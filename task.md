@@ -15,10 +15,13 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 | Task | What | Who | Branch | State |
 |---|---|---|---|---|
 | T01 | kill test, demo stack on Sepolia | Claude | `main` (submodule only) | simulation passed 9/9; waiting on Joshua to broadcast |
-| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | verify passed (DONE.md); adversary next, then Codex |
+| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | verify passed (DONE.md); adversary (Opus) running |
+| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus) | `feat/t04-registry`, then `feat/t05-invariants` | building |
+| T03 | core formats + vectors | builder B2 (Opus) | `feat/t03-core` | building |
+| T13 | enclave app (Rust) | builder B3 (Opus) | `feat/t13-enclave` | building; vector tests wait for T03 |
 | rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
 
-## Next, in parallel once T02 is on staging (builders, Opus, own worktree each)
+## Builders started 2026-10-29 from `feat/t02-scaffold` (worktrees in `.worktrees/`: the harness hook blocks writes under `.claude/`)
 - B1 contracts: T04 EnclaveRegistry + unit tests, then T05 invariants + mutations
 - B2 core: T03 formats, hashes, EIP-712, vectors (T06 follows in contracts once vectors exist)
 - B3 enclave: T13 Rust app (no AWS needed for the tests)
