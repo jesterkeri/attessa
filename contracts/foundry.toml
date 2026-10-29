@@ -1,0 +1,9 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+optimizer = true
+optimizer_runs = 10000
+# Pinned to lib/nitro-validator's solc_version.
+solc_version = "0.8.26"
+fs_permissions = [{ access = "read", path = "../vectors" }]
