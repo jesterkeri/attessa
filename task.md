@@ -47,3 +47,8 @@ The full rule list is in AGENTS.md, BRIEF_CARD.md and ~/.claude/CLAUDE.md. Confl
 - Fixtures: "no fabricated fixtures" vs the G1 fixture attestation. Not a conflict: base's fixture is a real AWS attestation.
 - `cast send` is treated as a broadcast and never run, even though no hook blocks it.
 - Renewal threshold (72 h / 6 days / 48 h) and attribution spot-check (one tx vs every tx): logged in OPEN-QUESTIONS for the design side.
+
+## Adversary suspicions on T02 (unproven, for later tasks)
+- Once a package imports another (sdk -> core), `pnpm -r typecheck` on a clean clone fails until core is built (`types` points at dist). Fix when T19/T20 first import core: project references or build core first.
+- `include: ["src"]` leaves tests outside src/ untypechecked: keep tests in src/.
+- `forge build` leaves `contracts/foundry.lock` untracked on fresh clones.

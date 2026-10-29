@@ -57,3 +57,25 @@ exit 0
 ```
 reviewed: pending (adversary, then Codex; verdict appended as a new entry)
 notes: attempt 1 failed (rootDir in the shared tsconfig resolved to the repo root); fixed per package. Rust 1.98.1 pinned; locally it is a hardlink of the installed stable 1.98.1 because the rustup download stalled. esbuild install script is skipped by the pnpm allowlist (only better-sqlite3, keytar may run scripts).
+
+## T02 adversary fix - 2026-10-29
+commit: 1eb99f7
+findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
+verified: ./scripts/check-install-scripts.sh && ./scripts/check-agents-commands.sh && <T02 verify>
+output:
+```
+install refused (exit 1): ok
+PASS install
+PASS build
+PASS test
+PASS lint
+PASS typecheck
+packages/seller-host typecheck: Done
+Warning: lib/nitro-validator: missing from foundry.lock (found 0ea0d12366b4fa44f9e07e4755f2ad36561cb674)
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+0ea0d12
+exit 0
+```
+reviewed: pending (Codex)
+notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
