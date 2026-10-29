@@ -16,3 +16,9 @@ Anything genuinely undecided, and anything the build discovers that the design d
 - [ ] Facilitator credits: confirm the live config's 20 free mainnet settlements vs the docs' 1, before the judging window.
 - [ ] Frontier cap ($15k per the forum vs "$25k+" per the site): confirm on the call with Defi Messiah.
 - [ ] ADR-003 deviates from the brief (no on-chain challenge; key in `public_key`). Confirm Joshua accepts it.
+
+## Found by the build (2026-10-29)
+- [ ] **CI is red on the untouched pack.** `scripts/check-reviews.sh` fails on `reviews/design-review-r1.md`, `-r2.md`, `-r3.md` (each ends `VERDICT: changes required`; all superseded by later rounds), and the pack-integrity step fails while any `BLOCKING` open question is unchecked. With `guardrails` required on `main`, nothing can merge until the design session decides: move r1 to r3 to `docs/design/` as history, or record them as overrides in KNOWN-LIMITS (design-owned, the build can't edit it).
+- [ ] **guard-edit.sh blocks worktree builders.** It denies any Edit/Write path matching `*/.claude/*`, and Claude Code puts subagent worktrees under `<repo>/.claude/worktrees/`. With the hooks loaded, a builder in a worktree can't write a single file. Needs a carve-out for `.claude/worktrees/` (a `.claude/` change, so Joshua approves it).
+- [ ] **Signer renewal threshold is stated three ways:** "fewer than 72 h" (TASKS.md header, SPEC §13), "fewer than 6 days" (T36), "cover the next 48 h" (PREFLIGHT.md:43). Which one does `scripts/health.sh` (T24) alert on?
+- [ ] **guard-bash.sh doesn't catch `cast send`**, which broadcasts without a `--broadcast` flag (guard-bash.sh:23, settings.json:18 cover `forge`/`--broadcast` only). The builder treats `cast send` as blocked regardless; the hook needs the pattern (a `.claude/` change, Joshua approves).
