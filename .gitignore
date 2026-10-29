@@ -1,0 +1,27 @@
+# secrets: keys come from env or keystores only
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+keystore/
+.npmrc
+
+# node
+node_modules/
+dist/
+*.tsbuildinfo
+
+# foundry
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# rust
+enclave/target/
+
+# local data
+*.sqlite
+*.sqlite-journal
+.attessa/
+.claude/worktrees/
