@@ -8,6 +8,10 @@
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "gen:vectors": "node scripts/gen-vectors.ts"
+  },
+  "dependencies": {
+    "viem": "^2.57.13"
   }
 }

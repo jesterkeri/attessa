@@ -1,0 +1,183 @@
+{
+  "spec": "SPEC §2.3. Domain {name:\"AttestedExecution\",version:\"1\",chainId,verifyingContract}. Proof and liveness fields are the §2.3 JSON strings. Signatures r‖s‖v, v in {27,28}, high-s invalid; signer \"\" when invalid.",
+  "domain": {
+    "name": "AttestedExecution",
+    "version": "1"
+  },
+  "typeStrings": {
+    "ExecutionProof": "ExecutionProof(uint256 agentId,bytes32 releaseId,bytes32 requestId,bytes32 requestHash,bytes32 responseHash,bytes32 inputsHash,bytes32 paymentId,uint64 issuedAt,uint64 expiresAt)",
+    "Liveness": "Liveness(uint256 agentId,bytes32 releaseId,bytes32 originHash,bytes32 challenge,uint64 issuedAt)"
+  },
+  "typehashes": {
+    "ExecutionProof": "0x4952020dbb2d3e93a26fb2c248d7dff8ae065253b74733da68c3e2cf102b876f",
+    "Liveness": "0x0c245d637d21cf2bcbc56e8d343588be524430312d43d55a80ebc6cd1016c753"
+  },
+  "proof": [
+    {
+      "name": "sepolia",
+      "chainId": "11142220",
+      "verifyingContract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "domainSeparator": "0x883685d430de8c5ede66f1812bc05fa267f2e5463b8b2666efd8f8e4daea3a6f",
+      "agentId": "1",
+      "releaseId": "0x274dc25f9535421f27da128918c4ad3c47d49e3f425e6fd3563b8c68ef3140e1",
+      "requestId": "0x9aceb58006e91bc91c863e2fc95765ea9a493c1526a9848a58b1fb59ba5d82ce",
+      "requestHash": "0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00",
+      "responseHash": "0x8d8c216d7985962af3a4a21287ca28fdc3d14865f8bf7f965138360df0bc6a5c",
+      "inputsHash": "0x398d8de5fbb671052db4b85489bb637cc322c02ced5b42ddb65cfa491d2b6233",
+      "paymentId": "0x15bfc4006f524b74685f1a092e71653239f9017d53543235eb55a10f6619c6c2",
+      "issuedAt": "1761700000",
+      "expiresAt": "1761700600",
+      "structHash": "0xa88ce48c7562390ca2ec4c0530d0fdefd67d3f79fa06077a841e8d11c16635b0",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d"
+    },
+    {
+      "name": "mainnet",
+      "chainId": "42220",
+      "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+      "domainSeparator": "0xaf8b0fa80d33a35cb1c25e7dfddd7a04870fa3064924b3f85dde984c0de227fc",
+      "agentId": "77",
+      "releaseId": "0x2a3940643d2a4ecca16b3095935c50f7b746a99e0ddbe5c7145095469d0ff431",
+      "requestId": "0x956998dc23bf5c4389e794e8627c6640ddbf1ff8451aa3838b33f7b454ab00cf",
+      "requestHash": "0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00",
+      "responseHash": "0x5b17d2e59c40d6eb786f7f7405189f34fe5f1e6bd1f68577c359936341f2829a",
+      "inputsHash": "0x398d8de5fbb671052db4b85489bb637cc322c02ced5b42ddb65cfa491d2b6233",
+      "paymentId": "0x026c1ef1a40612b5bb5b6ad6b4e983b8f3d903771d4f60c3906713e6692eb21d",
+      "issuedAt": "1762000000",
+      "expiresAt": "1762000600",
+      "structHash": "0x4b70706854bc7a90435a112d1c3b4cd42b279bca7c300b3ff9f985e13df1f762",
+      "digest": "0xc640f9c0155e1571c4699ef79526a11985522f965d02e86a1e59d996a9e4f5c2"
+    },
+    {
+      "name": "max values",
+      "chainId": "11142220",
+      "verifyingContract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "domainSeparator": "0x883685d430de8c5ede66f1812bc05fa267f2e5463b8b2666efd8f8e4daea3a6f",
+      "agentId": "115792089237316195423570985008687907853269984665640564039457584007913129639935",
+      "releaseId": "0xca8fe48b9ef1b8cded24a1cbe30b98cc979079c6ea5d08dbe928f85d93055285",
+      "requestId": "0x18a8393587219637fe730f2243f8dfe0254d6e053101c6f8fb0c252a9a6df481",
+      "requestHash": "0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00",
+      "responseHash": "0xc3637f2f2d29aa9656b4e9445b24b46ca096777021f9f9379b9127ba816f5be4",
+      "inputsHash": "0x398d8de5fbb671052db4b85489bb637cc322c02ced5b42ddb65cfa491d2b6233",
+      "paymentId": "0xb60557ef0659b95f7d63836198d6eea57f3f8c82c7c20b7cee96dc39ad8513c0",
+      "issuedAt": "18446744073709551015",
+      "expiresAt": "18446744073709551615",
+      "structHash": "0x30bdffbe3491f9cc74ca11ef6f4a0dd565c504c21d6ad8b6f6ad0188b2fd13c8",
+      "digest": "0x01fae1f888938ba093996a7b1ebbaecc8617bbac7bf85935bfde7f2617d569ff"
+    }
+  ],
+  "liveness": [
+    {
+      "name": "sepolia",
+      "chainId": "11142220",
+      "verifyingContract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "domainSeparator": "0x883685d430de8c5ede66f1812bc05fa267f2e5463b8b2666efd8f8e4daea3a6f",
+      "agentId": "1",
+      "releaseId": "0x274dc25f9535421f27da128918c4ad3c47d49e3f425e6fd3563b8c68ef3140e1",
+      "originHash": "0x9437f43cf55c13ced64192f7072897dffd9ab55679097ec0af97d4d6d3bc33bd",
+      "challenge": "0xa07937b8dee655375feee37f353f8dae53bbcdf6d67ff340094ca03b9aa30d06",
+      "issuedAt": "1761700000",
+      "structHash": "0x226f3693578780672986801c773465421fd1cab5f2024fa5ca371e7c56f4295a",
+      "digest": "0xd41e62b22ca71019bc91f45cfc1e0077053b3a82b9068b92fa7621fe769e5bee"
+    },
+    {
+      "name": "mainnet",
+      "chainId": "42220",
+      "verifyingContract": "0xe7f1725e7734ce288f8367e1bb143e90bb3f0512",
+      "domainSeparator": "0xaf8b0fa80d33a35cb1c25e7dfddd7a04870fa3064924b3f85dde984c0de227fc",
+      "agentId": "77",
+      "releaseId": "0x2a3940643d2a4ecca16b3095935c50f7b746a99e0ddbe5c7145095469d0ff431",
+      "originHash": "0xbd37c71a3d59e2c1ce343bbd32aee23d1ea5d720f4ef029df9d1c6bc84017c80",
+      "challenge": "0xa0b8227c4840fefdb5f417380bdc972efc209c5e070ece1e99aa15cc4d3de84e",
+      "issuedAt": "1762000000",
+      "structHash": "0x4114effc203f4743b1ab5f05003a13f655452c8c6f1a2f3d1be9da3230a9845f",
+      "digest": "0xea266665fbe5259615c259b412b74f49a708629f648fd2fe7d2ec15c042136d5"
+    },
+    {
+      "name": "zero challenge, issuedAt 0",
+      "chainId": "11142220",
+      "verifyingContract": "0x5fbdb2315678afecb367f032d93f642f64180aa3",
+      "domainSeparator": "0x883685d430de8c5ede66f1812bc05fa267f2e5463b8b2666efd8f8e4daea3a6f",
+      "agentId": "0",
+      "releaseId": "0x414f72a4d550cad29f17d9d99a4af64b3776ec5538cd440cef0f03fef2e9e010",
+      "originHash": "0xec8515c76a86e0728a12451ad0c07148913b04f603f845af04f6e5e6eb21a09d",
+      "challenge": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "issuedAt": "0",
+      "structHash": "0xfcfe204244a8a2928d1f5d60630457fd39e1f03c9ca4c092ae04f17b5b62b7ae",
+      "digest": "0x0b129838ff06f860264b14bb23a0764cec1cbb1795d100abb428a077b20290fd"
+    }
+  ],
+  "signatures": [
+    {
+      "name": "valid, key 10",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xefadeacb36c176d9f6b2ea333bd530c036e89971e9bda3cb2021877f87bf2e4d342342b1403f1691e9dd4c342ddad637bfc958ed1683ec026affb6db0a9559c91c",
+      "valid": true,
+      "signer": "0x971a518cb8759bedf4b6bff34bc2b06555c06a00",
+      "reason": "ok"
+    },
+    {
+      "name": "valid, key 11",
+      "digest": "0xc640f9c0155e1571c4699ef79526a11985522f965d02e86a1e59d996a9e4f5c2",
+      "signature": "0xe23887c28bf9a5a8bd653f4dc801e6c440db3cf18d0b78141ccefd4054bd7be158b0fb65be364c2d9233fa2150f6c24d86b15d9f9b223100c2660546d5190d4b1c",
+      "valid": true,
+      "signer": "0x40631b4bf82c6720d3e8d227a3921059e6cfe45e",
+      "reason": "ok"
+    },
+    {
+      "name": "valid, key 12",
+      "digest": "0xd41e62b22ca71019bc91f45cfc1e0077053b3a82b9068b92fa7621fe769e5bee",
+      "signature": "0x7232c2ab83f3d73a80c542e94cf1e136164ba118ec4a91ed868c607b2d3df3da5d106736d2c0324d3e4f1cbd59738f4baf498f78135e72cae436dec5c89dcd911c",
+      "valid": true,
+      "signer": "0xe15bfbcd108305b7c97d9e754f067db0778a51c3",
+      "reason": "ok"
+    },
+    {
+      "name": "another key signs the same digest",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xe27271bd73328a45bec02fa4a8d91e3f22203718e3ca7a80e4ffb05c612ae9484ec53aa1e8fb2071d826a91f6d52e33f9205e66f4761efdc3bf2a6375cce12371c",
+      "valid": true,
+      "signer": "0x076dd7db931b7760403089ea430ba9cdb27e0ac1",
+      "reason": "ok"
+    },
+    {
+      "name": "high-s twin of a valid signature",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xefadeacb36c176d9f6b2ea333bd530c036e89971e9bda3cb2021877f87bf2e4dcbdcbd4ebfc0e96e1622b3cbd22529c6fae583f998c4b43954d2a7b1c5a0e7781b",
+      "valid": false,
+      "signer": "",
+      "reason": "high_s"
+    },
+    {
+      "name": "v = 0",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xefadeacb36c176d9f6b2ea333bd530c036e89971e9bda3cb2021877f87bf2e4d342342b1403f1691e9dd4c342ddad637bfc958ed1683ec026affb6db0a9559c901",
+      "valid": false,
+      "signer": "",
+      "reason": "bad_v"
+    },
+    {
+      "name": "v = 29",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xefadeacb36c176d9f6b2ea333bd530c036e89971e9bda3cb2021877f87bf2e4d342342b1403f1691e9dd4c342ddad637bfc958ed1683ec026affb6db0a9559c91d",
+      "valid": false,
+      "signer": "",
+      "reason": "bad_v"
+    },
+    {
+      "name": "r = 0",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0x0000000000000000000000000000000000000000000000000000000000000000342342b1403f1691e9dd4c342ddad637bfc958ed1683ec026affb6db0a9559c91c",
+      "valid": false,
+      "signer": "",
+      "reason": "zero_r"
+    },
+    {
+      "name": "64 bytes (compact)",
+      "digest": "0xedd3a1a68470164ba903232011f1fb0a7a8c69f5e05b4732365b059cce57248d",
+      "signature": "0xefadeacb36c176d9f6b2ea333bd530c036e89971e9bda3cb2021877f87bf2e4d342342b1403f1691e9dd4c342ddad637bfc958ed1683ec026affb6db0a9559c9",
+      "valid": false,
+      "signer": "",
+      "reason": "bad_length"
+    }
+  ]
+}

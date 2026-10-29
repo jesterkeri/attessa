@@ -1,0 +1,227 @@
+{
+  "spec": "SPEC §2.1. valid[].normalized = normalizeOrigin(input), originHash = keccak256(utf8(normalized)). local = --network local.",
+  "valid": [
+    {
+      "name": "plain",
+      "input": "https://example.com",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "uppercase host and scheme",
+      "input": "HTTPS://EXAMPLE.COM",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "port 443 dropped",
+      "input": "https://example.com:443",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "port 443 with leading zero dropped",
+      "input": "https://example.com:0443/",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "other port kept",
+      "input": "https://example.com:8443",
+      "local": false,
+      "normalized": "https://example.com:8443",
+      "bytes": 24,
+      "originHash": "0xaa3fdb3169e8d8eb7a8f42a70b7d1f917197f074a0d21f74126a2bf639d90ef5"
+    },
+    {
+      "name": "path query fragment dropped",
+      "input": "https://api.Example.com:8443/v1/evaluate?x=1#frag",
+      "local": false,
+      "normalized": "https://api.example.com:8443",
+      "bytes": 28,
+      "originHash": "0xfa7849246ea1d10efc336cfac5d15965d32d08050bb43905b988c456ca93afd8"
+    },
+    {
+      "name": "IDN",
+      "input": "https://münchen.de",
+      "local": false,
+      "normalized": "https://xn--mnchen-3ya.de",
+      "bytes": 25,
+      "originHash": "0xc34dba17fabcde7eacf9738c8cf36aea4b1bfd75001f5befd3385a3de99bd062"
+    },
+    {
+      "name": "IDN uppercase",
+      "input": "https://MÜNCHEN.DE/",
+      "local": false,
+      "normalized": "https://xn--mnchen-3ya.de",
+      "bytes": 25,
+      "originHash": "0xc34dba17fabcde7eacf9738c8cf36aea4b1bfd75001f5befd3385a3de99bd062"
+    },
+    {
+      "name": "sharp s non-transitional (not strasse)",
+      "input": "https://Straße.de",
+      "local": false,
+      "normalized": "https://xn--strae-oqa.de",
+      "bytes": 24,
+      "originHash": "0x330dfc55444e89247188988ec3eceb33b10d6f9a35b4b8e0f33014bb4b055823"
+    },
+    {
+      "name": "sharp s only",
+      "input": "https://ß.example",
+      "local": false,
+      "normalized": "https://xn--zca.example",
+      "bytes": 23,
+      "originHash": "0x638d10028c04e9d058328ec6e45f42f0b89a2a31242417d0ca310dfeac3ca205"
+    },
+    {
+      "name": "fullwidth mapped",
+      "input": "https://ＥＸＡＭＰＬＥ.com",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "emoji",
+      "input": "https://😀.com",
+      "local": false,
+      "normalized": "https://xn--e28h.com",
+      "bytes": 20,
+      "originHash": "0x1213bdf2fcc2fc2387f2a2fd4f18fd881857efc916b0b8fba785229ba94653b9"
+    },
+    {
+      "name": "percent-encoded host",
+      "input": "https://ex%41mple.com",
+      "local": false,
+      "normalized": "https://example.com",
+      "bytes": 19,
+      "originHash": "0xedba3f8cfcd4165f73cd4641ced2b2ec0d3ba4338e3eec30edd58777d86b53b2"
+    },
+    {
+      "name": "minimum length 9 bytes",
+      "input": "https://a",
+      "local": false,
+      "normalized": "https://a",
+      "bytes": 9,
+      "originHash": "0xec8515c76a86e0728a12451ad0c07148913b04f603f845af04f6e5e6eb21a09d"
+    },
+    {
+      "name": "maximum length 267 bytes",
+      "input": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.com/path",
+      "local": false,
+      "normalized": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.com",
+      "bytes": 267,
+      "originHash": "0xb796ffbb9e698bf0cd23af89113b70ff6e93ef4667faf25a4dd185ab54dc38cf"
+    },
+    {
+      "name": "local http localhost with port",
+      "input": "http://localhost:8545/",
+      "local": true,
+      "normalized": "http://localhost:8545",
+      "bytes": 21,
+      "originHash": "0xe693b80fa6038a4b17bd57538e4ed84ba55209f7e95d3a359871345eaa4bb192"
+    },
+    {
+      "name": "local https IPv4 literal",
+      "input": "https://127.0.0.1:8443",
+      "local": true,
+      "normalized": "https://127.0.0.1:8443",
+      "bytes": 22,
+      "originHash": "0x8a8909569739f4420ed02103ffd1de5db43e6530b31ac0e2c8991425813d2356"
+    }
+  ],
+  "invalid": [
+    {
+      "name": "http",
+      "input": "http://example.com",
+      "local": false,
+      "reason": "not_https"
+    },
+    {
+      "name": "ftp",
+      "input": "ftp://example.com",
+      "local": false,
+      "reason": "not_https"
+    },
+    {
+      "name": "http localhost off local",
+      "input": "http://localhost:8545",
+      "local": false,
+      "reason": "not_https"
+    },
+    {
+      "name": "http localhost without port on local",
+      "input": "http://localhost",
+      "local": true,
+      "reason": "not_https"
+    },
+    {
+      "name": "trailing dot",
+      "input": "https://example.com.",
+      "local": false,
+      "reason": "trailing_dot"
+    },
+    {
+      "name": "trailing dot with port",
+      "input": "https://example.com.:8443/",
+      "local": false,
+      "reason": "trailing_dot"
+    },
+    {
+      "name": "IPv4 literal",
+      "input": "https://127.0.0.1",
+      "local": false,
+      "reason": "ip_literal"
+    },
+    {
+      "name": "IPv4 literal in hex form",
+      "input": "https://0x7f.1",
+      "local": false,
+      "reason": "ip_literal"
+    },
+    {
+      "name": "IPv6 literal",
+      "input": "https://[::1]:8443",
+      "local": false,
+      "reason": "ip_literal"
+    },
+    {
+      "name": "userinfo",
+      "input": "https://user:pw@example.com",
+      "local": false,
+      "reason": "userinfo"
+    },
+    {
+      "name": "268 bytes",
+      "input": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.comx",
+      "local": false,
+      "reason": "length"
+    },
+    {
+      "name": "not a URL",
+      "input": "example.com",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
+      "name": "invalid punycode label",
+      "input": "https://xn--a.com",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
+      "name": "zero-width joiner",
+      "input": "https://a‍b.com",
+      "local": false,
+      "reason": "invalid_url"
+    }
+  ]
+}
