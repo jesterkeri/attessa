@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p .",
-    "typecheck": "tsc -p ../core && tsc -p ../seller-host --noEmit && tsc -p . --noEmit",
+    "typecheck": "tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
