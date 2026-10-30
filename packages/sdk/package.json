@@ -9,5 +9,9 @@
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "viem": "2.57.13"
   }
 }
