@@ -3,11 +3,14 @@ pragma solidity 0.8.26;
 
 import {EnclaveRegistry, IEnclaveRegistry} from "../src/EnclaveRegistry.sol";
 import {RegistryBase} from "./utils/RegistryBase.sol";
+import {HeaderGrammar} from "./HeaderGrammar.sol";
+import {console2} from "forge-std/console2.sol";
 
 /// INV-18: the shared vectors in ../vectors (T03) checked against EnclaveRegistry. Wherever the
 /// registry computes a value itself (originHash, releaseId, signer, digests, signature checks), the
 /// registry's own function is what's compared; values the registry never computes (requestHash,
-/// responseHash, inputsHash, requestId) are recomputed here from their SPEC §2.2 definitions.
+/// responseHash, inputsHash, requestId) are recomputed here from their SPEC §2.2 definitions. The
+/// registry parses no headers, so the §2.5 header grammars run through the test-only HeaderGrammar.
 contract VectorsTest is RegistryBase {
     function _read(string memory name) internal view returns (string memory) {
         return vm.readFile(string.concat(vm.projectRoot(), "/../vectors/", name, ".json"));
@@ -22,6 +25,7 @@ contract VectorsTest is RegistryBase {
             n++;
         }
         assertGt(n, 0, string.concat("empty vector list ", list));
+        console2.log(string.concat("cases ", list, ":"), n);
     }
 
     function _startsWith(bytes memory s, bytes memory prefix) internal pure returns (bool) {
@@ -398,6 +402,150 @@ contract VectorsTest is RegistryBase {
                 throughRegistry++;
             }
             assertTrue(valid || throughRegistry > 0, string.concat("invalid signature not checked: ", name));
+        }
+    }
+
+    // ---------------------------------------------------------------- headers
+
+    /// SPEC §2.5 grammars, run through the Solidity adapter in HeaderGrammar.sol. Every valid case
+    /// parses to the vector's fields; every invalid case is refused (X-Attested-Proof: for the
+    /// vector's stated reason).
+
+    function test_vectors_headers_bytes32() public view {
+        string memory json = _read("headers");
+        uint256 n = _count(json, "bytes32.valid");
+        for (uint256 i = 0; i < n; i++) {
+            string memory name = vm.parseJsonString(json, _at("bytes32.valid", i, "name"));
+            string memory value = vm.parseJsonString(json, _at("bytes32.valid", i, "value"));
+            (bool ok, bytes32 b) = HeaderGrammar.parseBytes32(value);
+            assertTrue(ok, name);
+            assertEq(b, vm.parseBytes32(value), name);
+        }
+        n = _count(json, "bytes32.invalid");
+        for (uint256 i = 0; i < n; i++) {
+            (bool ok,) = HeaderGrammar.parseBytes32(vm.parseJsonString(json, _at("bytes32.invalid", i, "value")));
+            assertFalse(ok, vm.parseJsonString(json, _at("bytes32.invalid", i, "name")));
+        }
+    }
+
+    function test_vectors_headers_retryAfter() public view {
+        string memory json = _read("headers");
+        uint256 n = _count(json, "retryAfter.valid");
+        for (uint256 i = 0; i < n; i++) {
+            assertTrue(
+                HeaderGrammar.isRetryAfter(vm.parseJsonString(json, _at("retryAfter.valid", i, "value"))),
+                vm.parseJsonString(json, _at("retryAfter.valid", i, "name"))
+            );
+        }
+        n = _count(json, "retryAfter.invalid");
+        for (uint256 i = 0; i < n; i++) {
+            assertFalse(
+                HeaderGrammar.isRetryAfter(vm.parseJsonString(json, _at("retryAfter.invalid", i, "value"))),
+                vm.parseJsonString(json, _at("retryAfter.invalid", i, "name"))
+            );
+        }
+    }
+
+    function test_vectors_headers_payerSig() public view {
+        string memory json = _read("headers");
+        uint256 n = _count(json, "payerSig.valid");
+        for (uint256 i = 0; i < n; i++) {
+            string memory name = vm.parseJsonString(json, _at("payerSig.valid", i, "name"));
+            (bool ok, uint256 t, bytes memory sig) =
+                HeaderGrammar.parsePayerSig(vm.parseJsonString(json, _at("payerSig.valid", i, "header")));
+            assertTrue(ok, name);
+            assertEq(t, vm.parseJsonUint(json, _at("payerSig.valid", i, "unixSeconds")), name);
+            assertEq(sig, vm.parseJsonBytes(json, _at("payerSig.valid", i, "signature")), name);
+            string memory requestId = vm.parseJsonString(json, _at("payerSig.valid", i, "requestId"));
+            (bool idOk,) = HeaderGrammar.parseBytes32(requestId);
+            assertTrue(idOk, name);
+            assertEq(
+                string(HeaderGrammar.payerSigMessage(requestId, t)),
+                vm.parseJsonString(json, _at("payerSig.valid", i, "message")),
+                name
+            );
+            bytes32 digest = HeaderGrammar.payerSigDigest(requestId, t);
+            assertEq(digest, vm.parseJsonBytes32(json, _at("payerSig.valid", i, "digest")), name);
+            assertEq(
+                HeaderGrammar.recover(digest, sig), vm.parseJsonAddress(json, _at("payerSig.valid", i, "signer")), name
+            );
+        }
+        n = _count(json, "payerSig.invalid");
+        for (uint256 i = 0; i < n; i++) {
+            (bool ok,,) = HeaderGrammar.parsePayerSig(vm.parseJsonString(json, _at("payerSig.invalid", i, "header")));
+            assertFalse(ok, vm.parseJsonString(json, _at("payerSig.invalid", i, "name")));
+        }
+    }
+
+    /// Valid cases: the decoded fields equal the vector's JSON, the signature recovers to the signer
+    /// over registry.proofDigest on the vector's chain and address, and verifyProof gets past the
+    /// signature check (UNKNOWN_SIGNER, since no signer is registered here).
+    function test_vectors_headers_attestedProof_valid() public {
+        string memory json = _read("headers");
+        uint256 n = _count(json, "attestedProof.valid");
+        for (uint256 i = 0; i < n; i++) {
+            _checkAttestedProof(json, i);
+        }
+    }
+
+    function _checkAttestedProof(string memory json, uint256 i) internal {
+        string memory name = vm.parseJsonString(json, _at("attestedProof.valid", i, "name"));
+        string memory header = vm.parseJsonString(json, _at("attestedProof.valid", i, "header"));
+        string memory text = vm.parseJsonString(json, _at("attestedProof.valid", i, "json"));
+        (bool b64, bytes memory decoded) = HeaderGrammar.decodeBase64(header);
+        assertTrue(b64, name);
+        assertEq(string(decoded), text, name);
+
+        (HeaderGrammar.Err err, HeaderGrammar.AttestedProof memory a) = HeaderGrammar.decodeAttestedProof(header);
+        assertEq(uint8(err), uint8(HeaderGrammar.Err.None), name);
+        _assertProofFields(a.proof, text, name);
+        assertEq(a.signature, vm.parseJsonBytes(json, _at("attestedProof.valid", i, "signature")), name);
+        assertEq(a.signer, vm.parseJsonAddress(json, _at("attestedProof.valid", i, "signer")), name);
+
+        EnclaveRegistry r = _registryAt(
+            vm.parseJsonAddress(json, _at("attestedProof.valid", i, "verifyingContract")),
+            vm.parseJsonUint(json, _at("attestedProof.valid", i, "chainId"))
+        );
+        assertEq(HeaderGrammar.recover(r.proofDigest(a.proof), a.signature), a.signer, name);
+        assertEq(
+            uint8(r.verifyProof(a.proof, a.signature, bytes32(0))), uint8(IEnclaveRegistry.Check.UNKNOWN_SIGNER), name
+        );
+    }
+
+    function _assertProofFields(IEnclaveRegistry.ExecutionProof memory p, string memory text, string memory name)
+        internal
+        pure
+    {
+        assertEq(p.agentId, vm.parseJsonUint(text, ".proof.agentId"), name);
+        assertEq(p.releaseId, vm.parseJsonBytes32(text, ".proof.releaseId"), name);
+        assertEq(p.requestId, vm.parseJsonBytes32(text, ".proof.requestId"), name);
+        assertEq(p.requestHash, vm.parseJsonBytes32(text, ".proof.requestHash"), name);
+        assertEq(p.responseHash, vm.parseJsonBytes32(text, ".proof.responseHash"), name);
+        assertEq(p.inputsHash, vm.parseJsonBytes32(text, ".proof.inputsHash"), name);
+        assertEq(p.paymentId, vm.parseJsonBytes32(text, ".proof.paymentId"), name);
+        assertEq(p.issuedAt, vm.parseJsonUint(text, ".proof.issuedAt"), name);
+        assertEq(p.expiresAt, vm.parseJsonUint(text, ".proof.expiresAt"), name);
+    }
+
+    function _headerErr(string memory reason) internal pure returns (HeaderGrammar.Err) {
+        bytes32 h = keccak256(bytes(reason));
+        if (h == keccak256("base64")) return HeaderGrammar.Err.Base64;
+        if (h == keccak256("not_jcs")) return HeaderGrammar.Err.NotJcs;
+        if (h == keccak256("unknown_field")) return HeaderGrammar.Err.UnknownField;
+        if (h == keccak256("missing_field")) return HeaderGrammar.Err.MissingField;
+        if (h == keccak256("field_grammar")) return HeaderGrammar.Err.FieldGrammar;
+        revert(string.concat("unknown attestedProof reason: ", reason));
+    }
+
+    function test_vectors_headers_attestedProof_invalid() public view {
+        string memory json = _read("headers");
+        uint256 n = _count(json, "attestedProof.invalid");
+        for (uint256 i = 0; i < n; i++) {
+            string memory name = vm.parseJsonString(json, _at("attestedProof.invalid", i, "name"));
+            HeaderGrammar.Err expected = _headerErr(vm.parseJsonString(json, _at("attestedProof.invalid", i, "reason")));
+            (HeaderGrammar.Err err,) =
+                HeaderGrammar.decodeAttestedProof(vm.parseJsonString(json, _at("attestedProof.invalid", i, "header")));
+            assertEq(uint8(err), uint8(expected), name);
         }
     }
 }
