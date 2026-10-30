@@ -15,10 +15,12 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 | Task | What | Who | Branch | State |
 |---|---|---|---|---|
 | T01 | kill test, demo stack on Sepolia | Claude | `main` (submodule only) | simulation passed 9/9; waiting on Joshua to broadcast |
-| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | adversary found 2, both fixed (1eb99f7); **Codex r1 prompt ready, waiting on Joshua** |
-| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus), done | `feat/t04-registry` b3347e1, `feat/t05-invariants` 98c2f29 | 153 unit tests + invariants + 5/5 mutants killed, rerun by lead; adversary (Opus) running |
-| T03 | core formats + vectors | builder B2 (Opus), done | `feat/t03-core` | adversary r1: 2 defects fixed (705d515); r2: no defect; evidence in DONE.md (e2aeb15); **Codex r1 prompt ready** |
-| T13 | enclave app (Rust) | builder B3 (Opus) | `feat/t13-enclave` 607c63d | adversary: array-as-object defect fixed; now failing T03's new JCS vectors, B3 fixing |
+| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` 2714b55 | adversary found 2, both fixed; **Codex r1 waiting on Joshua** |
+| T03 | core formats + vectors | builder B2 (Opus), done | `feat/t03-core` e2aeb15 | adversary r1: 2 fixed; r2: no defect; **Codex r1 waiting on Joshua** |
+| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus), done | `feat/t05-invariants` 0d9e8bd | adversary: no defect, 6 gap tests kept; **Codex r1 waiting on Joshua** |
+| T13 | enclave app (Rust) | builder B3 (Opus), done | `feat/t13-enclave` ca8a26e | adversary r1: 1 fixed; r2: no defect; 42 tests, fmt, clippy green; **Codex r1 waiting on Joshua** |
+| T08 | Self spike | Claude, done | `feat/t08-self-spike` 11f43e1 | done |
+| T06, T07 | vectors in Solidity, real-fixture fork tests | builder B1 (Opus) | `feat/t06-vectors` 8ee8186, then `feat/t07-real-fixture` | T06 pushed; T07 in progress |
 | rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
 
 ## Builders started 2026-10-29 from `feat/t02-scaffold` (worktrees in `.worktrees/`: the harness hook blocks writes under `.claude/`)
@@ -31,11 +33,10 @@ Gateway (T19), SDK (T20) and CLI (T21) start after T03 lands; they import core.
 
 ## Waiting on Joshua
 - apply `.worktrees/prompts/harness-r1.patch` (stops commit prompts, CI on feat/staging, cast send block)
-- Codex: T02 r1, T03 r1 (prompts in `.worktrees/prompts/`)
+- Codex: T02 r1, T03 r1, T04/T05 r1, T13 r1 (prompts in `.worktrees/prompts/codex-*-r1.md`)
 - T01 broadcast (funded Sepolia wallet, key in `.env` as PRIVATE_KEY)
 - restart Claude Code with `claude --continue` so the harness hooks load
 - `sudo apt install -y jq` (hooks need it)
-- yes or no on the CI workflow change (below)
 - domain, AWS enclave access, Sepolia broadcast permission
 
 ## Problems found
