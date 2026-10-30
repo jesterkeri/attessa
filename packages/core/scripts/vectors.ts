@@ -102,6 +102,7 @@ function origins() {
     { name: 'maximum length 267 bytes', input: `https://${host259}/path`, local: false, expected: `https://${host259}` },
     { name: 'local http localhost with port', input: 'http://localhost:8545/', local: true, expected: 'http://localhost:8545' },
     { name: 'local https IPv4 literal', input: 'https://127.0.0.1:8443', local: true, expected: 'https://127.0.0.1:8443' },
+    { name: 'ZWNJ between two dual-joining letters', input: 'https://\u1820\u200C\u1820.com', local: false, expected: 'https://xn--26ea791d.com' },
   ];
   const invalid: { name: string; input: string; local: boolean; reason: string }[] = [
     { name: 'http', input: 'http://example.com', local: false, reason: 'not_https' },
@@ -120,6 +121,11 @@ function origins() {
     { name: 'not a URL', input: 'example.com', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
     { name: 'zero-width joiner', input: 'https://a‍b.com', local: false, reason: 'invalid_url' },
+    // RFC 5892 A.1 holds for each ZWNJ on its own; a virama-exempt ZWNJ before it does not help (tr46 5.1.1 bug).
+    { name: 'ZWNJ before a non-joining letter, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u200Ca.com', local: false, reason: 'invalid_url' },
+    { name: 'same host as punycode', input: 'https://xn--a-0xd894iba352hba.com', local: false, reason: 'invalid_url' },
+    { name: 'ZWNJ at label end, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u200C.com', local: false, reason: 'invalid_url' },
+    { name: 'two ZWNJ in a row, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u094D\u200C\u200Ca.com', local: false, reason: 'invalid_url' },
     // UTS-46 CheckBidi (RFC 5893), which WHATWG sets and Node's built-in URL skips.
     { name: 'bidi: label of Arabic-Indic digits', input: 'https://\u0661\u0662.com', local: false, reason: 'invalid_url' },
     { name: 'bidi: same label as punycode', input: 'https://xn--9hbc.com', local: false, reason: 'invalid_url' },
