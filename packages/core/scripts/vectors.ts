@@ -122,6 +122,9 @@ function origins() {
     // SPEC §2.1 parses before it checks the scheme, so a URL WHATWG cannot parse is invalid_url, not not_https.
     { name: 'non-special scheme, unclosed IPv6 host', input: 'foo://[x', local: false, reason: 'invalid_url' },
     { name: 'file scheme, space in host', input: 'file://a b/', local: false, reason: 'invalid_url' },
+    // An opaque host gets no UTS-46, so punycode that decodes to a bad ZWNJ still parses.
+    { name: 'non-special scheme, punycode of a bad ZWNJ', input: 'foo://xn--ab-j1t', local: false, reason: 'not_https' },
+    { name: 'https, punycode of a bad ZWNJ', input: 'https://xn--ab-j1t', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
     { name: 'zero-width joiner', input: 'https://a‍b.com', local: false, reason: 'invalid_url' },
     // RFC 5892 A.1 holds for each ZWNJ on its own; a virama-exempt ZWNJ before it does not help (tr46 5.1.1 bug).

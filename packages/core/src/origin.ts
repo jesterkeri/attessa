@@ -29,6 +29,7 @@ export const ORIGIN_MAX_BYTES = 267;
 
 // The WHATWG host serializer always writes an IPv4 host in dotted decimal and an IPv6 host in brackets.
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+const SPECIAL = new Set(['http:', 'https:', 'ws:', 'wss:', 'ftp:', 'file:']);
 
 // RFC 5892 A.1 for every ZWNJ on its own. tr46 5.1.1 tests a ZWNJ against a window that a
 // virama-exempt ZWNJ does not close, so an earlier valid ZWNJ can pass a later invalid one.
@@ -56,7 +57,8 @@ export function normalizeOrigin(input: string, opts: { local?: boolean } = {}): 
   } catch {
     throw new OriginError('invalid_url', input);
   }
-  if (!zwnjContextsOk(url.hostname)) throw new OriginError('invalid_url', input);
+  // Only special schemes get domain-to-ASCII; WHATWG leaves an opaque host's punycode alone.
+  if (SPECIAL.has(url.protocol) && !zwnjContextsOk(url.hostname)) throw new OriginError('invalid_url', input);
   const localHttp =
     local && url.protocol === 'http:' && url.hostname === 'localhost' && url.port !== '';
   if (url.protocol !== 'https:' && !localHttp) throw new OriginError('not_https', input);

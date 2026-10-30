@@ -36,7 +36,7 @@ V = lambda f: json.load(open(f"vectors/{f}", encoding="utf-8"))
 
 # ---- committed family sizes. A family may grow, never shrink or vanish.
 MIN = {
-    ("origins.json", "valid"): 18, ("origins.json", "invalid"): 25,
+    ("origins.json", "valid"): 18, ("origins.json", "invalid"): 27,
     ("hashes.json", "requestHash"): 6, ("hashes.json", "responseHash"): 3, ("hashes.json", "inputsHash"): 6,
     ("hashes.json", "releaseId"): 3, ("hashes.json", "requestId"): 2,
     ("binding.json", "userData"): 6, ("binding.json", "signer"): 4,

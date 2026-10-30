@@ -244,6 +244,18 @@
       "reason": "invalid_url"
     },
     {
+      "name": "non-special scheme, punycode of a bad ZWNJ",
+      "input": "foo://xn--ab-j1t",
+      "local": false,
+      "reason": "not_https"
+    },
+    {
+      "name": "https, punycode of a bad ZWNJ",
+      "input": "https://xn--ab-j1t",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
       "name": "invalid punycode label",
       "input": "https://xn--a.com",
       "local": false,
