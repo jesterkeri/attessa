@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Ledger, RESERVATION_TTL_MS, spendToday } from '../src/ledger.ts';
 import type { PendingEntry } from '../src/types.ts';
 import { makeWorld, PRICE, type World } from './fakes/world.ts';
@@ -115,5 +115,42 @@ describe('a crash between V6 and V8 holds the reservation at most 10 minutes', (
     const l = new Ledger(dir);
     writeFileSync(join(dir, 'pending.lock'), '999999999');
     expect(l.reserve(entry({}), 10n ** 9n)).toBe('reserved');
+  });
+
+  // Three processes: the holder died; B and A both find its lock stale. B breaks it and takes the
+  // lock; A, acting on its older reading, must not then remove B's live lock and enter as well.
+  it('a breaker acting on an old reading never removes a lock a peer has just taken', () => {
+    dir = mkdtempSync(join(tmpdir(), 'attessa-ledger-'));
+    const lockPath = join(dir, 'pending.lock');
+    const DEAD = 999999999;
+    writeFileSync(lockPath, String(DEAD));
+    const a = new Ledger(dir);
+    const b = new Ledger(dir);
+    const realKill = process.kill.bind(process);
+    let bHolds = false;
+    let bTookOver = false;
+    const kill = vi.spyOn(process, 'kill').mockImplementation((pid: number, sig?: string | number) => {
+      if (pid === DEAD) {
+        if (!bTookOver) {
+          // A has read the dead pid. Before A acts on it, B breaks the lock and takes it.
+          bTookOver = true;
+          (b as unknown as { acquire(): void }).acquire();
+          bHolds = true;
+        }
+        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
+      }
+      if (pid === process.pid && bHolds) {
+        // A is looking at B's live lock: B finishes its critical section and releases.
+        rmSync(lockPath, { force: true });
+        bHolds = false;
+      }
+      return realKill(pid, sig);
+    });
+    try {
+      const heldByB = a.withLock(() => ({ result: bHolds }));
+      expect({ bTookOver, aEnteredWhileBHeldTheLock: heldByB }).toEqual({ bTookOver: true, aEnteredWhileBHeldTheLock: false });
+    } finally {
+      kill.mockRestore();
+    }
   });
 });

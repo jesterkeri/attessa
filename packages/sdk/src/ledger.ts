@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Address, Hex } from 'viem';
@@ -56,13 +57,17 @@ export class Ledger {
   readonly pendingPath: string;
   readonly evidencePath: string;
   private readonly lockPath: string;
+  private readonly breakPath: string;
   private readonly now: () => number;
+  /** What this instance wrote into the lock file it holds: `<pid> <random>`, unique per acquisition. */
+  private token = '';
 
   constructor(dataDir: string, now: () => number = Date.now) {
     this.dir = dataDir;
     this.pendingPath = join(dataDir, 'pending.jsonl');
     this.evidencePath = join(dataDir, 'evidence.jsonl');
     this.lockPath = join(dataDir, 'pending.lock');
+    this.breakPath = join(dataDir, 'pending.lock.break');
     this.now = now;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   }
@@ -99,11 +104,7 @@ export class Ledger {
       }
       return result;
     } finally {
-      try {
-        unlinkSync(this.lockPath);
-      } catch {
-        // already gone: a peer judged it stale; nothing to release
-      }
+      this.release();
     }
   }
 
@@ -151,12 +152,28 @@ export class Ledger {
     });
   }
 
-  /** Releases a reservation that was never signed (V7 failure). */
-  remove(requestId: Hex): void {
-    this.withLock((entries) => ({
-      entries: entries.filter((e) => e.requestId !== requestId.toLowerCase()),
-      result: undefined,
-    }));
+  /**
+   * `update`, but only if the entry for `expected.requestId` is still exactly `expected`. A
+   * reservation can be swept after 10 minutes and its requestId taken by another process; the
+   * stalled owner must then not patch (V8: sign over) that other entry. Returns null if it changed.
+   */
+  updateIfUnchanged(expected: PendingEntry, patch: Partial<PendingEntry>): PendingEntry | null {
+    return this.withLock<PendingEntry | null>((entries) => {
+      const i = entries.findIndex((e) => sameEntry(e, expected));
+      if (i < 0) return { result: null };
+      const next = { ...entries[i]!, ...patch };
+      const out = [...entries];
+      out[i] = next;
+      return { entries: out, result: next };
+    });
+  }
+
+  /** Releases a reservation that was never signed (V7 failure), if the entry is still `expected`. */
+  removeIfUnchanged(expected: PendingEntry): void {
+    this.withLock((entries) => {
+      const kept = entries.filter((e) => !sameEntry(e, expected));
+      return kept.length === entries.length ? { result: undefined } : { entries: kept, result: undefined };
+    });
   }
 
   /** Evidence is append-only. */
@@ -190,13 +207,10 @@ export class Ledger {
   private acquire(): void {
     const deadline = Date.now() + LOCK_TIMEOUT_MS;
     for (;;) {
-      try {
-        const fd = openSync(this.lockPath, 'wx', 0o600);
-        writeSync(fd, String(process.pid));
-        closeSync(fd);
+      const token = `${process.pid} ${randomBytes(8).toString('hex')}`;
+      if (createExclusive(this.lockPath, token)) {
+        this.token = token;
         return;
-      } catch (e) {
-        if ((e as NodeJS.ErrnoException).code !== 'EEXIST') throw e;
       }
       this.breakStaleLock();
       if (Date.now() > deadline) throw new Error(`ledger lock ${this.lockPath} held for over ${LOCK_TIMEOUT_MS} ms`);
@@ -204,14 +218,77 @@ export class Ledger {
     }
   }
 
-  private breakStaleLock(): void {
+  /** Removes the lock file only while it is still ours: a peer may have judged it stale and taken it. */
+  private release(): void {
     try {
-      const age = Date.now() - statSync(this.lockPath).mtimeMs;
-      const pid = Number(readFileSync(this.lockPath, 'utf8'));
-      const dead = Number.isSafeInteger(pid) && pid > 0 && !pidAlive(pid);
-      if (age > STALE_LOCK_MS || dead) unlinkSync(this.lockPath);
+      if (readFileSync(this.lockPath, 'utf8') === this.token) unlinkSync(this.lockPath);
     } catch {
-      // the holder released it between our checks
+      // already gone: a peer judged it stale; nothing to release
     }
+  }
+
+  /**
+   * Breaks a lock whose holder died or stalled. Two waiters can both find the same lock stale; the
+   * one acting on the older reading must not remove the lock the other has just taken. So breaking
+   * happens under a second lock, and only if the lock file still holds the very token judged stale
+   * (each acquisition writes a fresh one).
+   */
+  private breakStaleLock(): void {
+    const seen = staleToken(this.lockPath);
+    if (seen === null) return;
+    if (!createExclusive(this.breakPath, `${process.pid} ${randomBytes(8).toString('hex')}`)) {
+      // Another waiter is breaking it. If that one died mid-break, clear its marker for the next try.
+      if (staleToken(this.breakPath) !== null) unlinkQuiet(this.breakPath);
+      return;
+    }
+    try {
+      if (staleToken(this.lockPath) === seen) unlinkQuiet(this.lockPath);
+    } finally {
+      unlinkQuiet(this.breakPath);
+    }
+  }
+}
+
+/** Same entry, field by field (values are strings or null). */
+function sameEntry(a: PendingEntry, b: PendingEntry): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof PendingEntry>;
+  for (const k of keys) if (a[k] !== b[k]) return false;
+  return true;
+}
+
+function createExclusive(path: string, content: string): boolean {
+  let fd: number;
+  try {
+    fd = openSync(path, 'wx', 0o600);
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw e;
+  }
+  try {
+    writeSync(fd, content);
+  } finally {
+    closeSync(fd);
+  }
+  return true;
+}
+
+/** The content of a lock file whose holder is dead or older than STALE_LOCK_MS; null if live or gone. */
+function staleToken(path: string): string | null {
+  try {
+    const age = Date.now() - statSync(path).mtimeMs;
+    const token = readFileSync(path, 'utf8');
+    const pid = Number(token.split(' ')[0]);
+    const dead = Number.isSafeInteger(pid) && pid > 0 && !pidAlive(pid);
+    return age > STALE_LOCK_MS || dead ? token : null;
+  } catch {
+    return null; // released between our checks
+  }
+}
+
+function unlinkQuiet(path: string): void {
+  try {
+    unlinkSync(path);
+  } catch {
+    // already gone
   }
 }
