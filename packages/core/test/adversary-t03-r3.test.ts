@@ -54,7 +54,7 @@ describe('adversary: the oracle origin check is not UTS-46 (SPEC §2.1 step 2, I
     expect(reason(extra.input)).toBe('invalid_url'); // core and rust-url both refuse it
     const r = oracleWithValidOrigin(extra);
     expect(r.status, r.out).toBe(1);
-  });
+  }, 30_000); // spawns the full oracle: 1.8 s alone, over 5 s when 16 threads are busy
 
   // A right vector: UTS-46 maps U+1F80 to U+1F00 U+03B9 (case folding), so core and rust-url
   // both give xn--uxa970l. The oracle keeps U+1F80 (xn--0qg) and fails a correct vector.
@@ -63,7 +63,7 @@ describe('adversary: the oracle origin check is not UTS-46 (SPEC §2.1 step 2, I
     expect(reason(extra.input)).toBe(`ok:${extra.normalized}`);
     const r = oracleWithValidOrigin(extra);
     expect(r.status, r.out).toBe(0);
-  });
+  }, 30_000);
 });
 
 describe('adversary: core mutants that change no vector (INV-18 coverage)', () => {
