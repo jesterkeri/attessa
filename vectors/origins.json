@@ -222,6 +222,24 @@
       "input": "https://a‍b.com",
       "local": false,
       "reason": "invalid_url"
+    },
+    {
+      "name": "bidi: label of Arabic-Indic digits",
+      "input": "https://١٢.com",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
+      "name": "bidi: same label as punycode",
+      "input": "https://xn--9hbc.com",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
+      "name": "bidi: Latin label with an Arabic-Indic digit",
+      "input": "https://a١.com",
+      "local": false,
+      "reason": "invalid_url"
     }
   ]
 }

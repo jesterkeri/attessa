@@ -118,6 +118,10 @@ function origins() {
     { name: 'not a URL', input: 'example.com', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
     { name: 'zero-width joiner', input: 'https://a‍b.com', local: false, reason: 'invalid_url' },
+    // UTS-46 CheckBidi (RFC 5893), which WHATWG sets and Node's built-in URL skips.
+    { name: 'bidi: label of Arabic-Indic digits', input: 'https://\u0661\u0662.com', local: false, reason: 'invalid_url' },
+    { name: 'bidi: same label as punycode', input: 'https://xn--9hbc.com', local: false, reason: 'invalid_url' },
+    { name: 'bidi: Latin label with an Arabic-Indic digit', input: 'https://a\u0661.com', local: false, reason: 'invalid_url' },
   ];
   return {
     spec: 'SPEC §2.1. valid[].normalized = normalizeOrigin(input), originHash = keccak256(utf8(normalized)). local = --network local.',
@@ -148,6 +152,40 @@ const SAMPLE_INPUTS = {
   block: { timestamp: '1761700000', number: '12345678', hash: hex32('block-12345678') },
 };
 
+/** RFC 8785 Appendix B: IEEE-754 bit patterns and their JCS text (NaN and Infinity omitted: JCS refuses them). */
+const APPENDIX_B: [string, string][] = [
+  ['0000000000000000', '0'],
+  ['8000000000000000', '0'],
+  ['0000000000000001', '5e-324'],
+  ['8000000000000001', '-5e-324'],
+  ['7fefffffffffffff', '1.7976931348623157e+308'],
+  ['ffefffffffffffff', '-1.7976931348623157e+308'],
+  ['4340000000000000', '9007199254740992'],
+  ['c340000000000000', '-9007199254740992'],
+  ['4430000000000000', '295147905179352830000'],
+  ['44b52d02c7e14af5', '9.999999999999997e+22'],
+  ['44b52d02c7e14af6', '1e+23'],
+  ['44b52d02c7e14af7', '1.0000000000000001e+23'],
+  ['444b1ae4d6e2ef4e', '999999999999999700000'],
+  ['444b1ae4d6e2ef4f', '999999999999999900000'],
+  ['444b1ae4d6e2ef50', '1e+21'],
+  ['3eb0c6f7a0b5ed8c', '9.999999999999997e-7'],
+  ['3eb0c6f7a0b5ed8d', '0.000001'],
+  ['41b3de4355555553', '333333333.3333332'],
+  ['41b3de4355555554', '333333333.33333325'],
+  ['41b3de4355555555', '333333333.3333333'],
+  ['41b3de4355555556', '333333333.3333334'],
+  ['41b3de4355555557', '333333333.33333343'],
+  ['becbf647612f3696', '-0.0000033333333333333333'],
+  ['43143ff3c1cb0959', '1424953923781206.2'],
+];
+
+function f64(bits: string): number {
+  const view = new DataView(new ArrayBuffer(8));
+  view.setBigUint64(0, BigInt(`0x${bits}`));
+  return view.getFloat64(0);
+}
+
 function hashes() {
   const enc = (s: string) => stringToBytes(s);
   const requestCases: { name: string; method: string; pathAndQuery: string; body: Uint8Array }[] = [
@@ -156,6 +194,8 @@ function hashes() {
     { name: 'GET with empty body', method: 'GET', pathAndQuery: `/v1/results/${hex32('rid')}`, body: new Uint8Array() },
     { name: 'query string kept as sent', method: 'POST', pathAndQuery: '/v1/evaluate?a=1&b=%20x', body: enc('{}') },
     { name: 'binary body with zero bytes', method: 'PUT', pathAndQuery: '/', body: hexToBytes('0x00ff0000017f80') },
+    // ASCII-only uppercasing: 'ß' stays 'ß' (Unicode uppercasing would give 'SS').
+    { name: 'non-ASCII method uppercased ASCII-only', method: 'po\u00dft', pathAndQuery: '/v1/evaluate', body: enc('{}') },
   ];
   const responseBodies: { name: string; body: Uint8Array }[] = [
     { name: 'empty', body: new Uint8Array() },
@@ -165,7 +205,7 @@ function hashes() {
     },
     { name: 'binary', body: hexToBytes(filler('response', 100)) },
   ];
-  const inputsCases: { name: string; inputs: unknown }[] = [
+  const inputsCases: { name: string; inputs: unknown; expectJcs?: string }[] = [
     { name: 'forno inputs, keys out of order', inputs: SAMPLE_INPUTS },
     {
       name: 'buy inputs, contract payTo',
@@ -179,7 +219,32 @@ function hashes() {
       name: 'JCS escaping and UTF-16 key order',
       inputs: { '€': 'euro', '\r': 'cr', '1': 'one', a: 'line\nbreak "q" \\ \u0007 é 😀', A: ['x', 'y'] },
     },
+    {
+      name: 'RFC 8785 3.2.3 sort example (UTF-16 code units, not code points)',
+      inputs: {
+        '\u20ac': 'Euro Sign',
+        '\r': 'Carriage Return',
+        '\ufb33': 'Hebrew Letter Dalet With Dagesh',
+        '1': 'One',
+        '\ud83d\ude00': 'Emoji: Grinning Face',
+        '\u0080': 'Control',
+        '\u00f6': 'Latin Small Letter O With Diaeresis',
+      },
+      expectJcs:
+        '{"\\r":"Carriage Return","1":"One","\u0080":"Control","\u00f6":"Latin Small Letter O With Diaeresis","\u20ac":"Euro Sign","\ud83d\ude00":"Emoji: Grinning Face","\ufb33":"Hebrew Letter Dalet With Dagesh"}',
+    },
+    {
+      name: 'empty key, emoji before U+E000 (code-point order would swap them)',
+      inputs: { '\ue000': 'private use', '\ud83d\ude00': 'emoji', '': 'empty' },
+      expectJcs: '{"":"empty","\ud83d\ude00":"emoji","\ue000":"private use"}',
+    },
+    {
+      name: 'RFC 8785 Appendix B numbers',
+      inputs: { numbers: APPENDIX_B.map(([bits]) => f64(bits)) },
+      expectJcs: `{"numbers":[${APPENDIX_B.map(([, text]) => text).join(',')}]}`,
+    },
   ];
+  for (const c of inputsCases) if (c.expectJcs !== undefined) check(jcs(c.inputs) === c.expectJcs, `jcs ${c.name}: got ${jcs(c.inputs)}`);
   const pcr = (l: string) => filler(l, 48);
   const releaseCases: { name: string; pcrs: [Hex, Hex, Hex] }[] = [
     { name: 'distinct PCRs', pcrs: [pcr('pcr0'), pcr('pcr1'), pcr('pcr2')] },
@@ -441,6 +506,7 @@ async function headers() {
     { name: 'uppercase bytes32', header: withProof({ requestId: goodJson.proof.requestId!.toUpperCase().replace('0X', '0x') }), reason: 'field_grammar' },
     { name: 'leading zero integer', header: withProof({ agentId: '01' }), reason: 'field_grammar' },
     { name: 'uint64 overflow', header: withProof({ expiresAt: (MAX_UINT64 + 1n).toString() }), reason: 'field_grammar' },
+    { name: 'UTF-8 BOM before the JCS bytes', header: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(jcs(goodJson), 'utf8')]).toString('base64'), reason: 'not_jcs' },
     { name: 'uppercase signer', header: b64(jcs({ ...goodJson, signer: goodJson.signer.toUpperCase().replace('0X', '0x') })), reason: 'field_grammar' },
   ];
   for (const c of proofInvalid) {

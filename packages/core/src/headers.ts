@@ -82,7 +82,8 @@ export function encodeAttestedProof(a: AttestedProof): string {
 export function decodeAttestedProof(v: string): AttestedProof {
   const bytes = decodeBase64Strict(v);
   if (!bytes) throw new Error('X-Attested-Proof: not strict base64');
-  const text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+  // ignoreBOM keeps a leading U+FEFF in the text, so JSON.parse refuses it as serde_json does.
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   const obj: unknown = JSON.parse(text);
   if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new Error('X-Attested-Proof: not an object');
   if (jcs(obj) !== text) throw new Error('X-Attested-Proof: not JCS');

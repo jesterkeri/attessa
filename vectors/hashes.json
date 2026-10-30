@@ -35,6 +35,13 @@
       "pathAndQuery": "/",
       "body": "0x00ff0000017f80",
       "expected": "0x005e1adcd2e157862c5f3890b2d11ad4fe079f7d16c5ad3e4b064e92a225b7a2"
+    },
+    {
+      "name": "non-ASCII method uppercased ASCII-only",
+      "method": "poßt",
+      "pathAndQuery": "/v1/evaluate",
+      "body": "0x7b7d",
+      "expected": "0x143a3a8aee94f37984b801a2db2204b6016ff8a8db3457ea749cc5a7d963bd6b"
     }
   ],
   "responseHash": [
@@ -107,6 +114,63 @@
       },
       "jcs": "{\"\\r\":\"cr\",\"1\":\"one\",\"A\":[\"x\",\"y\"],\"a\":\"line\\nbreak \\\"q\\\" \\\\ \\u0007 é 😀\",\"€\":\"euro\"}",
       "expected": "0xdd150600571734891669c2917655beb19ce958ac358b9112d104f5a5543f1312"
+    },
+    {
+      "name": "RFC 8785 3.2.3 sort example (UTF-16 code units, not code points)",
+      "inputs": {
+        "1": "One",
+        "€": "Euro Sign",
+        "\r": "Carriage Return",
+        "דּ": "Hebrew Letter Dalet With Dagesh",
+        "😀": "Emoji: Grinning Face",
+        "": "Control",
+        "ö": "Latin Small Letter O With Diaeresis"
+      },
+      "jcs": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "expected": "0xa0a138a7404c34122e9e872cd2a11429272c1ad2a592c0c8c47cf059164bb78f"
+    },
+    {
+      "name": "empty key, emoji before U+E000 (code-point order would swap them)",
+      "inputs": {
+        "": "private use",
+        "😀": "emoji",
+        "": "empty"
+      },
+      "jcs": "{\"\":\"empty\",\"😀\":\"emoji\",\"\":\"private use\"}",
+      "expected": "0xb7e18690294f5f8284a4e0c6bc3338f59c1551feb8e6d8a2cba35c39596938a3"
+    },
+    {
+      "name": "RFC 8785 Appendix B numbers",
+      "inputs": {
+        "numbers": [
+          0,
+          0,
+          5e-324,
+          -5e-324,
+          1.7976931348623157e+308,
+          -1.7976931348623157e+308,
+          9007199254740992,
+          -9007199254740992,
+          295147905179352830000,
+          9.999999999999997e+22,
+          1e+23,
+          1.0000000000000001e+23,
+          999999999999999700000,
+          999999999999999900000,
+          1e+21,
+          9.999999999999997e-7,
+          0.000001,
+          333333333.3333332,
+          333333333.33333325,
+          333333333.3333333,
+          333333333.3333334,
+          333333333.33333343,
+          -0.0000033333333333333333,
+          1424953923781206.2
+        ]
+      },
+      "jcs": "{\"numbers\":[0,0,5e-324,-5e-324,1.7976931348623157e+308,-1.7976931348623157e+308,9007199254740992,-9007199254740992,295147905179352830000,9.999999999999997e+22,1e+23,1.0000000000000001e+23,999999999999999700000,999999999999999900000,1e+21,9.999999999999997e-7,0.000001,333333333.3333332,333333333.33333325,333333333.3333333,333333333.3333334,333333333.33333343,-0.0000033333333333333333,1424953923781206.2]}",
+      "expected": "0xb3f75499d233d290e8dd9cfc0f0c39f0dfa3853c9c38de191116380be93c9b84"
     }
   ],
   "releaseId": [

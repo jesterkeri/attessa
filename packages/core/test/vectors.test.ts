@@ -62,7 +62,13 @@ describe('committed vectors', () => {
       expect(originHash(c.normalized), c.name).toBe(c.originHash);
     }
     for (const c of v.invalid) {
-      expect(() => normalizeOrigin(c.input, { local: c.local }), c.name).toThrow(OriginError);
+      let reason = 'accepted';
+      try {
+        normalizeOrigin(c.input, { local: c.local });
+      } catch (e) {
+        reason = e instanceof OriginError ? e.reason : 'not an OriginError';
+      }
+      expect(reason, c.name).toBe(c.reason);
     }
   });
 

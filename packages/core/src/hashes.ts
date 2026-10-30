@@ -1,12 +1,15 @@
 import { concat, encodeAbiParameters, keccak256, size, stringToBytes, type Address, type Hex } from 'viem';
 import { jcs } from './jcs.ts';
 
-/** SPEC §2.2: `keccak256(utf8(METHOD) ‖ 0x00 ‖ utf8(pathAndQuery) ‖ 0x00 ‖ bodyBytes)`. */
+/**
+ * SPEC §2.2: `keccak256(utf8(METHOD) ‖ 0x00 ‖ utf8(pathAndQuery) ‖ 0x00 ‖ bodyBytes)`.
+ * METHOD is uppercased ASCII-only (a-z), so non-ASCII characters pass through unchanged.
+ */
 export function requestHash(method: string, pathAndQuery: string, body: Uint8Array): Hex {
   if (!pathAndQuery.startsWith('/')) throw new Error('requestHash: pathAndQuery must start with /');
   return keccak256(
     concat([
-      stringToBytes(method.toUpperCase()),
+      stringToBytes(method.replace(/[a-z]/g, (c) => c.toUpperCase())),
       new Uint8Array([0]),
       stringToBytes(pathAndQuery),
       new Uint8Array([0]),

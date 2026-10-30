@@ -1,4 +1,7 @@
 import { keccak256, stringToBytes, type Hex } from 'viem';
+// The WHATWG reference implementation. Node's built-in URL skips UTS-46 CheckBidi, which the
+// standard sets (and Rust's url/idna applies), so it accepts hosts such as `xn--9hbc.com`.
+import { URL } from 'whatwg-url';
 
 /** Why `normalizeOrigin` refused an input. Stable strings, used in `vectors/origins.json`. */
 export type OriginErrorReason =
@@ -26,7 +29,7 @@ const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
 
 /**
  * SPEC §2.1. WHATWG URL parsing, whose host parser applies UTS-46 non-transitional
- * processing to ASCII and lowercases. `local` is `--network local`: it allows
+ * processing (CheckBidi and CheckJoiners on) to ASCII and lowercases. `local` is `--network local`: it allows
  * `http://localhost:<port>` and IP literals.
  */
 export function normalizeOrigin(input: string, opts: { local?: boolean } = {}): string {

@@ -122,6 +122,9 @@ describe('hashes (SPEC §2.2)', () => {
     expect(requestHash('POST', '/v1/evaluate?x=1', body)).toBe(manual);
     expect(requestHash('post', '/v1/evaluate?x=1', body)).toBe(manual);
     expect(() => requestHash('POST', 'v1/evaluate', body)).toThrow();
+    // ASCII-only uppercasing, as Rust's to_ascii_uppercase: 'ß' is not turned into 'SS'.
+    const ss = keccak256(concat([stringToHex('PO\u00dfT'), '0x00', stringToHex('/'), '0x00']));
+    expect(requestHash('po\u00dft', '/', new Uint8Array())).toBe(ss);
   });
 
   it('inputsHash hashes the JCS text', () => {

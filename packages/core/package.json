@@ -12,6 +12,10 @@
     "gen:vectors": "node scripts/gen-vectors.ts"
   },
   "dependencies": {
-    "viem": "^2.57.13"
+    "viem": "^2.57.13",
+    "whatwg-url": "14.2.0"
+  },
+  "devDependencies": {
+    "@types/whatwg-url": "13.0.0"
   }
 }
