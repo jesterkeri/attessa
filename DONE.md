@@ -79,3 +79,16 @@ exit 0
 ```
 reviewed: pending (Codex)
 notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
+
+## T19a - 2026-10-30
+commit: this entry (spike, no code)
+verified: the T19a loop from TASKS.md, SEP=https://forno.celo-sepolia.celo-testnet.org MAIN=https://forno.celo.org (read-only cast balance, no writes)
+output:
+```
+https://forno.celo-sepolia.celo-testnet.org -400 ok
+https://forno.celo-sepolia.celo-testnet.org -7200 ok
+https://forno.celo.org -400 ok
+https://forno.celo.org -7200 ok
+```
+result: -400 ok on both, so the gateway inputs value check can read state 400 blocks back on Forno. -7200 ok on both, so the SDK late re-read usually works.
+reviewed: n/a (spike)
