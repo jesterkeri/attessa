@@ -96,16 +96,17 @@ export async function connect(g: Global, deps: Deps): Promise<Chain> {
   let chainId: number;
   let deployed: Address | null = null;
   if (g.network === 'local') {
+    // SPEC §2.6: the deployments entry and pins come from the network whose chain id the RPC reports.
     chainId = reported;
+    deployed = Object.values(DEPLOYMENTS).find((d) => d.chainId === reported)?.enclaveRegistry ?? null;
   } else {
     const d = DEPLOYMENTS[g.network === 'mainnet' ? 'celo' : 'celo-sepolia'];
     chainId = d.chainId;
     deployed = d.enclaveRegistry;
     if (reported !== chainId) throw ERR.networkMismatch(reported, chainId);
   }
-  // A deployed registry is authoritative; ATTESSA_REGISTRY only fills in before deploy, or on a local chain.
-  const override = deps.env.ATTESSA_REGISTRY;
-  const registry = (g.network === 'local' ? (override ?? deployed) : (deployed ?? override)) ?? null;
+  // A deployed registry is authoritative; ATTESSA_REGISTRY only fills in before deploy, or on a chain with no pins.
+  const registry = deployed ?? deps.env.ATTESSA_REGISTRY ?? null;
   if (!registry) throw ERR.noRegistry(g.network);
   if (!ADDRESS.test(registry)) throw ERR.usage('ATTESSA_REGISTRY must be an address.');
   return { network: g.network, chainId, rpc, registry: registry.toLowerCase() as Address, account: loadAccount(deps.env) };
