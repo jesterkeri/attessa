@@ -348,6 +348,51 @@ fn bad_inputs_cases() {
     assert!(eval_with(&mut e, &b, ok).get("proof").is_some());
 }
 
+/// SPEC §4.3 (SPEC.md:355): every inputs leaf is a string. A JSON number at any leaf, in any
+/// form (integer, negative, fraction, exponent, the Appendix B extremes), is `bad_inputs`.
+#[test]
+fn numbers_in_inputs_are_bad_inputs() {
+    let (mut e, _) = configured(key_one());
+    let b = body("11142220", PAY_TO, SEPOLIA_USDC, "5");
+    let leaves: [&[&str]; 8] = [
+        &["block", "number"],
+        &["block", "hash"],
+        &["block", "timestamp"],
+        &["payTo", "address"],
+        &["payTo", "code"],
+        &["payTo", "nonce"],
+        &["payTo", "balanceWei"],
+        &["source"],
+    ];
+    let numbers: Vec<Value> = [
+        "0",
+        "3",
+        "-1",
+        "1.5",
+        "5e-324",
+        "1.7976931348623157e308",
+        "1e23",
+    ]
+    .iter()
+    .map(|n| serde_json::from_str(n).unwrap())
+    .collect();
+    for path in leaves {
+        for n in &numbers {
+            let mut i = inputs(PAY_TO, "0x", "3");
+            match path {
+                [k] => i[*k] = n.clone(),
+                [a, k] => i[*a][*k] = n.clone(),
+                _ => unreachable!(),
+            }
+            assert_eq!(
+                eval_with(&mut e, &b, i),
+                json!({"error": "bad_inputs"}),
+                "{path:?} = {n}"
+            );
+        }
+    }
+}
+
 #[test]
 fn malformed_evaluate_messages_are_bad_frame() {
     let (mut e, _) = configured(key_one());

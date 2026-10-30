@@ -127,7 +127,25 @@ fn vectors_hashes() {
             c["name"]
         );
     }
+    // SPEC §4.3 (SPEC.md:355) makes every `inputs` leaf a string and the enclave answers
+    // `bad_inputs` to a number (tests/enclave.rs `numbers_in_inputs_are_bad_inputs`), so the
+    // enclave's JCS never meets one and refuses them. Only cases holding a number are skipped.
+    fn has_number(v: &Value) -> bool {
+        match v {
+            Value::Number(_) => true,
+            Value::Array(a) => a.iter().any(has_number),
+            Value::Object(o) => o.values().any(has_number),
+            _ => false,
+        }
+    }
+    let (mut ran, mut skipped) = (0, 0);
     for c in list(&v, "inputsHash") {
+        if has_number(&c["inputs"]) {
+            assert_eq!(jcs(&c["inputs"]), None, "numbers must be refused");
+            skipped += 1;
+            continue;
+        }
+        ran += 1;
         let canonical = jcs(&c["inputs"]).expect("inputs canonicalise");
         assert_eq!(canonical, field(c, "jcs"), "inputsHash JCS {}", c["name"]);
         assert_eq!(
@@ -137,6 +155,10 @@ fn vectors_hashes() {
             c["name"]
         );
     }
+    assert!(
+        ran > 0,
+        "every inputsHash case was skipped ({skipped} hold numbers)"
+    );
     for c in list(&v, "releaseId") {
         let got = release_id(&bytes(c, "pcr0"), &bytes(c, "pcr1"), &bytes(c, "pcr2"));
         assert_eq!(
