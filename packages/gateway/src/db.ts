@@ -171,12 +171,19 @@ export class CallStore {
     return r.changes === 1;
   }
 
-  /** Records a non-terminal settle answer (reason, tx) without changing state. */
-  note(requestId: string, set: { reject_reason?: string | null; settle_tx?: string | null }, now: number): void {
+  /**
+   * Records a non-terminal settle answer (reason, tx) without changing state. Only while the row is still
+   * `settling` / `settle_pending`: a re-send answered after chain evidence resolved the row never
+   * overwrites the recorded outcome (SPEC §6.3 step 5). Returns whether the row was updated.
+   */
+  note(requestId: string, set: { reject_reason?: string | null; settle_tx?: string | null }, now: number): boolean {
     const cols = ['updated_at = @now'];
     if ('reject_reason' in set) cols.push('reject_reason = @reject_reason');
     if ('settle_tx' in set) cols.push('settle_tx = @settle_tx');
-    this.db.prepare(`UPDATE calls SET ${cols.join(', ')} WHERE request_id = @request_id`).run({ request_id: requestId, now, ...set });
+    const r = this.db
+      .prepare(`UPDATE calls SET ${cols.join(', ')} WHERE request_id = @request_id AND state IN ('settling','settle_pending')`)
+      .run({ request_id: requestId, now, ...set });
+    return r.changes === 1;
   }
 
   countUnsettledSince(payer: string, since: number): number {
