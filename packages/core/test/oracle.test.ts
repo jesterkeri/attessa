@@ -5,6 +5,7 @@ import {
   eip712Domain,
   encodeUserData,
   inputsHash,
+  jcs,
   livenessDigest,
   normalizeOrigin,
   originHash,
@@ -98,5 +99,32 @@ describe('core against fixed values computed independently with cast (INV-18)', 
   it('payer signature digest (SPEC §2.5, EIP-191)', () => {
     expect(payerSigMessage(ORACLE.requestId, 1761800000)).toBe(ORACLE.payerSigMessage);
     expect(payerSigDigest(ORACLE.requestId, 1761800000)).toBe(ORACLE.payerSigDigest);
+  });
+});
+
+// JCS (RFC 8785) at every depth. Each expected string was written by hand from RFC 8785 §3.2:
+// members sorted by UTF-16 code units in every object, arrays kept in order, ECMAScript number
+// text, minimal string escaping. The hash is `cast keccak` of the hand-written text.
+describe('JCS against text written by hand from RFC 8785 (INV-18, SPEC §2.2)', () => {
+  it('sorts members at every depth, inside arrays too', () => {
+    const input = { b: { d: [{ y: 1, x: [{ q: true, p: null }] }], c: {} }, a: [] };
+    const text = '{"a":[],"b":{"c":{},"d":[{"x":[{"p":null,"q":true}],"y":1}]}}';
+    expect(jcs(input)).toBe(text);
+    expect(inputsHash(input)).toBe('0x53d5b440f277094e09e0ddbbde0e9dc6ba3c28993ed26b881a01701d99bc3772');
+  });
+
+  it('orders nested keys by UTF-16 code units (RFC 8785 §3.2.3 example keys)', () => {
+    const input = { outer: { '\u20ac': 1, '\r': 2, '\u00f6': 3, '1': 4, '\u{1f600}': 5, '\ufb33': 6 } };
+    expect(jcs(input)).toBe('{"outer":{"\\r":2,"1":4,"\u00f6":3,"\u20ac":1,"\u{1f600}":5,"\ufb33":6}}');
+  });
+
+  it('writes nested numbers as ECMAScript does (RFC 8785 §3.2.2.3)', () => {
+    const input = { n: { small: 1e-7, neg: -0, int: 9007199254740992, frac: 0.000001, big: 1e21 } };
+    expect(jcs(input)).toBe('{"n":{"big":1e+21,"frac":0.000001,"int":9007199254740992,"neg":0,"small":1e-7}}');
+  });
+
+  it('escapes nested strings minimally (RFC 8785 §3.2.2.2)', () => {
+    const input = [{ s: 'a"b\\c\u001f\u007f/\u00e9' }];
+    expect(jcs(input)).toBe('[{"s":"a\\"b\\\\c\\u001f\u007f/\u00e9"}]');
   });
 });
