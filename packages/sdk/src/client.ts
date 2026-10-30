@@ -440,7 +440,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (entry.code) f.code = parseCode(entry.code);
       return finish(entry, 'settled_after_refusal', meta, f);
     }
-    return finish(entry, 'paid_but_rejected', meta, { check: 'missing_proof', settlementTx: settlement.tx });
+    return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: settlement.tx });
   }
 
   /**
@@ -485,6 +485,9 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const r = baseResult(e, outcome, meta);
     const c = code ?? (e.code ? parseCode(e.code) : undefined);
     if (c) r.code = c;
+    // A paid_but_rejected entry keeps its check in `proof_rejected{check}` (INV-13: the specific ProofCheck).
+    const check = e.state === 'paid_but_rejected' && e.code?.startsWith('proof_rejected{') ? e.code.slice('proof_rejected{'.length, -1) : undefined;
+    if (check) r.check = check as ProofCheck;
     return r;
   }
 
@@ -522,7 +525,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
 
     const err = parseErrorBody(new TextDecoder().decode(bytes));
     if (res.status === 409 && err?.error === 'in_progress' && err.requestId === entry.requestId) return pollResults(n, entry, meta);
-    if (res.status >= 400 && err && err.requestId === entry.requestId && err.error in GATEWAY_ERRORS) {
+    if (res.status >= 400 && err && err.requestId === entry.requestId && Object.hasOwn(GATEWAY_ERRORS, err.error)) {
       const code = err.error as CallCode;
       const e = ledger.update(entry.requestId, { state: 'refused', code: codeString(code, err.detail ?? undefined) });
       const r: Partial<CallResult> = { code };
@@ -703,7 +706,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       settlementTx: null,
       createdAt: String(now()),
     };
-    if (ledger.reserve(entry, limits.dailyCap) === 'over_daily_cap') return stopped('over_daily_cap');
+    for (let attempt = 0; ; attempt++) {
+      const got = ledger.reserve(entry, limits.dailyCap, { resumeOpen: req.newRequest !== true });
+      if (got === 'reserved') break;
+      if (got === 'over_daily_cap') return stopped('over_daily_cap');
+      if (got === 'request_id_conflict') return stopped('request_id_conflict', 'requestId already in the ledger');
+      // V0 again, under the lock: another process opened the same input after our first V0 check.
+      const resumed = await resume(n, got.open);
+      if (resumed) return resumed;
+      if (attempt >= 2) return stopped('in_progress', 'the same request kept starting in another process');
+    }
 
     // V7
     let live;

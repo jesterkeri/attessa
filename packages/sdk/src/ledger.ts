@@ -49,6 +49,8 @@ export function spendToday(entries: PendingEntry[], asset: Address, nowMs: numbe
   return total;
 }
 
+export type ReserveResult = 'reserved' | 'over_daily_cap' | 'request_id_conflict' | { open: PendingEntry };
+
 export class Ledger {
   readonly dir: string;
   readonly pendingPath: string;
@@ -89,7 +91,12 @@ export class Ledger {
     this.acquire();
     try {
       const { entries, result } = fn(this.list());
-      if (entries) this.write(entries);
+      if (entries) {
+        // One record per requestId: `update` and `get` address an entry by it.
+        const ids = new Set(entries.map((e) => e.requestId));
+        if (ids.size !== entries.length) throw new Error('ledger write refused: two entries share one requestId');
+        this.write(entries);
+      }
       return result;
     } finally {
       try {
@@ -103,17 +110,33 @@ export class Ledger {
   /**
    * V6. Under the lock: drop stale unsigned reservations, then reserve `entry.amount` if today's
    * spend plus it stays within `dailyCap`. The reservation and the ledger entry are one record.
+   * The V0 and requestId checks run again here, under the same lock, so two processes racing on one
+   * input or one requestId can't both get past them (INV-14): with `resumeOpen` (payAndVerify without
+   * `newRequest`), an open entry for the same `(originHash, requestHash)` is returned for V0 to resume,
+   * and any entry already holding `entry.requestId` is a `request_id_conflict`. Nothing is signed in
+   * either case.
    */
-  reserve(entry: PendingEntry, dailyCap: bigint): 'reserved' | 'over_daily_cap' {
-    return this.withLock((entries) => {
+  reserve(
+    entry: PendingEntry,
+    dailyCap: bigint,
+    opts: { resumeOpen?: boolean } = {},
+  ): ReserveResult {
+    return this.withLock<ReserveResult>((entries) => {
       const now = this.now();
       const kept = entries.filter(
         (e) => !(e.state === 'reserved' && e.nonce === null && now - Number(e.createdAt) > RESERVATION_TTL_MS),
       );
-      if (spendToday(kept, entry.asset, now) + BigInt(entry.amount) > dailyCap) {
-        return { entries: kept, result: 'over_daily_cap' as const };
+      if (opts.resumeOpen) {
+        const open = kept.find((e) => e.originHash === entry.originHash && e.requestHash === entry.requestHash && !isTerminal(e));
+        if (open) return { entries: kept, result: { open } };
       }
-      return { entries: [...kept, entry], result: 'reserved' as const };
+      if (kept.some((e) => e.requestId === entry.requestId.toLowerCase())) {
+        return { entries: kept, result: 'request_id_conflict' };
+      }
+      if (spendToday(kept, entry.asset, now) + BigInt(entry.amount) > dailyCap) {
+        return { entries: kept, result: 'over_daily_cap' };
+      }
+      return { entries: [...kept, entry], result: 'reserved' };
     });
   }
 

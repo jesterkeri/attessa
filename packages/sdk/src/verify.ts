@@ -182,6 +182,11 @@ export async function verifyPaid(
   if (proof.releaseId !== status.releaseId) return fail('release_not_approved', r);
 
   // Inputs block: the hash and timestamp the operator claims, and its age against the anchors.
+  // A block after the settlement block did not exist when the payment settled, so no header the RPC
+  // could return for it can equal `inputs.block`: a ProofCheck, decided without asking the RPC. At or
+  // below the settlement block (the head has reached it, above) the block exists, so a failed read
+  // there is an RPC error, never a ProofCheck.
+  if (inputs.block.number > settlement.blockNumber) return fail('inputs_mismatch', r);
   const blk = await chain.block(inputs.block.number);
   if (blk.hash.toLowerCase() !== inputs.block.hash || blk.timestamp !== inputs.block.timestamp) return fail('inputs_mismatch', r);
   if (inputs.block.timestamp < A - MAX_INPUTS_AGE || inputs.block.timestamp > S) return fail('stale_inputs', r);
