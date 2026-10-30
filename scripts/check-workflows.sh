@@ -20,19 +20,22 @@ if grep -rn 'pull_request_target' "$D" 2>/dev/null; then
   fail=1
 fi
 
-# 3. actions pinned to a mutable tag. Tags move; that is how the known compromises worked.
-#    Owner must be matched at the start of the action reference, not anywhere in it:
-#    "tj-actions/..." contains "actions/" and must NOT be treated as first-party.
-while IFS= read -r line; do
-  ref=${line#*uses:}; ref=${ref## }; ref=${ref%% *}
-  case "$ref" in
-    actions/*|github/*) ;;                      # first-party, tag is acceptable
-    ./*|docker://*) ;;                          # local or docker, different rules
-    *) echo "FAIL unpinned third-party action: $ref"
-       echo "     Pin to a full 40-character commit sha, e.g. owner/repo@<sha> # v1.2.3"
-       fail=1 ;;
-  esac
-done < <(grep -rhE '^[[:space:]]*(-[[:space:]]*)?uses:[[:space:]]*[^ ]+@[^ ]+' "$D" 2>/dev/null | grep -vE '@[0-9a-f]{40}')
+# 3. every action pinned to a full commit sha, first-party included: tags move, and that is
+#    how the known compromises worked. Scans the raw text, so flow mappings ({ uses: x@v })
+#    and a value on the next line are caught too.
+if ! python3 -I -c '
+import pathlib, re, sys
+bad = 0
+for f in sorted(pathlib.Path(sys.argv[1]).glob("*.y*ml")):
+    for m in re.finditer(r"\buses:\s*[\"\x27]?([^\s\"\x27#,}]+)", f.read_text()):
+        ref = m.group(1)
+        if ref.startswith(("./", "docker://")) or re.search(r"@[0-9a-f]{40}$", ref):
+            continue
+        print(f"FAIL unpinned action in {f.name}: {ref}")
+        print("     Pin to a full 40-character commit sha, e.g. owner/repo@<sha> # v1.2.3")
+        bad = 1
+sys.exit(bad)
+' "$D"; then fail=1; fi
 
 [ "$fail" -eq 0 ] && echo "workflows clean"
 exit $fail
