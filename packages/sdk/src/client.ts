@@ -314,6 +314,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         code: fields.code ? codeString(fields.code, fields.detail ?? fields.check) : entry.code,
         ...(fields.settlementTx ? { settlementTx: fields.settlementTx } : {}),
       });
+      // Another process decided this call first (V12): report its outcome, not this one's.
+      if (e.state !== ledgerState) return current(e, meta);
     }
     const r = { ...baseResult(e, outcome, meta), ...fields };
     evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });

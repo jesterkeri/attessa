@@ -128,10 +128,15 @@ export class Ledger {
     });
   }
 
+  /**
+   * Patches the entry as stored now, under the lock. A terminal entry is decided (V12) and is
+   * returned unchanged: another process may have finished the call since this one last read it.
+   */
   update(requestId: Hex, patch: Partial<PendingEntry>): PendingEntry {
     return this.withLock((entries) => {
       const i = entries.findIndex((e) => e.requestId === requestId.toLowerCase());
       if (i < 0) throw new Error(`no ledger entry for ${requestId}`);
+      if (isTerminal(entries[i]!)) return { result: entries[i]! };
       const next = { ...entries[i]!, ...patch };
       const out = [...entries];
       out[i] = next;
