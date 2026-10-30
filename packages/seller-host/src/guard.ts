@@ -83,7 +83,10 @@ const SETTLED_STATES = ['settled', 'delivered', 'delivery_failed'];
 
 /**
  * Reads the gateway's SQLite `calls` table (SPEC §6.4) read-only. Any failure counts as zero revenue, so
- * the guard trips sooner, never later.
+ * the guard trips sooner, never later. The schema has no settled-at column, and `updated_at` moves on
+ * later transitions (delivery, startup sweep), so a row is dated by `created_at`. It never changes and is
+ * never after the settlement, so each payment counts on one day only; one that straddles midnight counts
+ * on the earlier day, which only makes today's budget smaller.
  */
 export class GatewayDbRevenue implements RevenueSource {
   private readonly dbPath: string;
@@ -98,7 +101,7 @@ export class GatewayDbRevenue implements RevenueSource {
     try {
       db = new Database(this.dbPath, { readonly: true, fileMustExist: true });
       const rows = db
-        .prepare(`SELECT amount FROM calls WHERE updated_at >= ? AND state IN (${SETTLED_STATES.map(() => '?').join(',')})`)
+        .prepare(`SELECT amount FROM calls WHERE created_at >= ? AND state IN (${SETTLED_STATES.map(() => '?').join(',')})`)
         .all(dayStartSec, ...SETTLED_STATES) as Array<{ amount: string }>;
       let sum = 0n;
       for (const r of rows) if (/^(0|[1-9][0-9]*)$/.test(r.amount)) sum += BigInt(r.amount);

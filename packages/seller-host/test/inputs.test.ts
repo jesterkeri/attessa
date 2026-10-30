@@ -142,7 +142,7 @@ describe('buy-spend guard (SPEC §5)', () => {
     const dir = tmp();
     const dbPath = join(dir, 'sepolia.db');
     const db = new Database(dbPath);
-    db.exec('CREATE TABLE calls (request_id TEXT PRIMARY KEY, amount TEXT NOT NULL, state TEXT NOT NULL, updated_at INTEGER NOT NULL)');
+    db.exec('CREATE TABLE calls (request_id TEXT PRIMARY KEY, amount TEXT NOT NULL, state TEXT NOT NULL, created_at INTEGER NOT NULL)');
     const day = Date.UTC(2026, 10, 10) / 1000;
     const ins = db.prepare('INSERT INTO calls VALUES (?, ?, ?, ?)');
     ins.run('a', '20000', 'delivered', day + 10);
