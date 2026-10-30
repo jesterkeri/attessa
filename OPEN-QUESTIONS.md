@@ -51,3 +51,10 @@ Each was resolved with the smallest reading and pinned by a test or vector, so a
 - [ ] **`createAttestClient` second argument (T20).** Optional `registry`, `transport`, `fetch`, `sleep`, `now`, needed while deployments.ts has no registry address.
 - [ ] **`sourceRef` lookup (T20).** Best effort `earliest..latest` getLogs; a public RPC may reject the range, then the field is empty.
 - [ ] **Clean-clone typecheck needs core built first (T02 suspicion, confirmed in T20).** core's `types` points at dist. A source `types` export condition or project references would fix it.
+- [ ] **40 s window vs idempotency (T19).** §6.2 step 3's window check would refuse a retry of an already-settled call; the gateway applies it to new payments only, repeats follow the step 4 table.
+- [ ] **Replaying a stored 200 (T19).** The gateway requires the presented EIP-3009 signature to recover to the row's payer before replaying, so knowing the authorization fields is not enough. Smart-wallet (EIP-1271) buyers cannot pass this and must use `/v1/results`.
+- [ ] **Liveness inside `accepted` (T19).** `accepted` must be JCS-equal to the quote except `extra.attestedExec.liveness`, which must be present and null or an object.
+- [ ] **Gateway error mapping (T19).** Unreadable payload gives `payment_invalid{invalid_payload}`; a facilitator `/verify` error gives `payment_invalid{unexpected_verify_error}` with no row. Block hash or timestamp mismatch counts as `stale_inputs` (the SDK calls the same case `inputs_mismatch`, T20: the two should agree). An RPC failure at step 9 fails the check and nothing settles.
+- [ ] **`created_block` (T19).** Head minus 20 blocks, so the log search cannot start after the authorization was used.
+- [ ] **402 body and 202 PAYMENT-RESPONSE (T19).** 402 body is the PaymentRequired JSON; 202 PAYMENT-RESPONSE is `{success:false, errorReason:"settle_pending", transaction, ...}`.
+- [ ] **Contracts not in SPEC (T19).** seller-host `/internal/evaluate` body `{requestId, method, path, body(base64), paymentId}`; facilitator auth header configurable, default `Authorization: Bearer`. T15 must match the first.
