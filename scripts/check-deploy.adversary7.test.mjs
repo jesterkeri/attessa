@@ -1,6 +1,6 @@
 // Adversary test for T10 round 7: a committed remapping swaps out DeployBase.sol itself.
 //   flock /home/hr/.cache/attessa-heavy.lock node --test scripts/check-deploy.adversary7.test.mjs
-// Needs forge and git on PATH. No RPC, no transaction: forge test in a scratch mirror only.
+// Needs forge, cast and git on PATH. No RPC, no transaction: forge in a scratch mirror only.
 //
 // ADR-001 ("pinned, unmodified ... Never modify it") and the claim in
 // contracts/script/DeployBase.sol: DeployRegistry refuses, before broadcasting, any validator that
@@ -19,6 +19,11 @@
 // what `forge script script/DeployRegistry.s.sol` would. At the real tree they all pass; with the
 // remapping committed, every refusal case (look-alike validator from Codex r1 M2, demo CertManager,
 // foreign or accept-all P384Verifier) must still be refused.
+//
+// X rewritten per Joshua's decision 2026-10-30: no in-script guard can stop a committed tree that
+// replaces the guard (rounds 5, 6, 7), so X now targets the pre-deploy check Joshua runs before
+// every simulation and broadcast (`node scripts/check-deploy.mjs --pre-deploy`): on the X tree it
+// must FAIL; on the clean tree it must PASS (control).
 
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
@@ -51,6 +56,13 @@ const commitMirror = (msg) => {
   gitIn(M, ...gitId, 'commit', '--quiet', '-m', msg);
 };
 
+/** check-deploy --pre-deploy in the mirror: { status, out }. */
+function preDeploy(label) {
+  const r = spawnSync('node', [join(M, 'scripts', 'check-deploy.mjs'), '--pre-deploy'], { encoding: 'utf8' });
+  process.stdout.write(`--- check-deploy --pre-deploy, ${label} (exit ${r.status})\n${r.stdout}${r.stderr}`);
+  return { status: r.status, out: r.stdout + r.stderr };
+}
+
 /** forge test over test/deploy/DeployRegistry.t.sol in the mirror: { status, passed: Set, failed: Set }. */
 function deployRegistryTests(label) {
   const r = spawnSync('forge', ['test', '--match-path', 'test/deploy/DeployRegistry.t.sol'], { cwd: MC, encoding: 'utf8', maxBuffer: 64 << 20 });
@@ -62,17 +74,19 @@ function deployRegistryTests(label) {
 
 before(() => {
   mkdirSync(join(M, 'scripts'), { recursive: true });
+  cpSync(join(ROOT, 'scripts', 'check-deploy.mjs'), join(M, 'scripts', 'check-deploy.mjs'));
   cpSync(join(ROOT, '.gitignore'), join(M, '.gitignore'));
   cpSync(CONTRACTS, MC, { recursive: true, filter: (p) => !['out', 'cache', 'broadcast', 'lib'].includes(basename(p)) || dirname(p) !== CONTRACTS });
   execFileSync('git', ['clone', '--quiet', '--no-checkout', join(CONTRACTS, 'lib', 'nitro-validator'), NV]);
   gitIn(NV, 'checkout', '--quiet', '--detach', PINNED_FULL);
-  cpSync(join(CONTRACTS, 'lib', 'nitro-validator', 'lib', 'forge-std'), join(NV, 'lib', 'forge-std'), {
-    recursive: true,
-    filter: (p) => basename(p) !== '.git',
-  });
+  // A clone, not a copy: the pre-deploy check reads forge-std's committed blobs.
+  const FS = join(NV, 'lib', 'forge-std');
+  execFileSync('git', ['clone', '--quiet', '--no-checkout', join(CONTRACTS, 'lib', 'nitro-validator', 'lib', 'forge-std'), FS]);
+  gitIn(FS, 'checkout', '--quiet', '--detach', gitIn(NV, 'ls-tree', 'HEAD', 'lib/forge-std').split(/\s+/)[2]);
   gitIn(M, 'init', '--quiet');
   commitMirror('mirror at the real pin');
   results.baseline = deployRegistryTests('real tree');
+  results.preDeployClean = preDeploy('real tree');
 
   // The copy: DeployBase.sol with one early return in _requireProductionStack.
   const src = readFileSync(join(MC, 'script', 'DeployBase.sol'), 'utf8');
@@ -95,6 +109,7 @@ before(() => {
   // `forge script`) has no cache, so rebuild from scratch as it would.
   execFileSync('forge', ['build', '--force'], { cwd: MC, stdio: ['ignore', 'ignore', 'inherit'] });
   results.remapped = deployRegistryTests('remapped DeployBase');
+  results.preDeployX = preDeploy('remapped DeployBase');
 });
 
 after(() => {
@@ -106,13 +121,15 @@ test('baseline: at the real tree every DeployRegistry refusal test passes (the h
   assert.equal(results.baseline.status, 0);
 });
 
-test('X. committed remapping replaces DeployBase.sol under the unchanged deploy scripts: DeployRegistry must still refuse every look-alike', () => {
+test('control: at the real tree the pre-deploy check PASSES', () => {
+  assert.equal(results.preDeployClean.status, 0);
+  assert.match(results.preDeployClean.out, /^PASS: /m);
+});
+
+test('X. committed remapping replaces DeployBase.sol under the unchanged deploy scripts: the pre-deploy check must FAIL', () => {
   assert.equal(results.clean, '');
   assert.ok(results.scriptsUnchanged, 'script/DeployBase.sol or script/DeployRegistry.s.sol differs from the commit under review');
-  const accepted = REFUSALS.filter((t) => !results.remapped.passed.has(t));
-  assert.deepEqual(
-    accepted,
-    [],
-    `DeployRegistry accepted what it must refuse (${accepted.join(', ')}): a one-line remapping swaps out the guard in script/DeployBase.sol (ADR-001, DeployBase.sol "Any other byte, length or immutable value is refused")`,
-  );
+  assert.equal(results.preDeployX.status, 1, 'the pre-deploy check did not FAIL a tree whose remapping swaps out script/DeployBase.sol (ADR-001)');
+  assert.match(results.preDeployX.out, /^FAIL: /m);
+  assert.match(results.preDeployX.out, /DeployRegistry local artifact compiled src\/evil\/DeployBase\.sol/);
 });
