@@ -416,7 +416,10 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           paymentResponse: res.headers.get(HEADER.paymentResponse),
         };
       if (res.status === 202) return { kind: 'pending' };
-      return { kind: 'none', status: res.status };
+      // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
+      const err = parseErrorBody(new TextDecoder().decode(bytes));
+      if (res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId) return { kind: 'none', status: res.status };
+      return { kind: 'error' };
     } catch {
       return { kind: 'error' };
     }
@@ -425,14 +428,20 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   /**
    * The authorization was used on chain (`settlement`). First call getResult (INV-23): a result
    * that passes V10 → verified, one that fails → paid_but_rejected, none → settled_after_refusal
-   * for a refused call or paid_but_rejected{missing_proof} for an uncertain one.
+   * for a refused call or paid_but_rejected{missing_proof} for an uncertain one. "None" is the
+   * gateway's `result_not_found`: while /v1/results is unreachable an uncertain call stays
+   * `uncertain` (settlement recorded), so getResult / reconcilePending can still verify it (INV-13).
    */
   async function settledPath(n: Net, entry: PendingEntry, settlement: Settlement, meta: CallMeta): Promise<CallResult> {
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
+    let noResult = false;
     for (let attempt = 0; attempt < 5; attempt++) {
       const f = await fetchResult(n, entry);
       if (f.kind === 'result') return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, meta, settlement);
-      if (f.kind === 'none') break;
+      if (f.kind === 'none') {
+        noResult = true;
+        break;
+      }
       await sleep(POLL_MS);
     }
     if (entry.state === 'refused') {
@@ -440,6 +449,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (entry.code) f.code = parseCode(entry.code);
       return finish(entry, 'settled_after_refusal', meta, f);
     }
+    if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: settlement.tx });
     return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: settlement.tx });
   }
 
@@ -575,7 +585,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           entry = e;
           break;
         }
-        if (waited >= RESERVED_WAIT_MS) return { ...baseResult(e, 'stopped'), code: 'in_progress' };
+        if (waited >= RESERVED_WAIT_MS) {
+          const r: CallResult = { ...baseResult(e, 'stopped'), code: 'in_progress' };
+          evidence(e, r); // SPEC §9: every outcome is in evidence
+          return r;
+        }
       }
     }
     if (isTerminal(entry)) return current(entry, {});
@@ -722,12 +736,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     try {
       live = await verifyLiveness(n, ep, sel.liveness, challenge);
     } catch (e) {
-      ledger.remove(requestId);
+      ledger.removeIfUnchanged(entry);
       if (e instanceof RpcError) return stopped('rpc_unavailable', e.message);
       throw e;
     }
     if (!live.ok) {
-      ledger.remove(requestId);
+      ledger.removeIfUnchanged(entry);
       return stopped('liveness_failed', live.reason);
     }
     const meta: CallMeta = { selfVerifiedOwner: ep.selfVerifiedOwner, releaseId: live.releaseId };
@@ -739,7 +753,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     try {
       head = await n.chain.latest();
     } catch (e) {
-      ledger.remove(requestId);
+      ledger.removeIfUnchanged(entry);
       return stopped('rpc_unavailable', (e as Error).message);
     }
     const auth: Authorization = {
@@ -750,7 +764,9 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       validBefore: (head.timestamp + VALID_WINDOW).toString(),
       nonce: random32(),
     };
-    const signed = ledger.update(requestId, {
+    // Only our own reservation turns `signed`. If V7 stalled past the 10-minute sweep, the entry was
+    // dropped and the requestId may now belong to another call (INV-14): sign nothing.
+    const signed = ledger.updateIfUnchanged(entry, {
       state: 'signed',
       nonce: auth.nonce,
       signedAtChain: head.timestamp.toString(),
@@ -759,12 +775,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       validBefore: auth.validBefore,
       expectedSigner: live.signer,
     });
+    if (!signed) {
+      if (ledger.get(requestId)) return stopped('request_id_conflict', 'requestId was taken by another call while this one waited');
+      return stopped('liveness_failed', 'reservation_expired');
+    }
     let signature: Hex;
     try {
       signature = await signAuthorization(cfg.account, n.chainId, pin, auth);
     } catch (e) {
       // Nothing left the process: release the reservation.
-      ledger.remove(requestId);
+      ledger.removeIfUnchanged(signed);
       throw e;
     }
 
