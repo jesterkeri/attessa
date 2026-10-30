@@ -9,6 +9,12 @@ import { classifySettle, targetOf } from './settle.ts';
 export const SETTLING_RESEND_AFTER_S = 20;
 /** SPEC §6.3: `settled` with no live response for longer than this → `delivery_failed`. */
 export const DELIVERY_GRACE_S = 30;
+/**
+ * INV-11: a `settled` row with no live response is `delivery_failed` once now > validBefore + this, even
+ * inside the grace (a row the reconciler settles late, after a lagging log index). Leaves one 5 s pass of
+ * slack before validBefore + 60 s. A live handler's row is never swept.
+ */
+export const DELIVERY_DEADLINE_S = 50;
 /** SPEC §6.3 step 4 / INV-11: expiry is judged only at a block whose timestamp exceeds validBefore + 5. */
 export const EXPIRY_MARGIN_S = 5;
 
@@ -104,19 +110,27 @@ export class Reconciler {
         })
         .finally(() => {
           this.checking.delete(id);
-          db.applyRetention(this.d.now()); // drop the response of a row this check terminalized
+          // A row this check settled late, or terminalized: finish it now, not a pass later.
+          this.sweepDelivered(this.d.now());
+          db.applyRetention(this.d.now());
         });
       this.checking.set(id, checked.then(() => undefined));
       started.push(checked.then((r) => r?.sent));
     }
     const now = this.d.now();
-    for (const row of db.inStates(['settled'])) {
-      if (!this.d.live.has(row.request_id) && now - row.updated_at > DELIVERY_GRACE_S) {
-        db.transition(row.request_id, ['settled'], 'delivery_failed', now);
-      }
-    }
+    this.sweepDelivered(now);
     db.applyRetention(now);
     return started;
+  }
+
+  /** SPEC §6.3: `settled` with no live response for > 30 s, or past the INV-11 deadline → `delivery_failed`. */
+  private sweepDelivered(now: number): void {
+    for (const row of this.d.db.inStates(['settled'])) {
+      if (this.d.live.has(row.request_id)) continue;
+      if (now - row.updated_at > DELIVERY_GRACE_S || now > row.valid_before + DELIVERY_DEADLINE_S) {
+        this.d.db.transition(row.request_id, ['settled'], 'delivery_failed', now);
+      }
+    }
   }
 
   /**
