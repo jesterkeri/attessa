@@ -298,3 +298,25 @@ exit 0
 adversary: all five official mutants also die to the invariant suite alone; invariants not vacuous (handler reaches second registration, renewal, rotation, OPERATOR_MISMATCH, AGENT_MISMATCH).
 reviewed: pending (Codex)
 notes: mutate.sh refuses a dirty contracts/src, runs the clean suite first, reports BROKEN for a patch that does not apply or compile, reverts on EXIT/INT/TERM.
+
+## T09 - 2026-10-30
+commit: this entry (on feat/t05-invariants 0d9e8bd)
+verified: cd contracts && forge coverage --report summary --match-path 'test/*' && slither . --config-file slither.config.json
+output (coverage table, test summary and slither tail, verbatim from the log):
+```
+$ cd contracts && forge coverage --report summary --match-path 'test/*' && slither . --config-file slither.config.json
+Ran 6 test suites in 285.68s (286.01s CPU time): 160 tests passed, 0 failed, 0 skipped (160 total tests)
+| File                               | % Lines           | % Statements      | % Branches       | % Funcs         |
+| src/EnclaveRegistry.sol            | 100.00% (207/207) | 100.00% (298/298) | 100.00% (61/61)  | 100.00% (29/29) |
+| test/invariant/RegistryHandler.sol | 90.23% (240/266)  | 91.03% (355/390)  | 78.65% (70/89)   | 84.00% (21/25)  |
+| test/mocks/Mocks.sol               | 100.00% (45/45)   | 100.00% (37/37)   | 87.50% (14/16)   | 100.00% (11/11) |
+| test/utils/AttestationKit.sol      | 100.00% (32/32)   | 100.00% (35/35)   | 100.00% (1/1)    | 100.00% (7/7)   |
+| test/utils/RegistryBase.sol        | 82.22% (37/45)    | 76.19% (32/42)    | N/A (0/0)        | 100.00% (9/9)   |
+| Total                              | 94.29% (561/595)  | 94.39% (757/802)  | 87.43% (146/167) | 95.06% (77/81)  |
+INFO:Slither:. analyzed (11 contracts with 102 detectors), 0 result(s) found
+exit=0
+```
+result: EnclaveRegistry branch coverage 100% (61/61), done-when is >= 90%. Slither 0.11.6 found 15 results on the first run, all triaged in docs/SLITHER_TRIAGE.md and recorded by id in contracts/slither.db.json; 0 untriaged, exit 0.
+adversary: n/a (config and triage doc only; the triage goes to Codex with T06/T07)
+reviewed: pending (Codex)
+notes: slither installed with `uv tool install slither-analyzer` (user space, not a project dependency). Coverage runs invariants at default depth, about 285 s.
