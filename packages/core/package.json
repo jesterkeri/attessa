@@ -8,6 +8,14 @@
   "scripts": {
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "gen:vectors": "node scripts/gen-vectors.ts"
+  },
+  "dependencies": {
+    "viem": "^2.57.13",
+    "whatwg-url": "14.2.0"
+  },
+  "devDependencies": {
+    "@types/whatwg-url": "13.0.0"
   }
 }

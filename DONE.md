@@ -57,3 +57,30 @@ exit 0
 ```
 reviewed: pending (adversary, then Codex; verdict appended as a new entry)
 notes: attempt 1 failed (rootDir in the shared tsconfig resolved to the repo root); fixed per package. Rust 1.98.1 pinned; locally it is a hardlink of the installed stable 1.98.1 because the rustup download stalled. esbuild install script is skipped by the pnpm allowlist (only better-sqlite3, keytar may run scripts).
+
+## T03 - 2026-10-30
+commit: 705d515 (built fd63419 by builder B2, Opus; fixed 705d515)
+verified: pnpm --filter @attessa/core test
+output:
+```
+
+> @attessa/core@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/b2-core/packages/core
+> vitest run --passWithNoTests
+
+
+ RUN  v3.2.7 /home/hr/myvscode_linux/attessa/.worktrees/b2-core/packages/core
+
+ ✓ test/regression-t03.test.ts (4 tests) 7ms
+ ✓ test/core.test.ts (21 tests) 52ms
+ ✓ test/vectors.test.ts (7 tests) 111ms
+
+ Test Files  3 passed (3)
+      Tests  32 passed (32)
+   Start at  08:47:06
+   Duration  630ms (transform 157ms, setup 0ms, collect 766ms, tests 171ms, environment 1ms, prepare 228ms)
+
+exit 0
+```
+adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts; UTF-8 BOM accepted before X-Attested-Proof JCS); 120/120 vector values recomputed independently with cast. r2 on 705d515 NO DEFECT FOUND; 124/124 recomputed; 2,130-input TS vs Rust url differential fuzz, no originHash disagreement.
+reviewed: pending (Codex)
+notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
