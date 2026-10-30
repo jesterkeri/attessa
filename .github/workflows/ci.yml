@@ -98,9 +98,14 @@ jobs:
           version: ${{ steps.foundry.outputs.version }}
       - run: pipx install slither-analyzer==0.11.6
       # Slither resolves symlinks before matching include_paths, so a symlinked file could escape it.
+      # find, after the recursive checkout, also sees symlinks inside submodules (git ls-files does not).
+      # Slither honours inline slither-disable comments in any file a result touches, lib/ included,
+      # so triage goes only by id through contracts/slither.db.json (docs/SLITHER_TRIAGE.md).
       - run: |
-          links=$(git ls-files -s contracts | awk '$1 == "120000" {print $4}')
+          links=$(find contracts -type l)
           if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
+          rc=0; grep -rn --exclude-dir=out --exclude-dir=cache slither-disable contracts || rc=$?
+          if [ $rc -ne 1 ]; then echo "slither-disable comments under contracts/ are not allowed (grep rc=$rc): triage by id in contracts/slither.db.json"; exit 1; fi
       # Nothing to analyse before the first contract lands; once one exists the config must too.
       - working-directory: contracts
         run: |
