@@ -9,6 +9,7 @@
     "build": "tsc -p .",
     "typecheck": "tsc -p ../core && tsc -p . --noEmit",
     "test": "vitest run",
+    "lint": "tsc -p ../core && tsc -p . --noEmit",
     "render-units": "node --experimental-strip-types scripts/render-units.ts"
   },
   "dependencies": {

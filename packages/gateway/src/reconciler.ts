@@ -27,7 +27,13 @@ export interface ReconcilerDeps {
 
 export class Reconciler {
   private timer: NodeJS.Timeout | null = null;
-  private running: Promise<void> | null = null;
+  private running: Promise<Promise<void>[]> | null = null;
+  /**
+   * Re-sends in flight, by request id. A pass starts them and does not wait, so a facilitator that hangs
+   * for the full settle timeout never delays the next pass's chain checks (SPEC §6.3 every 5 s, INV-11).
+   * A row with a re-send in flight is not sent again: at most one reconciler send per row at a time.
+   */
+  private readonly resending = new Map<string, Promise<void>>();
 
   private readonly d: ReconcilerDeps;
   constructor(d: ReconcilerDeps) {
@@ -52,27 +58,34 @@ export class Reconciler {
     this.timer.unref();
   }
 
+  /** Stops the timer and waits for the pass and every re-send in flight, so nothing writes after close. */
   async stop(): Promise<void> {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     await this.running;
+    await Promise.all(this.resending.values());
   }
 
-  /** One pass. Concurrent calls share the pass in flight. */
-  tick(): Promise<void> {
+  /**
+   * One pass. Concurrent calls share the pass in flight. The returned promise also waits for the re-sends
+   * that pass started; the timer ignores it, so the next pass is never held up by a slow facilitator.
+   */
+  async tick(): Promise<void> {
     if (!this.running) {
       this.running = this.pass().finally(() => {
         this.running = null;
       });
     }
-    return this.running;
+    await Promise.all(await this.running);
   }
 
-  private async pass(): Promise<void> {
+  private async pass(): Promise<Promise<void>[]> {
     const { db } = this.d;
+    const started: Promise<void>[] = [];
     for (const row of db.inStates(['settling', 'settle_pending'])) {
       try {
-        await this.reconcileSettlement(row);
+        const r = await this.reconcileSettlement(row);
+        if (r) started.push(r.sent);
       } catch (e) {
         this.d.log('reconcile_error', { requestId: row.request_id, error: (e as Error).message });
       }
@@ -84,10 +97,15 @@ export class Reconciler {
       }
     }
     db.applyRetention(now);
+    return started;
   }
 
-  /** SPEC §6.3 steps 1–5 for one `settling` / `settle_pending` row. Only chain evidence terminalizes. */
-  private async reconcileSettlement(row: CallRow): Promise<void> {
+  /**
+   * SPEC §6.3 steps 1–5 for one `settling` / `settle_pending` row. Only chain evidence terminalizes.
+   * Returns the step 5 re-send it started, if any, without waiting for it (boxed: an async function
+   * returning a bare promise would adopt it and wait).
+   */
+  private async reconcileSettlement(row: CallRow): Promise<{ sent: Promise<void> } | null> {
     const { chain, db } = this.d;
     const t = targetOf(row);
     const fromBlock = BigInt(row.created_block);
@@ -96,7 +114,7 @@ export class Reconciler {
     const usedLog = used.find((l) => isAuthorizationUsed(l, t));
     if (usedLog) {
       const receipt = await chain.receipt(usedLog.transactionHash);
-      if (!receipt) return; // log seen, receipt not served yet: next tick
+      if (!receipt) return null; // log seen, receipt not served yet: next tick
       const now = this.d.now();
       if (receiptSettles(receipt, t)) {
         db.transition(row.request_id, ['settling', 'settle_pending'], 'settled', now, {
@@ -112,14 +130,14 @@ export class Reconciler {
         });
         this.d.log('settle_failed', { requestId: row.request_id, reason: 'nonce_used_elsewhere' });
       }
-      return;
+      return null;
     }
     // 3. AuthorizationCanceled(payer, nonce).
     const cancelled = await chain.getLogs(t.asset, authorizationTopics('AuthorizationCanceled', t.payer, t.nonce), fromBlock);
     if (cancelled.length > 0) {
       db.transition(row.request_id, ['settling', 'settle_pending'], 'settle_failed', this.d.now(), { reject_reason: 'cancelled' });
       this.d.log('settle_failed', { requestId: row.request_id, reason: 'cancelled' });
-      return;
+      return null;
     }
     // 4. Expiry, judged at a block past validBefore + 5.
     const head = await chain.latestBlock();
@@ -129,12 +147,18 @@ export class Reconciler {
         db.transition(row.request_id, ['settling', 'settle_pending'], 'settle_failed', this.d.now(), { reject_reason: 'expired' });
         this.d.log('settle_failed', { requestId: row.request_id, reason: 'expired' });
       }
-      return; // used but the log query is behind: next tick
+      return null; // used but the log query is behind: next tick
     }
     // 5. Retry from the stored payload. The answer is recorded, never acted on as a terminal outcome.
-    if (db.isPaused() || this.d.sending.has(row.request_id) || !row.payment_payload || !row.requirements) return;
-    if (row.state === 'settling' && this.d.now() - row.updated_at <= SETTLING_RESEND_AFTER_S) return;
-    await this.resend(row);
+    if (db.isPaused() || this.d.sending.has(row.request_id) || this.resending.has(row.request_id)) return null;
+    if (!row.payment_payload || !row.requirements) return null;
+    if (row.state === 'settling' && this.d.now() - row.updated_at <= SETTLING_RESEND_AFTER_S) return null;
+    const id = row.request_id;
+    const sent = this.resend(row)
+      .catch((e: unknown) => this.d.log('reconcile_error', { requestId: id, error: (e as Error).message }))
+      .finally(() => this.resending.delete(id));
+    this.resending.set(id, sent);
+    return { sent };
   }
 
   private async resend(row: CallRow): Promise<void> {
