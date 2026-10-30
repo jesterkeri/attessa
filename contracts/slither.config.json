@@ -1,5 +1,5 @@
 {
-  "filter_paths": "lib/|test/|script/",
+  "include_paths": "contracts/src/",
   "exclude_dependencies": true,
   "compile_force_framework": "foundry",
   "foundry_compile_all": false

@@ -1,8 +1,8 @@
 # Slither triage: EnclaveRegistry
 
-Slither 0.11.6, 102 detectors, run as `cd contracts && slither . --config-file slither.config.json`. `slither.config.json` filters `lib/`, `test/` and `script/`, so only `src/` is analysed. The first run on `src/EnclaveRegistry.sol` at 0d9e8bd found 15 results. None were fixed in code: each is a false positive or accepted by design, for the reason given below.
+Slither 0.11.6, 102 detectors, run as `cd contracts && slither . --config-file slither.config.json`. `slither.config.json` sets `include_paths: contracts/src/`, so a result is reported whenever any of its elements is in `src/`, even if it also touches `lib/`. (The earlier `filter_paths "lib/|test/|script/"` dropped any result with a matching element, and Slither strips the trailing `/`, so it would also have hidden a src file named like `Transcript.sol`.) The first run on `src/EnclaveRegistry.sol` at 0d9e8bd found 15 results; the switch to `include_paths` surfaced a 16th (pragma). None were fixed in code: each is a false positive or accepted by design, for the reason given below.
 
-Every triaged result is listed by its Slither id in `contracts/slither.db.json`, which Slither reads by default and uses to hide those results. The id hashes the finding's source, so editing a flagged function brings its finding back and it has to be triaged again. A new finding fails the command (exit 255).
+Every triaged result is listed by its Slither id in `contracts/slither.db.json`, which Slither reads by default and uses to hide those results. In Slither 0.11.6 the id hashes the function's canonical name, the message text and the flagged expression with its line number (`utils/output.py`). Guards and the rest of the function are not hashed, so a change that leaves the flagged line in place (for example removing a length check) keeps the finding suppressed. A suppression is not re-review: any change to a function listed here needs its triage re-read, and the unit and invariant tests, not Slither, are what catch a removed guard. A new finding fails the command (exit 255).
 
 | # | id (prefix) | Detector (impact) | Where | Verdict |
 |---|---|---|---|---|
@@ -21,6 +21,7 @@ Every triaged result is listed by its Slither id in `contracts/slither.db.json`,
 | 13 | 40d707e93546 | timestamp (Low) | `renewSigner`, L369-385 | by design |
 | 14 | 81a1016ae935 | timestamp (Low) | `checkSigner`, L405-423 | by design |
 | 15 | 97984c41f98a | timestamp (Low) | `verifyProof`, L425-441 | by design |
+| 16 | 4b6e69a12a80 | pragma (Informational) | `src/EnclaveRegistry.sol` 0.8.26 vs `lib/nitro-validator` ^0.8.15 | by design: the dependency is pinned at 0ea0d12 (adr/001) and compiles under the same solc 0.8.26 set in foundry.toml; hidden before only because the old filter_paths dropped any result with a lib/ element |
 
 ## 1, 2. encode-packed-collision
 
