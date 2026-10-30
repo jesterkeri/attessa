@@ -74,4 +74,51 @@ describe('reconciler with a slow RPC (SPEC §6.3 every 5 s, INV-11)', () => {
       expect(used).toHaveLength(0);
     }
   });
+
+  it('every chain read takes 20 s (10 s timeout + one retry): rows with every validBefore phase are terminal by validBefore + 60 s', async () => {
+    h = await makeHarness();
+    h.fac.settleScript = Array(400).fill({ kind: 'status', status: 500 });
+    const t0 = h.clock.t;
+    // validBefore at every second of a 20 s call cycle and of the 5 s tick.
+    const open: Array<{ id: string; validBefore: number }> = [];
+    for (let i = 0; i < 20; i++) {
+      const validBefore = t0 + 45 + i;
+      const r = await h.call(await h.pay({ validBefore }));
+      expect(r.statusCode).toBe(202);
+      open.push({ id: r.headers['x-request-id'] as string, validBefore });
+    }
+    expect(h.clock.t).toBe(t0);
+
+    // Each read answers 20 virtual seconds after it was asked, with the chain as it is then.
+    const sleepers: Array<{ until: number; go: () => void }> = [];
+    let fast = false;
+    release = () => {
+      fast = true;
+      for (const z of sleepers.splice(0)) z.go();
+    };
+    const slow = <A extends unknown[], R>(f: (...a: A) => Promise<R>) => async (...a: A): Promise<R> => {
+      if (!fast) await new Promise<void>((go) => sleepers.push({ until: h.clock.t + 20, go }));
+      return f(...a);
+    };
+    h.chain.getLogs = slow(h.chain.getLogs.bind(h.chain));
+    h.chain.latestBlock = slow(h.chain.latestBlock.bind(h.chain));
+    h.chain.authorizationState = slow(h.chain.authorizationState.bind(h.chain));
+
+    const terminalAt = new Map<string, number>();
+    const end = t0 + 45 + 19 + 61;
+    while (h.clock.t < end) {
+      h.chain.advance(1);
+      for (const z of sleepers.filter((x) => x.until <= h.clock.t)) {
+        sleepers.splice(sleepers.indexOf(z), 1);
+        z.go();
+      }
+      if ((h.clock.t - t0) % 5 === 0) void h.gw.reconciler.tick();
+      await wait(15);
+      for (const o of open) if (!terminalAt.has(o.id) && TERMINAL.includes(h.row(o.id)!.state)) terminalAt.set(o.id, h.clock.t);
+    }
+
+    const late = open.filter((o) => !(terminalAt.get(o.id)! <= o.validBefore + 60)).map((o) => o.validBefore - t0);
+    expect(late).toEqual([]);
+    for (const o of open) expect(h.row(o.id)!).toMatchObject({ state: 'settle_failed', reject_reason: 'expired' });
+  });
 });

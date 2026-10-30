@@ -128,8 +128,15 @@ export class Reconciler {
     const { chain, db } = this.d;
     const t = targetOf(row);
     const fromBlock = BigInt(row.created_block);
+    // The three reads of steps 1, 3 and 4 run together: one slow RPC call then costs one timeout, not three,
+    // which keeps a row inside validBefore + 60 s (INV-11). The expiry verdict rests only on
+    // authorizationState at H, so reading H alongside the log queries is safe.
+    const [used, cancelled, head] = await Promise.all([
+      chain.getLogs(t.asset, authorizationTopics('AuthorizationUsed', t.payer, t.nonce), fromBlock),
+      chain.getLogs(t.asset, authorizationTopics('AuthorizationCanceled', t.payer, t.nonce), fromBlock),
+      chain.latestBlock(),
+    ]);
     // 1–2. AuthorizationUsed(payer, nonce) from the row's asset, then the same tx must carry the Transfer.
-    const used = await chain.getLogs(t.asset, authorizationTopics('AuthorizationUsed', t.payer, t.nonce), fromBlock);
     const usedLog = used.find((l) => isAuthorizationUsed(l, t));
     if (usedLog) {
       const receipt = await chain.receipt(usedLog.transactionHash);
@@ -152,14 +159,12 @@ export class Reconciler {
       return null;
     }
     // 3. AuthorizationCanceled(payer, nonce).
-    const cancelled = await chain.getLogs(t.asset, authorizationTopics('AuthorizationCanceled', t.payer, t.nonce), fromBlock);
     if (cancelled.length > 0) {
       db.transition(row.request_id, ['settling', 'settle_pending'], 'settle_failed', this.d.now(), { reject_reason: 'cancelled' });
       this.d.log('settle_failed', { requestId: row.request_id, reason: 'cancelled' });
       return null;
     }
     // 4. Expiry, judged at a block past validBefore + 5.
-    const head = await chain.latestBlock();
     if (head.timestamp > BigInt(row.valid_before + EXPIRY_MARGIN_S)) {
       const isUsed = await chain.authorizationState(t.asset, t.payer, t.nonce, head.number);
       if (!isUsed) {
@@ -169,11 +174,15 @@ export class Reconciler {
       return null; // used but the log query is behind: next tick
     }
     // 5. Retry from the stored payload. The answer is recorded, never acted on as a terminal outcome.
-    if (db.isPaused() || this.d.sending.has(row.request_id) || this.resending.has(row.request_id)) return null;
-    if (!row.payment_payload || !row.requirements) return null;
-    if (row.state === 'settling' && this.d.now() - row.updated_at <= SETTLING_RESEND_AFTER_S) return null;
+    // Decide from the row as it is now, not as the pass read it: during the reads above the handler's own
+    // send may have landed and moved the row on. Steps 1-4 need no re-read: db.transition checks the state.
     const id = row.request_id;
-    const sent = this.resend(row)
+    const cur = db.byRequestId(id);
+    if (!cur || (cur.state !== 'settling' && cur.state !== 'settle_pending')) return null;
+    if (db.isPaused() || this.d.sending.has(id) || this.resending.has(id)) return null;
+    if (!cur.payment_payload || !cur.requirements) return null;
+    if (cur.state === 'settling' && this.d.now() - cur.updated_at <= SETTLING_RESEND_AFTER_S) return null;
+    const sent = this.resend(cur)
       .catch((e: unknown) => this.d.log('reconcile_error', { requestId: id, error: (e as Error).message }))
       .finally(() => this.resending.delete(id));
     this.resending.set(id, sent);
