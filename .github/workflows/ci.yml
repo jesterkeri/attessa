@@ -20,10 +20,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
       - run: corepack enable
@@ -39,12 +39,16 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
           persist-credentials: false
       - id: foundry
-        run: echo "version=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)" >> "$GITHUB_OUTPUT"
+        # A missing or malformed pin must fail here: an empty version makes foundry-toolchain install stable.
+        run: |
+          v=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)
+          [[ $v =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "contracts/FOUNDRY_VERSION is not vX.Y.Z: '$v'"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
         with:
           version: ${{ steps.foundry.outputs.version }}
@@ -60,19 +64,26 @@ jobs:
           FOUNDRY_INVARIANT_DEPTH: '50'
         run: forge test
       # INV-18: every vector value recomputed with cast, independent of core and viem.
-      - run: python3 -I scripts/check-vectors-oracle.py
+      # vectors/ and the oracle land together (T03); once vectors/ exists a missing oracle fails.
+      - run: |
+          if [ ! -d vectors ]; then echo "no vectors/ yet"; exit 0; fi
+          python3 -I scripts/check-vectors-oracle.py
 
   slither:
     name: slither
     runs-on: ubuntu-latest
     timeout-minutes: 6
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           submodules: recursive
           persist-credentials: false
       - id: foundry
-        run: echo "version=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)" >> "$GITHUB_OUTPUT"
+        # A missing or malformed pin must fail here: an empty version makes foundry-toolchain install stable.
+        run: |
+          v=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)
+          [[ $v =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "contracts/FOUNDRY_VERSION is not vX.Y.Z: '$v'"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
       - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
         with:
           version: ${{ steps.foundry.outputs.version }}
@@ -80,7 +91,7 @@ jobs:
       # Nothing to analyse before the first contract lands; once one exists the config must too.
       - working-directory: contracts
         run: |
-          if ! ls src/*.sol >/dev/null 2>&1; then echo "no contracts in contracts/src yet"; exit 0; fi
+          if [ -z "$(find src -name '*.sol' -print -quit 2>/dev/null)" ]; then echo "no contracts in contracts/src yet"; exit 0; fi
           test -f slither.config.json || { echo "contracts/slither.config.json is missing"; exit 1; }
           slither . --config-file slither.config.json --fail-high
 
@@ -89,7 +100,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
       # rustup reads rust-toolchain.toml (exact version, rustfmt, clippy).
