@@ -11,10 +11,10 @@
 // Needs git and forge on PATH. Exit 0: every check printed OK. Exit 1: a check failed. Exit 2:
 // could not run (bad input, TODO addresses, reference build failed, RPC error).
 
-import { readFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,7 +23,30 @@ const DEFAULT_RPC = {
   'celo-sepolia': 'https://forno.celo-sepolia.celo-testnet.org',
   celo: 'https://forno.celo.org',
 };
+// SPEC §2.6 and §3.5, per network: the chain id and the identity and Self registries the
+// EnclaveRegistry must embed. Fixed here, not read from deployments.ts or DEPLOYMENTS.md, so an
+// edit to both of those cannot move them (T10 Codex r1 M1).
+const PINS = {
+  'celo-sepolia': {
+    chainId: 11142220,
+    identityRegistry: '0x8004a818bfb912233c491871b3d84c89a494bd9e',
+    selfRegistry: '0x043dacac8b0771dd5b444bcc88f2f8bbdbedd379',
+  },
+  celo: {
+    chainId: 42220,
+    identityRegistry: '0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
+    selfRegistry: '0xac3df9abf80d0f5c020c06b04cced27763355944',
+  },
+};
 const OURS = ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'];
+// The source each reference artifact must be compiled from (its metadata compilationTarget), so a
+// same-named contract elsewhere in the tree cannot stand in for it (T10 adversary r4 S).
+const SOURCES = {
+  P384Verifier: 'lib/nitro-validator/src/P384Verifier.sol',
+  CertManager: 'lib/nitro-validator/src/CertManager.sol',
+  NitroValidator: 'lib/nitro-validator/src/NitroValidator.sol',
+  EnclaveRegistry: 'src/EnclaveRegistry.sol',
+};
 // Each contract's immutables in declaration order. Solidity numbers AST ids in source order, so
 // sorting an artifact's immutableReferences ids gives the same order.
 const IMMUTABLES = {
@@ -51,6 +74,7 @@ function parseArgs(argv) {
     else throw new Refuse(`unexpected argument ${a}`);
   }
   if (!args.network) throw new Refuse('usage: node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]');
+  if (!Object.hasOwn(PINS, args.network)) throw new Refuse(`no SPEC §3.5 pins for network ${args.network}; known: ${Object.keys(PINS).join(', ')}`);
   args.rpcUrl ??= DEFAULT_RPC[args.network];
   if (!args.rpcUrl) throw new Refuse(`no default RPC for network ${args.network}; pass --rpc-url`);
   args.deployments = resolve(args.deployments ?? `${ROOT}/docs/DEPLOYMENTS.md`);
@@ -87,7 +111,21 @@ function parseDeploymentsMd(text, network) {
   return out;
 }
 
-const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
+/** The environment minus every variable whose prefix is in `drop`, plus `add`. */
+function envWithout(drop, add = {}) {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (!drop.some((p) => k.startsWith(p))) env[k] = v;
+  return { ...env, ...add };
+}
+// No refs/replace objects (a local `git replace <pinned> <other>` would show <other>'s tree under
+// the pinned id; T10 adversary r4 R) and no GIT_* variables (GIT_DIR, GIT_CONFIG_* and the like
+// could point git elsewhere or reconfigure it).
+const GIT_ENV = envWithout(['GIT_'], { GIT_NO_REPLACE_OBJECTS: '1' });
+const gitRaw = (dir, a, opts = {}) => execFileSync('git', ['--no-replace-objects', '-C', dir, ...a], { env: GIT_ENV, ...opts });
+const git = (dir, ...a) => gitRaw(dir, a, { encoding: 'utf8' }).trim();
+// The reference build reads only the committed foundry.toml: FOUNDRY_* and DAPP_* variables (which
+// override it, e.g. FOUNDRY_OPTIMIZER_RUNS or FOUNDRY_PROFILE) are dropped.
+const FORGE_ENV = envWithout(['FOUNDRY_', 'DAPP_']);
 
 /**
  * Writes the committed blobs under `paths` at `rev` into `dest`, byte for byte. Not `git archive`
@@ -95,7 +133,7 @@ const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'u
  * build could see code that is not in the commit (T10 adversary r3). Only regular files allowed.
  */
 function exportBlobs(repo, rev, paths, dest) {
-  const listing = execFileSync('git', ['-C', repo, 'ls-tree', '-r', '-z', '--full-tree', rev, '--', ...paths], { encoding: 'utf8' });
+  const listing = gitRaw(repo, ['ls-tree', '-r', '-z', '--full-tree', rev, '--', ...paths], { encoding: 'utf8' });
   const entries = listing.split('\0').filter(Boolean);
   if (entries.length === 0) throw new Refuse(`${repo} has nothing at ${paths.join(', ')} in ${rev}`);
   for (const entry of entries) {
@@ -106,7 +144,7 @@ function exportBlobs(repo, rev, paths, dest) {
     }
     const out = join(dest, path);
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, execFileSync('git', ['-C', repo, 'cat-file', 'blob', sha], { maxBuffer: 64 << 20 }));
+    writeFileSync(out, gitRaw(repo, ['cat-file', 'blob', sha], { maxBuffer: 64 << 20 }));
   }
 }
 
@@ -135,15 +173,16 @@ function referenceBuild() {
     exportBlobs(ROOT, 'HEAD', ['contracts/src', 'contracts/foundry.toml', 'contracts/remappings.txt'], dir);
     exportBlobs(`${ROOT}/contracts/lib/nitro-validator`, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
     // forge compiles src/ plus what it imports; the validator stack is named explicitly.
-    const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => `lib/nitro-validator/src/${n}.sol`)];
-    execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), ...paths.map((p) => join(dir, 'contracts', p))], {
+    const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => SOURCES[n])];
+    const out = join(dir, 'contracts', 'out');
+    // cwd is the temp dir too, so forge loads no .env from wherever check-deploy was started.
+    execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), '--out', out, ...paths.map((p) => join(dir, 'contracts', p))], {
+      cwd: dir,
+      env: FORGE_ENV,
       stdio: ['ignore', 'ignore', 'pipe'],
     });
-    const arts = {};
+    const arts = selectArtifacts(out);
     for (const n of OURS) {
-      const p = join(dir, `contracts/out/${n}.sol/${n}.json`);
-      if (!existsSync(p)) throw new Refuse(`reference build produced no ${n} artifact`);
-      arts[n] = JSON.parse(readFileSync(p, 'utf8'));
       if (Object.keys(arts[n].deployedBytecode.linkReferences ?? {}).length) throw new Refuse(`${n} artifact has unlinked libraries`);
     }
     return { arts, head, pinned };
@@ -153,6 +192,31 @@ function referenceBuild() {
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+/**
+ * For each of OURS, the one artifact under `out` whose metadata compilationTarget is exactly
+ * { SOURCES[n]: n }. Not out/<n>.sol/<n>.json: forge moves an artifact to out/<its path>/ when
+ * another file of the same name declares the same contract, and puts the other one there.
+ */
+function selectArtifacts(out) {
+  const found = Object.fromEntries(OURS.map((n) => [n, []]));
+  for (const rel of readdirSync(out, { recursive: true })) {
+    if (!rel.endsWith('.json') || rel.split(sep)[0] === 'build-info') continue;
+    const art = JSON.parse(readFileSync(join(out, rel), 'utf8'));
+    const target = Object.entries(art.metadata?.settings?.compilationTarget ?? {});
+    if (target.length !== 1) continue;
+    const [[src, name]] = target;
+    if (Object.hasOwn(found, name) && src === SOURCES[name]) found[name].push({ rel, art });
+  }
+  const arts = {};
+  for (const n of OURS) {
+    if (found[n].length !== 1) {
+      throw new Refuse(`reference build has ${found[n].length} artifacts compiled from ${SOURCES[n]}:${n}${found[n].length ? ` (${found[n].map((f) => f.rel).join(', ')})` : ''}`);
+    }
+    arts[n] = found[n][0].art;
+  }
+  return arts;
 }
 
 const word = (addrOrBool) =>
@@ -249,13 +313,20 @@ async function main() {
     check(`deployments.ts ${name} matches DEPLOYMENTS.md`, (v ?? '').toLowerCase() === md[name], `deployments.ts has ${v}, DEPLOYMENTS.md has ${md[name]}`);
   }
 
+  const pin = PINS[args.network];
+  check(`deployments.ts chainId == SPEC §2.6 pin ${pin.chainId}`, core.chainId === pin.chainId, `deployments.ts has ${core.chainId}`);
   const chainId = parseInt(await rpc(args.rpcUrl, 'eth_chainId', []), 16);
-  check(`chain id ${core.chainId}`, chainId === core.chainId, `RPC reports ${chainId}`);
+  check(`chain id ${pin.chainId}`, chainId === pin.chainId, `RPC reports ${chainId}`);
 
-  const identity = core.identityRegistry.toLowerCase();
-  const self = core.selfRegistry.toLowerCase();
-  check('deployments.ts identityRegistry matches DEPLOYMENTS.md', identity === md.IdentityRegistry, `deployments.ts has ${identity}, DEPLOYMENTS.md has ${md.IdentityRegistry}`);
-  check('deployments.ts selfRegistry matches DEPLOYMENTS.md', self === md.SelfRegistry, `deployments.ts has ${self}, DEPLOYMENTS.md has ${md.SelfRegistry}`);
+  // The cross-file checks stay; the code and getter checks below use the pins, never these values.
+  const coreIdentity = String(core.identityRegistry).toLowerCase();
+  const coreSelf = String(core.selfRegistry).toLowerCase();
+  check('deployments.ts identityRegistry matches DEPLOYMENTS.md', coreIdentity === md.IdentityRegistry, `deployments.ts has ${coreIdentity}, DEPLOYMENTS.md has ${md.IdentityRegistry}`);
+  check('deployments.ts selfRegistry matches DEPLOYMENTS.md', coreSelf === md.SelfRegistry, `deployments.ts has ${coreSelf}, DEPLOYMENTS.md has ${md.SelfRegistry}`);
+  check(`deployments.ts identityRegistry == SPEC §3.5 pin ${pin.identityRegistry}`, coreIdentity === pin.identityRegistry, `deployments.ts has ${coreIdentity}`);
+  check(`deployments.ts selfRegistry == SPEC §3.5 pin ${pin.selfRegistry}`, coreSelf === pin.selfRegistry, `deployments.ts has ${coreSelf}`);
+  const identity = pin.identityRegistry;
+  const self = pin.selfRegistry;
   const values = {
     P384Verifier: {},
     CertManager: { p384Verifier: md.P384Verifier },

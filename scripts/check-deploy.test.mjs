@@ -16,7 +16,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const CONTRACTS = join(ROOT, 'contracts');
 const CHECK = join(ROOT, 'scripts', 'check-deploy.mjs');
-const VARIANTS = ['production', 'demo', 'mock-validator'];
+const VARIANTS = ['production', 'demo', 'mock-validator', 'wrong-pins'];
 const FIRST_PORT = 18600 + (process.pid % 300);
 
 const tmp = mkdtempSync(join(tmpdir(), 'check-deploy-'));
@@ -44,10 +44,13 @@ async function waitFor(rpc) {
   throw new Error(`anvil at ${rpc} did not start`);
 }
 
+const SEPOLIA_IDENTITY = '0x8004A818BFB912233c491871b3d84c89A494BD9e';
+const SEPOLIA_SELF = '0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379';
+
 /** A DEPLOYMENTS.md with the same layout as docs/DEPLOYMENTS.md. */
-function deploymentsMd(m) {
+function deploymentsMd(m, { identity = SEPOLIA_IDENTITY, self = SEPOLIA_SELF } = {}) {
   const rows = ['Admin', 'P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'].map((k) => `| ${k} | \`${m[k]}\` |`);
-  const pinned = ['| IdentityRegistry (ERC-8004) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |', '| SelfRegistry | `0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379` |'];
+  const pinned = [`| IdentityRegistry (ERC-8004) | \`${identity}\` |`, `| SelfRegistry | \`${self}\` |`];
   return ['# Deployments (test)', '', '## celo-sepolia', '', '| Name | Address |', '|---|---|', ...rows, '', '| Name | Address |', '|---|---|', ...pinned, '', '## celo', ''].join('\n');
 }
 
@@ -65,16 +68,16 @@ function coreTs(m) {
   return src;
 }
 
-function runCheck(variant, { manifest, core } = {}) {
+function runCheck(variant, { manifest, core, md, childEnv } = {}) {
   const m = manifest ?? env[variant].manifest;
   const dir = mkdtempSync(join(tmp, `${variant}-`));
   writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
-  writeFileSync(join(dir, 'DEPLOYMENTS.md'), deploymentsMd(m));
+  writeFileSync(join(dir, 'DEPLOYMENTS.md'), md ?? deploymentsMd(m));
   writeFileSync(join(dir, 'deployments.ts'), core === undefined ? coreTs(m) : core);
   const r = spawnSync(
     'node',
     [CHECK, 'celo-sepolia', '--rpc-url', env[variant].rpc, '--deployments', join(dir, 'DEPLOYMENTS.md'), '--core', join(dir, 'deployments.ts')],
-    { encoding: 'utf8' },
+    { encoding: 'utf8', env: childEnv ?? process.env },
   );
   process.stdout.write(`--- check-deploy against ${variant} (exit ${r.status})\n${r.stdout}${r.stderr}`);
   return { status: r.status, out: r.stdout, err: r.stderr, fails: r.stdout.split('\n').filter((l) => l.startsWith('FAIL  ')) };
@@ -105,7 +108,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
   const r = runCheck('production');
   assert.equal(r.status, 0);
   assert.deepEqual(r.fails, []);
-  assert.match(r.out, /\nOK: all 24 checks passed\n$/);
+  assert.match(r.out, /\nOK: all 27 checks passed\n$/);
   for (const n of ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry']) {
     assert.match(r.out, new RegExp(`^OK {4}${n} runtime code equals the production artifact with immutables spliced$`, 'm'));
   }
@@ -115,7 +118,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
 test('CertManagerDemo: the CertManager code check fails, exit 1', () => {
   const r = runCheck('demo');
   assert.equal(r.status, 1);
-  assert.match(r.out, /\nFAILED: 1 of 24 checks failed\n$/);
+  assert.match(r.out, /\nFAILED: 1 of 27 checks failed\n$/);
   // The demo stack's owner is set as admin and its wiring is right, so the code check alone catches it.
   assert.deepEqual(r.fails.map((l) => l.split(':')[0]), ['FAIL  CertManager runtime code equals the production artifact with immutables spliced']);
 });
@@ -151,6 +154,48 @@ test('deployments.ts not updated to the DEPLOYMENTS.md addresses: exit 1', () =>
   assert.equal(r.status, 1);
   assert.equal(r.fails.length, 4);
   assert.ok(r.fails.every((l) => l.startsWith('FAIL  deployments.ts ')));
+});
+
+test('deployments.ts, DEPLOYMENTS.md and the registry all use the same wrong identity/Self pair: exit 1', () => {
+  // Codex r1 M1: the three agree with each other, so only the SPEC §3.5 pins can catch it.
+  const m = env['wrong-pins'].manifest;
+  assert.notEqual(m.IdentityRegistry.toLowerCase(), SEPOLIA_IDENTITY.toLowerCase());
+  assert.notEqual(m.SelfRegistry.toLowerCase(), SEPOLIA_SELF.toLowerCase());
+  const core = coreTs(m).replace(`'${SEPOLIA_IDENTITY}'`, `'${m.IdentityRegistry}'`).replace(`'${SEPOLIA_SELF}'`, `'${m.SelfRegistry}'`);
+  assert.ok(core.includes(m.IdentityRegistry) && core.includes(m.SelfRegistry));
+  const r = runCheck('wrong-pins', { core, md: deploymentsMd(m, { identity: m.IdentityRegistry, self: m.SelfRegistry }) });
+  assert.equal(r.status, 1);
+  assert.deepEqual(
+    r.fails.map((l) => l.split(/ == |: /)[0]),
+    [
+      'FAIL  deployments.ts identityRegistry',
+      'FAIL  deployments.ts selfRegistry',
+      'FAIL  EnclaveRegistry runtime code equals the production artifact with immutables spliced',
+      'FAIL  EnclaveRegistry.identityRegistry()',
+      'FAIL  EnclaveRegistry.selfRegistry()',
+    ],
+  );
+  // The two files agree with each other, so the cross-file checks pass.
+  assert.match(r.out, /^OK {4}deployments\.ts identityRegistry matches DEPLOYMENTS\.md$/m);
+  assert.match(r.out, /^OK {4}deployments\.ts selfRegistry matches DEPLOYMENTS\.md$/m);
+});
+
+test('an unknown network has no pins: refuses, exit 2', () => {
+  const r = spawnSync('node', [CHECK, 'local', '--rpc-url', env.production.rpc], { encoding: 'utf8' });
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /^check-deploy: no SPEC §3\.5 pins for network local; known: celo-sepolia, celo/);
+});
+
+test('FOUNDRY_* and DAPP_* in the environment do not change the reference build: production still exit 0', () => {
+  const childEnv = {
+    ...process.env,
+    FOUNDRY_OPTIMIZER_RUNS: '200',
+    FOUNDRY_PROFILE: 'nonexistent',
+    DAPP_BUILD_OPTIMIZE_RUNS: '200',
+  };
+  const r = runCheck('production', { childEnv });
+  assert.equal(r.status, 0, r.err);
+  assert.match(r.out, /\nOK: all 27 checks passed\n$/);
 });
 
 test('the repo as committed (TODO addresses): refuses with a clear error, exit 2', () => {
