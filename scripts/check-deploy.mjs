@@ -5,7 +5,8 @@
 //
 //   node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]
 //
-// Needs `forge build` in contracts/ first (the artifacts are the reference bytecode).
+// Needs `forge build` in contracts/ first (the artifacts are the reference bytecode), a clean
+// contracts/src and nitro-validator, and `cast` on PATH (keccak256 of the sources).
 // Exit 0: every check printed OK. Exit 1: a check failed. Exit 2: could not run (bad input,
 // TODO addresses, missing artifacts, RPC error).
 
@@ -65,7 +66,9 @@ function parseDeploymentsMd(text, network) {
   const rows = {};
   for (let i = start + 1; i < lines.length && !lines[i].startsWith('## '); i++) {
     const m = /^\|\s*([A-Za-z0-9]+)\s*\|\s*`([^`]*)`\s*\|/.exec(lines[i]);
-    if (m) rows[m[1]] = m[2].trim();
+    if (!m) continue;
+    if (m[1] in rows) throw new Refuse(`DEPLOYMENTS.md ${network}: ${m[1]} row appears twice`);
+    rows[m[1]] = m[2].trim();
   }
   const out = {};
   for (const name of ['Admin', ...OURS]) {
@@ -75,6 +78,7 @@ function parseDeploymentsMd(text, network) {
       throw new Refuse(`DEPLOYMENTS.md ${network}: ${name} is still "${v}". Not deployed yet: Joshua broadcasts per "How to deploy", then fills in the addresses.`);
     }
     if (!ADDRESS_RE.test(v)) throw new Refuse(`DEPLOYMENTS.md ${network}: ${name} is not an address: "${v}"`);
+    if (/^0x0{40}$/.test(v)) throw new Refuse(`DEPLOYMENTS.md ${network}: ${name} is the zero address`);
     out[name] = v.toLowerCase();
   }
   return out;
@@ -169,11 +173,47 @@ async function main() {
     return r.length === 66 ? '0x' + r.slice(26).toLowerCase() : `(bad return ${r})`;
   };
 
-  let commit = '(unknown)';
-  try {
-    commit = execFileSync('git', ['-C', `${ROOT}/contracts/lib/nitro-validator`, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim();
-  } catch {}
-  check(`artifacts built from nitro-validator ${PINNED_VALIDATOR_COMMIT}`, commit.startsWith(PINNED_VALIDATOR_COMMIT), `submodule is at ${commit}`);
+  // Provenance: the reference artifacts must come from the pinned, unmodified sources. The commit
+  // alone is not enough: a dirty submodule or a stale contracts/out passes it (T10 adversary).
+  const git = (dir, ...a) => {
+    try {
+      return execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
+    } catch (e) {
+      return `(git failed: ${e.message.split('\n')[0]})`;
+    }
+  };
+  const validatorDir = `${ROOT}/contracts/lib/nitro-validator`;
+  const commit = git(validatorDir, 'rev-parse', 'HEAD');
+  const validatorDirty = git(validatorDir, 'status', '--porcelain', '--ignore-submodules=none');
+  check(
+    `nitro-validator is at ${PINNED_VALIDATOR_COMMIT} with a clean tree`,
+    commit.startsWith(PINNED_VALIDATOR_COMMIT) && validatorDirty === '',
+    `submodule is at ${commit}${validatorDirty ? `, uncommitted changes:\n${validatorDirty}` : ''}`,
+  );
+  const srcDirty = git(ROOT, 'status', '--porcelain', '--', 'contracts/src');
+  check('contracts/src has no uncommitted changes', srcDirty === '', srcDirty);
+  // Every source in each artifact's metadata must be under src/ or the pinned submodule, and
+  // match the file on disk byte for byte (keccak256, as solc records it). With the clean-tree
+  // checks above, that ties contracts/out to the pinned code; the runtime code comparison below
+  // then ties the chain to contracts/out, metadata hash included.
+  for (const n of OURS) {
+    const bad = [];
+    for (const [path, { keccak256 }] of Object.entries(arts[n].metadata?.sources ?? {})) {
+      if (!path.startsWith('src/') && !path.startsWith('lib/nitro-validator/src/')) {
+        bad.push(`${path} is outside src/ and lib/nitro-validator/src/`);
+        continue;
+      }
+      const file = `${ROOT}/contracts/${path}`;
+      if (!existsSync(file)) {
+        bad.push(`${path} is missing`);
+        continue;
+      }
+      const onDisk = execFileSync('cast', ['keccak'], { input: readFileSync(file), encoding: 'utf8' }).trim();
+      if (onDisk !== keccak256) bad.push(`${path} on disk ${onDisk}, artifact built from ${keccak256}`);
+    }
+    if (!arts[n].metadata?.sources) bad.push('artifact has no metadata.sources');
+    check(`${n} artifact was built from the sources on disk`, bad.length === 0, `rebuild with \`forge build\`:\n  ${bad.join('\n  ')}`);
+  }
 
   check(
     'deployments.ts EnclaveRegistry matches DEPLOYMENTS.md',

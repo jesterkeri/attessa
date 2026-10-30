@@ -104,7 +104,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
   const r = runCheck('production');
   assert.equal(r.status, 0);
   assert.deepEqual(r.fails, []);
-  assert.match(r.out, /\nOK: all 23 checks passed\n$/);
+  assert.match(r.out, /\nOK: all 28 checks passed\n$/);
   for (const n of ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry']) {
     assert.match(r.out, new RegExp(`^OK {4}${n} runtime code equals the production artifact with immutables spliced$`, 'm'));
   }
@@ -114,7 +114,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
 test('CertManagerDemo: the CertManager code check fails, exit 1', () => {
   const r = runCheck('demo');
   assert.equal(r.status, 1);
-  assert.match(r.out, /\nFAILED: 1 of 23 checks failed\n$/);
+  assert.match(r.out, /\nFAILED: 1 of 28 checks failed\n$/);
   // The demo stack's owner is set as admin and its wiring is right, so the code check alone catches it.
   assert.deepEqual(r.fails.map((l) => l.split(':')[0]), ['FAIL  CertManager runtime code equals the production artifact with immutables spliced']);
 });

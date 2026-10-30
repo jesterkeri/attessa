@@ -45,6 +45,7 @@ contract DumpStack is Script, ValidatorStackDeployer, RegistryDeployer {
         vm.serializeAddress(k, "CertManager", address(s.certManager));
         vm.serializeAddress(k, "NitroValidator", validator);
         string memory json = vm.serializeAddress(k, "EnclaveRegistry", address(registry));
+        vm.createDir(DIR, true);
         vm.writeJson(json, string.concat(DIR, variant, ".manifest.json"));
         vm.dumpState(string.concat(DIR, variant, ".state.json"));
     }
