@@ -1,4 +1,4 @@
-import { accessSync, appendFileSync, chmodSync, closeSync, constants, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
+import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { Address, Hex } from 'viem';
@@ -16,6 +16,7 @@ export const RESERVATION_TTL_MS = 10 * 60 * 1000;
 /** How long a caller waits for a live holder before failing (it never takes the lock from one). */
 const LOCK_TIMEOUT_MS = 30_000;
 const SQLITE_NOTADB = 26;
+const SQLITE_READONLY = 8;
 
 function utcDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
@@ -49,6 +50,7 @@ export class Ledger {
   private readonly lockPath: string;
   private readonly now: () => number;
   private lockDb: DatabaseSync | undefined;
+  private lockWritable = false;
 
   constructor(dataDir: string, now: () => number = Date.now) {
     this.dir = dataDir;
@@ -196,14 +198,44 @@ export class Ledger {
     renameSync(tmp, this.pendingPath);
   }
 
+  /**
+   * SQLite opens a lock file it cannot write read-only (umask, chmod, `sudo attessa`), and `BEGIN
+   * IMMEDIATE` there excludes no one (INV-19). So the first lock on each connection tries a write on
+   * that same connection, discarded by the ROLLBACK in release(). A read-only connection is closed;
+   * a file this user owns is made writable again (same inode) and opened once more, else refused.
+   */
   private acquire(): void {
-    if (!this.lockDb) {
-      this.ensureWritableLock();
-      this.lockDb = new DatabaseSync(this.lockPath);
-      this.lockDb.exec(`PRAGMA busy_timeout = ${LOCK_TIMEOUT_MS}`);
+    for (let retried = false; ; retried = true) {
+      if (!this.lockDb) {
+        this.lockDb = new DatabaseSync(this.lockPath);
+        this.lockDb.exec(`PRAGMA busy_timeout = ${LOCK_TIMEOUT_MS}`);
+      }
+      this.begin(this.lockDb);
+      if (this.lockWritable) return;
+      try {
+        this.lockDb.exec('PRAGMA user_version = 0');
+        this.lockWritable = true;
+        return;
+      } catch (e) {
+        this.lockDb.exec('ROLLBACK');
+        this.lockDb.close();
+        this.lockDb = undefined;
+        if ((e as { errcode?: number }).errcode !== SQLITE_READONLY || retried) {
+          // not in FLOWS
+          throw new Error(`ledger lock ${this.lockPath} not acquired: ${(e as Error).message}`, { cause: e });
+        }
+        try {
+          chmodSync(this.lockPath, 0o600);
+        } catch {
+          // not this user's file: the next open is read-only again and refused
+        }
+      }
     }
+  }
+
+  private begin(db: DatabaseSync): void {
     try {
-      this.lockDb.exec('BEGIN IMMEDIATE');
+      db.exec('BEGIN IMMEDIATE');
     } catch (e) {
       // A pending.lock written by the earlier pid-file lock is not a database. Emptying it in place
       // (never unlinking, so every process keeps locking the same inode) makes it a valid one.
@@ -211,27 +243,7 @@ export class Ledger {
         throw new Error(`ledger lock ${this.lockPath} not acquired: ${(e as Error).message}`, { cause: e });
       }
       truncateSync(this.lockPath, 0);
-      this.lockDb.exec('BEGIN IMMEDIATE');
-    }
-  }
-
-  /**
-   * SQLite opens a lock file it cannot write read-only, and `BEGIN IMMEDIATE` there excludes no one
-   * (INV-19). A read-only file this user owns is made writable again (same inode); one it cannot
-   * change, e.g. left by `sudo attessa`, is refused.
-   */
-  private ensureWritableLock(): void {
-    try {
-      accessSync(this.lockPath, constants.W_OK);
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return;
-      try {
-        chmodSync(this.lockPath, 0o600);
-        accessSync(this.lockPath, constants.W_OK);
-      } catch (e2) {
-        // not in FLOWS
-        throw new Error(`ledger lock ${this.lockPath} not acquired: this user cannot write it`, { cause: e2 });
-      }
+      db.exec('BEGIN IMMEDIATE');
     }
   }
 
