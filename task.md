@@ -15,9 +15,9 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 | Task | What | Who | Branch | State |
 |---|---|---|---|---|
 | T01 | kill test, demo stack on Sepolia | Claude | `main` (submodule only) | simulation passed 9/9; waiting on Joshua to broadcast |
-| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | verify passed (DONE.md); adversary (Opus) running |
-| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus) | `feat/t04-registry`, then `feat/t05-invariants` | building |
-| T03 | core formats + vectors | builder B2 (Opus) | `feat/t03-core` | building |
+| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | adversary found 2, both fixed (1eb99f7); **Codex r1 prompt ready, waiting on Joshua** |
+| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus) | `feat/t04-registry`, then `feat/t05-invariants` | T04 committed b3347e1 (pushed); T05 building |
+| T03 | core formats + vectors | builder B2 (Opus), done | `feat/t03-core` | 28/28 pass, rerun by lead; diff read; adversary (Opus) running |
 | T13 | enclave app (Rust) | builder B3 (Opus) | `feat/t13-enclave` | building; vector tests wait for T03 |
 | rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
 
