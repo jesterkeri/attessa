@@ -22,6 +22,9 @@ importers:
 
   packages/core:
     dependencies:
+      tr46:
+        specifier: 5.1.1
+        version: 5.1.1
       viem:
         specifier: ^2.57.13
         version: 2.57.13(typescript@5.9.3)
