@@ -2,9 +2,10 @@
 # Independent oracle for vectors/*.json (INV-18). No viem and no @attessa/core: hashes and ABI
 # encodings come from Foundry `cast`; everything else (RFC 8785 JCS, origin normalisation, the
 # SPEC §2.5 header grammars, secp256k1 recovery, family sizes) is recomputed here from the raw
-# inputs with the Python standard library. Every compare is exact, case included. Exit 1 on any
-# mismatch. Run from the repo root: python3 -I scripts/check-vectors-oracle.py
-import base64, binascii, ipaddress, json, struct, subprocess, sys, unicodedata
+# inputs with the Python standard library, UTS-46 from the Unicode files vendored in scripts/data/.
+# Every compare is exact, case included. Exit 1 on any mismatch.
+# Run from the repo root: python3 -I scripts/check-vectors-oracle.py
+import base64, binascii, bisect, hashlib, ipaddress, json, os, struct, subprocess, sys, unicodedata
 from decimal import Decimal
 
 def cast(*args):
@@ -193,25 +194,105 @@ eq("oracle self-check 1*G address", address_of(ec_mul(1, G)), "0x7e5f4552091a691
 # Returns ("ok", normalized) or ("err", reason).
 DEFAULT_PORT = {"https": 443, "http": 80, "ws": 80, "wss": 443, "ftp": 21}
 FORBIDDEN_HOST = set("\x00\t\n\r #/:<>?@[\\]^|%\x7f") | {chr(c) for c in range(0x20)}
-IGNORED = {0x00AD, 0x034F, 0x180B, 0x180C, 0x180D, 0x200B, 0x2060, 0xFEFF} | set(range(0xFE00, 0xFE10))
 class Fail(Exception): pass
 
-def uts46_label_valid(label):
+# UTS-46 at Unicode 16.0.0, the version tr46 5.1.1 (whatwg-url 14.2.0's) is generated from. Python's
+# unicodedata is older (15.0), so the IDNA status/mapping, general category, combining class, bidi
+# class, NFC and joining type all come from Unicode's own files, vendored with their sha256.
+UCD_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "unicode-16.0.0")
+UCD_SHA256 = {
+    "IdnaMappingTable.txt": "6db2ef4ed35f3b3de74ebc2e00404a9607f76d499f576b8d4043cf14f1ed175c",
+    "UnicodeData.txt": "ff58e5823bd095166564a006e47d111130813dcf8bf234ef79fa51a870edb48f",
+    "CompositionExclusions.txt": "89e83cf9cc8bef6c1f8bf77e42cf6f0341dfa42e66261f4dbe9b492e7a23c8ee",
+    "DerivedJoiningType.txt": "6bd08b97da66b70ccfdab105a352de2984e02625239ec5695422c99b33d854f0",
+}
+def ucd_rows(name):  # data lines of a UCD file as stripped fields; exits on a hash mismatch
+    raw = open(os.path.join(UCD_DIR, name), "rb").read()
+    if hashlib.sha256(raw).hexdigest() != UCD_SHA256[name]: sys.exit(f"{name}: sha256 mismatch")
+    for line in raw.decode("utf-8").splitlines():
+        f = [x.strip() for x in line.split("#")[0].split(";")]
+        if f[0]: yield f
+def cp_range(r):  # "0041" or "0041..005A"
+    a, _, b = r.partition("..")
+    return int(a, 16), int(b or a, 16)
+
+IDNA_START, IDNA_ROWS = [], []  # sorted ranges: (end, status, mapping)
+for f in ucd_rows("IdnaMappingTable.txt"):
+    a, b = cp_range(f[0])
+    IDNA_START.append(a)
+    IDNA_ROWS.append((b, f[1], "".join(chr(int(x, 16)) for x in f[2].split()) if len(f) > 2 else ""))
+def idna(ch):  # -> (status, mapping); a code point outside every range is disallowed
+    i = bisect.bisect_right(IDNA_START, ord(ch)) - 1
+    return IDNA_ROWS[i][1:] if i >= 0 and ord(ch) <= IDNA_ROWS[i][0] else ("disallowed", "")
+
+UCD, UCD_RANGES, DECOMP = {}, [], {}  # cp -> (gc, ccc, bidi); First/Last blocks; canonical decompositions
+for f in ucd_rows("UnicodeData.txt"):
+    cp, props = int(f[0], 16), (f[2], int(f[3]), f[4])
+    if f[1].endswith(", Last>"): UCD_RANGES.append((UCD_RANGES.pop()[0], cp, props))
+    elif f[1].endswith(", First>"): UCD_RANGES.append((cp, cp, props))
+    else: UCD[cp] = props
+    if f[5] and not f[5].startswith("<"): DECOMP[cp] = [int(x, 16) for x in f[5].split()]
+def ucd(cp):  # unassigned: Cn, ccc 0; its IDNA status is disallowed, so its bidi class never decides
+    return UCD.get(cp) or next((p for a, b, p in UCD_RANGES if a <= cp <= b), ("Cn", 0, "L"))
+ccc = lambda cp: ucd(cp)[1]
+bidi_class = lambda ch: ucd(ord(ch))[2]
+JOINING = [(*cp_range(f[0]), f[1]) for f in ucd_rows("DerivedJoiningType.txt")]
+def joining_type(ch):
+    return next((t for a, b, t in JOINING if a <= ord(ch) <= b), "U")
+
+# NFC (UAX #15) from the same data. Full_Composition_Exclusion = the listed exclusions, singletons and
+# non-starter decompositions.
+EXCLUDED = {cp_range(f[0])[0] for f in ucd_rows("CompositionExclusions.txt")}
+COMPOSE = {tuple(d): cp for cp, d in DECOMP.items()
+           if len(d) == 2 and cp not in EXCLUDED and ccc(cp) == 0 and ccc(d[0]) == 0}
+SB, LB, VB, TB, LC, VC, TC = 0xAC00, 0x1100, 0x1161, 0x11A7, 19, 21, 28
+def nfd_cps(cp):
+    if SB <= cp < SB + LC * VC * TC:
+        s = cp - SB
+        return [LB + s // (VC * TC), VB + s % (VC * TC) // TC] + ([TB + s % TC] if s % TC else [])
+    return [x for d in DECOMP[cp] for x in nfd_cps(d)] if cp in DECOMP else [cp]
+def compose_pair(a, b):
+    if LB <= a < LB + LC and VB <= b < VB + VC: return SB + ((a - LB) * VC + b - VB) * TC
+    if SB <= a < SB + LC * VC * TC and (a - SB) % TC == 0 and TB < b < TB + TC: return a + b - TB
+    return COMPOSE.get((a, b))
+def nfc(s):
+    d = [x for ch in s for x in nfd_cps(ord(ch))]
+    for i in range(1, len(d)):  # canonical ordering: stable insertion sort of each non-starter run
+        j = i
+        while j > 0 and 0 < ccc(d[j]) < ccc(d[j - 1]):
+            d[j - 1], d[j] = d[j], d[j - 1]; j -= 1
+    out, si, last = [], None, None  # si: index of the last starter; last: ccc of the last char after it
+    for cp in d:
+        c = ccc(cp)
+        if si is not None and (last is None or 0 < last < c):  # not blocked from the starter
+            p = compose_pair(out[si], cp)
+            if p is not None:
+                out[si] = p; continue
+        if c == 0: si, last = len(out), None
+        else: last = c
+        out.append(cp)
+    return "".join(map(chr, out))
+ok("oracle self-check NFC matches Python's on every Unicode 15 canonical decomposition",
+   all(nfc(unicodedata.normalize("NFD", chr(c)) + "́") == unicodedata.normalize("NFC", chr(c) + "́")
+       for c in range(0x110000) if unicodedata.decomposition(chr(c))[:1] not in ("", "<")))
+
+def uts46_label_valid(label, bidi):  # UTS-46 §4.1 validity criteria, non-transitional, CheckHyphens off
     if label == "": return True
-    if unicodedata.normalize("NFC", label) != label: return False
-    if unicodedata.category(label[0]).startswith("M"): return False
-    for i, ch in enumerate(label):
-        o = ord(ch)
-        if o in (0x200C, 0x200D):  # CheckJoiners (RFC 5892 A.1, A.2): only after a virama
-            if i == 0 or unicodedata.combining(label[i - 1]) != 9: return False
-            continue
-        if unicodedata.category(ch) in ("Cc", "Cf", "Cs", "Co", "Cn", "Zs", "Zl", "Zp"): return False
-        if unicodedata.normalize("NFKC", ch).lower() != ch and ch != "\u00df": return False  # not a mapped form
-    return True
+    if nfc(label) != label or label.startswith("xn--") or "." in label: return False
+    if ucd(ord(label[0]))[0].startswith("M"): return False
+    if any(idna(ch)[0] not in ("valid", "deviation") for ch in label): return False
+    for i, ch in enumerate(label):  # CheckJoiners: RFC 5892 Appendix A.1 and A.2
+        if ch not in "‌‍" or (i > 0 and ccc(ord(label[i - 1])) == 9): continue
+        if ch == "‍": return False
+        j, k = i - 1, i + 1  # ZWNJ: (L|D) T* ZWNJ T* (R|D)
+        while j >= 0 and joining_type(label[j]) == "T": j -= 1
+        while k < len(label) and joining_type(label[k]) == "T": k += 1
+        if not (j >= 0 and joining_type(label[j]) in ("L", "D") and k < len(label) and joining_type(label[k]) in ("R", "D")):
+            return False
+    return not bidi or bidi_rule(label)
 
 def bidi_rule(label):  # RFC 5893 §2
-    if label == "": return True
-    cls = [unicodedata.bidirectional(c) for c in label]
+    cls = [bidi_class(c) for c in label]
     if cls[0] not in ("L", "R", "AL"): return False
     core = cls[:]
     while core and core[-1] == "NSM": core.pop()
@@ -224,21 +305,20 @@ def bidi_rule(label):  # RFC 5893 §2
         if not core or core[-1] not in ("L", "EN"): return False
     return True
 
-def domain_to_ascii(host):
-    mapped = "".join(unicodedata.normalize("NFKC", ch).lower() if ch != "\u00df" else ch
-                     for ch in host if ord(ch) not in IGNORED)
-    mapped = unicodedata.normalize("NFC", mapped.replace("\u3002", "."))
-    labels = []
-    for label in mapped.split("."):
+def domain_to_ascii(host):  # WHATWG "domain to ASCII", beStrict false: UTS-46 ToASCII (§4, §4.2)
+    mapped = ""
+    for ch in host:  # 1. Map (disallowed is kept and fails validity below)
+        status, to = idna(ch)
+        mapped += to if status == "mapped" else "" if status == "ignored" else ch
+    labels = nfc(mapped).split(".")  # 2. Normalize, 3. Break
+    for i, label in enumerate(labels):  # 4. Convert
         if label.startswith("xn--"):
             if not label.isascii(): raise Fail
-            try: label = label[4:].encode("ascii").decode("punycode")
+            try: labels[i] = label[4:].encode("ascii").decode("punycode")
             except Exception: raise Fail
-            if label == "" or label.isascii(): raise Fail
-        if not uts46_label_valid(label): raise Fail
-        labels.append(label)
-    if any(unicodedata.bidirectional(c) in ("R", "AL", "AN") for l in labels for c in l):
-        if not all(bidi_rule(l) for l in labels): raise Fail
+            if labels[i] == "" or labels[i].isascii(): raise Fail
+    bidi = any(bidi_class(c) in ("R", "AL", "AN") for l in labels for c in l)  # a Bidi domain name
+    if not all(uts46_label_valid(l, bidi) for l in labels): raise Fail  # 4. Validate
     out = ".".join(l if l.isascii() else "xn--" + l.encode("punycode").decode("ascii") for l in labels)
     if out == "": raise Fail
     return out
