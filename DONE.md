@@ -57,3 +57,244 @@ exit 0
 ```
 reviewed: pending (adversary, then Codex; verdict appended as a new entry)
 notes: attempt 1 failed (rootDir in the shared tsconfig resolved to the repo root); fixed per package. Rust 1.98.1 pinned; locally it is a hardlink of the installed stable 1.98.1 because the rustup download stalled. esbuild install script is skipped by the pnpm allowlist (only better-sqlite3, keytar may run scripts).
+
+## T04 - 2026-10-30
+commit: b3347e1 (builder B1, Opus)
+verified: cd contracts && forge test --match-path 'test/unit/*' -vv && ../scripts/check-error-coverage.sh
+output:
+```
+No files changed, compilation skipped
+
+Ran 20 tests for test/unit/RenewSigner.t.sol:RenewSignerTest
+[PASS] test_renewSigner_AttestationFromFuture() (gas: 296402)
+[PASS] test_renewSigner_AttestationStale() (gas: 296597)
+[PASS] test_renewSigner_BindingMismatch() (gas: 316788)
+[PASS] test_renewSigner_DebugPcrs() (gas: 306976)
+[PASS] test_renewSigner_EndpointInactive() (gas: 293789)
+[PASS] test_renewSigner_EndpointMismatch() (gas: 346683)
+[PASS] test_renewSigner_InvalidPublicKey() (gas: 311342)
+[PASS] test_renewSigner_NotOperator_newOperatorAfterRotation() (gas: 346322)
+[PASS] test_renewSigner_NotOperator_nonOperator() (gas: 429057)
+[PASS] test_renewSigner_NotOperator_oldOperatorAfterRotation() (gas: 346055)
+[PASS] test_renewSigner_ReleaseMismatch() (gas: 389890)
+[PASS] test_renewSigner_ReleaseNotApproved_deprecated() (gas: 345824)
+[PASS] test_renewSigner_SignerMismatch() (gas: 314633)
+[PASS] test_renewSigner_expired_SignerNotActive() (gas: 249962)
+[PASS] test_renewSigner_extendsActiveUnexpired() (gas: 372974)
+[PASS] test_renewSigner_futureWithinSkew_noUnderflow() (gas: 326135)
+[PASS] test_renewSigner_lastSecond() (gas: 344093)
+[PASS] test_renewSigner_revoked_SignerNotActive() (gas: 291214)
+[PASS] test_renewSigner_unknown_SignerNotActive() (gas: 238969)
+[PASS] test_renewSigner_validatorRevertPropagates() (gas: 315083)
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 4.96ms (5.06ms CPU time)
+
+Ran 32 tests for test/unit/CheckAndVerify.t.sol:CheckAndVerifyTest
+[PASS] test_check_AGENT_MISMATCH() (gas: 127859)
+[PASS] test_check_ENDPOINT_INACTIVE() (gas: 77186)
+[PASS] test_check_ENDPOINT_MISMATCH() (gas: 142508)
+[PASS] test_check_OK() (gas: 40484)
+[PASS] test_check_OPERATOR_MISMATCH_afterRotation() (gas: 619034)
+[PASS] test_check_OPERATOR_MISMATCH_beforeRelease() (gas: 163874)
+[PASS] test_check_RELEASE_NOT_APPROVED_deprecated() (gas: 159063)
+[PASS] test_check_RELEASE_NOT_APPROVED_revoked() (gas: 80928)
+[PASS] test_check_SIGNER_EXPIRED_atExpiresAt() (gas: 76024)
+[PASS] test_check_SIGNER_REVOKED() (gas: 76951)
+[PASS] test_check_SIGNER_REVOKED_beforeExpired() (gas: 77344)
+[PASS] test_check_UNKNOWN_SIGNER() (gas: 36841)
+[PASS] test_check_renewedSignerOkAfterOriginalTtl() (gas: 357015)
+[PASS] test_check_sameOperatorReadded_OK() (gas: 129573)
+[PASS] test_livenessDigest_isEip712() (gas: 16611)
+[PASS] test_proofDigest_isEip712() (gas: 15514)
+[PASS] test_verify_AGENT_MISMATCH() (gas: 54536)
+[PASS] test_verify_BAD_SIGNATURE_badV() (gas: 41674)
+[PASS] test_verify_BAD_SIGNATURE_highS() (gas: 36624)
+[PASS] test_verify_BAD_SIGNATURE_length() (gas: 64479)
+[PASS] test_verify_BAD_SIGNATURE_unrecoverable() (gas: 19449)
+[PASS] test_verify_OK() (gas: 55209)
+[PASS] test_verify_PROOF_EXPIRED() (gas: 107323)
+[PASS] test_verify_otherKey_UNKNOWN_SIGNER() (gas: 52973)
+[PASS] test_verify_propagatesCheckSigner() (gas: 217984)
+[PASS] test_verify_releaseId_RELEASE_NOT_APPROVED() (gas: 54627)
+[PASS] test_verify_skew_minus120_OK() (gas: 55279)
+[PASS] test_verify_skew_minus121_PROOF_CLOCK_SKEW() (gas: 55271)
+[PASS] test_verify_skew_plus120_OK() (gas: 55252)
+[PASS] test_verify_skew_plus121_PROOF_CLOCK_SKEW() (gas: 55284)
+[PASS] test_verify_tamperedField_UNKNOWN_SIGNER() (gas: 51951)
+[PASS] test_verify_wrongOrigin_ENDPOINT_MISMATCH() (gas: 157297)
+Suite result: ok. 32 passed; 0 failed; 0 skipped; finished in 19.05ms (12.19ms CPU time)
+
+Ran 45 tests for test/unit/RegisterSigner.t.sol:RegisterSignerTest
+[PASS] testFuzz_BindingMismatch_random(bytes32[5]) (runs: 256, μ: 307917, ~: 308414)
+[PASS] testFuzz_freshnessWindow(int256) (runs: 256, μ: 320693, ~: 292666)
+Logs:
+  Bound result -1800
+
+[PASS] test_BindingMismatch_0_long() (gas: 301379)
+[PASS] test_BindingMismatch_0_null() (gas: 293383)
+[PASS] test_BindingMismatch_0_short() (gas: 313404)
+[PASS] test_BindingMismatch_1_typehash() (gas: 296859)
+[PASS] test_BindingMismatch_2_chainId() (gas: 302926)
+[PASS] test_BindingMismatch_3_registry() (gas: 303533)
+[PASS] test_BindingMismatch_4_agentId() (gas: 306175)
+[PASS] test_BindingMismatch_5_originHash() (gas: 304891)
+[PASS] test_DebugPcrs_pcr0() (gas: 294949)
+[PASS] test_DebugPcrs_pcr1() (gas: 295089)
+[PASS] test_DebugPcrs_pcr2() (gas: 295244)
+[PASS] test_InvalidPcr_lengthShiftCollision() (gas: 347607)
+[PASS] test_InvalidPcr_null() (gas: 621072)
+[PASS] test_InvalidPublicKey_64bytes() (gas: 303922)
+[PASS] test_InvalidPublicKey_66bytes() (gas: 304183)
+[PASS] test_InvalidPublicKey_compressedPrefix() (gas: 305734)
+[PASS] test_InvalidPublicKey_null() (gas: 299460)
+[PASS] test_ReleaseNotApproved_approvedForOtherAgent() (gas: 369604)
+[PASS] test_ReleaseNotApproved_deprecated() (gas: 336336)
+[PASS] test_ReleaseNotApproved_revoked() (gas: 336416)
+[PASS] test_ReleaseNotApproved_unknown() (gas: 299060)
+[PASS] test_SignerExists() (gas: 736007)
+[PASS] test_SignerExists_otherOrigin() (gas: 843578)
+[PASS] test_age_0s_ok() (gas: 438574)
+[PASS] test_age_1799s_ok() (gas: 438619)
+[PASS] test_age_1800s_ok() (gas: 438576)
+[PASS] test_age_1801s_AttestationStale() (gas: 284838)
+[PASS] test_age_msFloored_1800s_ok() (gas: 438622)
+[PASS] test_age_msFloored_1801s_AttestationStale() (gas: 284840)
+[PASS] test_future_1s_ok() (gas: 438532)
+[PASS] test_future_59s_ok() (gas: 438511)
+[PASS] test_future_60s999ms_ok() (gas: 438512)
+[PASS] test_future_60s_ok() (gas: 438487)
+[PASS] test_future_61s_AttestationFromFuture() (gas: 284643)
+[PASS] test_registerSigner_EndpointInactive_retired() (gas: 288900)
+[PASS] test_registerSigner_EndpointInactive_unknown() (gas: 244675)
+[PASS] test_registerSigner_EndpointMismatch() (gas: 256470)
+[PASS] test_registerSigner_NotOperator() (gas: 327328)
+[PASS] test_registerSigner_afterOperatorRotation() (gas: 586828)
+[PASS] test_registerSigner_signerIsPublicKeyAddress() (gas: 453280)
+[PASS] test_registerSigner_storesFromTbs() (gas: 496758)
+[PASS] test_registerSigner_tbsIsNotAttestation() (gas: 275088)
+[PASS] test_registerSigner_validatorRevertPropagates() (gas: 303190)
+Suite result: ok. 45 passed; 0 failed; 0 skipped; finished in 18.96ms (46.43ms CPU time)
+
+Ran 56 tests for test/unit/OwnerActions.t.sol:OwnerActionsTest
+[PASS] test_addEndpoint_InvalidOrigin() (gas: 242548)
+[PASS] test_addEndpoint_NotOwner() (gas: 75592)
+[PASS] test_addEndpoint_OriginTaken_otherAgent() (gas: 91928)
+[PASS] test_addEndpoint_OriginTaken_sameAgent() (gas: 65197)
+[PASS] test_addEndpoint_ZeroAddress() (gas: 76943)
+[PASS] test_addEndpoint_localOriginOnlyWhenAllowed() (gas: 247244)
+[PASS] test_addEndpoint_originLengthBounds() (gas: 251749)
+[PASS] test_addEndpoint_overwritesRetired() (gas: 161170)
+[PASS] test_addEndpoint_storesAndEmits() (gas: 135648)
+[PASS] test_approveRelease_InvalidPcr_allZero() (gas: 154521)
+[PASS] test_approveRelease_InvalidPcr_length() (gas: 501981)
+[PASS] test_approveRelease_InvalidSourceRef() (gas: 319047)
+[PASS] test_approveRelease_NotOwner() (gas: 107873)
+[PASS] test_approveRelease_ReleaseExists() (gas: 66812)
+[PASS] test_approveRelease_ReleaseExists_afterRevoke() (gas: 107233)
+[PASS] test_approveRelease_storesAndEmits() (gas: 123184)
+[PASS] test_constantsAndConstructor() (gas: 80309)
+[PASS] test_linkSelfAgent_NotOwner() (gas: 131696)
+[PASS] test_linkSelfAgent_SelfDisabled() (gas: 38423)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_hasHumanProofReverts() (gas: 190654)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_isProofFreshReverts() (gas: 193729)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_noHumanProof() (gas: 128395)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_otherSelfOwner() (gas: 147266)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_ownerOfReverts() (gas: 187585)
+[PASS] test_linkSelfAgent_SelfLinkInvalid_staleProof() (gas: 131472)
+[PASS] test_linkSelfAgent_storesAndEmits() (gas: 177403)
+[PASS] test_ownerOfRevert_NotOwner_everyOwnerFunction() (gas: 668817)
+[PASS] test_ownerReadAtCallTime() (gas: 111234)
+[PASS] test_release_Approved_to_Approved_InvalidTransition() (gas: 50880)
+[PASS] test_release_Approved_to_Deprecated() (gas: 59926)
+[PASS] test_release_Approved_to_None_InvalidTransition() (gas: 50803)
+[PASS] test_release_Approved_to_Revoked() (gas: 59963)
+[PASS] test_release_Deprecated_to_Approved() (gas: 96189)
+[PASS] test_release_Deprecated_to_Deprecated_InvalidTransition() (gas: 87087)
+[PASS] test_release_Deprecated_to_None_InvalidTransition() (gas: 87075)
+[PASS] test_release_Deprecated_to_Revoked() (gas: 96181)
+[PASS] test_release_None_to_Approved_InvalidTransition() (gas: 47711)
+[PASS] test_release_None_to_Deprecated_InvalidTransition() (gas: 47688)
+[PASS] test_release_None_to_None_InvalidTransition() (gas: 47721)
+[PASS] test_release_None_to_Revoked_InvalidTransition() (gas: 47755)
+[PASS] test_release_Revoked_to_Approved_InvalidTransition() (gas: 86992)
+[PASS] test_release_Revoked_to_Deprecated_InvalidTransition() (gas: 87012)
+[PASS] test_release_Revoked_to_None_InvalidTransition() (gas: 87019)
+[PASS] test_release_Revoked_to_Revoked_InvalidTransition() (gas: 86989)
+[PASS] test_retireEndpoint_Active_to_Retired() (gas: 65683)
+[PASS] test_retireEndpoint_NotOwner() (gas: 75367)
+[PASS] test_retireEndpoint_Retired_EndpointNotActive() (gas: 81589)
+[PASS] test_retireEndpoint_unknown_NotOwner() (gas: 39861)
+[PASS] test_revokeSigner_Active_to_Revoked() (gas: 497447)
+[PASS] test_revokeSigner_NotOwner() (gas: 502025)
+[PASS] test_revokeSigner_Revoked_SignerNotActive() (gas: 510229)
+[PASS] test_revokeSigner_expiredStillRevocable() (gas: 503727)
+[PASS] test_revokeSigner_unknown_NotOwner() (gas: 41208)
+[PASS] test_revokedSigner_cannotReregister_SignerExists() (gas: 775202)
+[PASS] test_setReleaseStatus_NotOwner() (gas: 71885)
+[PASS] test_setReleaseStatus_otherAgentIsSeparate() (gas: 49801)
+Suite result: ok. 56 passed; 0 failed; 0 skipped; finished in 19.14ms (8.04ms CPU time)
+
+Ran 4 test suites in 20.16ms (62.12ms CPU time): 153 tests passed, 0 failed, 0 skipped (153 total tests)
+all 24 custom errors in EnclaveRegistry.sol are named in contracts/test/
+exit 0
+```
+adversary: NO DEFECT FOUND in EnclaveRegistry (attacks: tbs vs attestation, unguaranteed validator fields, PCR collisions, timestamps, replay, renewSigner, rotation, verifyProof, reentrancy, unreachable errors). 49 extra mutants: 6 survived (s == n/2 low-s edge, SignerRegistered ts, three spec-ordered check orders, InvalidPublicKey vs BindingMismatch order); pinned by contracts/test/adv/AdvRegistry.t.sol (6 tests, each kills one survivor).
+reviewed: pending (Codex)
+notes: open questions logged: InvalidPcr for wrong-length PCRs in registerSigner; try/catch cannot map no-code or undecodable registry returns.
+
+## T05 - 2026-10-30
+commit: 98c2f29 (builder B1, Opus); adversary tests added in the next commit
+verified: cd contracts && FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --match-path 'test/invariant/*' && ../scripts/mutate.sh
+output:
+```
+No files changed, compilation skipped
+
+Ran 1 test for test/invariant/RegistryInvariants.t.sol:RegistryInvariants
+[PASS]
+RegistryInvariants invariants:
+[PASS] invariant_INV1_signerOnlyFromValidatedAttestation
+[PASS] invariant_INV24_renewChangesOnlyExpiryAndHash
+[PASS] invariant_INV2_releaseApprovedAtRegistration
+[PASS] invariant_INV3_freshNonDebugAttestation
+[PASS] invariant_INV4_exactBinding
+[PASS] invariant_INV5_onlyOwnerAndOperator
+[PASS] invariant_INV6_activeEndpointImmutable
+[PASS] invariant_INV7_revokedIsTerminal
+[PASS] invariant_INV8_checkSignerMatchesModel
+[PASS] invariant_modelAgreesOnEveryCall
+ RegistryInvariants invariants (runs: 256, calls: 12800, reverts: 0)
+
+╭-----------------+------------------+-------+---------+----------╮
+| Contract        | Selector         | Calls | Reverts | Discards |
++=================================================================+
+| RegistryHandler | addEndpoint      | 1464  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | approveRelease   | 1450  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | linkSelfAgent    | 1373  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | registerSigner   | 1411  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | renewSigner      | 1454  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | retireEndpoint   | 1388  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | revokeSigner     | 1433  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | setReleaseStatus | 1418  | 0       | 0        |
+|-----------------+------------------+-------+---------+----------|
+| RegistryHandler | warp             | 1409  | 0       | 0        |
+╰-----------------+------------------+-------+---------+----------╯
+
+Suite result: ok. 1 passed; 0 failed; 0 skipped; finished in 13.46s (13.46s CPU time)
+
+Ran 1 test suite in 13.46s (13.46s CPU time): 1 tests passed, 0 failed, 0 skipped (1 total tests)
+KILLED drop-age-underflow-guard
+KILLED drop-operator-check
+KILLED drop-operator-mismatch
+KILLED drop-zero-pcr-check
+KILLED read-from-attestation
+exit 0
+```
+adversary: all five official mutants also die to the invariant suite alone; invariants not vacuous (handler reaches second registration, renewal, rotation, OPERATOR_MISMATCH, AGENT_MISMATCH).
+reviewed: pending (Codex)
+notes: mutate.sh refuses a dirty contracts/src, runs the clean suite first, reports BROKEN for a patch that does not apply or compile, reverts on EXIT/INT/TERM.
