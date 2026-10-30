@@ -26,6 +26,15 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version-file: .nvmrc
+      # The core adversary tests call Foundry's cast, so the ts job needs the same pinned Foundry.
+      - id: foundry
+        run: |
+          v=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)
+          [[ $v =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "contracts/FOUNDRY_VERSION is not vX.Y.Z: '$v'"; exit 1; }
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
       - run: corepack enable
       - run: pnpm install --frozen-lockfile
       # core's package types point at dist, so dependents typecheck against a built core.
@@ -88,6 +97,10 @@ jobs:
         with:
           version: ${{ steps.foundry.outputs.version }}
       - run: pipx install slither-analyzer==0.11.6
+      # Slither resolves symlinks before matching include_paths, so a symlinked file could escape it.
+      - run: |
+          links=$(git ls-files -s contracts | awk '$1 == "120000" {print $4}')
+          if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
       # Nothing to analyse before the first contract lands; once one exists the config must too.
       - working-directory: contracts
         run: |
