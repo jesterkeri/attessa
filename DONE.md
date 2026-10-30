@@ -79,3 +79,23 @@ exit 0
 ```
 reviewed: pending (Codex)
 notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
+
+## T02 Codex r1 fixes - 2026-10-30
+commit: this entry
+review: .worktrees/review-t02-r1/reviews/t02-review-r1.md (VERDICT: changes required, M2 m1)
+fixed:
+- M2 Foundry pin: contracts/FOUNDRY_VERSION = v1.8.1 (forge 1.8.1, commit 982849d); the proposed ci.yml installs that version.
+- m1 scripts/check-install-scripts.sh passes on a failed install only for ERR_PNPM_UNSUPPORTED_ENGINE; any other failure exits 1.
+- M1 CI: .github/workflows/ci.yml with the PIPELINE jobs ts, contracts, slither, enclave is proposed in .worktrees/prompts/ci.yml (the guard-edit hook keeps workflow files for Joshua to apply), plus harness-r2.patch removing the duplicate build job from harness.yml.
+verified: bash scripts/check-install-scripts.sh (normal) and the same with npm offline and an empty cache
+output:
+```
+$ bash scripts/check-install-scripts.sh
+install refused by the engines pin (exit 1): ok
+exit=0
+$ npm_config_offline=true npm_config_cache=$(mktemp -d) bash scripts/check-install-scripts.sh
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+exit=1
+```
+reviewed: pending (Codex r2, after ci.yml is applied)
