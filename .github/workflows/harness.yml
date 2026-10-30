@@ -6,7 +6,7 @@ name: harness
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging, 'feat/**']
 
 # Least privilege by default. Grant more only in the job that needs it.
 permissions:
@@ -70,3 +70,23 @@ jobs:
       # - run: npm ci --ignore-scripts && npm run build
       - name: Scan build output
         run: ./scripts/check-secrets.sh .next dist build out || true   # set to blocking once a build step exists above
+
+  build:
+    name: build and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+      - run: corepack enable
+      - name: install
+        run: pnpm install --frozen-lockfile && cargo fetch --locked --manifest-path enclave/Cargo.toml
+      - name: build
+        run: pnpm -r build && (cd contracts && forge build) && cargo build --release --locked --manifest-path enclave/Cargo.toml
+      - name: test
+        run: pnpm -r test && (cd contracts && forge test) && cargo test --locked --manifest-path enclave/Cargo.toml
