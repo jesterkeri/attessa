@@ -34,6 +34,12 @@ export class Reconciler {
    * A row with a re-send in flight is not sent again: at most one reconciler send per row at a time.
    */
   private readonly resending = new Map<string, Promise<void>>();
+  /**
+   * Chain checks in flight, by request id. A pass starts one per open row and does not wait, so a slow RPC
+   * on one row never delays another row's expiry or the delivery sweep (SPEC §6.3 every 5 s, INV-11).
+   * shortcut: no global cap on concurrent row checks; add one if open rows ever number in the hundreds.
+   */
+  private readonly checking = new Map<string, Promise<void>>();
 
   private readonly d: ReconcilerDeps;
   constructor(d: ReconcilerDeps) {
@@ -63,12 +69,14 @@ export class Reconciler {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
     await this.running;
+    await Promise.all(this.checking.values()); // before re-sends: a check can still start one
     await Promise.all(this.resending.values());
   }
 
   /**
-   * One pass. Concurrent calls share the pass in flight. The returned promise also waits for the re-sends
-   * that pass started; the timer ignores it, so the next pass is never held up by a slow facilitator.
+   * One pass. Concurrent calls share the pass in flight. The returned promise also waits for the row checks
+   * and re-sends that pass started; the timer ignores it, so the next pass is never held up by a slow RPC
+   * or facilitator.
    */
   async tick(): Promise<void> {
     if (!this.running) {
@@ -83,12 +91,23 @@ export class Reconciler {
     const { db } = this.d;
     const started: Promise<void>[] = [];
     for (const row of db.inStates(['settling', 'settle_pending'])) {
-      try {
-        const r = await this.reconcileSettlement(row);
-        if (r) started.push(r.sent);
-      } catch (e) {
-        this.d.log('reconcile_error', { requestId: row.request_id, error: (e as Error).message });
+      const id = row.request_id;
+      const inFlight = this.checking.get(id);
+      if (inFlight) {
+        started.push(inFlight);
+        continue;
       }
+      const checked = this.reconcileSettlement(row)
+        .catch((e: unknown) => {
+          this.d.log('reconcile_error', { requestId: id, error: (e as Error).message });
+          return null;
+        })
+        .finally(() => {
+          this.checking.delete(id);
+          db.applyRetention(this.d.now()); // drop the response of a row this check terminalized
+        });
+      this.checking.set(id, checked.then(() => undefined));
+      started.push(checked.then((r) => r?.sent));
     }
     const now = this.d.now();
     for (const row of db.inStates(['settled'])) {
