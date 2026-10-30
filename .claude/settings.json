@@ -20,10 +20,7 @@
       "Bash(supabase db push *)",
       "Bash(vercel --prod *)"
     ],
-    "ask": [
-      "Bash(git commit *)",
-      "Bash(gh pr create *)"
-    ]
+    "ask": []
   },
   "hooks": {
     "SessionStart": [

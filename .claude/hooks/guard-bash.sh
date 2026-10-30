@@ -22,6 +22,8 @@ low=$(printf '%s' "$cmd" | tr '[:upper:]' '[:lower:]')
 # Anything that broadcasts, publishes or deploys is a human decision, per the design.
 echo "$low" | grep -qE '(^|[;&|[:space:]])(forge|cast)[[:space:]].*--broadcast' && \
   deny "Broadcasting a transaction is gated on a human. CI produces calldata and a simulation; a multisig executes. Run the simulation without --broadcast instead."
+echo "$low" | grep -qE '(^|[;&|[:space:]])cast[[:space:]]+(send|publish)([[:space:]]|$)' && \
+  deny "cast send and cast publish broadcast a transaction without a --broadcast flag. Broadcasting is gated on a human."
 echo "$low" | grep -qE 'sui[[:space:]]+client[[:space:]]+(publish|upgrade)' && \
   deny "Publishing or upgrading a Sui package is gated on a human and the UpgradeCap holder, which is not this session."
 echo "$low" | grep -qE 'npm[[:space:]]+publish|pnpm[[:space:]]+publish|yarn[[:space:]]+npm[[:space:]]+publish' && \

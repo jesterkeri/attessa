@@ -34,7 +34,8 @@ case "$path" in
     fi ;;
   */.github/workflows/*|.github/workflows/*)
     deny "Workflow files change the security boundary of the pipeline. Propose the diff in the response for human review rather than writing it." ;;
-  */.claude/*|.claude/*)
+  # This repo's agent config and its worktrees' copies; not ~/.claude (user memory).
+  "${CLAUDE_PROJECT_DIR:-$PWD}"/.claude/*|*/.worktrees/*/.claude/*|.claude/*)
     deny "Agent configuration is out of scope for a build task and is a known malware persistence target. Propose the change instead of writing it." ;;
 esac
 exit 0

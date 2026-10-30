@@ -25,3 +25,4 @@ enclave/target/
 *.sqlite-journal
 .attessa/
 .claude/worktrees/
+.worktrees/

@@ -320,3 +320,66 @@ result: EnclaveRegistry branch coverage 100% (61/61), done-when is >= 90%. Slith
 adversary: n/a (config and triage doc only; the triage goes to Codex with T06/T07)
 reviewed: pending (Codex)
 notes: slither installed with `uv tool install slither-analyzer` (user space, not a project dependency). Coverage runs invariants at default depth, about 285 s.
+## T02 adversary fix - 2026-10-29
+commit: 1eb99f7
+findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
+verified: ./scripts/check-install-scripts.sh && ./scripts/check-agents-commands.sh && <T02 verify>
+output:
+```
+install refused (exit 1): ok
+PASS install
+PASS build
+PASS test
+PASS lint
+PASS typecheck
+packages/seller-host typecheck: Done
+Warning: lib/nitro-validator: missing from foundry.lock (found 0ea0d12366b4fa44f9e07e4755f2ad36561cb674)
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+0ea0d12
+exit 0
+```
+reviewed: pending (Codex)
+notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
+
+## T02 Codex r1 fixes - 2026-10-30
+commit: this entry
+review: .worktrees/review-t02-r1/reviews/t02-review-r1.md (VERDICT: changes required, M2 m1)
+fixed:
+- M2 Foundry pin: contracts/FOUNDRY_VERSION = v1.8.1 (forge 1.8.1, commit 982849d); the proposed ci.yml installs that version.
+- m1 scripts/check-install-scripts.sh passes on a failed install only for ERR_PNPM_UNSUPPORTED_ENGINE; any other failure exits 1.
+- M1 CI: .github/workflows/ci.yml with the PIPELINE jobs ts, contracts, slither, enclave is proposed in .worktrees/prompts/ci.yml (the guard-edit hook keeps workflow files for Joshua to apply), plus harness-r2.patch removing the duplicate build job from harness.yml.
+verified: bash scripts/check-install-scripts.sh (normal) and the same with npm offline and an empty cache
+output:
+```
+$ bash scripts/check-install-scripts.sh
+install refused by the engines pin (exit 1): ok
+exit=0
+$ npm_config_offline=true npm_config_cache=$(mktemp -d) bash scripts/check-install-scripts.sh
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+exit=1
+```
+reviewed: pending (Codex r2, after ci.yml is applied)
+
+## T02 Codex r1 fixes: full offline-probe output - 2026-10-30
+The entry above abridged the offline run. Verbatim rerun:
+```
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/pnpm failed: cache mode is 'only-if-cached' but no cached response is available.
+npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/2026-10-30T09_03_24_882Z-debug-0.log
+exit=1
+```
+reviewed: pending (Codex r2)
+
+## T04/T05 Codex review r1 - 2026-10-30
+Codex reviewed T04 and T05 at 0d9e8bd under REVIEW-PROTOCOL U1 to U9 and found nothing to fix.
+Review file: reviews/t04-t05-review-r1.md. Its closing lines, verbatim:
+```
+U9: This review swept the complete T04/T05 implementation diff and directly relevant validator dependency, but was not a broader unscoped review of the remainder of the repository.
+
+VERDICT: implementation-ready
+```
+reviewed: reviews/t04-t05-review-r1.md | verdict: implementation-ready | C0 M0 m0
+note: commit e22eee9 recorded this wrongly (conflict markers in DONE.md and the T13 review file, from a shared git stash). The commit after it restores DONE.md to the merge plus this entry and swaps in the right review file.
