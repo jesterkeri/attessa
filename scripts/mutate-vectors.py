@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # One-value mutants (from adversary T03 r2) of vectors/*.json, each run through
 # scripts/check-vectors-oracle.py in a scratch copy (tracked files are never touched).
-# A mutant SURVIVES when the oracle script exits 0 on a vector that is wrong.
+# A mutant SURVIVES when the oracle script exits 0 on a vector that is wrong; exit 1 if any does.
 # Run from the repo root: python3 -I scripts/mutate-vectors.py
 import copy, json, os, shutil, subprocess, sys, tempfile
 
@@ -78,3 +78,4 @@ for m in MUTANTS:
     survivors += r.returncode == 0
     print(f"{verdict:8} {m.__name__[2:]:28} exit={r.returncode} {tail}")
 print("survivors:", survivors, "of", len(MUTANTS))
+sys.exit(1 if survivors else 0)
