@@ -41,7 +41,8 @@ const git = (...a) => execFileSync('git', ['-C', NV, ...a], { encoding: 'utf8' }
 
 function deploymentsMd(m) {
   const rows = ['Admin', 'P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'].map((k) => `| ${k} | \`${m[k]}\` |`);
-  return ['# Deployments (test)', '', '## celo-sepolia', '', '| Name | Address |', '|---|---|', ...rows, '', '## celo', ''].join('\n');
+  const pinned = ['| IdentityRegistry (ERC-8004) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |', '| SelfRegistry | `0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379` |'];
+  return ['# Deployments (test)', '', '## celo-sepolia', '', '| Name | Address |', '|---|---|', ...rows, '', '| Name | Address |', '|---|---|', ...pinned, '', '## celo', ''].join('\n');
 }
 
 function coreTs(m) {
@@ -79,6 +80,12 @@ before(async () => {
     recursive: true,
     filter: (p) => basename(p) !== '.git',
   });
+
+  // The mirror is a committed git repo (check-deploy builds its reference from HEAD), with
+  // nitro-validator recorded at the pinned commit.
+  execFileSync('git', ['-C', M, 'init', '--quiet']);
+  execFileSync('git', ['-C', M, 'add', '-A'], { stdio: 'ignore' });
+  execFileSync('git', ['-C', M, '-c', 'user.email=adversary@test', '-c', 'user.name=adversary', 'commit', '--quiet', '-m', 'mirror']);
 
   // The modification: accept expired certificates.
   const cm = join(NV, 'src', 'CertManager.sol');
@@ -125,7 +132,7 @@ test('A. dirty nitro-validator (HEAD 0ea0d12, CertManager.sol modified): check-d
   assert.equal(git('status', '--porcelain'), 'M src/CertManager.sol');
   const r = runCheck('dirty');
   assert.notEqual(r.status, 0, 'check-deploy passed a CertManager built from a modified CertManager.sol');
-  assert.match(r.stdout, /^FAIL  nitro-validator is at 0ea0d12 with a clean tree: /m);
+  assert.match(r.stdout, /^FAIL  CertManager runtime code equals the production artifact with immutables spliced: /m);
 });
 
 test('B. stale contracts/out (tree clean at 0ea0d12, not rebuilt): check-deploy must not pass', () => {
@@ -133,8 +140,5 @@ test('B. stale contracts/out (tree clean at 0ea0d12, not rebuilt): check-deploy 
   assert.equal(git('status', '--porcelain'), '');
   const r = runCheck('stale');
   assert.notEqual(r.status, 0, 'check-deploy passed a CertManager that the checked-out source does not compile to');
-  // The mirror is not a git repo, so the contracts/src check also fails here; the stale build
-  // itself must be caught by the source-hash check.
-  assert.match(r.stdout, /^FAIL  CertManager artifact was built from the sources on disk: /m);
-  assert.match(r.stdout, /^OK    nitro-validator is at 0ea0d12 with a clean tree$/m);
+  assert.match(r.stdout, /^FAIL  CertManager runtime code equals the production artifact with immutables spliced: /m);
 });

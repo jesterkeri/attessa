@@ -66,7 +66,9 @@ forge script script/DeployRegistry.s.sol:DeployRegistry --rpc-url $RPC \
   --account <keystore-name> --sender $DEPLOYER --slow --broadcast
 
 # 3. Record. Replace the TODO rows above with the five addresses, fill `enclaveRegistry` and
-#    `validatorStack` for celo-sepolia in packages/core/src/deployments.ts, then from the repo root:
+#    `validatorStack` for celo-sepolia in packages/core/src/deployments.ts, commit, then from the
+#    repo root at the commit you deployed from (check-deploy compiles its own reference bytecode
+#    from HEAD's committed contracts and the pinned nitro-validator, so local edits can't skew it):
 cd ..
 node scripts/check-deploy.mjs celo-sepolia   # must print OK for every check and exit 0
 ```

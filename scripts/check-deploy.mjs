@@ -1,18 +1,20 @@
 #!/usr/bin/env node
 // T10/T30 (SPEC §3.5): checks a deployed Attessa stack against docs/DEPLOYMENTS.md,
-// packages/core/src/deployments.ts and the compiled production artifacts in contracts/out.
+// packages/core/src/deployments.ts and a reference build of the production contracts.
 // Read-only: eth_chainId, eth_getCode and eth_call only.
 //
 //   node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]
 //
-// Needs `forge build` in contracts/ first (the artifacts are the reference bytecode), a clean
-// contracts/src and nitro-validator, and `cast` on PATH (keccak256 of the sources).
-// Exit 0: every check printed OK. Exit 1: a check failed. Exit 2: could not run (bad input,
-// TODO addresses, missing artifacts, RPC error).
+// The reference bytecode is compiled fresh, in a temp dir, from HEAD's committed contracts/ and
+// the nitro-validator commit HEAD pins. Nothing in the working tree (uncommitted edits,
+// contracts/out, a dirty submodule) can change it, so run this from the commit that was deployed.
+// Needs git and forge on PATH. Exit 0: every check printed OK. Exit 1: a check failed. Exit 2:
+// could not run (bad input, TODO addresses, reference build failed, RPC error).
 
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -65,13 +67,14 @@ function parseDeploymentsMd(text, network) {
   if (start < 0) throw new Refuse(`no "## ${network}" section in DEPLOYMENTS.md`);
   const rows = {};
   for (let i = start + 1; i < lines.length && !lines[i].startsWith('## '); i++) {
-    const m = /^\|\s*([A-Za-z0-9]+)\s*\|\s*`([^`]*)`\s*\|/.exec(lines[i]);
+    // The name is the first word: `| IdentityRegistry (ERC-8004) | ...` is IdentityRegistry.
+    const m = /^\|\s*([A-Za-z0-9]+)[^|`]*\|\s*`([^`]*)`\s*\|/.exec(lines[i]);
     if (!m) continue;
     if (m[1] in rows) throw new Refuse(`DEPLOYMENTS.md ${network}: ${m[1]} row appears twice`);
     rows[m[1]] = m[2].trim();
   }
   const out = {};
-  for (const name of ['Admin', ...OURS]) {
+  for (const name of ['Admin', ...OURS, 'IdentityRegistry', 'SelfRegistry']) {
     const v = rows[name];
     if (v === undefined) throw new Refuse(`DEPLOYMENTS.md ${network}: no ${name} row`);
     if (/^TODO/i.test(v)) {
@@ -84,12 +87,53 @@ function parseDeploymentsMd(text, network) {
   return out;
 }
 
-function artifact(name) {
-  const p = `${ROOT}/contracts/out/${name}.sol/${name}.json`;
-  if (!existsSync(p)) throw new Refuse(`missing ${p}; run \`forge build\` in contracts/ first`);
-  const a = JSON.parse(readFileSync(p, 'utf8'));
-  if (Object.keys(a.deployedBytecode.linkReferences ?? {}).length) throw new Refuse(`${name} artifact has unlinked libraries`);
-  return a;
+const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
+
+/**
+ * Compiles the production contracts from HEAD's committed contracts/ (foundry.toml and
+ * remappings included) plus the nitro-validator commit HEAD records, in a fresh temp dir with
+ * `forge build --force`. Returns the artifacts and what they were built from.
+ */
+function referenceBuild() {
+  let head, gitlink;
+  try {
+    head = git(ROOT, 'rev-parse', 'HEAD');
+    gitlink = git(ROOT, 'ls-tree', 'HEAD', 'contracts/lib/nitro-validator').split(/\s+/);
+  } catch (e) {
+    throw new Refuse(`cannot read the committed tree at ${ROOT}: ${e.message.split('\n')[0]}`);
+  }
+  if (gitlink[1] !== 'commit') throw new Refuse('HEAD does not record contracts/lib/nitro-validator as a submodule');
+  const pinned = gitlink[2];
+  if (!pinned.startsWith(PINNED_VALIDATOR_COMMIT)) {
+    throw new Refuse(`HEAD pins nitro-validator at ${pinned}, not ${PINNED_VALIDATOR_COMMIT} (ADR-001)`);
+  }
+  const dir = mkdtempSync(join(tmpdir(), 'check-deploy-ref-'));
+  try {
+    const sh = (script, ...a) => execFileSync('sh', ['-c', script, 'sh', ...a], { stdio: ['ignore', 'ignore', 'pipe'] });
+    // Only what the production contracts compile from: no test/ or script/ (they need forge-std).
+    sh('git -C "$1" archive HEAD contracts/src contracts/foundry.toml contracts/remappings.txt | tar -x -C "$2"', ROOT, dir);
+    const nv = join(dir, 'contracts/lib/nitro-validator');
+    mkdirSync(nv, { recursive: true });
+    sh('git -C "$1" archive "$2" src | tar -x -C "$3"', `${ROOT}/contracts/lib/nitro-validator`, pinned, nv);
+    // forge compiles src/ plus what it imports; the validator stack is named explicitly.
+    const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => `lib/nitro-validator/src/${n}.sol`)];
+    execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), ...paths.map((p) => join(dir, 'contracts', p))], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    });
+    const arts = {};
+    for (const n of OURS) {
+      const p = join(dir, `contracts/out/${n}.sol/${n}.json`);
+      if (!existsSync(p)) throw new Refuse(`reference build produced no ${n} artifact`);
+      arts[n] = JSON.parse(readFileSync(p, 'utf8'));
+      if (Object.keys(arts[n].deployedBytecode.linkReferences ?? {}).length) throw new Refuse(`${n} artifact has unlinked libraries`);
+    }
+    return { arts, head, pinned };
+  } catch (e) {
+    if (e instanceof Refuse) throw e;
+    throw new Refuse(`reference build failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 const word = (addrOrBool) =>
@@ -149,7 +193,7 @@ async function main() {
   const core = DEPLOYMENTS[args.network];
   if (!core) throw new Refuse(`${args.core} has no "${args.network}" entry`);
 
-  const arts = Object.fromEntries(OURS.map((n) => [n, artifact(n)]));
+  const { arts, head, pinned } = referenceBuild();
   const sel = (n, sig) => {
     const s = arts[n].methodIdentifiers[sig];
     if (!s) throw new Refuse(`${n} artifact has no ${sig}`);
@@ -173,47 +217,8 @@ async function main() {
     return r.length === 66 ? '0x' + r.slice(26).toLowerCase() : `(bad return ${r})`;
   };
 
-  // Provenance: the reference artifacts must come from the pinned, unmodified sources. The commit
-  // alone is not enough: a dirty submodule or a stale contracts/out passes it (T10 adversary).
-  const git = (dir, ...a) => {
-    try {
-      return execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
-    } catch (e) {
-      return `(git failed: ${e.message.split('\n')[0]})`;
-    }
-  };
-  const validatorDir = `${ROOT}/contracts/lib/nitro-validator`;
-  const commit = git(validatorDir, 'rev-parse', 'HEAD');
-  const validatorDirty = git(validatorDir, 'status', '--porcelain', '--ignore-submodules=none');
-  check(
-    `nitro-validator is at ${PINNED_VALIDATOR_COMMIT} with a clean tree`,
-    commit.startsWith(PINNED_VALIDATOR_COMMIT) && validatorDirty === '',
-    `submodule is at ${commit}${validatorDirty ? `, uncommitted changes:\n${validatorDirty}` : ''}`,
-  );
-  const srcDirty = git(ROOT, 'status', '--porcelain', '--', 'contracts/src');
-  check('contracts/src has no uncommitted changes', srcDirty === '', srcDirty);
-  // Every source in each artifact's metadata must be under src/ or the pinned submodule, and
-  // match the file on disk byte for byte (keccak256, as solc records it). With the clean-tree
-  // checks above, that ties contracts/out to the pinned code; the runtime code comparison below
-  // then ties the chain to contracts/out, metadata hash included.
-  for (const n of OURS) {
-    const bad = [];
-    for (const [path, { keccak256 }] of Object.entries(arts[n].metadata?.sources ?? {})) {
-      if (!path.startsWith('src/') && !path.startsWith('lib/nitro-validator/src/')) {
-        bad.push(`${path} is outside src/ and lib/nitro-validator/src/`);
-        continue;
-      }
-      const file = `${ROOT}/contracts/${path}`;
-      if (!existsSync(file)) {
-        bad.push(`${path} is missing`);
-        continue;
-      }
-      const onDisk = execFileSync('cast', ['keccak'], { input: readFileSync(file), encoding: 'utf8' }).trim();
-      if (onDisk !== keccak256) bad.push(`${path} on disk ${onDisk}, artifact built from ${keccak256}`);
-    }
-    if (!arts[n].metadata?.sources) bad.push('artifact has no metadata.sources');
-    check(`${n} artifact was built from the sources on disk`, bad.length === 0, `rebuild with \`forge build\`:\n  ${bad.join('\n  ')}`);
-  }
+  // Printed, not a check: the reference build either ran from the committed tree or refused.
+  console.log(`REF   reference bytecode compiled from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned.slice(0, 12)}`);
 
   check(
     'deployments.ts EnclaveRegistry matches DEPLOYMENTS.md',
@@ -230,6 +235,8 @@ async function main() {
 
   const identity = core.identityRegistry.toLowerCase();
   const self = core.selfRegistry.toLowerCase();
+  check('deployments.ts identityRegistry matches DEPLOYMENTS.md', identity === md.IdentityRegistry, `deployments.ts has ${identity}, DEPLOYMENTS.md has ${md.IdentityRegistry}`);
+  check('deployments.ts selfRegistry matches DEPLOYMENTS.md', self === md.SelfRegistry, `deployments.ts has ${self}, DEPLOYMENTS.md has ${md.SelfRegistry}`);
   const values = {
     P384Verifier: {},
     CertManager: { p384Verifier: md.P384Verifier },

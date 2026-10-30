@@ -47,7 +47,8 @@ async function waitFor(rpc) {
 /** A DEPLOYMENTS.md with the same layout as docs/DEPLOYMENTS.md. */
 function deploymentsMd(m) {
   const rows = ['Admin', 'P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'].map((k) => `| ${k} | \`${m[k]}\` |`);
-  return ['# Deployments (test)', '', '## celo-sepolia', '', '| Name | Address |', '|---|---|', ...rows, '', '## celo', ''].join('\n');
+  const pinned = ['| IdentityRegistry (ERC-8004) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |', '| SelfRegistry | `0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379` |'];
+  return ['# Deployments (test)', '', '## celo-sepolia', '', '| Name | Address |', '|---|---|', ...rows, '', '| Name | Address |', '|---|---|', ...pinned, '', '## celo', ''].join('\n');
 }
 
 /** packages/core/src/deployments.ts with the celo-sepolia entry filled in from `m` (or left null). */
@@ -104,7 +105,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
   const r = runCheck('production');
   assert.equal(r.status, 0);
   assert.deepEqual(r.fails, []);
-  assert.match(r.out, /\nOK: all 28 checks passed\n$/);
+  assert.match(r.out, /\nOK: all 24 checks passed\n$/);
   for (const n of ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry']) {
     assert.match(r.out, new RegExp(`^OK {4}${n} runtime code equals the production artifact with immutables spliced$`, 'm'));
   }
@@ -114,7 +115,7 @@ test('production stack deployed by the deploy scripts: every check OK, exit 0', 
 test('CertManagerDemo: the CertManager code check fails, exit 1', () => {
   const r = runCheck('demo');
   assert.equal(r.status, 1);
-  assert.match(r.out, /\nFAILED: 1 of 28 checks failed\n$/);
+  assert.match(r.out, /\nFAILED: 1 of 24 checks failed\n$/);
   // The demo stack's owner is set as admin and its wiring is right, so the code check alone catches it.
   assert.deepEqual(r.fails.map((l) => l.split(':')[0]), ['FAIL  CertManager runtime code equals the production artifact with immutables spliced']);
 });
