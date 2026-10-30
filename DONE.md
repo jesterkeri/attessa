@@ -136,3 +136,29 @@ npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/
 exit=1
 ```
 reviewed: pending (Codex r2)
+
+## T19 - 2026-10-30
+commit: 3bb4af3 plus merge 5198af1 (built 2d55778, 67e0122 by a builder, Opus; fixed b76a43d)
+verified: pnpm --filter @attessa/gateway test (plus pnpm --filter @attessa/gateway typecheck), on the merge
+output (file lines and totals verbatim; the per-test lines are in the run log and omitted here):
+```
+$ pnpm --filter @attessa/gateway test
+ ✓ test/smoke.test.ts (1 test) 694ms
+ ✓ test/admin.test.ts (4 tests) 3938ms
+ ✓ test/reconciler-resend.test.ts (3 tests) 4621ms
+ ✓ test/adversary-t19-r2.test.ts (9 tests) 9409ms
+ ✓ test/adversary-t19.test.ts (2 tests) 10198ms
+ ✓ test/idempotency.test.ts (17 tests) 13068ms
+ ✓ test/quote.test.ts (32 tests) 15087ms
+ ✓ test/settlement.test.ts (25 tests) 15712ms
+ ✓ test/evaluate.test.ts (37 tests) 17677ms
+ Test Files  9 passed (9)
+      Tests  130 passed (130)
+exit=0
+$ pnpm --filter @attessa/gateway typecheck
+> tsc -p ../core && tsc -p . --noEmit
+exit=0
+```
+adversary: r1 on 67e0122 DEFECT (INV-11: a serial reconciler re-send to a hung facilitator delayed other rows' expiry; fixed b76a43d, test kept as test/adversary-t19.test.ts). r2 on b76a43d NO DEFECT FOUND (late re-send answers vs terminal states, in-flight leak, concurrent ticks, corrupt payload, stop() mid-pass, background 402); its 9 tests kept as test/adversary-t19-r2.test.ts.
+reviewed: pending (Codex)
+notes: three SPEC questions from the fix round are in OPEN-QUESTIONS (unfunded authorizations vs the unpaid rate limit; nonce used before created_block; §6.2 step order vs the idempotency table).
