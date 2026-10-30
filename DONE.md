@@ -297,7 +297,6 @@ exit 0
 ```
 adversary: all five official mutants also die to the invariant suite alone; invariants not vacuous (handler reaches second registration, renewal, rotation, OPERATOR_MISMATCH, AGENT_MISMATCH).
 reviewed: pending (Codex)
-<<<<<<< Updated upstream
 notes: mutate.sh refuses a dirty contracts/src, runs the clean suite first, reports BROKEN for a patch that does not apply or compile, reverts on EXIT/INT/TERM.
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
@@ -351,15 +350,14 @@ npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/
 exit=1
 ```
 reviewed: pending (Codex r2)
-=======
-notes: runs the T03 vectors from 705d515 (merged from feat/t03-core). Open: frame size vs a large payTo, NSM error after boot, payer-sig hex case (OPEN-QUESTIONS).
 
-## T13 Codex review r1 - 2026-10-30
-Codex reviewed T13 at ca8a26e under REVIEW-PROTOCOL U1 to U9 and found nothing to fix.
-Review file: reviews/t13-review-r1.md. Its closing lines, verbatim:
+## T04/T05 Codex review r1 - 2026-10-30
+Codex reviewed T04 and T05 at 0d9e8bd under REVIEW-PROTOCOL U1 to U9 and found nothing to fix.
+Review file: reviews/t04-t05-review-r1.md. Its closing lines, verbatim:
 ```
-Decision: SHIP
+U9: This review swept the complete T04/T05 implementation diff and directly relevant validator dependency, but was not a broader unscoped review of the remainder of the repository.
+
 VERDICT: implementation-ready
 ```
-reviewed: reviews/t13-review-r1.md | verdict: implementation-ready | C0 M0 m0
->>>>>>> Stashed changes
+reviewed: reviews/t04-t05-review-r1.md | verdict: implementation-ready | C0 M0 m0
+note: commit e22eee9 recorded this wrongly (conflict markers in DONE.md and the T13 review file, from a shared git stash). The commit after it restores DONE.md to the merge plus this entry and swaps in the right review file.
