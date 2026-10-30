@@ -232,6 +232,18 @@
       "reason": "invalid_url"
     },
     {
+      "name": "non-special scheme, unclosed IPv6 host",
+      "input": "foo://[x",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
+      "name": "file scheme, space in host",
+      "input": "file://a b/",
+      "local": false,
+      "reason": "invalid_url"
+    },
+    {
       "name": "invalid punycode label",
       "input": "https://xn--a.com",
       "local": false,

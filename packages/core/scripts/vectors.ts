@@ -119,6 +119,9 @@ function origins() {
     { name: 'userinfo, password only', input: 'https://:pw@example.com', local: false, reason: 'userinfo' },
     { name: '268 bytes', input: `https://${host259}x`, local: false, reason: 'length' },
     { name: 'not a URL', input: 'example.com', local: false, reason: 'invalid_url' },
+    // SPEC §2.1 parses before it checks the scheme, so a URL WHATWG cannot parse is invalid_url, not not_https.
+    { name: 'non-special scheme, unclosed IPv6 host', input: 'foo://[x', local: false, reason: 'invalid_url' },
+    { name: 'file scheme, space in host', input: 'file://a b/', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
     { name: 'zero-width joiner', input: 'https://a‍b.com', local: false, reason: 'invalid_url' },
     // RFC 5892 A.1 holds for each ZWNJ on its own; a virama-exempt ZWNJ before it does not help (tr46 5.1.1 bug).

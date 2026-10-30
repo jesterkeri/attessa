@@ -36,7 +36,7 @@ V = lambda f: json.load(open(f"vectors/{f}", encoding="utf-8"))
 
 # ---- committed family sizes. A family may grow, never shrink or vanish.
 MIN = {
-    ("origins.json", "valid"): 18, ("origins.json", "invalid"): 23,
+    ("origins.json", "valid"): 18, ("origins.json", "invalid"): 25,
     ("hashes.json", "requestHash"): 6, ("hashes.json", "responseHash"): 3, ("hashes.json", "inputsHash"): 6,
     ("hashes.json", "releaseId"): 3, ("hashes.json", "requestId"): 2,
     ("binding.json", "userData"): 6, ("binding.json", "signer"): 4,
@@ -378,6 +378,36 @@ def percent_decode(s):
             out.append(raw[i]); i += 1
     return out.decode("utf-8", errors="replace")
 
+FORBIDDEN_OPAQUE = set("\x00\t\n\r #/:<>?@[\\]^|")
+def cut(s, stops): return s[:min([s.find(c) for c in stops if c in s] or [len(s)])]
+def check_ipv6(h):  # h starts with "["
+    if not h.endswith("]"): raise Fail
+    try: serialize_ipv6(h[1:-1])
+    except ValueError: raise Fail
+def parse_unspecial(scheme, rest):  # raises Fail where WHATWG fails a file: or non-special URL
+    if scheme == "file":
+        if rest[:1] not in ("/", "\\") or rest[1:2] not in ("/", "\\"): return
+        h = cut(rest[2:], "/\\?#")
+        if h == "" or (len(h) == 2 and h[0].isascii() and h[0].isalpha() and h[1] in ":|"): return  # drive letter
+        if h.startswith("["): return check_ipv6(h)
+        host = domain_to_ascii(percent_decode(h))
+        if set(host) & FORBIDDEN_HOST: raise Fail
+        if ends_in_number(host): parse_ipv4(host)
+        return
+    if not rest.startswith("//"): return  # opaque path: never fails
+    auth = cut(rest[2:], "/?#")
+    hostport = auth.rsplit("@", 1)[-1]
+    if "@" in auth and hostport == "": raise Fail
+    host, port, inside = hostport, None, False
+    for i, ch in enumerate(hostport):
+        if ch == ":" and not inside:
+            host, port = hostport[:i], hostport[i + 1:]; break
+        inside = True if ch == "[" else False if ch == "]" else inside
+    if host == "" and port is not None: raise Fail
+    if host.startswith("["): check_ipv6(host)
+    elif set(host) & FORBIDDEN_OPAQUE: raise Fail
+    if port and (not set(port) <= DEC or int(port) > 65535): raise Fail
+
 def whatwg_origin(inp):  # -> (scheme, userinfo?, host, kind, port or None)
     s = inp.strip("".join(chr(c) for c in range(0x21))).replace("\t", "").replace("\n", "").replace("\r", "")
     i = 0
@@ -385,7 +415,8 @@ def whatwg_origin(inp):  # -> (scheme, userinfo?, host, kind, port or None)
     while i < len(s) and s[i].isascii() and (s[i].isalnum() or s[i] in "+-."): i += 1
     if i >= len(s) or s[i] != ":": raise Fail
     scheme, rest = s[:i].lower(), s[i + 1:]
-    if scheme not in DEFAULT_PORT: return scheme, False, None, None, None  # not special: no host to judge
+    if scheme not in DEFAULT_PORT:  # still parsed first (SPEC §2.1 step 1): a parse failure is invalid_url
+        parse_unspecial(scheme, rest); return scheme, False, None, None, None
     rest = rest.lstrip("/\\")
     end = min([rest.find(c) for c in "/\\?#" if c in rest] or [len(rest)])
     auth = rest[:end]
