@@ -174,3 +174,33 @@ checks: 124 fails: 6
 ```
 restored: oracle back to `checks: 124 fails: 0`.
 reviewed: pending (Codex r2)
+
+## T03 adversary rounds 2-6 - 2026-10-30
+commit: 1333de5 (fix builders, Opus; branch feat/t03-core, rerun by lead)
+verified: pnpm --filter @attessa/core test; pnpm -r lint; python3 -I scripts/check-vectors-oracle.py; python3 -I scripts/mutate-vectors.py
+output:
+```
+$ pnpm --filter @attessa/core test
+ ✓ test/regression-t03.test.ts (4 tests) 8ms
+ ✓ test/adversary-t03-r4.test.ts (4 tests) 8ms
+ ✓ test/adversary-t03-r5.test.ts (4 tests) 10ms
+ ✓ test/oracle.test.ts (9 tests) 10ms
+ ✓ test/core.test.ts (21 tests) 68ms
+ ✓ test/vectors.test.ts (7 tests) 158ms
+ ✓ test/adversary-t03-r3.test.ts (7 tests) 4329ms
+ ✓ test/adversary-t03-r2.test.ts (11 tests) 10964ms
+ Test Files  8 passed (8)
+      Tests  67 passed (67)
+exit=0
+$ pnpm -r lint
+exit=0
+$ python3 -I scripts/check-vectors-oracle.py
+checks: 461 fails: 0
+exit=0
+$ python3 -I scripts/mutate-vectors.py
+survivors: 0 of 24
+exit=0
+```
+adversary: r2 (oracle missed JCS, signers, grammars), r3 (oracle origin check was not UTS-46; password-only userinfo, unsafe payer-sig seconds), r4 (ZWNJ CheckJoiners after a virama-exempt ZWNJ, tr46 5.1.1), r5 (joiner check decoded opaque hosts of non-special schemes) each found a defect, all fixed with their tests committed. The oracle now implements UTS-46 itself from pinned Unicode 16.0.0 data. r6 on 1333de5: NO DEFECT FOUND (6400-case scheme x host differential core vs oracle, 0 disagreements; 256-case joiner differential, 0). 1333de5 gives three r3 tests that spawn the oracle a 30 s limit (they timed out at 5 s under load; assertions unchanged).
+reviewed: pending (Codex r2)
+notes: core reads tr46 5.1.1 internal regex data (tr46/lib/regexes.js), the version whatwg-url 14.2.0 pins; a tr46 upgrade could break it. The enclave has no origin code yet, so the Rust side of INV-18 for origins is untested here.
