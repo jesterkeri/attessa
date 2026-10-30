@@ -30,6 +30,8 @@ export interface World {
   confirmAnswer: boolean;
   env: Record<string, string | undefined>;
   arch: string;
+  /** Socat port per enclave on this fake host: 1 (nothing listens) until `sellerHost` puts a fake enclave behind one. */
+  socatPorts: { mainnet: number; sepolia: number; test: number } | undefined;
   deps(): Deps;
   cli(...argv: string[]): Promise<number>;
 }
@@ -56,6 +58,7 @@ export function world(): World {
     confirmAnswer: true,
     env: { ATTESSA_REGISTRY: REGISTRY },
     arch: 'arm64',
+    socatPorts: { mainnet: 1, sepolia: 1, test: 1 },
     deps() {
       return {
         io: {
@@ -85,6 +88,7 @@ export function world(): World {
         // Receipts appear once the fake chain has recovered the sender.
         sleep: () => chain.pending,
         arch: w.arch,
+        socatPorts: w.socatPorts,
       };
     },
     cli: (...argv) => run(argv, w.deps()),
@@ -127,6 +131,8 @@ export async function sellerHost(w: World): Promise<{ url: string; enclave: Fake
     clock: () => Number(w.chain.timestamp),
   });
   const enclavePort = await enclave.start();
+  // This fake socat stands for whichever network the test starts.
+  w.socatPorts = { mainnet: enclavePort, sepolia: enclavePort, test: enclavePort };
   const host = new SellerHost({
     config: { chainId: w.chain.chainId, registry: REGISTRY, agentId: AGENT, origin: ORIGIN },
     enclave: new EnclaveClient(new TcpEnclaveTransport(enclavePort)),

@@ -147,3 +147,14 @@ export const ERR = {
     new CliError('signer_exists', `Not registered: signer ${short(signer)} is already registered.`, 'To extend it without a restart: attessa signer renew.'),
   usage: (msg: string) => new CliError('usage', msg),
 } as const;
+
+/**
+ * `signer renew` refusals for the checks it shares with registration: FLOWS §8 "R: renew refused" with the
+ * register rows' reason words. // not in FLOWS: that row names none of these codes.
+ */
+export const RENEW = {
+  debugMode: () => ERR.renewRefused('debug_pcrs', "the machine was started in debug mode, which AWS doesn't sign for", false),
+  wrongBuild: (agent: string, rid: string) =>
+    ERR.renewRefused('release_not_approved', `this machine runs a build agent ${agent} hasn't approved (release ${short(rid)})`, false),
+  bindingMismatch: (what: string, field: string) => ERR.renewRefused(`binding_mismatch{${field}}`, `the attestation was made for ${what}`, false),
+} as const;

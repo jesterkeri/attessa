@@ -14,7 +14,7 @@ import { decodeAbiParameters, encodeFunctionData, parseAbiItem, size, toEventSel
 import { CERT_MANAGER_ABI, ENDPOINT_STATUS, REGISTRY_ABI, RELEASE_STATUS, SIGNER_STATUS, VALIDATOR_ABI } from '../abi.ts';
 import { hintPlan, parseAttestation, type ParsedAttestation } from '../attestation.ts';
 import { SELLER_HOST_URL, connect, type Chain, type Deps, type Global } from '../context.ts';
-import { COPY, CliError, ERR, celo, host, short, utcShort } from '../copy.ts';
+import { COPY, CliError, ERR, RENEW, celo, host, short, utcShort } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Simulation, type Step } from '../tx.ts';
 import { parseAgent } from './owner.ts';
@@ -198,10 +198,10 @@ async function checkAttestation(c: Chain, a: ParsedAttestation, agentId: bigint,
   }
   const pcrs = [0, 1, 2].map((i) => a.pcrs.get(i));
   if (!pcrs.every((p): p is Hex => !!p && size(p) === 48)) throw new CliError('invalid_pcr', `${not}: the report has no PCR0-2.`);
-  if (pcrs.some((p) => /^0x0+$/.test(p))) throw ERR.debugMode();
+  if (pcrs.some((p) => /^0x0+$/.test(p))) throw renew ? RENEW.debugMode() : ERR.debugMode();
   const rid = computeReleaseId(pcrs[0]!, pcrs[1]!, pcrs[2]!);
   const rel = await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, rid]);
-  if (RELEASE_STATUS[rel.status as number] !== 'Approved') throw ERR.wrongBuild(agentId.toString(), rid);
+  if (RELEASE_STATUS[rel.status as number] !== 'Approved') throw (renew ? RENEW : ERR).wrongBuild(agentId.toString(), rid);
   if (!hasEnclaveKey(a)) throw noEnclaveKey(not);
   return { a, rid, signer: signerFromPublicKey(a.publicKey!), ageMinutes, binding: decodeBinding(a) };
 }
@@ -325,7 +325,7 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   // renewSigner repeats registerSigner steps 2-7 (SPEC §3.4), so the same checks run before any certificate is cached.
   const { rid, ageMinutes, binding } = await checkAttestation(c, a, agentId, now, true);
   const field = bindingField(binding, c, agentId, oh);
-  if (field !== null) throw ERR.bindingMismatch(bindingWords(binding)(field), String(field));
+  if (field !== null) throw RENEW.bindingMismatch(bindingWords(binding)(field), String(field));
   if (rid !== (s.releaseId as string).toLowerCase()) throw ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
 
   const certs = await certSteps(c, a, from, now);

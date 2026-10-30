@@ -113,10 +113,15 @@ export async function enclaveStart(g: Global, deps: Deps, o: StartOptions): Prom
     throw ERR.invalidOrigin();
   }
   if (g.network === 'local' && !o.testBuild && !o.port) throw ERR.usage('--network local needs --port.');
-  const layout = o.testBuild ? NETWORK_PORTS.test : g.network === 'local' ? null : NETWORK_PORTS[g.network];
-  const port = o.port ? Number(o.port) : layout!.socatPort;
+  const net = o.testBuild ? 'test' : g.network === 'local' ? null : g.network;
+  const layout = net ? NETWORK_PORTS[net] : null;
+  const fixedPort = net ? (deps.socatPorts?.[net] ?? NETWORK_PORTS[net].socatPort) : null;
+  const port = o.port ? Number(o.port) : fixedPort!;
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw ERR.usage('--port must be a TCP port.');
   if (!layout) throw ERR.usage('--network local has no enclave CID; use --test-build or sepolia.');
+  // SPEC §5 pins each CID behind one socat port: any other port configures another network's enclave.
+  // not in FLOWS: worded like seller-host's "enclavePort must be 5007 on sepolia".
+  if (port !== fixedPort) throw ERR.usage(`--port must be ${fixedPort} ${net === 'test' ? 'with --test-build' : `on ${net}`}.`);
   const eif = findEif(deps, o.eif);
   // The registry and chain id the enclave binds into its attestation come from the chain itself.
   const c = await connect(g, deps);

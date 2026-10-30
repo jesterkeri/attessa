@@ -1,4 +1,4 @@
-import { CliError, ERR } from './copy.ts';
+import { CliError, ERR, RENEW } from './copy.ts';
 import type { Revert } from './tx.ts';
 
 /** What a command knows when a simulated or sent transaction reverts, to fill the FLOWS §8 slots. */
@@ -38,12 +38,12 @@ export function revertToError(r: Revert | null, message: string, c: RevertContex
     case 'AttestationStale':
       return ERR.attestationStale(c.ageMinutes ?? 31);
     case 'DebugPcrs':
-      return ERR.debugMode();
+      return (c.renewing ? RENEW : ERR).debugMode();
     case 'ReleaseNotApproved':
-      return ERR.wrongBuild(c.agent, c.releaseId ?? '');
+      return (c.renewing ? RENEW : ERR).wrongBuild(c.agent, c.releaseId ?? '');
     case 'BindingMismatch': {
       const field = Number(r.args[0] ?? 0);
-      return ERR.bindingMismatch(c.bindingWords ? c.bindingWords(field) : 'a different binding', String(field));
+      return (c.renewing ? RENEW : ERR).bindingMismatch(c.bindingWords ? c.bindingWords(field) : 'a different binding', String(field));
     }
     case 'SignerExists':
       return ERR.signerExists(c.signer ?? '');

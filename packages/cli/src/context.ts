@@ -38,6 +38,8 @@ export interface Deps {
   readdir(path: string): string[];
   sleep(ms: number): Promise<void>;
   arch: string;
+  /** Host socat port per enclave, SPEC §5 (5005 / 5007 / 5006) when absent. A test seam only. */
+  socatPorts?: Record<'mainnet' | 'sepolia' | 'test', number> | undefined;
 }
 
 export type NetworkFlag = 'sepolia' | 'mainnet' | 'local';
