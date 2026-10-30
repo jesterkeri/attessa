@@ -325,9 +325,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
       throw fail('payment_invalid', 'requirements_mismatch', ctx);
     }
     const validBefore = Number(a.validBefore);
-    if (!Number.isSafeInteger(validBefore) || validBefore - now() < MIN_WINDOW_S) {
-      throw fail('authorization_window_too_short', null, ctx);
-    }
+    if (!Number.isSafeInteger(validBefore)) throw fail('authorization_window_too_short', null, ctx);
     const asset = req402.asset;
     const requestId = (ctx.requestId ?? derivedRequestId(asset, a.from, a.nonce)) as Hex;
     ctx.requestId = requestId;
@@ -341,6 +339,9 @@ export function createGateway(deps: GatewayDeps): Gateway {
       const byReq = db.byRequestId(requestId);
       const byPay = db.byPayment(asset, a.from, a.nonce);
       if (byReq || byPay) return await existing(reply, ctx, decoded, req402, requestId, reqHash, byReq, byPay);
+      // The 40 s window applies to a new payment. A repeat of a known one follows the idempotency table
+      // even when its window has since shrunk, so a stored result is never refused as "too short".
+      if (validBefore - now() < MIN_WINDOW_S) throw fail('authorization_window_too_short', null, ctx);
 
       // 5. Facilitator /verify. No row is written for an unverified payment.
       const vreq = { x402Version: 2 as const, paymentPayload: decoded.paymentPayload, paymentRequirements: decoded.accepted };

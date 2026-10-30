@@ -78,7 +78,7 @@ export async function classifySettle(
     }
     const tx = txOf(body);
     if (!tx) return { kind: 'pending', reason: 'no_transaction', tx: null, pause: false };
-    const deadline = Date.now() + deps.cfg.timeouts.receiptPollMs;
+    const deadline = performance.now() + deps.cfg.timeouts.receiptPollMs;
     for (;;) {
       let r = null;
       try {
@@ -91,7 +91,7 @@ export async function classifySettle(
           ? { kind: 'settled', tx }
           : { kind: 'pending', reason: 'receipt_without_settlement', tx, pause: false };
       }
-      if (Date.now() >= deadline) return { kind: 'pending', reason: 'receipt_not_found', tx, pause: false };
+      if (performance.now() >= deadline) return { kind: 'pending', reason: 'receipt_not_found', tx, pause: false };
       await sleep(deps.cfg.timeouts.receiptPollIntervalMs);
     }
   }

@@ -1,3 +1,6 @@
+#!/usr/bin/env node
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { RpcChain } from './chain.ts';
 import { defaultRpcUrl, loadConfig } from './config.ts';
 import { CallStore } from './db.ts';
@@ -30,7 +33,7 @@ export async function main(configPath: string): Promise<void> {
   process.once('SIGINT', () => void stop());
 }
 
-if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {
   const path = process.argv[2];
   if (!path) {
     process.stderr.write('usage: attessa-gateway-server <gateway.config.json>\n');
