@@ -16,9 +16,9 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 |---|---|---|---|---|
 | T01 | kill test, demo stack on Sepolia | Claude | `main` (submodule only) | simulation passed 9/9; waiting on Joshua to broadcast |
 | T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` | adversary found 2, both fixed (1eb99f7); **Codex r1 prompt ready, waiting on Joshua** |
-| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus) | `feat/t04-registry`, then `feat/t05-invariants` | T04 committed b3347e1 (pushed); T05 building |
-| T03 | core formats + vectors | builder B2 (Opus) | `feat/t03-core` | adversary: 120/120 values recomputed with cast, 2 parser defects (bidi hosts, BOM in proof header); B2 fixing + adding vectors |
-| T13 | enclave app (Rust) | builder B3 (Opus), done | `feat/t13-enclave` | 35/35 pass with T03 vectors, rerun by lead (92b8d6c); 11 spec gaps in OPEN-QUESTIONS; adversary (Opus) running |
+| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus), done | `feat/t04-registry` b3347e1, `feat/t05-invariants` 98c2f29 | 153 unit tests + invariants + 5/5 mutants killed, rerun by lead; adversary (Opus) running |
+| T03 | core formats + vectors | builder B2 (Opus), done | `feat/t03-core` | adversary r1: 2 defects fixed (705d515); r2: no defect; evidence in DONE.md (e2aeb15); **Codex r1 prompt ready** |
+| T13 | enclave app (Rust) | builder B3 (Opus) | `feat/t13-enclave` 607c63d | adversary: array-as-object defect fixed; now failing T03's new JCS vectors, B3 fixing |
 | rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
 
 ## Builders started 2026-10-29 from `feat/t02-scaffold` (worktrees in `.worktrees/`: the harness hook blocks writes under `.claude/`)
@@ -30,6 +30,8 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 Gateway (T19), SDK (T20) and CLI (T21) start after T03 lands; they import core.
 
 ## Waiting on Joshua
+- apply `.worktrees/prompts/harness-r1.patch` (stops commit prompts, CI on feat/staging, cast send block)
+- Codex: T02 r1, T03 r1 (prompts in `.worktrees/prompts/`)
 - T01 broadcast (funded Sepolia wallet, key in `.env` as PRIVATE_KEY)
 - restart Claude Code with `claude --continue` so the harness hooks load
 - `sudo apt install -y jq` (hooks need it)
