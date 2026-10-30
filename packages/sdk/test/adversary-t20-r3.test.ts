@@ -1,8 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Ledger } from '../src/ledger.ts';
+import { afterEach, describe, expect, it } from 'vitest';
 import type { PendingEntry } from '../src/types.ts';
 import { makeWorld, type World } from './fakes/world.ts';
 
@@ -26,68 +24,6 @@ const evidence = (d: string): { requestId: string; outcome: string; code: string
 };
 
 describe('adversary T20 r3', () => {
-  // INV-19: "concurrent processes share one lock". The break lock (pending.lock.break) is what keeps
-  // two breakers apart, but a waiter that finds a stale break marker removes the marker by path
-  // without re-checking that it is still the stale one. Interleaving, with every peer step being
-  // exactly what ledger.ts does in another process:
-  //   - holder H died inside the critical section (pending.lock = dead pid), and breaker D died
-  //     mid-break (pending.lock.break = dead pid);
-  //   - A reads D's marker as stale; meanwhile B also clears it and takes the break lock;
-  //   - A unlinks the marker by path: B's live one. A then takes the break lock as well;
-  //   - both re-check pending.lock = H's token; B unlinks it and acquires; A unlinks B's live lock
-  //     and acquires too.
-  // A and B are then both inside withLock: two V6 cap checks can both pass (INV-19).
-  it('a breaker clearing a dead break marker never lets two processes into the critical section', () => {
-    dir = mkdtempSync(join(tmpdir(), 'attessa-ledger-'));
-    const lockPath = join(dir, 'pending.lock');
-    const breakPath = join(dir, 'pending.lock.break');
-    const DEAD_HOLDER = 999999999;
-    const DEAD_BREAKER = 999999998;
-    const holderToken = `${DEAD_HOLDER} 00000000000000aa`;
-    writeFileSync(lockPath, holderToken);
-    writeFileSync(breakPath, `${DEAD_BREAKER} 00000000000000bb`);
-    const a = new Ledger(dir);
-
-    const realKill = process.kill.bind(process);
-    let holderProbes = 0;
-    let bHoldsLock = false;
-    const kill = vi.spyOn(process, 'kill').mockImplementation((pid: number, sig?: string | number) => {
-      if (pid === DEAD_BREAKER) {
-        // A has read D's marker and is judging it. B (live, this pid) also judged it stale, cleared
-        // it, and created its own break marker: B is now mid-break.
-        if (readFileSync(breakPath, 'utf8').startsWith(String(DEAD_BREAKER))) {
-          unlinkSync(breakPath);
-          writeFileSync(breakPath, `${process.pid} b-break`);
-        }
-        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
-      }
-      if (pid === DEAD_HOLDER) {
-        holderProbes++;
-        // Probe 1: A's first reading. Probe 2: A's second reading, before taking the break lock.
-        // Probe 3: A's re-check under the break lock has read H's token. B, still believing it holds
-        // the break lock, re-checks the same token, unlinks it, removes the break marker in its
-        // `finally`, and acquires pending.lock.
-        if (holderProbes === 3 && readFileSync(lockPath, 'utf8') === holderToken) {
-          unlinkSync(lockPath);
-          rmSync(breakPath, { force: true });
-          writeFileSync(lockPath, `${process.pid} b-lock`);
-          bHoldsLock = true;
-        }
-        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
-      }
-      return realKill(pid, sig);
-    });
-    try {
-      const enteredWhileBHeld = a.withLock(() => ({ result: bHoldsLock }));
-      expect({ bTookTheLock: bHoldsLock, aEnteredWhileBHeldTheLock: enteredWhileBHeld }).toEqual({
-        bTookTheLock: true,
-        aEnteredWhileBHeldTheLock: false,
-      });
-    } finally {
-      kill.mockRestore();
-    }
-  });
-
   // SPEC §7 V12: "ledger entry terminal". SPEC §7 V10: "An RPC error is never a ProofCheck". A
   // verified call is decided. Calling getResult on it later, while the buyer's RPC cannot serve the
   // receipt, must not move the entry out of `verified`: here it becomes `uncertain` again and

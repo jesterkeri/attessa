@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, rmdirSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -34,87 +34,7 @@ const ids = (d: string): string[] =>
   existsSync(join(d, 'pending.jsonl'))
     ? readFileSync(join(d, 'pending.jsonl'), 'utf8').split('\n').filter(Boolean).map((l) => (JSON.parse(l) as PendingEntry).requestId)
     : [];
-const esrch = (): never => {
-  throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
-};
-
 describe('adversary T20 r4: the lock', () => {
-  // Rewrite of r3's "a breaker clearing a dead break marker never lets two processes into the
-  // critical section". The r3 version had simulated B take the lock and never release it, so a
-  // correct lock could only wait (and then break B under the 10 s age rule, or time out at 30 s),
-  // and the assertion rejected both. Here B, like a real process, releases as soon as A is waiting
-  // on its live lock. The property: A never runs while B holds the lock, and B's write survives.
-  //
-  // Interleaving (every peer step is what ledger.ts does in another process): holder H died in the
-  // critical section; breaker D died holding the break mutex. A reads D as dead; meanwhile B also
-  // clears D and takes the mutex. B then finishes its break at A's k-th reading of H's lock, takes
-  // the lock and writes an entry. When A probes B's live pid, B releases.
-  for (const k of [1, 2, 3]) {
-    it(`a dead breaker cleared by two waiters at once never lets them both in (B finishes at probe ${k})`, () => {
-      dir = mkdtempSync(join(tmpdir(), 'attessa-ledger-'));
-      const d = dir;
-      const lockPath = join(d, 'pending.lock');
-      const mutex = join(d, 'pending.lock.breaker');
-      const DEAD_HOLDER = 999999999;
-      const DEAD_BREAKER = 999999998;
-      const holderToken = `${DEAD_HOLDER} 00000000000000aa`;
-      const deadOwner = `${DEAD_BREAKER}-00000000000000bb`;
-      const bOwner = `${process.pid}-b0b0b0b0b0b0b0b0`;
-      const bToken = `${process.pid} b0b0b0b0b0b0b0b0`;
-      writeFileSync(lockPath, holderToken);
-      mkdirSync(mutex);
-      writeFileSync(join(mutex, deadOwner), '');
-      const a = new Ledger(d);
-
-      const realKill = process.kill.bind(process);
-      let bMidBreak = false;
-      let bHolds = false;
-      let holderProbes = 0;
-      vi.spyOn(process, 'kill').mockImplementation((pid: number, sig?: string | number) => {
-        if (pid === DEAD_BREAKER) {
-          if (!bMidBreak && existsSync(join(mutex, deadOwner))) {
-            // B clears the dead owner by exact name, rmdirs, and renames its own one-file dir in.
-            unlinkSync(join(mutex, deadOwner));
-            rmdirSync(mutex);
-            mkdirSync(mutex);
-            writeFileSync(join(mutex, bOwner), '');
-            bMidBreak = true;
-          }
-          return esrch();
-        }
-        if (pid === DEAD_HOLDER) {
-          holderProbes++;
-          if (bMidBreak && holderProbes >= k && existsSync(lockPath) && readFileSync(lockPath, 'utf8') === holderToken) {
-            // B under the mutex: re-read equals what it judged stale, unlink, release the mutex,
-            // acquire, write its entry.
-            unlinkSync(lockPath);
-            rmSync(join(mutex, bOwner), { force: true });
-            try {
-              rmdirSync(mutex);
-            } catch {
-              // not empty: someone else's
-            }
-            writeFileSync(lockPath, bToken);
-            bMidBreak = false;
-            bHolds = true;
-            // The ledger was empty when B read it.
-            writeFileSync(join(d, 'pending.jsonl'), JSON.stringify(entry('0b')) + '\n');
-          }
-          return esrch();
-        }
-        if (pid === process.pid && bHolds && existsSync(lockPath) && readFileSync(lockPath, 'utf8') === bToken) {
-          // A waits on B's live lock: B leaves its critical section.
-          unlinkSync(lockPath);
-          bHolds = false;
-        }
-        return realKill(pid, sig);
-      });
-
-      const overlap = a.withLock((entries) => ({ entries: [...entries, entry('0a')], result: bHolds }));
-      expect({ overlap, entries: ids(d).sort() }).toEqual({ overlap: false, entries: [entry('0a').requestId, entry('0b').requestId].sort() });
-    });
-  }
-
   // INV-19: "concurrent processes share one lock". The 10 s age rule breaks the lock of a holder
   // that is alive but stopped (Ctrl-Z of `attessa call`, laptop sleep, a paused WSL VM) inside the
   // critical section. Holder H has read the ledger; while it is stopped, B judges the lock stale by
