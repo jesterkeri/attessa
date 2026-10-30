@@ -1,46 +1,24 @@
-import { randomBytes } from 'node:crypto';
-import {
-  appendFileSync,
-  closeSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  renameSync,
-  rmdirSync,
-  statSync,
-  unlinkSync,
-  writeSync,
-} from 'node:fs';
+import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
+import { DatabaseSync } from 'node:sqlite';
 import type { Address, Hex } from 'viem';
 import { RESERVED_STATES, SETTLED_STATES, TERMINAL_STATES, type EvidenceRow, type PendingEntry } from './types.ts';
 
 // SPEC §7 pending ledger. Plain node built-ins only, so a second process can load this file
 // directly (the INV-19 race test does).
+//
+// The cross-process lock is an SQLite write transaction (`BEGIN IMMEDIATE`) on an empty database
+// file, used only as a mutex: the kernel's fcntl lock behind it is released when its holder exits or
+// is killed, and a stopped holder simply makes others wait. No process ever judges a lock stale.
 
 /** A `reserved` entry with no nonce older than this was never signed (SPEC §7). */
 export const RESERVATION_TTL_MS = 10 * 60 * 1000;
-/** A lock file older than this belongs to a process that died inside the critical section. */
-const STALE_LOCK_MS = 10_000;
+/** How long a caller waits for a live holder before failing (it never takes the lock from one). */
 const LOCK_TIMEOUT_MS = 30_000;
-
-const sleepBuf = new Int32Array(new SharedArrayBuffer(4));
-function sleepSync(ms: number): void {
-  Atomics.wait(sleepBuf, 0, 0, ms);
-}
+const SQLITE_NOTADB = 26;
 
 function utcDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10);
-}
-
-function pidAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'EPERM';
-  }
 }
 
 export function isTerminal(e: PendingEntry): boolean {
@@ -69,17 +47,14 @@ export class Ledger {
   readonly pendingPath: string;
   readonly evidencePath: string;
   private readonly lockPath: string;
-  private readonly breakPath: string;
   private readonly now: () => number;
-  /** What this instance wrote into the lock file it holds: `<pid> <random>`, unique per acquisition. */
-  private token = '';
+  private lockDb: DatabaseSync | undefined;
 
   constructor(dataDir: string, now: () => number = Date.now) {
     this.dir = dataDir;
     this.pendingPath = join(dataDir, 'pending.jsonl');
     this.evidencePath = join(dataDir, 'evidence.jsonl');
     this.lockPath = join(dataDir, 'pending.lock');
-    this.breakPath = join(dataDir, 'pending.lock.breaker');
     this.now = now;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   }
@@ -217,80 +192,26 @@ export class Ledger {
   }
 
   private acquire(): void {
-    const deadline = Date.now() + LOCK_TIMEOUT_MS;
-    for (;;) {
-      const token = `${process.pid} ${randomBytes(8).toString('hex')}`;
-      if (createExclusive(this.lockPath, token)) {
-        this.token = token;
-        return;
+    if (!this.lockDb) {
+      this.lockDb = new DatabaseSync(this.lockPath);
+      this.lockDb.exec(`PRAGMA busy_timeout = ${LOCK_TIMEOUT_MS}`);
+    }
+    try {
+      this.lockDb.exec('BEGIN IMMEDIATE');
+    } catch (e) {
+      // A pending.lock written by the earlier pid-file lock is not a database. Emptying it in place
+      // (never unlinking, so every process keeps locking the same inode) makes it a valid one.
+      if ((e as { errcode?: number }).errcode !== SQLITE_NOTADB) {
+        throw new Error(`ledger lock ${this.lockPath} not acquired: ${(e as Error).message}`, { cause: e });
       }
-      this.breakStaleLock();
-      if (Date.now() > deadline) throw new Error(`ledger lock ${this.lockPath} held for over ${LOCK_TIMEOUT_MS} ms`);
-      sleepSync(2 + Math.floor(Math.random() * 8));
+      truncateSync(this.lockPath, 0);
+      this.lockDb.exec('BEGIN IMMEDIATE');
     }
   }
 
-  /** Removes the lock file only while it is still ours: a peer may have judged it stale and taken it. */
   private release(): void {
-    try {
-      if (readFileSync(this.lockPath, 'utf8') === this.token) unlinkSync(this.lockPath);
-    } catch {
-      // already gone: a peer judged it stale; nothing to release
-    }
+    this.lockDb!.exec('ROLLBACK');
   }
-
-  /**
-   * Breaks a lock whose holder died or stalled: under the break mutex, unlink pending.lock only if
-   * it still holds the very token judged stale. Nothing but its own holder or a breaker under the
-   * mutex removes pending.lock, and a stale holder never releases, so the re-read stays true until
-   * the unlink.
-   */
-  private breakStaleLock(): void {
-    const seen = staleToken(this.lockPath);
-    if (seen === null) return;
-    const mine = takeMutex(this.breakPath);
-    if (mine === null) return;
-    try {
-      if (readQuiet(this.lockPath) === seen) unlinkQuiet(this.lockPath);
-    } finally {
-      unlinkQuiet(join(this.breakPath, mine));
-      rmdirQuiet(this.breakPath);
-    }
-  }
-}
-
-/**
- * The break mutex: a directory holding one empty file named by its owner's `<pid>-<random>`. It is
- * taken by renaming a fresh one-file directory onto `path`, which the kernel does atomically and
- * only while `path` is absent or empty, so it never has two owners. A dead owner's file is removed
- * by its exact name and the directory only by rmdir (which fails unless empty), so clearing a dead
- * owner can never remove a live one. Returns the name of our file, or null if another owner holds it.
- */
-function takeMutex(path: string): string | null {
-  const name = `${process.pid}-${randomBytes(8).toString('hex')}`;
-  const tmp = `${path}.${name}`;
-  mkdirSync(tmp, { mode: 0o700 });
-  closeSync(openSync(join(tmp, name), 'wx', 0o600));
-  try {
-    renameSync(tmp, path);
-    return name;
-  } catch (e) {
-    if (!['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
-  }
-  unlinkQuiet(join(tmp, name));
-  rmdirQuiet(tmp);
-  let owners: string[] = [];
-  try {
-    owners = readdirSync(path);
-  } catch {
-    // released meanwhile
-  }
-  for (const o of owners) {
-    const pid = Number(o.split('-')[0]);
-    if (Number.isSafeInteger(pid) && pid > 0 && !pidAlive(pid)) unlinkQuiet(join(path, o));
-  }
-  rmdirQuiet(path); // only if empty: a mutex left empty by an owner that died mid-release
-  return null;
 }
 
 /** Same entry, field by field (values are strings or null). */
@@ -298,57 +219,4 @@ function sameEntry(a: PendingEntry, b: PendingEntry): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]) as Set<keyof PendingEntry>;
   for (const k of keys) if (a[k] !== b[k]) return false;
   return true;
-}
-
-function createExclusive(path: string, content: string): boolean {
-  let fd: number;
-  try {
-    fd = openSync(path, 'wx', 0o600);
-  } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === 'EEXIST') return false;
-    throw e;
-  }
-  try {
-    writeSync(fd, content);
-  } finally {
-    closeSync(fd);
-  }
-  return true;
-}
-
-/** The content of a lock file whose holder is dead or older than STALE_LOCK_MS; null if live or gone. */
-function staleToken(path: string): string | null {
-  try {
-    const age = Date.now() - statSync(path).mtimeMs;
-    const token = readFileSync(path, 'utf8');
-    const pid = Number(token.split(' ')[0]);
-    const dead = Number.isSafeInteger(pid) && pid > 0 && !pidAlive(pid);
-    return age > STALE_LOCK_MS || dead ? token : null;
-  } catch {
-    return null; // released between our checks
-  }
-}
-
-function unlinkQuiet(path: string): void {
-  try {
-    unlinkSync(path);
-  } catch {
-    // already gone
-  }
-}
-
-function rmdirQuiet(path: string): void {
-  try {
-    rmdirSync(path);
-  } catch {
-    // gone, or not empty: someone else owns it now
-  }
-}
-
-function readQuiet(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch {
-    return null;
-  }
 }

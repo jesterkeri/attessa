@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { Ledger, RESERVATION_TTL_MS, spendToday } from '../src/ledger.ts';
 import type { PendingEntry } from '../src/types.ts';
 import { makeWorld, PRICE, type World } from './fakes/world.ts';
@@ -57,16 +57,23 @@ describe('INV-19: reservations are shared across processes', () => {
   }, 60_000);
 });
 
-describe('INV-19: the lock holds when processes are killed anywhere, mid-break included', () => {
-  // One slot runs a child until it has entered the lock `want` times, respawning it after each SIGKILL.
-  function slot(dir: string, want: number, rate: number): Promise<{ entered: number; killed: number }> {
+describe('INV-19: the lock holds when holders are killed or stopped inside it', () => {
+  // One slot runs a child until it has entered the lock `want` times, respawning it after each
+  // SIGKILL. A child that stops itself inside the critical section is resumed after 0.2-1 s, or
+  // (one time in three) killed while stopped.
+  function slot(dir: string, want: number): Promise<{ entered: number; killed: number }> {
     return new Promise((resolve, reject) => {
       let entered = 0;
       let killed = 0;
       const spawnOne = (): void => {
-        const p = spawn(process.execPath, [stressChild, dir, String(want - entered), String(rate)], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const p = spawn(process.execPath, [stressChild, dir, String(want - entered), '0.01', '0.004'], { stdio: ['ignore', 'pipe', 'pipe'] });
         let err = '';
-        p.stdout.on('data', (d: Buffer) => (entered += d.length));
+        p.stdout.on('data', (d: Buffer) => {
+          for (const c of d.toString()) {
+            if (c === '.') entered++;
+            else if (c === 'S') setTimeout(() => p.kill(Math.random() < 1 / 3 ? 'SIGKILL' : 'SIGCONT'), 200 + Math.random() * 800);
+          }
+        });
         p.stderr.on('data', (d) => (err += d));
         p.on('exit', (code, signal) => {
           if (code === 0) return resolve({ entered, killed });
@@ -78,17 +85,20 @@ describe('INV-19: the lock holds when processes are killed anywhere, mid-break i
     });
   }
 
-  it('6 processes x 200 entries with random SIGKILLs: never two inside the critical section', async () => {
+  it('6 processes x 200 entries with random SIGKILLs and SIGSTOPs: never two inside, no write lost', async () => {
     dir = mkdtempSync(join(tmpdir(), 'attessa-stress-'));
-    const slots = await Promise.allSettled(Array.from({ length: 6 }, () => slot(dir, 200, 0.01)));
-    const violations = existsSync(join(dir, 'violations.log')) ? readFileSync(join(dir, 'violations.log'), 'utf8') : '';
-    const kills = readFileSync(join(dir, 'kills.log'), 'utf8').split('\n').filter(Boolean);
-    expect(violations).toBe('');
+    const slots = await Promise.allSettled(Array.from({ length: 6 }, () => slot(dir, 200)));
+    const read = (f: string): string[] => (existsSync(join(dir, f)) ? readFileSync(join(dir, f), 'utf8').split('\n').filter(Boolean) : []);
+    expect(read('violations.log')).toEqual([]);
     expect(slots.filter((s) => s.status === 'rejected')).toEqual([]);
-    for (const s of slots) if (s.status === 'fulfilled') expect(s.value.entered).toBeGreaterThanOrEqual(200);
-    // The crashes really landed where the old schemes broke: inside a break, and inside the critical section.
-    expect(kills.filter((k) => k.endsWith('mid-break')).length).toBeGreaterThan(0);
-    expect(kills.filter((k) => k.startsWith('in-critical-section')).length).toBeGreaterThan(0);
+    let entered = 0;
+    for (const s of slots) if (s.status === 'fulfilled') entered += s.value.entered;
+    expect(entered).toBeGreaterThanOrEqual(1200);
+    // Every write that returned is in the file: a stopped holder never wrote back over a peer's.
+    expect(new Ledger(dir).list().length).toBeGreaterThanOrEqual(entered);
+    // The crashes and stops really landed inside the critical section.
+    expect(read('kills.log').filter((k) => k === 'in-critical-section').length).toBeGreaterThan(0);
+    expect(read('stops.log').length).toBeGreaterThan(0);
   }, 300_000);
 });
 
@@ -153,49 +163,19 @@ describe('a crash between V6 and V8 holds the reservation at most 10 minutes', (
     expect(l.reserve(entry({}), 10n ** 9n)).toBe('reserved');
   });
 
-  it('a break mutex left by a dead breaker is cleared by its exact name, then the dead holder\'s lock is broken', () => {
+  it('a lock held by a process that was SIGKILLed inside it is free at once', async () => {
     dir = mkdtempSync(join(tmpdir(), 'attessa-ledger-'));
-    writeFileSync(join(dir, 'pending.lock'), '999999999 00000000000000aa');
-    mkdirSync(join(dir, 'pending.lock.breaker'));
-    writeFileSync(join(dir, 'pending.lock.breaker', '999999998-00000000000000bb'), '');
+    const ledgerSrc = fileURLToPath(new URL('../src/ledger.ts', import.meta.url));
+    const holder = spawn(
+      process.execPath,
+      ['--input-type=module', '-e', `const { Ledger } = await import(${JSON.stringify(ledgerSrc)}); new Ledger(process.argv[1]).withLock(() => { process.stdout.write('in'); for (;;); });`, dir],
+      { stdio: ['ignore', 'pipe', 'ignore'] },
+    );
+    await new Promise((r) => holder.stdout.once('data', r));
+    holder.kill('SIGKILL');
+    await new Promise((r) => holder.once('exit', r));
+    const t = Date.now();
     expect(new Ledger(dir).reserve(entry({}), 10n ** 9n)).toBe('reserved');
-    expect(existsSync(join(dir, 'pending.lock'))).toBe(false);
-  });
-
-  // Three processes: the holder died; B and A both find its lock stale. B breaks it and takes the
-  // lock; A, acting on its older reading, must not then remove B's live lock and enter as well.
-  it('a breaker acting on an old reading never removes a lock a peer has just taken', () => {
-    dir = mkdtempSync(join(tmpdir(), 'attessa-ledger-'));
-    const lockPath = join(dir, 'pending.lock');
-    const DEAD = 999999999;
-    writeFileSync(lockPath, String(DEAD));
-    const a = new Ledger(dir);
-    const b = new Ledger(dir);
-    const realKill = process.kill.bind(process);
-    let bHolds = false;
-    let bTookOver = false;
-    const kill = vi.spyOn(process, 'kill').mockImplementation((pid: number, sig?: string | number) => {
-      if (pid === DEAD) {
-        if (!bTookOver) {
-          // A has read the dead pid. Before A acts on it, B breaks the lock and takes it.
-          bTookOver = true;
-          (b as unknown as { acquire(): void }).acquire();
-          bHolds = true;
-        }
-        throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' });
-      }
-      if (pid === process.pid && bHolds) {
-        // A is looking at B's live lock: B finishes its critical section and releases.
-        rmSync(lockPath, { force: true });
-        bHolds = false;
-      }
-      return realKill(pid, sig);
-    });
-    try {
-      const heldByB = a.withLock(() => ({ result: bHolds }));
-      expect({ bTookOver, aEnteredWhileBHeldTheLock: heldByB }).toEqual({ bTookOver: true, aEnteredWhileBHeldTheLock: false });
-    } finally {
-      kill.mockRestore();
-    }
+    expect(Date.now() - t).toBeLessThan(1000);
   });
 });
