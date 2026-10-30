@@ -11,14 +11,14 @@
 // Needs git and forge on PATH. Exit 0: every check printed OK. Exit 1: a check failed. Exit 2:
 // could not run (bad input, TODO addresses, reference build failed, RPC error).
 
-import { readFileSync, existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const PINNED_VALIDATOR_COMMIT = '0ea0d12';
+const PINNED_VALIDATOR_COMMIT = '0ea0d12366b4fa44f9e07e4755f2ad36561cb674';
 const DEFAULT_RPC = {
   'celo-sepolia': 'https://forno.celo-sepolia.celo-testnet.org',
   celo: 'https://forno.celo.org',
@@ -90,6 +90,27 @@ function parseDeploymentsMd(text, network) {
 const git = (dir, ...a) => execFileSync('git', ['-C', dir, ...a], { encoding: 'utf8' }).trim();
 
 /**
+ * Writes the committed blobs under `paths` at `rev` into `dest`, byte for byte. Not `git archive`
+ * or checkout: those apply committed .gitattributes (export-subst, export-ignore, filters), so the
+ * build could see code that is not in the commit (T10 adversary r3). Only regular files allowed.
+ */
+function exportBlobs(repo, rev, paths, dest) {
+  const listing = execFileSync('git', ['-C', repo, 'ls-tree', '-r', '-z', '--full-tree', rev, '--', ...paths], { encoding: 'utf8' });
+  const entries = listing.split('\0').filter(Boolean);
+  if (entries.length === 0) throw new Refuse(`${repo} has nothing at ${paths.join(', ')} in ${rev}`);
+  for (const entry of entries) {
+    const [meta, path] = entry.split('\t');
+    const [mode, type, sha] = meta.split(' ');
+    if (type !== 'blob' || (mode !== '100644' && mode !== '100755')) {
+      throw new Refuse(`${repo} ${rev}: ${path} is a ${type} with mode ${mode}; only regular files are built`);
+    }
+    const out = join(dest, path);
+    mkdirSync(dirname(out), { recursive: true });
+    writeFileSync(out, execFileSync('git', ['-C', repo, 'cat-file', 'blob', sha], { maxBuffer: 64 << 20 }));
+  }
+}
+
+/**
  * Compiles the production contracts from HEAD's committed contracts/ (foundry.toml and
  * remappings included) plus the nitro-validator commit HEAD records, in a fresh temp dir with
  * `forge build --force`. Returns the artifacts and what they were built from.
@@ -104,17 +125,15 @@ function referenceBuild() {
   }
   if (gitlink[1] !== 'commit') throw new Refuse('HEAD does not record contracts/lib/nitro-validator as a submodule');
   const pinned = gitlink[2];
-  if (!pinned.startsWith(PINNED_VALIDATOR_COMMIT)) {
+  // The full id: a 7-hex prefix is 28 bits and a colliding commit takes seconds (T10 adversary r3).
+  if (pinned !== PINNED_VALIDATOR_COMMIT) {
     throw new Refuse(`HEAD pins nitro-validator at ${pinned}, not ${PINNED_VALIDATOR_COMMIT} (ADR-001)`);
   }
   const dir = mkdtempSync(join(tmpdir(), 'check-deploy-ref-'));
   try {
-    const sh = (script, ...a) => execFileSync('sh', ['-c', script, 'sh', ...a], { stdio: ['ignore', 'ignore', 'pipe'] });
     // Only what the production contracts compile from: no test/ or script/ (they need forge-std).
-    sh('git -C "$1" archive HEAD contracts/src contracts/foundry.toml contracts/remappings.txt | tar -x -C "$2"', ROOT, dir);
-    const nv = join(dir, 'contracts/lib/nitro-validator');
-    mkdirSync(nv, { recursive: true });
-    sh('git -C "$1" archive "$2" src | tar -x -C "$3"', `${ROOT}/contracts/lib/nitro-validator`, pinned, nv);
+    exportBlobs(ROOT, 'HEAD', ['contracts/src', 'contracts/foundry.toml', 'contracts/remappings.txt'], dir);
+    exportBlobs(`${ROOT}/contracts/lib/nitro-validator`, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
     // forge compiles src/ plus what it imports; the validator stack is named explicitly.
     const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => `lib/nitro-validator/src/${n}.sol`)];
     execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), ...paths.map((p) => join(dir, 'contracts', p))], {
@@ -218,7 +237,7 @@ async function main() {
   };
 
   // Printed, not a check: the reference build either ran from the committed tree or refused.
-  console.log(`REF   reference bytecode compiled from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned.slice(0, 12)}`);
+  console.log(`REF   reference bytecode compiled from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned}`);
 
   check(
     'deployments.ts EnclaveRegistry matches DEPLOYMENTS.md',
