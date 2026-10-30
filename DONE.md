@@ -117,7 +117,6 @@ exit=0
 adversary: r1 on 92b8d6c DEFECT (a JSON array was accepted where a struct was expected; fixed 607c63d). r2 on 12ebcca NO DEFECT FOUND; its two regression tests kept as enclave/tests/adv_t13_r2.rs.
 reviewed: pending (Codex)
 notes: runs the T03 vectors from 705d515 (merged from feat/t03-core). Open: frame size vs a large payTo, NSM error after boot, payer-sig hex case (OPEN-QUESTIONS).
-<<<<<<< Updated upstream
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
 findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
@@ -170,7 +169,6 @@ npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/
 exit=1
 ```
 reviewed: pending (Codex r2)
-=======
 
 ## T13 Codex review r1 - 2026-10-30
 Codex reviewed T13 at ca8a26e under REVIEW-PROTOCOL U1 to U9 and found nothing to fix.
@@ -180,4 +178,4 @@ Decision: SHIP
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t13-review-r1.md | verdict: implementation-ready | C0 M0 m0
->>>>>>> Stashed changes
+note: commit 2a2dab8 left git conflict markers in DONE.md (from a shared git stash). The commit after it restores DONE.md to the merge plus this entry.
