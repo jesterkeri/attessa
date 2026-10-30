@@ -22,3 +22,19 @@ Anything genuinely undecided, and anything the build discovers that the design d
 - [ ] **guard-edit.sh blocks worktree builders.** It denies any Edit/Write path matching `*/.claude/*`, and Claude Code puts subagent worktrees under `<repo>/.claude/worktrees/`. With the hooks loaded, a builder in a worktree can't write a single file. Needs a carve-out for `.claude/worktrees/` (a `.claude/` change, so Joshua approves it).
 - [ ] **Signer renewal threshold is stated three ways:** "fewer than 72 h" (TASKS.md header, SPEC §13), "fewer than 6 days" (T36), "cover the next 48 h" (PREFLIGHT.md:43). Which one does `scripts/health.sh` (T24) alert on?
 - [ ] **guard-bash.sh doesn't catch `cast send`**, which broadcasts without a `--broadcast` flag (guard-bash.sh:23, settings.json:18 cover `forge`/`--broadcast` only). The builder treats `cast send` as blocked regardless; the hook needs the pattern (a `.claude/` change, Joshua approves).
+
+## From T03 (core) and T13 (enclave), 2026-10-30
+Each was resolved with the smallest reading and pinned by a test or vector, so a ruling changes one place.
+- [ ] **Frame size vs large payTo code (T13, likely to bite).** SPEC §4.2 caps messages at 65,536 bytes, but an evaluate reply carries `inputs` including payTo's code, base64-encoded: a 24,576-byte contract makes the reply ~67 KB. The enclave enforces the cap on incoming frames only. Rule needed: raise the reply cap, or bound the inputs.
+- [ ] **Local-network IP literals (T03).** §2.1 "IPv4/IPv6 literals (except local)" read as: on `--network local`, IP literals are allowed over https; http only for `localhost:<port>`. `http://localhost` with no port (or `:80`, which WHATWG drops) is refused.
+- [ ] **Empty host labels (T03).** §2.1 rejects only a trailing dot; WHATWG accepts `https://a..b` and `https://.example.com`, and so does core. No vector pins it.
+- [ ] **Method case (T03 + T13).** core's `requestHash` uppercases the method (`post` == `POST`, pinned by a vector); the enclave rejects a lowercase method as `bad_frame`. Should the enclave accept lowercase?
+- [ ] **`configure` reply (T13).** Unspecified; the enclave returns the same as `attest`: `{"attestation","signer"}`.
+- [ ] **`rpcAllowedChains` (T13).** No stated purpose; validated as uint256 decimals and otherwise ignored.
+- [ ] **How the enclave learns `releaseId` (T13).** Unspecified; it reads PCR0-2 via NSM `DescribePCR` at configure.
+- [ ] **Deny list contents (T13).** Unspecified; ships `[]`, R2 tested with an injected list.
+- [ ] **Error codes outside evaluate's list (T13).** Malformed messages map to `bad_frame`; bad body `bad_request`; bad inputs `bad_inputs`.
+- [ ] **`source` capability-id grammar (T13).** Accepts `buy:<visible ASCII>` or `forno`.
+- [ ] **NSM error after boot (T13).** Treated like boot: exit 3. `nsm_init` runs at process start, so a missing `/dev/nsm` exits before listening; SPEC lists the NSM step after configure.
+- [ ] **Incoming frames need not be canonical JCS (T13).** Parsed strictly instead; every outgoing frame is exact JCS (tested).
+- [ ] **Payer-sig hex case (T03).** §2.5 doesn't say; core requires lowercase hex, matching §2's lowercase rule.
