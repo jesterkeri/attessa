@@ -197,3 +197,45 @@ exit=0
 adversary: r1 on 89b2e5d DEFECT x2 (`--network local` ignored the pinned deployments, SPEC §2.6; the spend guard dated revenue by updated_at so a row counted on two days, SPEC §5); fixed acbf654, fbafffe; tests kept as packages/{cli,seller-host}/test/adversary-t15.test.ts. r2 on fbafffe NO DEFECT FOUND (all 11 §6.4 states, day boundary, WAL reads, time zones, pin vs override on every network); its 16 tests kept as adversary-t15-r2.test.ts.
 reviewed: pending (Codex)
 notes: no buy source yet (needs S7); the guard is not wired into main.ts; `enclave start --port` can point at another network's enclave (SPEC §8 lists --port as free) and `enclave build` does not refuse gitignored files in the build context: both left as design questions; one existing fixture column renamed updated_at -> created_at to match the §6.4 schema.
+
+## T15 Codex r1 fixes and adversary rounds 3-5 - 2026-10-30
+commit: cb83abf (fix builder, Opus; branch feat/t15-seller-host, rerun by lead)
+review: Codex r1 (.worktrees/archive/reviews/t15-seller-host-and-cli-review-r1.md): REVISE, M1 renew sent certificate-cache txs before checks registration makes; M2 seller-host could boot against another network's enclave and trusted bad_frame; m1 framed replies not checked as JCS. Fixed in 2056eff.
+verified: pnpm --filter @attessa/seller-host test; pnpm --filter @attessa/cli test; pnpm -r typecheck; pnpm -r lint
+output:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/framing.test.ts (4 tests) 4ms
+ ✓ test/units.test.ts (8 tests) 9ms
+ ✓ test/review-t15-r1.test.ts (13 tests) 70ms
+ ✓ test/server.test.ts (23 tests) 223ms
+ ✓ test/enclave.test.ts (6 tests) 257ms
+ ✓ test/inputs.test.ts (11 tests) 1090ms
+ ✓ test/adversary-t15.test.ts (8 tests) 1177ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 5245ms
+ Test Files  8 passed (8)
+      Tests  81 passed (81)
+exit=0
+$ pnpm --filter @attessa/cli test
+ ✓ test/adversary-t15-r3.test.ts (1 test) 260ms
+ ✓ test/attestation.test.ts (4 tests) 547ms
+ ✓ test/adversary-t15-r4.test.ts (1 test) 705ms
+ ✓ test/review-t15-r1.test.ts (3 tests) 1437ms
+ ✓ test/enclave.test.ts (8 tests) 1539ms
+ ✓ test/review-t15-r3.test.ts (8 tests) 1570ms
+ ✓ test/review-t15-r4.test.ts (4 tests) 1667ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1983ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 2232ms
+ ✓ test/owner.test.ts (15 tests) 2454ms
+ ✓ test/signer.test.ts (17 tests) 6202ms
+ Test Files  11 passed (11)
+      Tests  76 passed (76)
+exit=0
+$ pnpm -r typecheck
+exit=0
+$ pnpm -r lint
+exit=0
+```
+adversary: r3 (enclave start --port could configure the other network's enclave) and r4 (a late AttestationStale on renew used registration wording and advice) found defects, fixed in 949259f and cb83abf with their tests committed. r5 on cb83abf: NO DEFECT FOUND (renew reverts incl. a signer expiring during caching, port seam unreachable from bin.ts, boot binding check, JCS replies, port pins).
+reviewed: pending (Codex r2)
+notes: suspicions from r5, unproven and not fixed: after certificate txs land, the generic revert lines still end "Nothing was sent."; invalid_pcr and invalid_public_key renew lines carry restart or no advice (both unreachable with a genuine AWS document). `--port` now accepts only the network's fixed port (logged in OPEN-QUESTIONS).
