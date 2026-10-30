@@ -84,3 +84,93 @@ exit 0
 adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts; UTF-8 BOM accepted before X-Attested-Proof JCS); 120/120 vector values recomputed independently with cast. r2 on 705d515 NO DEFECT FOUND; 124/124 recomputed; 2,130-input TS vs Rust url differential fuzz, no originHash disagreement.
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
+## T02 adversary fix - 2026-10-29
+commit: 1eb99f7
+findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
+verified: ./scripts/check-install-scripts.sh && ./scripts/check-agents-commands.sh && <T02 verify>
+output:
+```
+install refused (exit 1): ok
+PASS install
+PASS build
+PASS test
+PASS lint
+PASS typecheck
+packages/seller-host typecheck: Done
+Warning: lib/nitro-validator: missing from foundry.lock (found 0ea0d12366b4fa44f9e07e4755f2ad36561cb674)
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+0ea0d12
+exit 0
+```
+reviewed: pending (Codex)
+notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
+
+## T02 Codex r1 fixes - 2026-10-30
+commit: this entry
+review: .worktrees/review-t02-r1/reviews/t02-review-r1.md (VERDICT: changes required, M2 m1)
+fixed:
+- M2 Foundry pin: contracts/FOUNDRY_VERSION = v1.8.1 (forge 1.8.1, commit 982849d); the proposed ci.yml installs that version.
+- m1 scripts/check-install-scripts.sh passes on a failed install only for ERR_PNPM_UNSUPPORTED_ENGINE; any other failure exits 1.
+- M1 CI: .github/workflows/ci.yml with the PIPELINE jobs ts, contracts, slither, enclave is proposed in .worktrees/prompts/ci.yml (the guard-edit hook keeps workflow files for Joshua to apply), plus harness-r2.patch removing the duplicate build job from harness.yml.
+verified: bash scripts/check-install-scripts.sh (normal) and the same with npm offline and an empty cache
+output:
+```
+$ bash scripts/check-install-scripts.sh
+install refused by the engines pin (exit 1): ok
+exit=0
+$ npm_config_offline=true npm_config_cache=$(mktemp -d) bash scripts/check-install-scripts.sh
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+exit=1
+```
+reviewed: pending (Codex r2, after ci.yml is applied)
+
+## T02 Codex r1 fixes: full offline-probe output - 2026-10-30
+The entry above abridged the offline run. Verbatim rerun:
+```
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/pnpm failed: cache mode is 'only-if-cached' but no cached response is available.
+npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/2026-10-30T09_03_24_882Z-debug-0.log
+exit=1
+```
+reviewed: pending (Codex r2)
+
+## T03 Codex r1 fixes - 2026-10-30
+commit: this entry (merge of feat/t02-scaffold into feat/t03-core, plus the oracle)
+review: .worktrees/review-t03-r1/reviews/t03-review-r1.md (VERDICT: changes required, M2)
+fixed:
+- M1 (outside) `pnpm -r lint` had no script on this branch: merged feat/t02-scaffold, which adds lint to every package.
+- M2 vectors had no independent oracle: packages/core/test/oracle.test.ts asserts fixed values for every family (requestHash, responseHash, inputsHash, releaseId, requestId, originHash, binding typehash, user_data, signer, proof and liveness digests, payer-sig message and digest), each computed with Foundry cast from a preimage built by hand per SPEC §2 (oracle sanity: the generator point G gives the well-known 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf). scripts/check-vectors-oracle.py recomputes all 124 values in vectors/*.json with cast, no viem and no core.
+verified: pnpm --filter @attessa/core test; pnpm -r lint; python3 -I scripts/check-vectors-oracle.py
+output:
+```
+$ pnpm install --frozen-lockfile
+$ pnpm --filter @attessa/core test
+ ✓ test/regression-t03.test.ts (4 tests) 9ms
+ ✓ test/oracle.test.ts (5 tests) 14ms
+ ✓ test/core.test.ts (21 tests) 66ms
+ ✓ test/vectors.test.ts (7 tests) 114ms
+ Test Files  4 passed (4)
+      Tests  37 passed (37)
+exit=0
+$ pnpm -r lint
+exit=0
+$ python3 -I scripts/check-vectors-oracle.py
+checks: 124 fails: 0
+exit=0
+```
+mutation check (Codex reproduction: drop the first 0x00 separator in requestHash, then gen:vectors):
+```
+$ (mutant: first 0x00 separator dropped from requestHash) pnpm --filter @attessa/core gen:vectors && pnpm --filter @attessa/core test; python3 -I scripts/check-vectors-oracle.py
+   × core against fixed values computed independently with cast (INV-18) > hashes (SPEC §2.2) 7ms
+   × hashes (SPEC §2.2) > requestHash is METHOD ‖ 0x00 ‖ pathAndQuery ‖ 0x00 ‖ body 6ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 35 passed (37)
+MISMATCH requestHash query string kept as sent: got 0xf927ca7c50002d67015850d24d5cd5f9c6cca42bcc06399a78e2528a2a5b591e want 0x4fc221efbe363eeea60a5e0d67d6b3b845031a51e7be098bd17285eb98656832
+checks: 124 fails: 6
+```
+restored: oracle back to `checks: 124 fails: 0`.
+reviewed: pending (Codex r2)
