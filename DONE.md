@@ -162,3 +162,38 @@ exit=0
 adversary: r1 on 67e0122 DEFECT (INV-11: a serial reconciler re-send to a hung facilitator delayed other rows' expiry; fixed b76a43d, test kept as test/adversary-t19.test.ts). r2 on b76a43d NO DEFECT FOUND (late re-send answers vs terminal states, in-flight leak, concurrent ticks, corrupt payload, stop() mid-pass, background 402); its 9 tests kept as test/adversary-t19-r2.test.ts.
 reviewed: pending (Codex)
 notes: three SPEC questions from the fix round are in OPEN-QUESTIONS (unfunded authorizations vs the unpaid rate limit; nonce used before created_block; §6.2 step order vs the idempotency table).
+
+## T15 - 2026-10-30
+commit: fd24b45 (built fbe9bcf, 89b2e5d by a builder, Opus; fixed acbf654, fbafffe; merge fd24b45 brings in the T19 branch)
+verified: pnpm --filter @attessa/seller-host test && pnpm --filter @attessa/cli test -- -t "seller" (plus pnpm -r typecheck), on the merge
+output (file lines and totals verbatim):
+```
+$ pnpm --filter @attessa/seller-host test && pnpm --filter @attessa/cli test -- -t "seller"
+ ✓ test/framing.test.ts (4 tests) 5ms
+ ✓ test/units.test.ts (8 tests) 9ms
+ ✓ test/server.test.ts (23 tests) 222ms
+ ✓ test/enclave.test.ts (6 tests) 253ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 647ms
+ ✓ test/inputs.test.ts (11 tests) 502ms
+ ✓ test/adversary-t15.test.ts (8 tests) 468ms
+ Test Files  7 passed (7)
+      Tests  68 passed (68)
+seller-host exit=0
+ ✓ test/attestation.test.ts (4 tests) 447ms
+ ✓ test/enclave.test.ts (8 tests) 1207ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1605ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 1789ms
+ ✓ test/owner.test.ts (15 tests) 2085ms
+ ✓ test/signer.test.ts (17 tests) 5784ms
+ Test Files  6 passed (6)
+      Tests  59 passed (59)
+cli exit=0
+$ pnpm -r typecheck
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+exit=0
+```
+adversary: r1 on 89b2e5d DEFECT x2 (`--network local` ignored the pinned deployments, SPEC §2.6; the spend guard dated revenue by updated_at so a row counted on two days, SPEC §5); fixed acbf654, fbafffe; tests kept as packages/{cli,seller-host}/test/adversary-t15.test.ts. r2 on fbafffe NO DEFECT FOUND (all 11 §6.4 states, day boundary, WAL reads, time zones, pin vs override on every network); its 16 tests kept as adversary-t15-r2.test.ts.
+reviewed: pending (Codex)
+notes: no buy source yet (needs S7); the guard is not wired into main.ts; `enclave start --port` can point at another network's enclave (SPEC §8 lists --port as free) and `enclave build` does not refuse gitignored files in the build context: both left as design questions; one existing fixture column renamed updated_at -> created_at to match the §6.4 schema.
