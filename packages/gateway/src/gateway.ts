@@ -354,10 +354,10 @@ export function createGateway(deps: GatewayDeps): Gateway {
           throw fail('payment_invalid', reason, ctx);
         }
         if (v.status < 200 || v.status >= 300 || !vb || vb.isValid !== true) throw fail('payment_invalid', 'unexpected_verify_error', ctx);
-        if (vb.payer !== undefined && (typeof vb.payer !== 'string' || vb.payer.toLowerCase() !== a.from)) {
-          throw fail('payment_invalid', 'payer_mismatch', ctx);
-        }
-        payer = a.from;
+        // Step 6 takes the payer from /verify, so a valid answer must name one.
+        if (typeof vb.payer !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(vb.payer)) throw fail('payment_invalid', 'unexpected_verify_error', ctx);
+        payer = vb.payer.toLowerCase() as Address;
+        if (payer !== a.from) throw fail('payment_invalid', 'payer_mismatch', ctx);
       } catch (e) {
         if (e instanceof Fail) throw e;
         throw fail('payment_invalid', 'unexpected_verify_error', ctx);
