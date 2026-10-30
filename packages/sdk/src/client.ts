@@ -301,6 +301,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     fields: Partial<CallResult> = {},
     ev: { responseHash?: Hex; inputsHash?: Hex; inputsBlock?: bigint } = {},
   ): CallResult {
+    // A refused call stays refused, code included, until the chain decides it: SPEC §7 ends a settled
+    // call with no result by whether it "was refused", so an RPC error must not turn it uncertain.
+    const stored = outcome === 'uncertain' ? ledger.get(entry.requestId) : undefined;
+    const keepRefusal = stored?.state === 'refused';
+    if (keepRefusal) outcome = 'refused';
     const ledgerState: LedgerState | undefined =
       outcome === 'verified' || outcome === 'not_charged' || outcome === 'paid_but_rejected' || outcome === 'settled_after_refusal'
         ? outcome
@@ -311,7 +316,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     if (ledgerState && ledger.get(entry.requestId)) {
       e = ledger.update(entry.requestId, {
         state: ledgerState,
-        code: fields.code ? codeString(fields.code, fields.detail ?? fields.check) : entry.code,
+        code: keepRefusal ? stored.code : fields.code ? codeString(fields.code, fields.detail ?? fields.check) : entry.code,
         ...(fields.settlementTx ? { settlementTx: fields.settlementTx } : {}),
       });
       // Another process decided this call first (V12): report its outcome, not this one's.

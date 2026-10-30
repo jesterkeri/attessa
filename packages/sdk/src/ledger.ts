@@ -1,4 +1,4 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
+import { accessSync, appendFileSync, chmodSync, closeSync, constants, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { Address, Hex } from 'viem';
@@ -198,6 +198,7 @@ export class Ledger {
 
   private acquire(): void {
     if (!this.lockDb) {
+      this.ensureWritableLock();
       this.lockDb = new DatabaseSync(this.lockPath);
       this.lockDb.exec(`PRAGMA busy_timeout = ${LOCK_TIMEOUT_MS}`);
     }
@@ -211,6 +212,26 @@ export class Ledger {
       }
       truncateSync(this.lockPath, 0);
       this.lockDb.exec('BEGIN IMMEDIATE');
+    }
+  }
+
+  /**
+   * SQLite opens a lock file it cannot write read-only, and `BEGIN IMMEDIATE` there excludes no one
+   * (INV-19). A read-only file this user owns is made writable again (same inode); one it cannot
+   * change, e.g. left by `sudo attessa`, is refused.
+   */
+  private ensureWritableLock(): void {
+    try {
+      accessSync(this.lockPath, constants.W_OK);
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code === 'ENOENT') return;
+      try {
+        chmodSync(this.lockPath, 0o600);
+        accessSync(this.lockPath, constants.W_OK);
+      } catch (e2) {
+        // not in FLOWS
+        throw new Error(`ledger lock ${this.lockPath} not acquired: this user cannot write it`, { cause: e2 });
+      }
     }
   }
 

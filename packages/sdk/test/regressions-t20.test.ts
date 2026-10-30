@@ -145,3 +145,34 @@ describe('INV-13: a terminal paid_but_rejected keeps its ProofCheck', () => {
     expect({ outcome: r.outcome, check: r.check }).toEqual({ outcome: 'paid_but_rejected', check: 'missing_proof' });
   });
 });
+
+describe('SPEC §7: a refused call stays refused until the chain decides it', () => {
+  it('an RPC error while verifying a refused call keeps it refused; with no result it ends settled_after_refusal', async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    const world = w;
+    let inputsBlock: string | undefined;
+    world.gw.behavior = {
+      paid: 'refuse_with_result',
+      inputs: (i) => {
+        inputsBlock = (i.block as { number: string }).number;
+        return i;
+      },
+    };
+    const r0 = await world.client.payAndVerify(world.url, { body: world.body });
+    expect(r0).toMatchObject({ outcome: 'refused', code: 'settle_failed' });
+    const real = world.chain.request.bind(world.chain);
+    let failing = true;
+    world.chain.request = async (method, params) => {
+      if (failing && method === 'eth_getBlockByNumber' && inputsBlock !== undefined && params?.[0] === `0x${BigInt(inputsBlock).toString(16)}`)
+        throw new Error('header not found');
+      return real(method, params);
+    };
+    const r1 = await world.client.getResult(r0.requestId);
+    expect({ outcome: r1.outcome, code: r1.code }).toEqual({ outcome: 'refused', code: 'rpc_unavailable' });
+    expect(new Ledger(world.dataDir).get(r0.requestId)).toMatchObject({ state: 'refused', code: 'settle_failed{expired}' });
+    failing = false;
+    world.gw.behavior = { noResults: true };
+    const r = await world.client.confirmNotCharged(r0.requestId);
+    expect({ outcome: r.outcome, code: r.code }).toEqual({ outcome: 'settled_after_refusal', code: 'settle_failed' });
+  });
+});
