@@ -1,5 +1,17 @@
 import { randomBytes } from 'node:crypto';
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
+import {
+  appendFileSync,
+  closeSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  renameSync,
+  rmdirSync,
+  statSync,
+  unlinkSync,
+  writeSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import type { Address, Hex } from 'viem';
 import { RESERVED_STATES, SETTLED_STATES, TERMINAL_STATES, type EvidenceRow, type PendingEntry } from './types.ts';
@@ -67,7 +79,7 @@ export class Ledger {
     this.pendingPath = join(dataDir, 'pending.jsonl');
     this.evidencePath = join(dataDir, 'evidence.jsonl');
     this.lockPath = join(dataDir, 'pending.lock');
-    this.breakPath = join(dataDir, 'pending.lock.break');
+    this.breakPath = join(dataDir, 'pending.lock.breaker');
     this.now = now;
     mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   }
@@ -228,25 +240,57 @@ export class Ledger {
   }
 
   /**
-   * Breaks a lock whose holder died or stalled. Two waiters can both find the same lock stale; the
-   * one acting on the older reading must not remove the lock the other has just taken. So breaking
-   * happens under a second lock, and only if the lock file still holds the very token judged stale
-   * (each acquisition writes a fresh one).
+   * Breaks a lock whose holder died or stalled: under the break mutex, unlink pending.lock only if
+   * it still holds the very token judged stale. Nothing but its own holder or a breaker under the
+   * mutex removes pending.lock, and a stale holder never releases, so the re-read stays true until
+   * the unlink.
    */
   private breakStaleLock(): void {
     const seen = staleToken(this.lockPath);
     if (seen === null) return;
-    if (!createExclusive(this.breakPath, `${process.pid} ${randomBytes(8).toString('hex')}`)) {
-      // Another waiter is breaking it. If that one died mid-break, clear its marker for the next try.
-      if (staleToken(this.breakPath) !== null) unlinkQuiet(this.breakPath);
-      return;
-    }
+    const mine = takeMutex(this.breakPath);
+    if (mine === null) return;
     try {
-      if (staleToken(this.lockPath) === seen) unlinkQuiet(this.lockPath);
+      if (readQuiet(this.lockPath) === seen) unlinkQuiet(this.lockPath);
     } finally {
-      unlinkQuiet(this.breakPath);
+      unlinkQuiet(join(this.breakPath, mine));
+      rmdirQuiet(this.breakPath);
     }
   }
+}
+
+/**
+ * The break mutex: a directory holding one empty file named by its owner's `<pid>-<random>`. It is
+ * taken by renaming a fresh one-file directory onto `path`, which the kernel does atomically and
+ * only while `path` is absent or empty, so it never has two owners. A dead owner's file is removed
+ * by its exact name and the directory only by rmdir (which fails unless empty), so clearing a dead
+ * owner can never remove a live one. Returns the name of our file, or null if another owner holds it.
+ */
+function takeMutex(path: string): string | null {
+  const name = `${process.pid}-${randomBytes(8).toString('hex')}`;
+  const tmp = `${path}.${name}`;
+  mkdirSync(tmp, { mode: 0o700 });
+  closeSync(openSync(join(tmp, name), 'wx', 0o600));
+  try {
+    renameSync(tmp, path);
+    return name;
+  } catch (e) {
+    if (!['EEXIST', 'ENOTEMPTY', 'ENOTDIR', 'EPERM'].includes((e as NodeJS.ErrnoException).code ?? '')) throw e;
+  }
+  unlinkQuiet(join(tmp, name));
+  rmdirQuiet(tmp);
+  let owners: string[] = [];
+  try {
+    owners = readdirSync(path);
+  } catch {
+    // released meanwhile
+  }
+  for (const o of owners) {
+    const pid = Number(o.split('-')[0]);
+    if (Number.isSafeInteger(pid) && pid > 0 && !pidAlive(pid)) unlinkQuiet(join(path, o));
+  }
+  rmdirQuiet(path); // only if empty: a mutex left empty by an owner that died mid-release
+  return null;
 }
 
 /** Same entry, field by field (values are strings or null). */
@@ -290,5 +334,21 @@ function unlinkQuiet(path: string): void {
     unlinkSync(path);
   } catch {
     // already gone
+  }
+}
+
+function rmdirQuiet(path: string): void {
+  try {
+    rmdirSync(path);
+  } catch {
+    // gone, or not empty: someone else owns it now
+  }
+}
+
+function readQuiet(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
   }
 }
