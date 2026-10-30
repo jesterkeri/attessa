@@ -24,7 +24,8 @@ import { FrameReader, encodeFrame } from '../src/framing.ts';
 /**
  * In-process stand-in for the enclave app (SPEC §4): a TCP server speaking the §4.2 framing, one-shot
  * `configure` (INV-22), a random in-test secp256k1 key, and rules v1 (§4.3) signed through @attessa/core.
- * The attestation document is whatever `makeAttestation` returns (random bytes by default): there is no NSM here.
+ * The attestation document is whatever `makeAttestation` returns: by default an unsigned COSE_Sign1 that
+ * carries the binding and key, with placeholder certificates. There is no NSM here.
  */
 
 export interface FakeEnclaveConfig {
@@ -44,6 +45,37 @@ export interface FakeEnclaveOptions {
 }
 
 const BYTES32 = /^0x[0-9a-f]{64}$/;
+
+type Cbor = bigint | Uint8Array | string | Cbor[] | Map<Cbor, Cbor>;
+
+// Every head uses the 8-byte argument form: valid CBOR, just not the shortest.
+function head(major: number, n: number | bigint): Buffer {
+  const b = Buffer.alloc(9);
+  b[0] = (major << 5) | 27;
+  b.writeBigUInt64BE(BigInt(n), 1);
+  return b;
+}
+
+function cbor(v: Cbor): Buffer {
+  if (typeof v === 'bigint') return head(0, v);
+  if (typeof v === 'string') return Buffer.concat([head(3, Buffer.byteLength(v)), Buffer.from(v, 'utf8')]);
+  if (v instanceof Uint8Array) return Buffer.concat([head(2, v.length), v]);
+  if (Array.isArray(v)) return Buffer.concat([head(4, v.length), ...v.map(cbor)]);
+  return Buffer.concat([head(5, v.size), ...[...v].flatMap(([k, x]) => [cbor(k), cbor(x)])]);
+}
+
+/** Tag 18 (0xd2) COSE_Sign1 with an empty signature: parseable, not verifiable. */
+export function unsignedAttestation(userData: Hex, publicKey: Hex): Uint8Array {
+  const payload = new Map<Cbor, Cbor>([
+    ['timestamp', BigInt(Date.now())],
+    ['pcrs', new Map<Cbor, Cbor>([0n, 1n, 2n].map((i) => [i, Buffer.alloc(48, 1)]))],
+    ['certificate', Buffer.from([0])],
+    ['cabundle', [Buffer.from([0]), Buffer.from([0])]],
+    ['public_key', Buffer.from(publicKey.slice(2), 'hex')],
+    ['user_data', Buffer.from(userData.slice(2), 'hex')],
+  ]);
+  return Buffer.concat([Buffer.from([0xd2]), cbor([Buffer.alloc(0), new Map(), cbor(payload), Buffer.alloc(0)])]);
+}
 
 function strictKeys(m: Record<string, unknown>, keys: string[]): boolean {
   const k = Object.keys(m).sort();
@@ -109,7 +141,7 @@ export class FakeEnclave {
   private attestation(): Record<string, string> {
     const c = this.config!;
     const userData = encodeUserData({ chainId: c.chainId, registry: c.registry, agentId: c.agentId, originHash: c.originHash });
-    const doc = this.o.makeAttestation ? this.o.makeAttestation(userData, this.publicKey) : randomBytes(64);
+    const doc = (this.o.makeAttestation ?? unsignedAttestation)(userData, this.publicKey);
     return { attestation: Buffer.from(doc).toString('base64'), signer: this.signer };
   }
 

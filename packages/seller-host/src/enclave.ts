@@ -1,5 +1,6 @@
 import { connect } from 'node:net';
-import { jcs } from '@attessa/core';
+import { encodeUserData, jcs, originHash, parseAttestation } from '@attessa/core';
+import type { Address } from 'viem';
 import { FrameReader, encodeFrame } from './framing.ts';
 
 /**
@@ -79,6 +80,17 @@ export class TcpEnclaveTransport implements EnclaveTransport {
           finish(new EnclaveUnreachable('enclave reply is not a JSON object'));
           return;
         }
+        // SPEC §4.2: every frame is JCS, so the reply must be byte-for-byte its own canonical form.
+        let canonical = false;
+        try {
+          canonical = Buffer.from(jcs(parsed), 'utf8').equals(first);
+        } catch {
+          // jcs refuses lone surrogates: not canonical.
+        }
+        if (!canonical) {
+          finish(new EnclaveUnreachable('enclave reply is not JCS'));
+          return;
+        }
         finish(null, parsed as EnclaveReply);
       });
       sock.on('error', (e) => finish(new EnclaveUnreachable(`enclave connection failed: ${e.message}`, { cause: e })));
@@ -132,8 +144,7 @@ export class EnclaveClient {
    * Configures the enclave, or, when it was already configured this boot (a second `configure` answers
    * `bad_frame`, INV-22), fetches an attestation for the running key instead. Either way returns the
    * attestation and signer, and `configured: true` only when this call did the configuring.
-   * A config mismatch with the running enclave isn't detectable here: the registry refuses the binding
-   * at `registerSigner` (SPEC §3.4 step 6).
+   * It doesn't check what the running enclave is bound to: callers do, with `checkBinding`.
    */
   async configureOrAttest(cfg: ConfigureMsg, timeoutMs: number): Promise<Attestation & { configured: boolean }> {
     const first = await this.configure(cfg, timeoutMs);
@@ -144,6 +155,32 @@ export class EnclaveClient {
     const att2 = asAttestation(again);
     if (!att2) throw new EnclaveUnreachable(`enclave refused attest: ${String(again.error)}`);
     return { ...att2, configured: false };
+  }
+}
+
+/** The enclave answered with an attestation bound to something other than this host's config. */
+export class EnclaveMismatch extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'EnclaveMismatch';
+  }
+}
+
+/**
+ * Throws `EnclaveMismatch` unless the attestation's `user_data` is the SPEC §2.4 binding for `cfg`: the
+ * chain, registry, agent and origin this host asked for. Catches an enclave already configured for
+ * another network or agent (a second `configure` only answers `bad_frame`).
+ */
+export function checkBinding(att: Attestation, cfg: ConfigureMsg): void {
+  let userData: string | null;
+  try {
+    userData = parseAttestation(Buffer.from(att.attestation, 'base64')).userData;
+  } catch (e) {
+    throw new EnclaveMismatch(`enclave attestation is unreadable: ${(e as Error).message}`);
+  }
+  const want = encodeUserData({ chainId: BigInt(cfg.chainId), registry: cfg.registry as Address, agentId: BigInt(cfg.agentId), originHash: originHash(cfg.origin) });
+  if (userData?.toLowerCase() !== want.toLowerCase()) {
+    throw new EnclaveMismatch('enclave is bound to a different chain, registry, agent or origin than this config');
   }
 }
 

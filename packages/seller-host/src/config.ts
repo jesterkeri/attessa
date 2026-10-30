@@ -15,7 +15,7 @@ export interface SellerHostConfigFile {
   registry: string;
   agentId: string;
   origin: string;
-  /** Host socat TCP port that reaches the enclave. Default from the network (5005 / 5007). */
+  /** Host socat TCP port that reaches the enclave. Required for `local`; fixed by SPEC §5 (5005 / 5007) otherwise. */
   enclavePort?: number;
   listen?: { host?: string; port?: number };
   /** Forno (or a local node for `local`). Default from the network. */
@@ -61,6 +61,9 @@ export function parseConfig(raw: unknown): LoadedConfig {
   if (origin !== c.origin) throw new Error(`config: origin must be normalised (${origin})`);
   if (typeof c.stateDir !== 'string' || c.stateDir === '') throw new Error('config: stateDir is required');
   const ports = c.network === 'local' ? null : NETWORK_PORTS[c.network];
+  // SPEC §5 pins each network's socat and HTTP ports, so a mainnet and a Sepolia host can't be crossed.
+  if (ports && c.enclavePort !== undefined && c.enclavePort !== ports.socatPort) throw new Error(`config: enclavePort must be ${ports.socatPort} on ${c.network}`);
+  if (ports && c.listen?.port !== undefined && c.listen.port !== ports.sellerPort) throw new Error(`config: listen.port must be ${ports.sellerPort} on ${c.network}`);
   const enclavePort = c.enclavePort ?? ports?.socatPort;
   if (!Number.isSafeInteger(enclavePort)) throw new Error('config: enclavePort is required for local');
   const port = c.listen?.port ?? ports?.sellerPort;

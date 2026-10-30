@@ -6,3 +6,4 @@ export * from './eip712.ts';
 export * from './headers.ts';
 export * from './deployments.ts';
 export * from './errors.ts';
+export * from './attestation.ts';

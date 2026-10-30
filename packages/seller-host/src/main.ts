@@ -22,9 +22,10 @@ export async function main(path: string): Promise<void> {
     inputs: new InputFetcher({ forno: new HttpRpcSource('forno', cfg.fornoUrl), log }),
     log,
   });
+  // Serve only once the enclave is known to be bound to this config (fail closed).
+  await host.configureEnclave();
   const port = await host.listen(cfg.listen.port, cfg.listen.host);
   log('listening', { network: cfg.network, port, enclavePort: cfg.enclavePort });
-  await host.configureEnclave();
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === realpathSync(process.argv[1])) {

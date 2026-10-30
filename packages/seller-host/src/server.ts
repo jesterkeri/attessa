@@ -2,7 +2,7 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from 'node:net';
 import { decodeBase64Strict } from '@attessa/core';
 import { parseRequestBody } from './body.ts';
-import { EnclaveClient, configureMessage, type EnclaveReply } from './enclave.ts';
+import { EnclaveClient, EnclaveMismatch, checkBinding, configureMessage, type EnclaveReply } from './enclave.ts';
 import { InputsUnavailable, type InputFetcher } from './inputs.ts';
 
 /**
@@ -114,19 +114,22 @@ export class SellerHost {
 
   /**
    * Boot step: `configure` the enclave from this host's config (SPEC §4.1 step 2), or attest if it was
-   * already configured this boot. Retries until the enclave answers.
+   * already configured this boot, then checks the attestation is bound to this config. Retries until the
+   * enclave answers; a binding mismatch throws at once (fail closed).
    */
   async configureEnclave(opts: { retryMs?: number; maxAttempts?: number } = {}): Promise<{ signer: string; configured: boolean }> {
     const retryMs = opts.retryMs ?? 2_000;
     const max = opts.maxAttempts ?? Number.POSITIVE_INFINITY;
     for (let i = 1; ; i++) {
       try {
-        const r = await this.o.enclave.configureOrAttest(configureMessage(this.o.config), this.timeoutMs);
+        const cfg = configureMessage(this.o.config);
+        const r = await this.o.enclave.configureOrAttest(cfg, this.timeoutMs);
+        checkBinding(r, cfg);
         this.log(r.configured ? 'enclave_configured' : 'enclave_already_configured', { signer: r.signer });
         return { signer: r.signer, configured: r.configured };
       } catch (e) {
         this.log('enclave_configure_failed', { attempt: i, reason: (e as Error).message });
-        if (i >= max) throw e;
+        if (e instanceof EnclaveMismatch || i >= max) throw e;
         await new Promise((r) => setTimeout(r, retryMs));
       }
     }

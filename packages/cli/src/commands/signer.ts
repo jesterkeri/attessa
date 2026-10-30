@@ -182,25 +182,37 @@ interface AttestationChecks {
   binding: Binding | null;
 }
 
-/** SPEC §3.4 steps 3, 4, 5 and 7, off chain, against the chain's clock. */
-async function checkAttestation(c: Chain, a: ParsedAttestation, agentId: bigint, now: bigint): Promise<AttestationChecks> {
+/** SPEC §3.4 steps 3, 4, 5 and 7, off chain, against the chain's clock. `renew` words refusals for `signer renew`. */
+async function checkAttestation(c: Chain, a: ParsedAttestation, agentId: bigint, now: bigint, renew = false): Promise<AttestationChecks> {
+  const not = renew ? 'Not renewed' : 'Not registered';
   const ts = a.timestampMs / 1000n;
   if (ts > now + MAX_FUTURE_SKEW) {
+    // not in FLOWS: the reason words for the "R: renew refused" row.
+    if (renew) throw ERR.renewRefused('attestation_from_future', "the machine's report is dated ahead of Celo's clock", false);
     throw new CliError('attestation_from_future', "Not registered: the machine's report is dated ahead of Celo's clock.", 'Check the host clock, then run `attessa signer register --fresh`.');
   }
   const age = ts > now ? 0n : now - ts;
   const ageMinutes = Number((age + 59n) / 60n);
-  if (age > MAX_ATTESTATION_AGE) throw ERR.attestationStale(ageMinutes);
+  if (age > MAX_ATTESTATION_AGE) {
+    throw renew ? ERR.renewRefused('attestation_stale', `the machine's report is ${ageMinutes} minutes old and Celo accepts 30`, false) : ERR.attestationStale(ageMinutes);
+  }
   const pcrs = [0, 1, 2].map((i) => a.pcrs.get(i));
-  if (!pcrs.every((p): p is Hex => !!p && size(p) === 48)) throw new CliError('invalid_pcr', 'Not registered: the report has no PCR0-2.');
+  if (!pcrs.every((p): p is Hex => !!p && size(p) === 48)) throw new CliError('invalid_pcr', `${not}: the report has no PCR0-2.`);
   if (pcrs.some((p) => /^0x0+$/.test(p))) throw ERR.debugMode();
   const rid = computeReleaseId(pcrs[0]!, pcrs[1]!, pcrs[2]!);
   const rel = await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, rid]);
   if (RELEASE_STATUS[rel.status as number] !== 'Approved') throw ERR.wrongBuild(agentId.toString(), rid);
-  if (!a.publicKey || size(a.publicKey) !== 65 || !a.publicKey.startsWith('0x04')) {
-    throw new CliError('invalid_public_key', 'Not registered: the report carries no enclave key.', 'Start the approved build with `attessa enclave start`.');
-  }
-  return { a, rid, signer: signerFromPublicKey(a.publicKey), ageMinutes, binding: decodeBinding(a) };
+  if (!hasEnclaveKey(a)) throw noEnclaveKey(not);
+  return { a, rid, signer: signerFromPublicKey(a.publicKey!), ageMinutes, binding: decodeBinding(a) };
+}
+
+/** SPEC §2.4: a 65-byte uncompressed key, `0x04 ‖ X ‖ Y`. */
+function hasEnclaveKey(a: ParsedAttestation): boolean {
+  return !!a.publicKey && size(a.publicKey) === 65 && a.publicKey.startsWith('0x04');
+}
+
+function noEnclaveKey(not: string): CliError {
+  return new CliError('invalid_public_key', `${not}: the report carries no enclave key.`, 'Start the approved build with `attessa enclave start`.');
 }
 
 async function checkEndpoint(c: Chain, oh: Hex, agentId: bigint, origin: string): Promise<{ operator: Address }> {
@@ -291,8 +303,9 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
 export async function signerRenew(g: Global, deps: Deps, o: { attestation?: string; sellerHost?: string }): Promise<number> {
   const raw = o.attestation ? deps.readFile(o.attestation) : await fetchAttestation(deps, sellerHostUrl(g, o.sellerHost));
   const a = parseAttestation(raw);
-  if (!a.publicKey || size(a.publicKey) !== 65) throw new CliError('invalid_public_key', 'Not renewed: the report carries no enclave key.');
-  const signer = signerFromPublicKey(a.publicKey);
+  // The signer is looked up by the report's key, so its form is checked before anything else.
+  if (!hasEnclaveKey(a)) throw noEnclaveKey('Not renewed');
+  const signer = signerFromPublicKey(a.publicKey!);
   const c = await connect(g, deps);
   const now = (await head(c)).timestamp;
   const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [signer]);
@@ -309,20 +322,11 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const { operator } = await checkEndpoint(c, oh, agentId, origin);
   const from = (c.account?.address.toLowerCase() as Address | undefined) ?? operator;
   if (from !== operator || operator !== (s.operator as string).toLowerCase()) throw ERR.notOperator(from, origin);
-  const binding = decodeBinding(a);
-  const ts = a.timestampMs / 1000n;
-  const age = ts > now ? 0n : now - ts;
-  const ageMinutes = Number((age + 59n) / 60n);
-  if (age > MAX_ATTESTATION_AGE) throw ERR.renewRefused('attestation_stale', `the machine's report is ${ageMinutes} minutes old and Celo accepts 30`, false);
-  const pcrs = [0, 1, 2].map((i) => a.pcrs.get(i));
-  if (!pcrs.every((p): p is Hex => !!p && size(p) === 48)) throw new CliError('invalid_pcr', 'Not renewed: the report has no PCR0-2.');
-  if (pcrs.some((p) => /^0x0+$/.test(p))) throw ERR.debugMode();
-  const rid = computeReleaseId(pcrs[0]!, pcrs[1]!, pcrs[2]!);
-  if (rid !== (s.releaseId as string).toLowerCase()) throw ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
+  // renewSigner repeats registerSigner steps 2-7 (SPEC §3.4), so the same checks run before any certificate is cached.
+  const { rid, ageMinutes, binding } = await checkAttestation(c, a, agentId, now, true);
   const field = bindingField(binding, c, agentId, oh);
   if (field !== null) throw ERR.bindingMismatch(bindingWords(binding)(field), String(field));
-  const rel = await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, rid]);
-  if (RELEASE_STATUS[rel.status as number] !== 'Approved') throw ERR.wrongBuild(agent, rid);
+  if (rid !== (s.releaseId as string).toLowerCase()) throw ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
 
   const certs = await certSteps(c, a, from, now);
   const renew: Step = {
