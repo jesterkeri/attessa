@@ -9,6 +9,9 @@ git -C "$root" archive HEAD | tar -x -C "$work"
 cd "$work"
 log=$(npx -y pnpm@9.15.9 install --frozen-lockfile --reporter=append-only --store-dir "$work/.store" --no-side-effects-cache 2>&1)
 st=$?
+# Checked first: a script that ran and failed could print the engines error itself.
+ran=$(printf '%s\n' "$log" | grep -E '(pre|post)?install\$' | grep -vE 'better-sqlite3|keytar')
+if [ -n "$ran" ]; then echo "FAIL: non-allowlisted install script ran:"; echo "$ran"; exit 1; fi
 # The only acceptable failure is pnpm 9 refusing the engines pin (pnpm >= 10.32.1). Anything
 # else (offline registry, bad lockfile, rejected config) proves nothing, so it fails the probe.
 if [ $st -ne 0 ]; then
@@ -19,6 +22,4 @@ if [ $st -ne 0 ]; then
   printf '%s\n' "$log" | tail -5
   exit 1
 fi
-ran=$(printf '%s\n' "$log" | grep -E '(pre|post)?install\$' | grep -vE 'better-sqlite3|keytar')
-if [ -n "$ran" ]; then echo "FAIL: non-allowlisted install script ran:"; echo "$ran"; exit 1; fi
 echo "PASS"
