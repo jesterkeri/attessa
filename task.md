@@ -20,7 +20,12 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 | T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus), done | `feat/t05-invariants` 0d9e8bd | adversary: no defect, 6 gap tests kept; **Codex r1 waiting on Joshua** |
 | T13 | enclave app (Rust) | builder B3 (Opus), done | `feat/t13-enclave` ca8a26e | adversary r1: 1 fixed; r2: no defect; 42 tests, fmt, clippy green; **Codex r1 waiting on Joshua** |
 | T08 | Self spike | Claude, done | `feat/t08-self-spike` 11f43e1 | done |
-| T06, T07 | vectors in Solidity, real-fixture fork tests | builder B1 (Opus) | `feat/t06-vectors` 8ee8186, then `feat/t07-real-fixture` | T06 pushed; T07 in progress |
+| T06, T07 | vectors in Solidity, real-fixture fork tests | builder B1 (Opus), done | `feat/t07-real-fixture` 11e54d5 | adversary: no defect; **Codex r1 waiting on Joshua** |
+| T09 | coverage 100% branches, slither 15 triaged | Claude | `feat/t09-coverage` e88b0ba | **Codex r1 waiting on Joshua** |
+| T19a | RPC history depth spike | Claude, done | `feat/t19a-rpc-depth` 6fd2d76 | 400 and 7200 blocks ok on both RPCs |
+| T10 | deploy scripts, simulation only | builder B4 (Opus) | `feat/t10-deploy` | building |
+| T19 | gateway | builder B5 (Opus) | `feat/t19-gateway` | building |
+| T20 | SDK | builder B6 (Opus) | `feat/t20-sdk` | building |
 | rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
 
 ## Builders started 2026-10-29 from `feat/t02-scaffold` (worktrees in `.worktrees/`: the harness hook blocks writes under `.claude/`)
@@ -32,11 +37,9 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 Gateway (T19), SDK (T20) and CLI (T21) start after T03 lands; they import core.
 
 ## Waiting on Joshua
-- apply `.worktrees/prompts/harness-r1.patch` (stops commit prompts, CI on feat/staging, cast send block)
-- Codex: T02 r1, T03 r1, T04/T05 r1, T13 r1 (prompts in `.worktrees/prompts/codex-*-r1.md`)
+- Codex: T02 r1, T03 r1, T04/T05 r1, T13 r1, T06/T07 r1, T09 r1 (prompts in `.worktrees/prompts/codex-*-r1.md`)
 - T01 broadcast (funded Sepolia wallet, key in `.env` as PRIVATE_KEY)
 - restart Claude Code with `claude --continue` so the harness hooks load
-- `sudo apt install -y jq` (hooks need it)
 - domain, AWS enclave access, Sepolia broadcast permission
 
 ## Problems found
