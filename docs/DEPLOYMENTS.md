@@ -41,14 +41,18 @@ Celo Sepolia only. Broadcasting is Joshua's job. The key comes from a Foundry ke
 the command line. Run from `contracts/` on a clean checkout of the commit being deployed.
 
 The deploy scripts' own checks run inside the build they guard, so a committed remapping,
-foundry.toml or source can switch them off (T10 adversary r5 to r7). `check-deploy.mjs --pre-deploy`
-rebuilds the scripts and the production contracts from the committed blobs under fixed settings
-and requires `contracts/out` to match them byte for byte. Run it right before every `forge script`
-below, simulation and broadcast alike: it must print `PASS` and exit 0. On `FAIL`, stop.
+foundry.toml or source can switch them off (T10 adversary r5 to r8). `check-deploy.mjs --pre-deploy`
+rebuilds the scripts and the production contracts from the committed blobs under fixed settings.
+It then requires forge's effective config in `contracts/` (foundry.toml, remappings.txt, `.env`,
+`~/.foundry/foundry.toml`) to equal those settings, refuses any `FOUNDRY_*` or `DAPP_*` variable,
+runs `forge clean` and `forge build`, and requires `contracts/out` to match byte for byte. Run it
+right before every `forge script` below, simulation and broadcast alike, in the same shell: it must
+print `PASS` and exit 0. On `FAIL`, stop. Run each `forge script` exactly as written (the only
+extra flag allowed is the Gas note's `--gas-estimate-multiplier`), with no `FOUNDRY_*` or `DAPP_*`
+variable set.
 
 ```sh
 cd contracts
-forge build
 
 # 0. Inputs. The admin is the cold EOA that owns the CertManager and holds its revoker role (L3).
 #    The script refuses an admin equal to the deployer.

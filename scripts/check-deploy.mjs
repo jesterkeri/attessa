@@ -6,11 +6,12 @@
 //   node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]
 //   node scripts/check-deploy.mjs --pre-deploy
 //
-// --pre-deploy, before every deploy simulation and broadcast: runs `forge build` in contracts/ as
-// `forge script` would, then requires contracts/out's deploy scripts and production contracts to
+// --pre-deploy, before every deploy simulation and broadcast: requires forge's effective config in
+// contracts/ to equal the reference build's and no FOUNDRY_*/DAPP_* variable, then runs `forge clean`
+// and `forge build` there and requires the deploy scripts and production contracts in that out to
 // equal the reference build (bytecode and runtime code, metadata included) and to be compiled only
 // from committed blobs. A committed remapping, foundry.toml or source that swaps the in-script
-// guard (T10 adversary r5 M, r6 D, r7 X) fails here. Exit 0: PASS. Exit 1: FAIL. Exit 2: could not run.
+// guard (T10 adversary r5 M, r6 D, r7 X, r8 O) fails here. Exit 0: PASS. 1: FAIL. 2: could not run.
 //
 // The reference bytecode is compiled fresh, in a temp dir, from HEAD's committed contracts/ and
 // the nitro-validator commit HEAD pins. Nothing in the working tree (uncommitted edits,
@@ -454,22 +455,70 @@ async function main() {
   return failed ? 1 : 0;
 }
 
-/** --pre-deploy: contracts/out, as `forge script` will use it, against the reference build. */
+// Effective config keys allowed to differ from the reference build's: none changes what solc
+// compiles or where forge reads artifacts. Remappings are compared as a sorted list instead.
+const CONFIG_MAY_DIFFER = ['fs_permissions', 'offline', 'auto_detect_remappings', 'eth_rpc_url', 'etherscan_api_key'];
+// Differences that still leave forge running only the pinned svm solc; the check then also builds,
+// to report what that build would deploy. Any other difference (solc, vyper, ...) stops it first.
+const CONFIG_SAFE_TO_BUILD = ['remappings', 'out', 'src', 'libs', 'optimizer', 'optimizer_runs', 'via_ir', 'evm_version', 'bytecode_hash', 'cbor_metadata'];
+
+/** `forge config --json` at `root`: what forge build and forge script resolve there. Runs no compiler. */
+function forgeConfig(root, env) {
+  const c = JSON.parse(execFileSync('forge', ['config', '--json', '--root', root], { cwd: root, env, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+  c.remappings = [...(c.remappings ?? [])].sort();
+  return c;
+}
+
+/**
+ * --pre-deploy: what `forge script` from contracts/ will compile and run, against the reference
+ * build. First, without compiling anything: no FOUNDRY_* or DAPP_* variable, and the effective
+ * config (foundry.toml and its profiles, remappings.txt, .env, ~/.foundry/foundry.toml) equal to the
+ * reference build's but for CONFIG_MAY_DIFFER, so out, src, libs, solc (never a committed path),
+ * remappings, optimizer, via_ir, evm_version and metadata settings all match (T10 adversary r8 O).
+ * Then `forge clean` and `forge build`, so nothing stale is compared, and the artifacts in that out.
+ * A config difference is a FAIL even when the artifacts match.
+ */
 function preDeploy() {
+  const contracts = join(ROOT, 'contracts');
+  const names = [...OURS, ...SCRIPTS];
+  const report = (problems) => {
+    for (const p of problems) console.log(`FAIL  ${p}`);
+    console.log(problems.length ? 'FAIL: this checkout does not build the committed deploy; do not deploy from it' : `PASS: contracts/out equals the reference build for ${names.join(', ')}`);
+    return problems.length ? 1 : 0;
+  };
+  // Names only, never values: they may hold secrets.
+  const problems = Object.keys(process.env)
+    .filter((k) => k.startsWith('FOUNDRY_') || k.startsWith('DAPP_'))
+    .map((k) => `environment sets ${k}; DEPLOYMENTS.md sets no FOUNDRY_* or DAPP_* variable, unset it`);
+  if (problems.length) return report(problems);
+  const dir = mkdtempSync(join(tmpdir(), 'check-deploy-cfg-'));
+  let want, got;
+  try {
+    mkdirSync(join(dir, 'home'));
+    writeFileSync(join(dir, 'foundry.toml'), foundryToml(SOLC_VERSION));
+    want = forgeConfig(dir, { ...FORGE_ENV, HOME: join(dir, 'home') });
+    got = forgeConfig(contracts, process.env);
+  } catch (e) {
+    throw new Refuse(`forge config failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+  const differ = [...new Set([...Object.keys(want), ...Object.keys(got)])].filter(
+    (k) => !CONFIG_MAY_DIFFER.includes(k) && JSON.stringify(want[k]) !== JSON.stringify(got[k]),
+  );
+  for (const k of differ) problems.push(`forge config "${k}" in contracts/ differs from the reference build's`);
+  if (differ.some((k) => !CONFIG_SAFE_TO_BUILD.includes(k))) return report(problems);
+
   const { arts: ref, blobs, head, pinned } = referenceBuild(true);
   console.log(`REF   reference build from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned}`);
-  const names = [...OURS, ...SCRIPTS];
-  const contracts = join(ROOT, 'contracts');
-  // The caller's own environment and config, as `forge script` from contracts/ will see them.
   try {
-    execFileSync('forge', ['build'], { cwd: contracts, stdio: ['ignore', 'ignore', 'pipe'] });
+    for (const cmd of ['clean', 'build']) execFileSync('forge', [cmd], { cwd: contracts, stdio: ['ignore', 'ignore', 'pipe'] });
   } catch (e) {
-    throw new Refuse(`forge build in contracts/ failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+    throw new Refuse(`forge clean/build in contracts/ failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
   }
-  const problems = [];
   let local;
   try {
-    local = selectArtifacts(join(contracts, 'out'), names);
+    local = selectArtifacts(join(contracts, got.out), names);
   } catch (e) {
     if (!(e instanceof Refuse)) throw e;
     problems.push(e.message);
@@ -482,9 +531,7 @@ function preDeploy() {
       }
     }
   }
-  for (const p of problems) console.log(`FAIL  ${p}`);
-  console.log(problems.length ? `FAIL: contracts/out is not the committed build; do not deploy from it` : `PASS: contracts/out equals the reference build for ${names.join(', ')}`);
-  return problems.length ? 1 : 0;
+  return report(problems);
 }
 
 (process.argv[2] === '--pre-deploy' && process.argv.length === 3 ? Promise.resolve().then(preDeploy) : main()).then(

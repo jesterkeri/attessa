@@ -205,3 +205,11 @@ test('the repo as committed (TODO addresses): refuses with a clear error, exit 2
   assert.equal(r.stdout, '');
   assert.match(r.stderr, /^check-deploy: DEPLOYMENTS\.md celo-sepolia: Admin is still "TODO/);
 });
+
+test('--pre-deploy refuses a FOUNDRY_* variable before building anything: FAIL, exit 1', () => {
+  const r = spawnSync('node', [CHECK, '--pre-deploy'], { encoding: 'utf8', env: { ...process.env, FOUNDRY_OUT: 'artifacts' } });
+  process.stdout.write(`--- check-deploy --pre-deploy with FOUNDRY_OUT (exit ${r.status})\n${r.stdout}${r.stderr}`);
+  assert.equal(r.status, 1);
+  assert.match(r.stdout, /^FAIL {2}environment sets FOUNDRY_OUT;/m);
+  assert.doesNotMatch(r.stdout, /^REF /m);
+});
