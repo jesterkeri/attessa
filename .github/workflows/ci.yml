@@ -1,0 +1,99 @@
+# Project CI per PIPELINE.md "Stages" (PR rows). The harness workflow stays as installed.
+# Every job here is meant to be a required status check on main and staging.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main, staging, 'feat/**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ts:
+    name: ts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - run: corepack enable
+      - run: pnpm install --frozen-lockfile
+      # core's package types point at dist, so dependents typecheck against a built core.
+      - run: pnpm -r build
+      - run: pnpm -r lint
+      - run: pnpm -r typecheck
+      - run: pnpm -r test
+
+  contracts:
+    name: contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - id: foundry
+        run: echo "version=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+      - run: forge --version
+      - working-directory: contracts
+        run: forge fmt --check
+      - working-directory: contracts
+        run: forge build
+      # Unit + invariant at 64 runs (PIPELINE); 256 runs / depth 50 is nightly.
+      - working-directory: contracts
+        env:
+          FOUNDRY_INVARIANT_RUNS: '64'
+          FOUNDRY_INVARIANT_DEPTH: '50'
+        run: forge test
+      # INV-18: every vector value recomputed with cast, independent of core and viem.
+      - run: python3 -I scripts/check-vectors-oracle.py
+
+  slither:
+    name: slither
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - id: foundry
+        run: echo "version=$(tr -d '[:space:]' < contracts/FOUNDRY_VERSION)" >> "$GITHUB_OUTPUT"
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: ${{ steps.foundry.outputs.version }}
+      - run: pipx install slither-analyzer==0.11.6
+      # Nothing to analyse before the first contract lands; once one exists the config must too.
+      - working-directory: contracts
+        run: |
+          if ! ls src/*.sol >/dev/null 2>&1; then echo "no contracts in contracts/src yet"; exit 0; fi
+          test -f slither.config.json || { echo "contracts/slither.config.json is missing"; exit 1; }
+          slither . --config-file slither.config.json --fail-high
+
+  enclave:
+    name: enclave
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # rustup reads rust-toolchain.toml (exact version, rustfmt, clippy).
+      - run: rustup show active-toolchain || rustup toolchain install
+      - run: cargo fmt --check --manifest-path enclave/Cargo.toml
+      - run: cargo clippy --locked --manifest-path enclave/Cargo.toml -- -D warnings
+      - run: cargo test --locked --manifest-path enclave/Cargo.toml
