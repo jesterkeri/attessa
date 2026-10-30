@@ -11,9 +11,9 @@
 // Needs git and forge on PATH. Exit 0: every check printed OK. Exit 1: a check failed. Exit 2:
 // could not run (bad input, TODO addresses, reference build failed, RPC error).
 
-import { readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -123,9 +123,40 @@ function envWithout(drop, add = {}) {
 const GIT_ENV = envWithout(['GIT_'], { GIT_NO_REPLACE_OBJECTS: '1' });
 const gitRaw = (dir, a, opts = {}) => execFileSync('git', ['--no-replace-objects', '-C', dir, ...a], { env: GIT_ENV, ...opts });
 const git = (dir, ...a) => gitRaw(dir, a, { encoding: 'utf8' }).trim();
-// The reference build reads only the committed foundry.toml: FOUNDRY_* and DAPP_* variables (which
-// override it, e.g. FOUNDRY_OPTIMIZER_RUNS or FOUNDRY_PROFILE) are dropped.
+// FOUNDRY_* and DAPP_* variables (e.g. FOUNDRY_OPTIMIZER_RUNS, FOUNDRY_PROFILE) are dropped.
 const FORGE_ENV = envWithout(['FOUNDRY_', 'DAPP_']);
+const SOLC_VERSION = '0.8.26';
+// The production compiler settings, fixed here rather than read from the committed foundry.toml or
+// remappings.txt: a remapping there can redirect the pinned sources' own relative imports, e.g.
+// `lib/nitro-validator/src/LibBytes.sol=src/evil/LibBytes.sol` (T10 adversary r5 M). They must
+// equal the committed ones, which the deploy scripts compile with, or no runtime code will match:
+// solc records the remappings in the metadata hash. The forge-std remapping only matches imports
+// starting `forge-std/`, which no production source has.
+const REMAPPINGS = ['forge-std/=lib/nitro-validator/lib/forge-std/src/', 'nitro-validator/=lib/nitro-validator/src/'];
+const foundryToml = (solc) => `[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+optimizer = true
+optimizer_runs = 10000
+solc = ${JSON.stringify(solc)}
+offline = true
+auto_detect_remappings = false
+remappings = ${JSON.stringify(REMAPPINGS)}
+`;
+
+/** The svm-installed solc binary forge would use; HOME is replaced for the build itself. */
+function solcPath() {
+  const home = homedir();
+  const dirs = [join(home, '.svm'), process.env.XDG_DATA_HOME && join(process.env.XDG_DATA_HOME, 'svm'), join(home, '.local', 'share', 'svm')];
+  for (const d of dirs.filter(Boolean)) {
+    const p = join(d, SOLC_VERSION, `solc-${SOLC_VERSION}`);
+    if (existsSync(p)) return p;
+  }
+  throw new Refuse(`no solc ${SOLC_VERSION} under ~/.svm or ~/.local/share/svm; run \`cd contracts && forge build\` once to install it`);
+}
+
+const keccak = (buf) => execFileSync('cast', ['keccak', '0x' + buf.toString('hex')], { env: FORGE_ENV, encoding: 'utf8' }).trim().toLowerCase();
 
 /**
  * Writes the committed blobs under `paths` at `rev` into `dest`, byte for byte. Not `git archive`
@@ -133,6 +164,7 @@ const FORGE_ENV = envWithout(['FOUNDRY_', 'DAPP_']);
  * build could see code that is not in the commit (T10 adversary r3). Only regular files allowed.
  */
 function exportBlobs(repo, rev, paths, dest) {
+  const written = {};
   const listing = gitRaw(repo, ['ls-tree', '-r', '-z', '--full-tree', rev, '--', ...paths], { encoding: 'utf8' });
   const entries = listing.split('\0').filter(Boolean);
   if (entries.length === 0) throw new Refuse(`${repo} has nothing at ${paths.join(', ')} in ${rev}`);
@@ -144,14 +176,17 @@ function exportBlobs(repo, rev, paths, dest) {
     }
     const out = join(dest, path);
     mkdirSync(dirname(out), { recursive: true });
-    writeFileSync(out, gitRaw(repo, ['cat-file', 'blob', sha], { maxBuffer: 64 << 20 }));
+    written[path] = gitRaw(repo, ['cat-file', 'blob', sha], { maxBuffer: 64 << 20 });
+    writeFileSync(out, written[path]);
   }
+  return written;
 }
 
 /**
- * Compiles the production contracts from HEAD's committed contracts/ (foundry.toml and
- * remappings included) plus the nitro-validator commit HEAD records, in a fresh temp dir with
- * `forge build --force`. Returns the artifacts and what they were built from.
+ * Compiles the production contracts from HEAD's committed contracts/src plus the nitro-validator
+ * commit HEAD records, in a fresh temp dir with `forge build --force`, under a generated
+ * foundry.toml and an empty HOME (so no ~/.foundry/foundry.toml applies; T10 adversary r5 G).
+ * Returns the artifacts and what they were built from.
  */
 function referenceBuild() {
   let head, gitlink;
@@ -170,20 +205,32 @@ function referenceBuild() {
   const dir = mkdtempSync(join(tmpdir(), 'check-deploy-ref-'));
   try {
     // Only what the production contracts compile from: no test/ or script/ (they need forge-std).
-    exportBlobs(ROOT, 'HEAD', ['contracts/src', 'contracts/foundry.toml', 'contracts/remappings.txt'], dir);
-    exportBlobs(`${ROOT}/contracts/lib/nitro-validator`, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
+    const own = exportBlobs(ROOT, 'HEAD', ['contracts/src/EnclaveRegistry.sol'], dir);
+    const validator = exportBlobs(`${ROOT}/contracts/lib/nitro-validator`, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
+    writeFileSync(join(dir, 'contracts', 'foundry.toml'), foundryToml(solcPath()));
+    const home = join(dir, 'home');
+    mkdirSync(home);
     // forge compiles src/ plus what it imports; the validator stack is named explicitly.
     const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => SOURCES[n])];
     const out = join(dir, 'contracts', 'out');
     // cwd is the temp dir too, so forge loads no .env from wherever check-deploy was started.
     execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), '--out', out, ...paths.map((p) => join(dir, 'contracts', p))], {
       cwd: dir,
-      env: FORGE_ENV,
+      env: { ...FORGE_ENV, HOME: home },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     const arts = selectArtifacts(out);
+    // Every source solc compiled must be a pinned nitro-validator blob or, for EnclaveRegistry,
+    // HEAD's EnclaveRegistry.sol, by path and by content.
+    const allowed = {};
+    for (const [p, buf] of Object.entries(validator)) allowed[`lib/nitro-validator/${p}`] = buf;
     for (const n of OURS) {
       if (Object.keys(arts[n].deployedBytecode.linkReferences ?? {}).length) throw new Refuse(`${n} artifact has unlinked libraries`);
+      for (const [src, { keccak256 }] of Object.entries(arts[n].metadata.sources)) {
+        const buf = src === 'src/EnclaveRegistry.sol' && n === 'EnclaveRegistry' ? own['contracts/src/EnclaveRegistry.sol'] : allowed[src];
+        if (!buf) throw new Refuse(`${n} reference artifact compiled ${src}, which is neither pinned nitro-validator source nor src/EnclaveRegistry.sol`);
+        if (keccak(buf) !== keccak256.toLowerCase()) throw new Refuse(`${n} reference artifact compiled ${src} with different content than the commit`);
+      }
     }
     return { arts, head, pinned };
   } catch (e) {
