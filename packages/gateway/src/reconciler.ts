@@ -27,7 +27,7 @@ export interface ReconcilerDeps {
   /** Rows whose settle the request handler is sending right now (never re-sent by the reconciler). */
   sending: ReadonlySet<string>;
   /** Rows a request handler is answering right now (their `settled` → `delivered` is the handler's). */
-  live: ReadonlySet<string>;
+  live: { has(requestId: string): boolean };
   log: (event: string, fields: Record<string, unknown>) => void;
 }
 
@@ -56,6 +56,10 @@ export class Reconciler {
   private readonly d: ReconcilerDeps;
   constructor(d: ReconcilerDeps) {
     this.d = d;
+    // A new process: none of its handlers answers any row yet, and no handler of an earlier process ever
+    // will again. The rows already open count "no live response" from their last stored write (the latest
+    // moment on record; a crash time is not stored), so a restart never hands them a fresh 30 s.
+    for (const row of d.db.inStates(['settling', 'settle_pending', 'settled'])) this.unwatchedSince.set(row.request_id, row.updated_at);
   }
 
   /** SPEC §6.3 at startup: rows left in `payment_verified` / `executing` by a crash → `exec_failed`, never settled. */

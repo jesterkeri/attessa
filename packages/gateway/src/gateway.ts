@@ -72,6 +72,27 @@ class Fail {
   }
 }
 
+/**
+ * Rows a request handler is answering right now, counted per handler: a duplicate request for a `settled` row
+ * can be delivering it while the first handler still is (SPEC §6.2 step 4 releases the lock before step 12).
+ * `delete` drops one handler and says whether none is left.
+ */
+export class LiveRows {
+  private readonly n = new Map<string, number>();
+  has(requestId: string): boolean {
+    return this.n.has(requestId);
+  }
+  add(requestId: string): void {
+    this.n.set(requestId, (this.n.get(requestId) ?? 0) + 1);
+  }
+  delete(requestId: string): boolean {
+    const left = (this.n.get(requestId) ?? 1) - 1;
+    if (left > 0) this.n.set(requestId, left);
+    else this.n.delete(requestId);
+    return left <= 0;
+  }
+}
+
 export interface Gateway {
   app: FastifyInstance;
   reconciler: Reconciler;
@@ -80,7 +101,7 @@ export interface Gateway {
   close(): Promise<void>;
   /** In-process sets, exposed for tests and the reconciler. */
   sending: Set<string>;
-  live: Set<string>;
+  live: LiveRows;
 }
 
 export function createGateway(deps: GatewayDeps): Gateway {
@@ -89,7 +110,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
   const log = deps.log ?? ((event, fields) => process.stdout.write(`${JSON.stringify({ t: now(), event, ...fields })}\n`));
   const locks = new Set<string>();
   const sending = new Set<string>();
-  const live = new Set<string>();
+  const live = new LiveRows();
   const limiter = new RateLimiter(() => now());
   let inFlight = 0;
   let signerCache: { signer: Address; at: number } | null = null;
@@ -233,8 +254,8 @@ export function createGateway(deps: GatewayDeps): Gateway {
       });
       reply.raw.once('close', () => {
         if (finished) return;
-        live.delete(row.request_id);
-        db.transition(row.request_id, ['settled'], 'delivery_failed', now());
+        // Another handler still delivering this row decides its outcome (and keeps the reconciler off it).
+        if (live.delete(row.request_id)) db.transition(row.request_id, ['settled'], 'delivery_failed', now());
       });
     }
     return reply
