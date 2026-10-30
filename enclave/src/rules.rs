@@ -1,7 +1,7 @@
 //! Workload: payment check, rules v1 (SPEC §4.3).
 
-use crate::formats::{is_dec, jcs, parse_address, parse_hex};
-use serde::Deserialize;
+use crate::formats::{is_dec, jcs, parse_address, parse_hex, parse_strict};
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub const MAX_BODY_BYTES: usize = 2048;
@@ -9,7 +9,7 @@ pub const MAX_BODY_BYTES: usize = 2048;
 /// The deny list shipped in the image (R2).
 pub const DENYLIST_V1: &str = include_str!("../rules/denylist-v1.json");
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct RequestBody {
     pub chain_id: String,
@@ -18,7 +18,7 @@ pub struct RequestBody {
     pub amount: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Inputs {
     pub block: Block,
@@ -26,7 +26,7 @@ pub struct Inputs {
     pub source: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Block {
     pub number: String,
@@ -34,7 +34,7 @@ pub struct Block {
     pub timestamp: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct PayTo {
     pub address: String,
@@ -53,7 +53,7 @@ pub fn parse_request(body: &[u8], configured_chain_id: &str) -> Option<RequestBo
     if body.len() > MAX_BODY_BYTES {
         return None;
     }
-    let req: RequestBody = serde_json::from_slice(body).ok()?;
+    let req: RequestBody = parse_strict(body)?;
     let ok = req.chain_id == configured_chain_id
         && parse_address(&req.pay_to).is_some()
         && parse_address(&req.asset).is_some()
@@ -61,15 +61,21 @@ pub fn parse_request(body: &[u8], configured_chain_id: &str) -> Option<RequestBo
     ok.then_some(req)
 }
 
+/// `forno` or `buy:<capability-id>`, the id being `[A-Za-z0-9._:/-]+` (no quotes, backslashes,
+/// spaces or controls).
 fn is_source(s: &str) -> bool {
     s == "forno"
-        || s.strip_prefix("buy:")
-            .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_graphic()))
+        || s.strip_prefix("buy:").is_some_and(|id| {
+            !id.is_empty()
+                && id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b".:_/-".contains(&b))
+        })
 }
 
 /// Inputs grammar and the address check. `None` means `bad_inputs`.
 pub fn parse_inputs(raw: &str, request: &RequestBody) -> Option<Inputs> {
-    let i: Inputs = serde_json::from_str(raw).ok()?;
+    let i: Inputs = parse_strict(raw.as_bytes())?;
     let ok = is_dec(&i.block.number)
         && parse_hex(&i.block.hash, Some(32)).is_some()
         && is_dec(&i.block.timestamp)

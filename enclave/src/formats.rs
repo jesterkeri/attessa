@@ -1,7 +1,18 @@
 //! Shared formats from SPEC §2: hex, decimal, JCS, origins, hashes, user_data, EIP-712.
 
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha3::{Digest, Keccak256};
+
+/// The one JSON parse every message, body and inputs object goes through.
+/// The typed parse refuses unknown and duplicate fields. Serde also accepts a JSON array
+/// for any struct (its fields in order), so the typed value is serialised back and must
+/// equal the input: only the exact object shape, at every nesting level, survives.
+pub fn parse_strict<'a, T: Deserialize<'a> + Serialize>(json: &'a [u8]) -> Option<T> {
+    let typed: T = serde_json::from_slice(json).ok()?;
+    let original: Value = serde_json::from_slice(json).ok()?;
+    (serde_json::to_value(&typed).ok()? == original).then_some(typed)
+}
 
 pub fn keccak(data: &[u8]) -> [u8; 32] {
     Keccak256::digest(data).into()

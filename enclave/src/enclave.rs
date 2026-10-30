@@ -1,5 +1,6 @@
 //! Message handling (SPEC §4.1, §4.2, §4.4). The key lives only in `Configured::key` (INV-15).
 
+use crate::formats::parse_strict;
 use crate::formats::{
     binding_user_data, domain_separator, jcs, keccak, normalize_origin, origin_hash, parse_address,
     parse_bytes32, parse_u256, release_id, request_hash, signer_address, to_hex, typed_digest,
@@ -9,7 +10,7 @@ use crate::rules;
 use base64::engine::general_purpose::STANDARD as B64;
 use base64::Engine;
 use k256::ecdsa::SigningKey;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use serde_json::value::RawValue;
 use serde_json::{json, Value};
 use std::io::{self, Read, Write};
@@ -49,13 +50,7 @@ pub struct Enclave<N: Nsm> {
     state: Option<Configured>,
 }
 
-#[derive(Deserialize)]
-struct Tag {
-    #[serde(rename = "type")]
-    kind: String,
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct ConfigureMsg {
     #[serde(rename = "type")]
@@ -67,14 +62,14 @@ struct ConfigureMsg {
     rpc_allowed_chains: Vec<String>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct AttestMsg {
     #[serde(rename = "type")]
     _kind: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 struct LivenessMsg {
     #[serde(rename = "type")]
@@ -82,7 +77,7 @@ struct LivenessMsg {
     challenge: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 struct EvaluateMsg<'a> {
     #[serde(rename = "type")]
@@ -113,9 +108,13 @@ impl<N: Nsm> Enclave<N> {
 
     /// Handles one frame payload and returns the response payload (JCS JSON).
     pub fn handle(&mut self, frame: &[u8]) -> Result<Vec<u8>, NsmUnavailable> {
-        let reply = match serde_json::from_slice::<Tag>(frame) {
-            Err(_) => error("bad_frame"),
-            Ok(tag) => match (tag.kind.as_str(), self.state.is_some()) {
+        // Dispatch only: each handler then parses its message with `parse_strict`.
+        let kind = serde_json::from_slice::<Value>(frame)
+            .ok()
+            .and_then(|v| v.get("type").and_then(Value::as_str).map(str::to_owned));
+        let reply = match kind {
+            None => error("bad_frame"),
+            Some(kind) => match (kind.as_str(), self.state.is_some()) {
                 ("configure", false) => self.configure(frame)?,
                 ("configure", true) => error("bad_frame"),
                 ("attest" | "liveness" | "evaluate", false) => error("not_configured"),
@@ -129,7 +128,7 @@ impl<N: Nsm> Enclave<N> {
     }
 
     fn configure(&mut self, frame: &[u8]) -> Result<Value, NsmUnavailable> {
-        let Some(msg) = serde_json::from_slice::<ConfigureMsg>(frame).ok() else {
+        let Some(msg) = parse_strict::<ConfigureMsg>(frame) else {
             return Ok(error("bad_frame"));
         };
         let (Some(chain_word), Some(registry), Some(agent_word), Some(origin)) = (
@@ -201,7 +200,7 @@ impl<N: Nsm> Enclave<N> {
     }
 
     fn attest(&mut self, frame: &[u8]) -> Result<Value, NsmUnavailable> {
-        if serde_json::from_slice::<AttestMsg>(frame).is_err() {
+        if parse_strict::<AttestMsg>(frame).is_none() {
             return Ok(error("bad_frame"));
         }
         let s = self.state.as_ref().expect("configured");
@@ -210,9 +209,8 @@ impl<N: Nsm> Enclave<N> {
 
     fn liveness(&self, frame: &[u8]) -> Value {
         let s = self.state.as_ref().expect("configured");
-        let Some(challenge) = serde_json::from_slice::<LivenessMsg>(frame)
-            .ok()
-            .and_then(|m| parse_bytes32(&m.challenge))
+        let Some(challenge) =
+            parse_strict::<LivenessMsg>(frame).and_then(|m| parse_bytes32(&m.challenge))
         else {
             return error("bad_frame");
         };
@@ -238,7 +236,7 @@ impl<N: Nsm> Enclave<N> {
 
     fn evaluate(&self, frame: &[u8]) -> Value {
         let s = self.state.as_ref().expect("configured");
-        let Ok(msg) = serde_json::from_slice::<EvaluateMsg>(frame) else {
+        let Some(msg) = parse_strict::<EvaluateMsg>(frame) else {
             return error("bad_frame");
         };
         let method_ok =

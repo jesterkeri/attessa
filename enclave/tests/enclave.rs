@@ -326,8 +326,16 @@ fn bad_inputs_cases() {
     tweak(&["source"], json!("buy:"));
     tweak(&["source"], json!("rpc"));
     tweak(&["source"], json!("buy:a b"));
+    tweak(&["source"], json!("buy:a\"b"));
+    tweak(&["source"], json!("buy:a\\b"));
     tweak(&["extra"], json!("1"));
     tweak(&["payTo", "extra"], json!("1"));
+    // Struct positions given as arrays of their fields (serde's visit_seq), one level at a time.
+    tweak(
+        &["block"],
+        json!(["123", format!("0x{}", "12".repeat(32)), "1761782400"]),
+    );
+    tweak(&["payTo"], json!([PAY_TO, "0x", "3", "5"]));
     for i in cases {
         assert_eq!(
             eval_with(&mut e, &b, i.clone()),
@@ -336,7 +344,7 @@ fn bad_inputs_cases() {
         );
     }
     let mut ok = inputs(PAY_TO, "0x", "3");
-    ok["source"] = json!("buy:celo-rpc.v1");
+    ok["source"] = json!("buy:celo-rpc.v1/A_b:2");
     assert!(eval_with(&mut e, &b, ok).get("proof").is_some());
 }
 
