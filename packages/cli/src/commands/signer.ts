@@ -134,7 +134,7 @@ interface CertPlan {
 }
 
 /** Steps that cache the certificates CertManager lacks, in chain order. Expired certificates can't be used. */
-async function certSteps(c: Chain, a: ParsedAttestation, from: Address, now: bigint): Promise<CertPlan & { plan: ReturnType<typeof hintPlan> }> {
+async function certSteps(c: Chain, a: ParsedAttestation, from: Address, now: bigint, E: typeof ERR | typeof RENEW = ERR): Promise<CertPlan & { plan: ReturnType<typeof hintPlan> }> {
   const plan = hintPlan(a);
   const validator = ((await read(c, c.registry, REGISTRY_ABI, 'nitroValidator', [])) as Address).toLowerCase() as Address;
   const cm = ((await read(c, validator, VALIDATOR_ABI, 'certManager', [])) as Address).toLowerCase() as Address;
@@ -143,10 +143,10 @@ async function certSteps(c: Chain, a: ParsedAttestation, from: Address, now: big
   let cached = 0;
   let parentReady = true;
   for (const cert of plan.certs) {
-    if (cert.notAfter <= now) throw ERR.certExpired();
+    if (cert.notAfter <= now) throw E.certExpired();
     const v = await read(c, cm, CERT_MANAGER_ABI, 'loadVerified', [cert.certHash]);
     if (v.pubKey !== '0x') {
-      if ((v.notAfter as bigint) <= now) throw ERR.certExpired();
+      if ((v.notAfter as bigint) <= now) throw E.certExpired();
       cached++;
       continue;
     }
@@ -187,9 +187,7 @@ async function checkAttestation(c: Chain, a: ParsedAttestation, agentId: bigint,
   const not = renew ? 'Not renewed' : 'Not registered';
   const ts = a.timestampMs / 1000n;
   if (ts > now + MAX_FUTURE_SKEW) {
-    // not in FLOWS: the reason words for the "R: renew refused" row.
-    if (renew) throw ERR.renewRefused('attestation_from_future', "the machine's report is dated ahead of Celo's clock", false);
-    throw new CliError('attestation_from_future', "Not registered: the machine's report is dated ahead of Celo's clock.", 'Check the host clock, then run `attessa signer register --fresh`.');
+    throw (renew ? RENEW : ERR).attestationFromFuture();
   }
   const age = ts > now ? 0n : now - ts;
   const ageMinutes = Number((age + 59n) / 60n);
@@ -215,9 +213,9 @@ function noEnclaveKey(not: string): CliError {
   return new CliError('invalid_public_key', `${not}: the report carries no enclave key.`, 'Start the approved build with `attessa enclave start`.');
 }
 
-async function checkEndpoint(c: Chain, oh: Hex, agentId: bigint, origin: string): Promise<{ operator: Address }> {
+async function checkEndpoint(c: Chain, oh: Hex, agentId: bigint, origin: string, E: typeof ERR | typeof RENEW = ERR): Promise<{ operator: Address }> {
   const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [oh]);
-  if (ENDPOINT_STATUS[e.status as number] !== 'Active' || (e.agentId as bigint) !== agentId) throw ERR.endpointInactive(origin, agentId.toString());
+  if (ENDPOINT_STATUS[e.status as number] !== 'Active' || (e.agentId as bigint) !== agentId) throw E.endpointInactive(origin, agentId.toString());
   return { operator: (e.operator as string).toLowerCase() as Address };
 }
 
@@ -319,16 +317,16 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const agent = agentId.toString();
   const oh = (s.originHash as string).toLowerCase() as Hex;
   const origin = await originFor(c, oh, undefined, g.network === 'local');
-  const { operator } = await checkEndpoint(c, oh, agentId, origin);
+  const { operator } = await checkEndpoint(c, oh, agentId, origin, RENEW);
   const from = (c.account?.address.toLowerCase() as Address | undefined) ?? operator;
-  if (from !== operator || operator !== (s.operator as string).toLowerCase()) throw ERR.notOperator(from, origin);
+  if (from !== operator || operator !== (s.operator as string).toLowerCase()) throw RENEW.notOperator(from, origin);
   // renewSigner repeats registerSigner steps 2-7 (SPEC §3.4), so the same checks run before any certificate is cached.
   const { rid, ageMinutes, binding } = await checkAttestation(c, a, agentId, now, true);
   const field = bindingField(binding, c, agentId, oh);
   if (field !== null) throw RENEW.bindingMismatch(bindingWords(binding)(field), String(field));
   if (rid !== (s.releaseId as string).toLowerCase()) throw ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
 
-  const certs = await certSteps(c, a, from, now);
+  const certs = await certSteps(c, a, from, now, RENEW);
   const renew: Step = {
     label: 'renewSigner',
     to: c.registry,

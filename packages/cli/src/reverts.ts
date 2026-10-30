@@ -19,6 +19,8 @@ export interface RevertContext {
 /** Maps a registry or CertManager revert to its FLOWS §8 line. Unknown reverts keep their name. */
 export function revertToError(r: Revert | null, message: string, c: RevertContext): CliError {
   const origin = c.origin ?? 'this origin';
+  // `signer renew` shares registerSigner's checks; its refusals read "Not renewed" (FLOWS §8 R: renew refused).
+  const E = c.renewing ? RENEW : ERR;
   switch (r?.name) {
     case 'NotOwner':
       return ERR.notOwner(c.agent, c.owner ?? 'unknown', c.from);
@@ -32,18 +34,21 @@ export function revertToError(r: Revert | null, message: string, c: RevertContex
       return ERR.originTaken(origin, 'another agent');
     case 'EndpointInactive':
     case 'EndpointMismatch':
-      return ERR.endpointInactive(origin, c.agent);
+      return E.endpointInactive(origin, c.agent);
     case 'NotOperator':
-      return ERR.notOperator(c.from, origin);
+      return E.notOperator(c.from, origin);
+    case 'AttestationFromFuture':
+      return E.attestationFromFuture();
     case 'AttestationStale':
-      return ERR.attestationStale(c.ageMinutes ?? 31);
+      // The age was measured when planning; reverting proves it is now past 30 minutes.
+      return c.renewing ? RENEW.attestationStale() : ERR.attestationStale(Math.max(c.ageMinutes ?? 31, 31));
     case 'DebugPcrs':
-      return (c.renewing ? RENEW : ERR).debugMode();
+      return E.debugMode();
     case 'ReleaseNotApproved':
-      return (c.renewing ? RENEW : ERR).wrongBuild(c.agent, c.releaseId ?? '');
+      return E.wrongBuild(c.agent, c.releaseId ?? '');
     case 'BindingMismatch': {
       const field = Number(r.args[0] ?? 0);
-      return (c.renewing ? RENEW : ERR).bindingMismatch(c.bindingWords ? c.bindingWords(field) : 'a different binding', String(field));
+      return E.bindingMismatch(c.bindingWords ? c.bindingWords(field) : 'a different binding', String(field));
     }
     case 'SignerExists':
       return ERR.signerExists(c.signer ?? '');
@@ -54,7 +59,7 @@ export function revertToError(r: Revert | null, message: string, c: RevertContex
     case 'ReleaseMismatch':
       return ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
     case 'Error':
-      if (String(r.args[0]).includes('cert expired')) return ERR.certExpired();
+      if (String(r.args[0]).includes('cert expired')) return E.certExpired();
       return new CliError('reverted', `The transaction would revert: ${String(r.args[0])}. Nothing was sent.`);
     default:
       return new CliError('reverted', `The transaction would revert${r ? ` (${r.name})` : ''}: ${message}. Nothing was sent.`);

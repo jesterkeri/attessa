@@ -145,14 +145,26 @@ export const ERR = {
     new CliError('no_registry', `No EnclaveRegistry address is known for ${network}.`, 'Set ATTESSA_REGISTRY to the registry address.'),
   signerExists: (signer: string) =>
     new CliError('signer_exists', `Not registered: signer ${short(signer)} is already registered.`, 'To extend it without a restart: attessa signer renew.'),
+  attestationFromFuture: () =>
+    new CliError('attestation_from_future', "Not registered: the machine's report is dated ahead of Celo's clock.", 'Check the host clock, then run `attessa signer register --fresh`.'),
   usage: (msg: string) => new CliError('usage', msg),
 } as const;
 
 /**
  * `signer renew` refusals for the checks it shares with registration: FLOWS §8 "R: renew refused" with the
- * register rows' reason words. // not in FLOWS: that row names none of these codes.
+ * register rows' reason words, and advice that works for a running key (a fresh report from the same machine,
+ * never `signer register`, which would hit SignerExists). // not in FLOWS: that row names none of these codes.
  */
 export const RENEW = {
+  // No age: a revert can come blocks after the age was measured.
+  attestationStale: () => ERR.renewRefused('attestation_stale', "the machine's report is more than 30 minutes old, the most Celo accepts", false),
+  attestationFromFuture: () => ERR.renewRefused('attestation_from_future', "the machine's report is dated ahead of Celo's clock", false),
+  certExpired: () => ERR.renewRefused('cert_expired', 'the certificate chain in this attestation has expired', false),
+  // The register rows' advice already works for renew.
+  endpointInactive: (origin: string, agent: string) =>
+    new CliError('endpoint_inactive', `Not renewed: ${origin} isn't an active endpoint for agent ${agent}.`, 'Add it with `attessa endpoint add`.'),
+  notOperator: (address: string, origin: string) =>
+    new CliError('not_operator', `Not renewed: ${address} isn't the operator for ${origin}.`, 'Run from the operator wallet set in `attessa endpoint add`.'),
   debugMode: () => ERR.renewRefused('debug_pcrs', "the machine was started in debug mode, which AWS doesn't sign for", false),
   wrongBuild: (agent: string, rid: string) =>
     ERR.renewRefused('release_not_approved', `this machine runs a build agent ${agent} hasn't approved (release ${short(rid)})`, false),
