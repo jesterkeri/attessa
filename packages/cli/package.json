@@ -7,7 +7,16 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p .",
-    "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "typecheck": "tsc -p ../core && tsc -p ../seller-host --noEmit && tsc -p . --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "@attessa/seller-host": "workspace:*",
+    "viem": "2.57.13"
+  },
+  "bin": {
+    "attessa": "dist/bin.js",
+    "attest": "dist/bin.js"
   }
 }

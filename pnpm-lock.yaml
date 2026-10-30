@@ -18,7 +18,17 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.5)
 
-  packages/cli: {}
+  packages/cli:
+    dependencies:
+      '@attessa/core':
+        specifier: workspace:*
+        version: link:../core
+      '@attessa/seller-host':
+        specifier: workspace:*
+        version: link:../seller-host
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@5.9.3)
 
   packages/core:
     dependencies:
@@ -54,7 +64,21 @@ importers:
 
   packages/sdk: {}
 
-  packages/seller-host: {}
+  packages/seller-host:
+    dependencies:
+      '@attessa/core':
+        specifier: workspace:*
+        version: link:../core
+      better-sqlite3:
+        specifier: 13.0.3
+        version: 13.0.3
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@5.9.3)
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 7.6.13
+        version: 7.6.13
 
 packages:
 

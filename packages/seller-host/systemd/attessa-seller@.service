@@ -1,0 +1,34 @@
+# Seller-host for one network: configures the enclave, fetches inputs, serves 127.0.0.1:<7070|7071> (SPEC §5).
+[Unit]
+Description=Attessa seller-host (%i)
+Requires=attessa-vsock@%i.service
+After=attessa-vsock@%i.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=attessa-seller
+Group=attessa-seller
+SupplementaryGroups=attessa-gw
+EnvironmentFile=/etc/attessa/%i.env
+EnvironmentFile=-/etc/attessa/seller-%i.secret
+ExecStart=/usr/bin/node /opt/attessa/packages/seller-host/dist/main.js /etc/attessa/seller-%i.json
+StateDirectory=attessa/seller-%i
+StateDirectoryMode=0750
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
