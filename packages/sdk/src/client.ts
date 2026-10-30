@@ -429,8 +429,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * The authorization was used on chain (`settlement`). First call getResult (INV-23): a result
    * that passes V10 → verified, one that fails → paid_but_rejected, none → settled_after_refusal
    * for a refused call or paid_but_rejected{missing_proof} for an uncertain one. "None" is the
-   * gateway's `result_not_found`: while /v1/results is unreachable an uncertain call stays
-   * `uncertain` (settlement recorded), so getResult / reconcilePending can still verify it (INV-13).
+   * gateway's `result_not_found`: while /v1/results is unreachable a refused or uncertain call keeps
+   * its state (settlement recorded), so getResult / reconcilePending can still verify it (INV-13).
    */
   async function settledPath(n: Net, entry: PendingEntry, settlement: Settlement, meta: CallMeta): Promise<CallResult> {
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
@@ -447,7 +447,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     if (entry.state === 'refused') {
       const f: Partial<CallResult> = { settlementTx: settlement.tx };
       if (entry.code) f.code = parseCode(entry.code);
-      return finish(entry, 'settled_after_refusal', meta, f);
+      return finish(entry, noResult ? 'settled_after_refusal' : 'refused', meta, f);
     }
     if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: settlement.tx });
     return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: settlement.tx });
@@ -845,9 +845,10 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const n = await net();
       const entry = await entryOf(lc(requestId));
       if (entry.nonce === null) return { ...baseResult(entry, 'stopped'), code: 'missing_nonce' };
+      // V12: a terminal entry is decided. Report it as stored; never rewrite it.
+      if (isTerminal(entry)) return current(entry, {});
       const f = await fetchResult(n, entry);
       if (f.kind === 'result') {
-        if (isTerminal(entry) && entry.state !== 'verified') return current(entry, {});
         return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, {});
       }
       const r = current(entry, {});
