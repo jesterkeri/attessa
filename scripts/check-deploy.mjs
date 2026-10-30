@@ -4,6 +4,13 @@
 // Read-only: eth_chainId, eth_getCode and eth_call only.
 //
 //   node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]
+//   node scripts/check-deploy.mjs --pre-deploy
+//
+// --pre-deploy, before every deploy simulation and broadcast: runs `forge build` in contracts/ as
+// `forge script` would, then requires contracts/out's deploy scripts and production contracts to
+// equal the reference build (bytecode and runtime code, metadata included) and to be compiled only
+// from committed blobs. A committed remapping, foundry.toml or source that swaps the in-script
+// guard (T10 adversary r5 M, r6 D, r7 X) fails here. Exit 0: PASS. Exit 1: FAIL. Exit 2: could not run.
 //
 // The reference bytecode is compiled fresh, in a temp dir, from HEAD's committed contracts/ and
 // the nitro-validator commit HEAD pins. Nothing in the working tree (uncommitted edits,
@@ -39,6 +46,8 @@ const PINS = {
   },
 };
 const OURS = ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'];
+// --pre-deploy also checks the deploy scripts; DeployBase.sol is in both scripts' metadata sources.
+const SCRIPTS = ['DeployValidatorStack', 'DeployRegistry'];
 // The source each reference artifact must be compiled from (its metadata compilationTarget), so a
 // same-named contract elsewhere in the tree cannot stand in for it (T10 adversary r4 S).
 const SOURCES = {
@@ -46,6 +55,8 @@ const SOURCES = {
   CertManager: 'lib/nitro-validator/src/CertManager.sol',
   NitroValidator: 'lib/nitro-validator/src/NitroValidator.sol',
   EnclaveRegistry: 'src/EnclaveRegistry.sol',
+  DeployValidatorStack: 'script/DeployValidatorStack.s.sol',
+  DeployRegistry: 'script/DeployRegistry.s.sol',
 };
 // Each contract's immutables in declaration order. Solidity numbers AST ids in source order, so
 // sorting an artifact's immutableReferences ids gives the same order.
@@ -156,7 +167,8 @@ function solcPath() {
   throw new Refuse(`no solc ${SOLC_VERSION} under ~/.svm or ~/.local/share/svm; run \`cd contracts && forge build\` once to install it`);
 }
 
-const keccak = (buf) => execFileSync('cast', ['keccak', '0x' + buf.toString('hex')], { env: FORGE_ENV, encoding: 'utf8' }).trim().toLowerCase();
+// Hex on stdin, not argv: forge-std sources exceed the argument size limit.
+const keccak = (buf) => execFileSync('cast', ['keccak'], { input: '0x' + buf.toString('hex'), env: FORGE_ENV, encoding: 'utf8' }).trim().toLowerCase();
 
 /**
  * Writes the committed blobs under `paths` at `rev` into `dest`, byte for byte. Not `git archive`
@@ -186,9 +198,10 @@ function exportBlobs(repo, rev, paths, dest) {
  * Compiles the production contracts from HEAD's committed contracts/src plus the nitro-validator
  * commit HEAD records, in a fresh temp dir with `forge build --force`, under a generated
  * foundry.toml and an empty HOME (so no ~/.foundry/foundry.toml applies; T10 adversary r5 G).
- * Returns the artifacts and what they were built from.
+ * With `withScripts`, also HEAD's contracts/script and the forge-std commit nitro-validator pins.
+ * Returns the artifacts, the committed blob for each source path, and what they were built from.
  */
-function referenceBuild() {
+function referenceBuild(withScripts = false) {
   let head, gitlink;
   try {
     head = git(ROOT, 'rev-parse', 'HEAD');
@@ -204,14 +217,23 @@ function referenceBuild() {
   }
   const dir = mkdtempSync(join(tmpdir(), 'check-deploy-ref-'));
   try {
-    // Only what the production contracts compile from: no test/ or script/ (they need forge-std).
-    const own = exportBlobs(ROOT, 'HEAD', ['contracts/src/EnclaveRegistry.sol'], dir);
-    const validator = exportBlobs(`${ROOT}/contracts/lib/nitro-validator`, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
+    // Only what the production contracts (and, withScripts, the deploy scripts) compile from.
+    const scriptFiles = ['script/DeployBase.sol', ...SCRIPTS.map((n) => SOURCES[n])].map((p) => `contracts/${p}`);
+    const own = exportBlobs(ROOT, 'HEAD', ['contracts/src/EnclaveRegistry.sol', ...(withScripts ? scriptFiles : [])], dir);
+    const nv = `${ROOT}/contracts/lib/nitro-validator`;
+    const validator = exportBlobs(nv, pinned, ['src'], join(dir, 'contracts/lib/nitro-validator'));
+    let forgeStd = {};
+    if (withScripts) {
+      const [, type, stdCommit] = git(nv, 'ls-tree', pinned, 'lib/forge-std').split(/\s+/);
+      if (type !== 'commit') throw new Refuse(`nitro-validator ${pinned} does not record lib/forge-std as a submodule`);
+      forgeStd = exportBlobs(`${nv}/lib/forge-std`, stdCommit, ['src'], join(dir, 'contracts/lib/nitro-validator/lib/forge-std'));
+    }
     writeFileSync(join(dir, 'contracts', 'foundry.toml'), foundryToml(solcPath()));
     const home = join(dir, 'home');
     mkdirSync(home);
     // forge compiles src/ plus what it imports; the validator stack is named explicitly.
-    const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator'].map((n) => SOURCES[n])];
+    const names = withScripts ? [...OURS, ...SCRIPTS] : OURS;
+    const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator', ...(withScripts ? SCRIPTS : [])].map((n) => SOURCES[n])];
     const out = join(dir, 'contracts', 'out');
     // cwd is the temp dir too, so forge loads no .env from wherever check-deploy was started.
     execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), '--out', out, ...paths.map((p) => join(dir, 'contracts', p))], {
@@ -219,20 +241,14 @@ function referenceBuild() {
       env: { ...FORGE_ENV, HOME: home },
       stdio: ['ignore', 'ignore', 'pipe'],
     });
-    const arts = selectArtifacts(out);
-    // Every source solc compiled must be a pinned nitro-validator blob or, for EnclaveRegistry,
-    // HEAD's EnclaveRegistry.sol, by path and by content.
-    const allowed = {};
-    for (const [p, buf] of Object.entries(validator)) allowed[`lib/nitro-validator/${p}`] = buf;
-    for (const n of OURS) {
-      if (Object.keys(arts[n].deployedBytecode.linkReferences ?? {}).length) throw new Refuse(`${n} artifact has unlinked libraries`);
-      for (const [src, { keccak256 }] of Object.entries(arts[n].metadata.sources)) {
-        const buf = src === 'src/EnclaveRegistry.sol' && n === 'EnclaveRegistry' ? own['contracts/src/EnclaveRegistry.sol'] : allowed[src];
-        if (!buf) throw new Refuse(`${n} reference artifact compiled ${src}, which is neither pinned nitro-validator source nor src/EnclaveRegistry.sol`);
-        if (keccak(buf) !== keccak256.toLowerCase()) throw new Refuse(`${n} reference artifact compiled ${src} with different content than the commit`);
-      }
-    }
-    return { arts, head, pinned };
+    const arts = selectArtifacts(out, names);
+    const blobs = {};
+    for (const [p, buf] of Object.entries(validator)) blobs[`lib/nitro-validator/${p}`] = buf;
+    for (const [p, buf] of Object.entries(forgeStd)) blobs[`lib/nitro-validator/lib/forge-std/${p}`] = buf;
+    for (const [p, buf] of Object.entries(own)) blobs[p.replace(/^contracts\//, '')] = buf;
+    const bad = sourceProblems(arts, names, blobs, 'reference');
+    if (bad.length) throw new Refuse(bad[0]);
+    return { arts, blobs, head, pinned };
   } catch (e) {
     if (e instanceof Refuse) throw e;
     throw new Refuse(`reference build failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
@@ -242,12 +258,35 @@ function referenceBuild() {
 }
 
 /**
- * For each of OURS, the one artifact under `out` whose metadata compilationTarget is exactly
+ * Every source each artifact's metadata lists must be a committed blob, by path and by keccak256:
+ * pinned nitro-validator source only for the validator stack, plus HEAD's src/EnclaveRegistry.sol
+ * for EnclaveRegistry, plus HEAD's script/ and pinned forge-std for the deploy scripts.
+ * Returns one message per problem.
+ */
+function sourceProblems(arts, names, blobs, label) {
+  const problems = [];
+  const allowedFor = (n, src) =>
+    src.startsWith('lib/nitro-validator/src/') ||
+    (src === 'src/EnclaveRegistry.sol' && (n === 'EnclaveRegistry' || SCRIPTS.includes(n))) ||
+    (SCRIPTS.includes(n) && (src.startsWith('script/') || src.startsWith('lib/nitro-validator/lib/forge-std/src/')));
+  for (const n of names) {
+    if (Object.keys(arts[n].deployedBytecode.linkReferences ?? {}).length) problems.push(`${n} ${label} artifact has unlinked libraries`);
+    for (const [src, { keccak256 }] of Object.entries(arts[n].metadata.sources)) {
+      const buf = allowedFor(n, src) ? blobs[src] : undefined;
+      if (!buf) problems.push(`${n} ${label} artifact compiled ${src}, which is not a committed source it may use`);
+      else if (keccak(buf) !== keccak256.toLowerCase()) problems.push(`${n} ${label} artifact compiled ${src} with different content than the commit`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * For each of `names`, the one artifact under `out` whose metadata compilationTarget is exactly
  * { SOURCES[n]: n }. Not out/<n>.sol/<n>.json: forge moves an artifact to out/<its path>/ when
  * another file of the same name declares the same contract, and puts the other one there.
  */
-function selectArtifacts(out) {
-  const found = Object.fromEntries(OURS.map((n) => [n, []]));
+function selectArtifacts(out, names = OURS) {
+  const found = Object.fromEntries(names.map((n) => [n, []]));
   for (const rel of readdirSync(out, { recursive: true })) {
     if (!rel.endsWith('.json') || rel.split(sep)[0] === 'build-info') continue;
     const art = JSON.parse(readFileSync(join(out, rel), 'utf8'));
@@ -257,9 +296,9 @@ function selectArtifacts(out) {
     if (Object.hasOwn(found, name) && src === SOURCES[name]) found[name].push({ rel, art });
   }
   const arts = {};
-  for (const n of OURS) {
+  for (const n of names) {
     if (found[n].length !== 1) {
-      throw new Refuse(`reference build has ${found[n].length} artifacts compiled from ${SOURCES[n]}:${n}${found[n].length ? ` (${found[n].map((f) => f.rel).join(', ')})` : ''}`);
+      throw new Refuse(`${out} has ${found[n].length} artifacts compiled from ${SOURCES[n]}:${n}${found[n].length ? ` (${found[n].map((f) => f.rel).join(', ')})` : ''}`);
     }
     arts[n] = found[n][0].art;
   }
@@ -415,7 +454,40 @@ async function main() {
   return failed ? 1 : 0;
 }
 
-main().then(
+/** --pre-deploy: contracts/out, as `forge script` will use it, against the reference build. */
+function preDeploy() {
+  const { arts: ref, blobs, head, pinned } = referenceBuild(true);
+  console.log(`REF   reference build from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned}`);
+  const names = [...OURS, ...SCRIPTS];
+  const contracts = join(ROOT, 'contracts');
+  // The caller's own environment and config, as `forge script` from contracts/ will see them.
+  try {
+    execFileSync('forge', ['build'], { cwd: contracts, stdio: ['ignore', 'ignore', 'pipe'] });
+  } catch (e) {
+    throw new Refuse(`forge build in contracts/ failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+  }
+  const problems = [];
+  let local;
+  try {
+    local = selectArtifacts(join(contracts, 'out'), names);
+  } catch (e) {
+    if (!(e instanceof Refuse)) throw e;
+    problems.push(e.message);
+  }
+  if (local) {
+    problems.push(...sourceProblems(local, names, blobs, 'local'));
+    for (const n of names) {
+      for (const k of ['bytecode', 'deployedBytecode']) {
+        if (local[n][k].object.toLowerCase() !== ref[n][k].object.toLowerCase()) problems.push(`${n} local ${k} differs from the reference build`);
+      }
+    }
+  }
+  for (const p of problems) console.log(`FAIL  ${p}`);
+  console.log(problems.length ? `FAIL: contracts/out is not the committed build; do not deploy from it` : `PASS: contracts/out equals the reference build for ${names.join(', ')}`);
+  return problems.length ? 1 : 0;
+}
+
+(process.argv[2] === '--pre-deploy' && process.argv.length === 3 ? Promise.resolve().then(preDeploy) : main()).then(
   (code) => process.exit(code),
   (e) => {
     console.error(e instanceof Refuse ? `check-deploy: ${e.message}` : e);

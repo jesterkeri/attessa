@@ -37,6 +37,9 @@ abstract contract ValidatorStackDeployer {
 /// 32-byte word zeroed, after checking that each such word holds the address the stack reports
 /// (offsets from the build's immutableReferences). P384Verifier has no immutables: its codehash.
 /// Any other byte, length or immutable value is refused (T10 adversary r6 D: a trailer alone is not).
+/// All of this runs inside the build it guards: a committed remapping can swap this file itself (T10
+/// adversary r7 X). `node scripts/check-deploy.mjs --pre-deploy`, run before every simulation and
+/// broadcast, proves that build is the committed one.
 /// The CBOR metadata trailers (IPFS hash of the metadata JSON, which commits to every source's path
 /// and keccak256 and to the settings) are checked too; the whole-code pin already covers them.
 abstract contract ValidatorStackChecker {

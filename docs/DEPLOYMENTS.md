@@ -40,6 +40,12 @@ Celo Sepolia only. Broadcasting is Joshua's job. The key comes from a Foundry ke
 (`--account`) or from env `PRIVATE_KEY` (the scripts read it with `vm.envOr`); never put it on
 the command line. Run from `contracts/` on a clean checkout of the commit being deployed.
 
+The deploy scripts' own checks run inside the build they guard, so a committed remapping,
+foundry.toml or source can switch them off (T10 adversary r5 to r7). `check-deploy.mjs --pre-deploy`
+rebuilds the scripts and the production contracts from the committed blobs under fixed settings
+and requires `contracts/out` to match them byte for byte. Run it right before every `forge script`
+below, simulation and broadcast alike: it must print `PASS` and exit 0. On `FAIL`, stop.
+
 ```sh
 cd contracts
 forge build
@@ -52,7 +58,9 @@ export RPC=https://forno.celo-sepolia.celo-testnet.org
 
 # 1. Validator stack: P384Verifier -> CertManager(p384, admin, admin) -> NitroValidator.
 #    Simulate first (no flag), read the three addresses and gas, then add --broadcast.
+node ../scripts/check-deploy.mjs --pre-deploy   # PASS, or stop
 forge script script/DeployValidatorStack.s.sol:DeployValidatorStack --rpc-url $RPC --sender $DEPLOYER
+node ../scripts/check-deploy.mjs --pre-deploy   # PASS, or stop
 forge script script/DeployValidatorStack.s.sol:DeployValidatorStack --rpc-url $RPC \
   --account <keystore-name> --sender $DEPLOYER --slow --broadcast
 #    or, with the key in env PRIVATE_KEY (and no --account):
@@ -61,7 +69,9 @@ forge script script/DeployValidatorStack.s.sol:DeployValidatorStack --rpc-url $R
 # 2. Registry: EnclaveRegistry(identity, nitroValidator, self, false). Use the NitroValidator
 #    address printed by step 1.
 export ATTESSA_NITRO_VALIDATOR=0x...
+node ../scripts/check-deploy.mjs --pre-deploy   # PASS, or stop
 forge script script/DeployRegistry.s.sol:DeployRegistry --rpc-url $RPC --sender $DEPLOYER
+node ../scripts/check-deploy.mjs --pre-deploy   # PASS, or stop
 forge script script/DeployRegistry.s.sol:DeployRegistry --rpc-url $RPC \
   --account <keystore-name> --sender $DEPLOYER --slow --broadcast
 
