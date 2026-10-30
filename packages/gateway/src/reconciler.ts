@@ -46,6 +46,12 @@ export class Reconciler {
    * shortcut: no global cap on concurrent row checks; add one if open rows ever number in the hundreds.
    */
   private readonly checking = new Map<string, Promise<void>>();
+  /**
+   * When a pass first saw each open or settled row with no live handler: the start of "no live response"
+   * for the 30 s delivery grace. Never earlier than the handler's end, so a delivery is never cut short;
+   * a row the reconciler settles long after the handler's 202 is finished at once (INV-11).
+   */
+  private readonly unwatchedSince = new Map<string, number>();
 
   private readonly d: ReconcilerDeps;
   constructor(d: ReconcilerDeps) {
@@ -96,6 +102,7 @@ export class Reconciler {
   private async pass(): Promise<Promise<void>[]> {
     const { db } = this.d;
     const started: Promise<void>[] = [];
+    this.track(this.d.now());
     for (const row of db.inStates(['settling', 'settle_pending'])) {
       const id = row.request_id;
       const inFlight = this.checking.get(id);
@@ -123,12 +130,25 @@ export class Reconciler {
     return started;
   }
 
+  private track(now: number): void {
+    const rows = this.d.db.inStates(['settling', 'settle_pending', 'settled']);
+    const ids = new Set(rows.map((r) => r.request_id));
+    for (const id of this.unwatchedSince.keys()) if (!ids.has(id)) this.unwatchedSince.delete(id);
+    for (const { request_id: id } of rows) {
+      if (this.d.live.has(id)) this.unwatchedSince.delete(id);
+      else if (!this.unwatchedSince.has(id)) this.unwatchedSince.set(id, now);
+    }
+  }
+
   /** SPEC §6.3: `settled` with no live response for > 30 s, or past the INV-11 deadline → `delivery_failed`. */
   private sweepDelivered(now: number): void {
     for (const row of this.d.db.inStates(['settled'])) {
-      if (this.d.live.has(row.request_id)) continue;
-      if (now - row.updated_at > DELIVERY_GRACE_S || now > row.valid_before + DELIVERY_DEADLINE_S) {
-        this.d.db.transition(row.request_id, ['settled'], 'delivery_failed', now);
+      const id = row.request_id;
+      if (this.d.live.has(id)) continue;
+      const since = this.unwatchedSince.get(id) ?? now;
+      this.unwatchedSince.set(id, since);
+      if (now - since > DELIVERY_GRACE_S || now > row.valid_before + DELIVERY_DEADLINE_S) {
+        this.d.db.transition(id, ['settled'], 'delivery_failed', now);
       }
     }
   }

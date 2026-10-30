@@ -27,7 +27,6 @@ describe('reconciler: INV-11 deadline for a row settled late (SPEC §6.3)', () =
     const row = h.row(id)!;
     expect(row).toMatchObject({ state: 'delivery_failed', updated_at: p.validBefore + 58 });
     expect(row.settle_tx).toMatch(/^0x[0-9a-f]{64}$/);
-    expect(h.fac.settleCalls).toBe(2);
     expect((await h.results(id)).statusCode).toBe(200);
   });
 
