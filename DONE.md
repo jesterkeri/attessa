@@ -84,3 +84,67 @@ exit 0
 adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts; UTF-8 BOM accepted before X-Attested-Proof JCS); 120/120 vector values recomputed independently with cast. r2 on 705d515 NO DEFECT FOUND; 124/124 recomputed; 2,130-input TS vs Rust url differential fuzz, no originHash disagreement.
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
+
+## T06 - 2026-10-30
+commit: 8ee8186 (builder B1, Opus; branch feat/t06-vectors, rerun by lead)
+verified: cd contracts && forge test --match-contract VectorsTest
+output:
+```
+$ cd contracts && forge test --match-contract VectorsTest
+No files changed, compilation skipped
+
+Ran 15 tests for test/VectorsTest.t.sol:VectorsTest
+[PASS] test_vectors_binding_signer() (gas: 1790017)
+[PASS] test_vectors_binding_typehash() (gas: 18777)
+[PASS] test_vectors_binding_userData() (gas: 179226)
+[PASS] test_vectors_binding_userData_acceptedByRegistry() (gas: 635611)
+[PASS] test_vectors_eip712_liveness() (gas: 224650)
+[PASS] test_vectors_eip712_proof() (gas: 264624)
+[PASS] test_vectors_eip712_signatures() (gas: 860515)
+[PASS] test_vectors_eip712_typehashes() (gas: 18753)
+[PASS] test_vectors_inputsHash() (gas: 97332)
+[PASS] test_vectors_origins_invalid_prefixAndLength() (gas: 404885)
+[PASS] test_vectors_origins_valid() (gas: 2370496)
+[PASS] test_vectors_releaseId() (gas: 254532)
+[PASS] test_vectors_requestHash() (gas: 148486)
+[PASS] test_vectors_requestId() (gas: 54355)
+[PASS] test_vectors_responseHash() (gas: 56062)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 10.24ms (36.29ms CPU time)
+
+Ran 1 test suite in 11.01ms (10.24ms CPU time): 15 tests passed, 0 failed, 0 skipped (15 total tests)
+exit=0
+```
+adversary: NO DEFECT FOUND (with T07). 21 single-field vector mutations (first and last list entries, typehashes, signer, valid flags, invalid origins) each failed VectorsTest; 3 production mutants (high-s check removed, origin length cap 267 to 268, minimum 9 to 10) each failed it.
+reviewed: pending (Codex)
+notes: only not_https and length invalid-origin reasons are checkable on chain; the other four are off-chain by design. headers.json is outside T06 scope.
+
+## T07 - 2026-10-30
+commit: 8aa7938 (builder B1, Opus; rerun by lead)
+verified: cd contracts && forge test --match-test 'test_realFixture' --fork-url $SEP -vvv (SEP=https://forno.celo-sepolia.celo-testnet.org)
+output:
+```
+$ cd contracts && forge test --match-test 'test_realFixture' --fork-url $SEP -vvv   (SEP=https://forno.celo-sepolia.celo-testnet.org)
+No files changed, compilation skipped
+
+Ran 3 tests for test/fork/RealFixture.t.sol:RealFixtureTest
+[PASS] test_realFixture_a_registerReverts_BindingMismatch0() (gas: 28817506)
+[PASS] test_realFixture_b_paddedUnprotectedHeader_sameTbsSameRevert() (gas: 42965196)
+Logs:
+  unprotected header bytes K: 770
+
+[PASS] test_realFixture_c_validateGas_under16M() (gas: 45904844)
+Logs:
+  validateAttestationWithHints gas (measured)            : 12994642
+  validateAttestationWithHints gas (projected post-Fusaka): 13907842
+  registerSigner gas to BindingMismatch (measured)       : 13104719
+  registerSigner tx gas (projected post-Fusaka, calldata): 14547623
+  hint bytes / MODEXP calls                              : 27312 3044
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 7.02s (1.09s CPU time)
+
+Ran 1 test suite in 8.74s (7.02s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)
+exit=0
+```
+adversary: NO DEFECT FOUND. Fixture equals upstream `node tools/nitro_attestation_input.js fixture` at 0ea0d12 byte for byte (4482 bytes, keccak 0x9f0c...0e9f). Padded header is valid CBOR (K=770) through upstream decodeAttestationTbs. 3044 MODEXP calls confirmed by trace; each hits the EIP-7883 500 floor, so +300 per call is exact. Without --fork-url all three SKIP, none pass silently.
+reviewed: pending (Codex)
+notes: first run of (c) failed on a measurement error (cold SLOADs of test storage inside the measured span), fixed by copying to memory first; no threshold changed. Open: gas headroom about 1.45M (OPEN-QUESTIONS). Adversary suspicions, unproven: the validator in the test is NitroParseHarness (a NitroValidator subclass exposing the parser), not the production bytecode; and in (b) user_data has the wrong length, so the test cannot show the registry ignores a binding planted in the unprotected header. T16b covers the positive real-attestation path.
