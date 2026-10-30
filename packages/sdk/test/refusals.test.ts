@@ -27,6 +27,9 @@ async function expectStopped(world: World, code: string, req: Parameters<World['
   expect(world.transferSignatures()).toBe(0);
   expect(world.gw.paid).toHaveLength(0);
   expect(ledgerEntries(world.dataDir).filter((e) => e.state === 'reserved')).toHaveLength(0);
+  // SPEC §9: every outcome is in evidence, refusals included.
+  const ev = readFileSync(join(world.dataDir, 'evidence.jsonl'), 'utf8').trim().split('\n').map((l) => JSON.parse(l));
+  expect(ev.at(-1)).toMatchObject({ outcome: 'stopped', code, requestId: r.requestId });
   return r;
 }
 

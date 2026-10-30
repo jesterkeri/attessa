@@ -156,19 +156,20 @@ export interface EvidenceRow {
   ts: string;
   requestId: Hex;
   origin: string;
-  agentId: string;
+  agentId: string | null;
   outcome: Outcome;
   code: string | null;
   check: ProofCheck | null;
-  amount: string;
-  asset: Address;
-  payTo: Address;
+  /** null on a `stopped` row written before the quote was read. */
+  amount: string | null;
+  asset: Address | null;
+  payTo: Address | null;
   settlementTx: Hash | null;
   signer: Address | null;
   releaseId: Hex | null;
   ownerClaimedSource: string | null;
   selfVerifiedOwner: boolean | null;
-  requestHash: Hex;
+  requestHash: Hex | null;
   responseHash: Hex | null;
   inputsHash: Hex | null;
   inputsBlock: string | null;

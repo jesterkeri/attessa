@@ -83,8 +83,8 @@ export class AlreadyUsedError extends Error {
   }
 }
 
-/** A V1-V7 refusal: the call ends `stopped` and nothing was signed. */
-class Stop extends Error {
+/** A V1-V7 refusal: nothing was signed. `payAndVerify` returns it as `stopped`; `resolveEndpoint` and `checkLiveness` throw it. */
+export class AttestError extends Error {
   readonly code: CallCode;
   readonly detail: string | undefined;
   constructor(code: CallCode, detail?: string) {
@@ -130,19 +130,19 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         chainId = await probe.chainId();
       } catch (e) {
         netPromise = undefined;
-        throw new Stop('rpc_unavailable', (e as Error).message);
+        throw new AttestError('rpc_unavailable', (e as Error).message);
       }
       let deployment: Deployment;
       if (cfg.network === 'local') {
         try {
           deployment = deploymentForChainId(chainId);
         } catch {
-          throw new Stop('network_mismatch', `no pinned deployment for chain ${chainId}`);
+          throw new AttestError('network_mismatch', `no pinned deployment for chain ${chainId}`);
         }
       } else {
         deployment = DEPLOYMENTS[cfg.network];
         if (deployment.chainId !== chainId)
-          throw new Stop('network_mismatch', `RPC is on chain ${chainId}; ${cfg.network} is ${deployment.chainId}`);
+          throw new AttestError('network_mismatch', `RPC is on chain ${chainId}; ${cfg.network} is ${deployment.chainId}`);
       }
       const registry = opts.registry ?? deployment.enclaveRegistry;
       if (!registry) throw new Error(`no EnclaveRegistry is deployed for chain ${chainId}; pass options.registry`);
@@ -153,7 +153,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
 
   function pinFor(n: Net, key: AssetKey): PinnedAsset {
     const pin = n.deployment.assets[key];
-    if (!pin) throw new Stop('network_mismatch', `${key} is not offered on chain ${n.chainId}`);
+    if (!pin) throw new AttestError('network_mismatch', `${key} is not offered on chain ${n.chainId}`);
     return { ...pin, address: lc(pin.address) };
   }
 
@@ -177,22 +177,22 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     try {
       e = await n.chain.endpoint(oh);
     } catch (err) {
-      throw new Stop('rpc_unavailable', (err as Error).message);
+      throw new AttestError('rpc_unavailable', (err as Error).message);
     }
-    if (e.status === ENDPOINT_STATUS.None) throw new Stop('endpoint_not_registered');
-    if (e.status !== ENDPOINT_STATUS.Active) throw new Stop('endpoint_retired');
+    if (e.status === ENDPOINT_STATUS.None) throw new AttestError('endpoint_not_registered');
+    if (e.status !== ENDPOINT_STATUS.Active) throw new AttestError('endpoint_retired');
     let wk: Record<string, unknown>;
     try {
       const res = await httpRequest(`${origin}/.well-known/attested-exec.json`, { method: 'GET' });
       wk = (await res.json()) as Record<string, unknown>;
       if (!res.ok || typeof wk !== 'object' || wk === null) throw new Error(`HTTP ${res.status}`);
     } catch (err) {
-      throw new Stop('origin_agent_mismatch', `.well-known unreadable: ${(err as Error).message}`);
+      throw new AttestError('origin_agent_mismatch', `.well-known unreadable: ${(err as Error).message}`);
     }
     if (wk.agentId !== e.agentId.toString())
-      throw new Stop('origin_agent_mismatch', `.well-known says agent ${String(wk.agentId)}, registry says ${e.agentId}`);
-    if (typeof wk.registry !== 'string' || lc(wk.registry) !== n.registry) throw new Stop('origin_agent_mismatch', '.well-known registry differs');
-    if (wk.chainId !== String(n.chainId)) throw new Stop('origin_agent_mismatch', '.well-known chainId differs');
+      throw new AttestError('origin_agent_mismatch', `.well-known says agent ${String(wk.agentId)}, registry says ${e.agentId}`);
+    if (typeof wk.registry !== 'string' || lc(wk.registry) !== n.registry) throw new AttestError('origin_agent_mismatch', '.well-known registry differs');
+    if (wk.chainId !== String(n.chainId)) throw new AttestError('origin_agent_mismatch', '.well-known chainId differs');
     const selfVerifiedOwner = await n.chain.selfVerifiedOwner(e.agentId);
     return {
       n,
@@ -592,9 +592,17 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const pathAndQuery = `${u.pathname}${u.search}`;
     const assetKey = req.asset ?? cfg.asset;
     let requestId = lc(req.requestId ?? random32());
+    // What is known so far, for the evidence row of a stopped call (SPEC §9: every outcome is in evidence).
+    const known: { agentId?: bigint; amount?: bigint; asset?: Address; payTo?: Address; origin?: string; requestHash?: Hex } = {};
     const stopped = (code: CallCode, detail?: string): CallResult => {
       const r: CallResult = { outcome: 'stopped', code, requestId };
       if (detail) r.detail = detail;
+      ledger.appendEvidence({
+        v: '1', ts: String(Math.floor(now() / 1000)), requestId, origin: known.origin ?? url, agentId: known.agentId?.toString() ?? null,
+        outcome: 'stopped', code, check: null, amount: known.amount?.toString() ?? null, asset: known.asset ?? null,
+        payTo: known.payTo ?? null, settlementTx: null, signer: null, releaseId: null, ownerClaimedSource: null, selfVerifiedOwner: null,
+        requestHash: known.requestHash ?? null, responseHash: null, inputsHash: null, inputsBlock: null, inputsChecked: null, via: 'gateway',
+      });
       return r;
     };
 
@@ -602,6 +610,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     let ep: ResolvedEndpoint;
     const origin = normalizeOrigin(url, { local: cfg.network === 'local' });
     const rh = hashRequest('POST', pathAndQuery, body);
+    known.origin = origin;
+    known.requestHash = rh;
     try {
       n = await net();
       // V0
@@ -616,8 +626,9 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (req.requestId && ledger.get(requestId)) return stopped('request_id_conflict', 'requestId already in the ledger');
       // V1
       ({ ep } = await resolve(url));
+      known.agentId = ep.agentId;
     } catch (e) {
-      if (e instanceof Stop) return stopped(e.code, e.detail);
+      if (e instanceof AttestError) return stopped(e.code, e.detail);
       throw e;
     }
 
@@ -648,13 +659,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     try {
       pin = pinFor(n, assetKey);
     } catch (e) {
-      if (e instanceof Stop) return stopped(e.code, e.detail);
+      if (e instanceof AttestError) return stopped(e.code, e.detail);
       throw e;
     }
     const sel = selectRequirement(pr, { network: n.x402Network, pin, chainId: n.chainId, registry: n.registry, agentId: ep.agentId });
     if (!sel.ok) return stopped(sel.code, sel.detail);
     const accepted = sel.entry;
     const amount = BigInt(accepted.amount);
+    known.amount = amount;
+    known.asset = pin.address;
+    known.payTo = lc(accepted.payTo as Address);
 
     // V4
     if (lc(accepted.payTo) !== ep.payTo) return stopped('payto_mismatch', `quote payTo ${lc(accepted.payTo)}, registry payTo ${ep.payTo}`);

@@ -52,6 +52,8 @@ export interface Behavior {
   headerSigner?: Address;
   /** Leave out X-Attested-Proof. */
   noProof?: boolean;
+  /** Send this X-Attested-Proof verbatim. */
+  rawProofHeader?: string;
   /** What the paid request does. */
   paid?:
     | 'deliver' // settle, 200
@@ -62,7 +64,8 @@ export interface Behavior {
     | 'refuse' // §10 error body, no settle
     | 'refuse_but_settle' // §10 error body, settles anyway
     | 'html502' // a proxy's HTML 502, no settle
-    | 'deliver_no_settle'; // 200 with a fake tx hash, nothing on chain
+    | 'deliver_no_settle' // 200 with a fake tx hash, nothing on chain
+    | 'refuse_with_result'; // executes, settles, stores the result, then answers a §10 refusal
   refuseWith?: { status: number; error: string; detail?: string; requestId?: string };
   /** Seconds the settlement lands after the request (chain time advances). */
   settleDelay?: number;
@@ -306,7 +309,7 @@ export class FakeGateway {
     if (b.proof) proof = b.proof(proof, ctx);
     const key = b.signWith ?? this.enclave;
     const signature = await key.sign!({ hash: proofDigest(this.domain(), proof) });
-    const proofHeader = b.noProof ? null : encodeAttestedProof({ proof, signature, signer: b.headerSigner ?? key.address });
+    const proofHeader = b.noProof ? null : b.rawProofHeader !== undefined ? b.rawProofHeader : encodeAttestedProof({ proof, signature, signer: b.headerSigner ?? key.address });
     const out = b.tamperResponse ? b.tamperResponse(honestBody) : honestBody;
 
     if (mode === 'deliver_no_settle') {
@@ -327,6 +330,10 @@ export class FakeGateway {
       res.setHeader('content-type', 'text/html');
       res.end('<html><body>502 Bad Gateway</body></html>');
       return;
+    }
+    if (mode === 'refuse_with_result') {
+      const r = b.refuseWith ?? { status: 502, error: 'settle_failed', detail: 'expired' };
+      return this.error(res, r.status, r.error, requestId, r.detail);
     }
     if (mode === 'drop_after_settle') {
       res.socket?.destroy();
