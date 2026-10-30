@@ -99,3 +99,14 @@ npm error code ENOTCACHED
 exit=1
 ```
 reviewed: pending (Codex r2, after ci.yml is applied)
+
+## T02 Codex r1 fixes: full offline-probe output - 2026-10-30
+The entry above abridged the offline run. Verbatim rerun:
+```
+FAIL: install failed for another reason (exit 1); no evidence either way:
+npm error code ENOTCACHED
+npm error request to https://registry.npmjs.org/pnpm failed: cache mode is 'only-if-cached' but no cached response is available.
+npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/2026-10-30T09_03_24_882Z-debug-0.log
+exit=1
+```
+reviewed: pending (Codex r2)
