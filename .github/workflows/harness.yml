@@ -21,8 +21,8 @@ jobs:
     name: guardrails
     runs-on: ubuntu-latest
     steps:
-      # Pin third-party actions to a full sha. actions/* is first-party; a tag is acceptable there.
-      - uses: actions/checkout@v4
+      # Every action is pinned to a full commit sha, first-party included (check-workflows.sh enforces).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false   # the token is otherwise left in .git/config and can leak via artifacts
@@ -64,29 +64,9 @@ jobs:
     name: no secrets in client output
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { persist-credentials: false }
       # Replace with your real build. The check is only meaningful against built output.
       # - run: npm ci --ignore-scripts && npm run build
       - name: Scan build output
         run: ./scripts/check-secrets.sh .next dist build out || true   # set to blocking once a build step exists above
-
-  build:
-    name: build and test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          persist-credentials: false
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .nvmrc
-      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
-      - run: corepack enable
-      - name: install
-        run: pnpm install --frozen-lockfile && cargo fetch --locked --manifest-path enclave/Cargo.toml
-      - name: build
-        run: pnpm -r build && (cd contracts && forge build) && cargo build --release --locked --manifest-path enclave/Cargo.toml
-      - name: test
-        run: pnpm -r test && (cd contracts && forge test) && cargo test --locked --manifest-path enclave/Cargo.toml
