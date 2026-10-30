@@ -200,6 +200,18 @@
       "reason": "userinfo"
     },
     {
+      "name": "userinfo, user only",
+      "input": "https://user@example.com",
+      "local": false,
+      "reason": "userinfo"
+    },
+    {
+      "name": "userinfo, password only",
+      "input": "https://:pw@example.com",
+      "local": false,
+      "reason": "userinfo"
+    },
+    {
       "name": "268 bytes",
       "input": "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc.ddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd.comx",
       "local": false,

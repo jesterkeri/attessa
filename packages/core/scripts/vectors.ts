@@ -114,6 +114,8 @@ function origins() {
     { name: 'IPv4 literal in hex form', input: 'https://0x7f.1', local: false, reason: 'ip_literal' },
     { name: 'IPv6 literal', input: 'https://[::1]:8443', local: false, reason: 'ip_literal' },
     { name: 'userinfo', input: 'https://user:pw@example.com', local: false, reason: 'userinfo' },
+    { name: 'userinfo, user only', input: 'https://user@example.com', local: false, reason: 'userinfo' },
+    { name: 'userinfo, password only', input: 'https://:pw@example.com', local: false, reason: 'userinfo' },
     { name: '268 bytes', input: `https://${host259}x`, local: false, reason: 'length' },
     { name: 'not a URL', input: 'example.com', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
@@ -442,7 +444,7 @@ async function headers() {
 
   // X-Attest-Payer-Sig
   const payerValid = [];
-  for (const [i, t] of [1761700000, 0].entries()) {
+  for (const [i, t] of [1761700000, 0, Number.MAX_SAFE_INTEGER].entries()) {
     const key = testKey(30 + i);
     const requestId = hex32(`payer-rid-${i}`);
     const digest = payerSigDigest(requestId, t);
@@ -455,6 +457,9 @@ async function headers() {
   }
   const goodSig = payerValid[0]!.signature;
   const payerInvalid = [
+    // Above Number.MAX_SAFE_INTEGER: 2^53 parses exactly but is unsafe, 2^53 + 1 rounds to 2^53.
+    { name: 'seconds 2^53', header: `9007199254740992.${goodSig}` },
+    { name: 'seconds 2^53 + 1', header: `9007199254740993.${goodSig}` },
     { name: 'no dot', header: `1761700000${goodSig}` },
     { name: 'leading zero seconds', header: `01761700000.${goodSig}` },
     { name: 'negative seconds', header: `-1.${goodSig}` },
@@ -506,6 +511,7 @@ async function headers() {
     { name: 'uppercase bytes32', header: withProof({ requestId: goodJson.proof.requestId!.toUpperCase().replace('0X', '0x') }), reason: 'field_grammar' },
     { name: 'leading zero integer', header: withProof({ agentId: '01' }), reason: 'field_grammar' },
     { name: 'uint64 overflow', header: withProof({ expiresAt: (MAX_UINT64 + 1n).toString() }), reason: 'field_grammar' },
+    { name: 'uint256 overflow', header: withProof({ agentId: (MAX_UINT256 + 1n).toString() }), reason: 'field_grammar' },
     { name: 'UTF-8 BOM before the JCS bytes', header: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(jcs(goodJson), 'utf8')]).toString('base64'), reason: 'not_jcs' },
     { name: 'uppercase signer', header: b64(jcs({ ...goodJson, signer: goodJson.signer.toUpperCase().replace('0X', '0x') })), reason: 'field_grammar' },
   ];

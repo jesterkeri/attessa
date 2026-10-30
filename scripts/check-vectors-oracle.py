@@ -36,15 +36,15 @@ V = lambda f: json.load(open(f"vectors/{f}", encoding="utf-8"))
 
 # ---- committed family sizes. A family may grow, never shrink or vanish.
 MIN = {
-    ("origins.json", "valid"): 17, ("origins.json", "invalid"): 17,
+    ("origins.json", "valid"): 17, ("origins.json", "invalid"): 19,
     ("hashes.json", "requestHash"): 6, ("hashes.json", "responseHash"): 3, ("hashes.json", "inputsHash"): 6,
     ("hashes.json", "releaseId"): 3, ("hashes.json", "requestId"): 2,
     ("binding.json", "userData"): 6, ("binding.json", "signer"): 4,
     ("eip712.json", "proof"): 3, ("eip712.json", "liveness"): 3, ("eip712.json", "signatures"): 9,
     ("headers.json", "bytes32.valid"): 2, ("headers.json", "bytes32.invalid"): 7,
     ("headers.json", "retryAfter.valid"): 3, ("headers.json", "retryAfter.invalid"): 4,
-    ("headers.json", "payerSig.valid"): 2, ("headers.json", "payerSig.invalid"): 7,
-    ("headers.json", "attestedProof.valid"): 3, ("headers.json", "attestedProof.invalid"): 13,
+    ("headers.json", "payerSig.valid"): 3, ("headers.json", "payerSig.invalid"): 9,
+    ("headers.json", "attestedProof.valid"): 3, ("headers.json", "attestedProof.invalid"): 14,
 }
 FILE_MIN = 10  # TASKS T03: at least 10 cases in each vectors file
 
