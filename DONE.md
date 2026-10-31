@@ -181,3 +181,10 @@ $ pnpm --filter @attessa/gateway lint
 lint_exit=0
 ```
 reviewed: pending (Codex r2)
+
+## T19 Codex review r2 - 2026-10-31
+Codex r2 reviewed d3b5c57: all round-1 findings (m1 proof lifetime, m2 payer from /verify, M1 serial reconciliation) are fixed, no new findings. Its sandbox blocked the socket-based tests (U8); they passed outside it on the same code, recorded in the entry above (154 passed). Closing line of round 2, verbatim:
+```
+VERDICT: implementation-ready
+```
+reviewed: reviews/t19-x402-payment-gateway-review-r2.md | verdict: implementation-ready | C0 M0 m0
