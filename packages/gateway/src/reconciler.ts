@@ -12,9 +12,15 @@ export const DELIVERY_GRACE_S = 30;
 /**
  * INV-11: a `settled` row with no live response is `delivery_failed` once now > validBefore + this, even
  * inside the grace (a row the reconciler settles late, after a lagging log index). Leaves one 5 s pass of
- * slack before validBefore + 60 s. A live handler's row is never swept.
+ * slack before validBefore + 60 s.
  */
 export const DELIVERY_DEADLINE_S = 50;
+/**
+ * INV-11 over a live mark: a `settled` row still marked live is `delivery_failed` once now > validBefore + this.
+ * A handler's settle ends by about validBefore + 15 (SPEC §6.2 steps 10-11) and its write takes milliseconds,
+ * so a mark left 40 s later is one nothing will release; a pass every 5 s still lands by validBefore + 60.
+ */
+export const LIVE_DEADLINE_S = 55;
 /** SPEC §6.3 step 4 / INV-11: expiry is judged only at a block whose timestamp exceeds validBefore + 5. */
 export const EXPIRY_MARGIN_S = 5;
 
@@ -144,11 +150,17 @@ export class Reconciler {
     }
   }
 
-  /** SPEC §6.3: `settled` with no live response for > 30 s, or past the INV-11 deadline → `delivery_failed`. */
+  /**
+   * SPEC §6.3: `settled` with no live response for > 30 s, or past the INV-11 deadline → `delivery_failed`.
+   * A row marked live is left to its handler until LIVE_DEADLINE_S, never past it.
+   */
   private sweepDelivered(now: number): void {
     for (const row of this.d.db.inStates(['settled'])) {
       const id = row.request_id;
-      if (this.d.live.has(id)) continue;
+      if (this.d.live.has(id)) {
+        if (now > row.valid_before + LIVE_DEADLINE_S) this.d.db.transition(id, ['settled'], 'delivery_failed', now);
+        continue;
+      }
       const since = this.unwatchedSince.get(id) ?? now;
       this.unwatchedSince.set(id, since);
       if (now - since > DELIVERY_GRACE_S || now > row.valid_before + DELIVERY_DEADLINE_S) {

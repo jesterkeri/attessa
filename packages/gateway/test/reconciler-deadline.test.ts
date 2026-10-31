@@ -45,4 +45,17 @@ describe('reconciler: INV-11 deadline for a row settled late (SPEC §6.3)', () =
     await h.gw.reconciler.tick();
     expect(h.row(id)!.state).toBe('delivery_failed');
   });
+
+  it('a live mark that is never released (a handler event gap) cannot keep the row past validBefore + 60 s', async () => {
+    h = await makeHarness();
+    h.fac.settleScript = [{ kind: 'status', status: 503, broadcast: true }];
+    const p = await h.pay({ validBefore: h.clock.t + 60 });
+    const id = (await h.call(p)).headers['x-request-id'] as string;
+    await h.gw.reconciler.tick();
+    expect(h.row(id)!.state).toBe('settled');
+    h.gw.live.add(id); // leaked: nothing will ever delete it
+    h.chain.advance(p.validBefore + 56 - h.clock.t); // the first 5 s pass after validBefore + 55
+    await h.gw.reconciler.tick();
+    expect(h.row(id)!).toMatchObject({ state: 'delivery_failed', updated_at: p.validBefore + 56 });
+  });
 });

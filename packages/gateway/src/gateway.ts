@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
@@ -247,20 +248,24 @@ export function createGateway(deps: GatewayDeps): Gateway {
    * Marks the row live for this reply. The mark is tied to the reply's own end at once, so it is dropped on
    * every path the response can end by (written, client gone, stream error), even one that ends before the
    * handler gets to write. A reply that has already ended (its client left during execution, the lock or
-   * the signature check) can no longer emit that end, so it takes no mark at all. `deliver()` makes this
+   * the signature check) can no longer emit that end, so it takes no mark at all. The connection's own close
+   * also ends the mark: a pipelined request's response that was never attached to the socket emits neither
+   * `finish` nor `close` (Node 22). The reconciler's LIVE_DEADLINE_S bounds any gap left. `deliver()` makes this
    * reply the row's delivery (SPEC §6.2 step 12): written → `delivered`; ended unwritten with no other
    * handler delivering → `delivery_failed`. `release()` drops the mark early when the reply will not carry
    * the result.
    */
   function holdLive(reply: FastifyReply, requestId: string): { deliver(): void; release(): void } {
     const res = reply.raw;
-    let held = !(res.destroyed || res.closed || res.writableEnded);
+    const sock = reply.request.raw.socket as Socket | null;
+    let held = !(res.destroyed || res.closed || res.writableEnded || sock?.destroyed);
     if (held) live.add(requestId);
     let delivering = false;
     let finished = false;
     const end = (): void => {
       if (!held) return;
       held = false;
+      sock?.off('close', end); // a kept-alive connection outlives this reply
       const last = live.delete(requestId);
       if (!delivering) return;
       if (finished) db.transition(requestId, ['settled'], 'delivered', now());
@@ -273,6 +278,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
         end();
       });
       res.once('close', end);
+      sock?.once('close', end);
     }
     return {
       deliver() {
