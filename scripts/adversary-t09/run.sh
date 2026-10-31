@@ -27,9 +27,11 @@
 set -u
 MUT=$1; OUT=$2
 HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd)
-rm -rf "$OUT/$MUT"; mkdir -p "$OUT/$MUT"
+rm -rf "$OUT/$MUT"
 W="$OUT/$MUT/contracts"
-rsync -a --exclude out --exclude cache "$ROOT/contracts/" "$W/"
+# A git superproject copy (mkrepo.sh), so the CI guard step, pin check included, sees what CI sees.
+. "$HERE/mkrepo.sh"
+mkrepo "$OUT/$MUT" || { echo "harness error: could not build the scratch superproject"; exit 2; }
 python3 -I "$HERE/mutate.py" "$MUT" "$W"
 bash "$HERE/ci_guard.sh" "$OUT/$MUT" > "$OUT/$MUT/guard.log" 2>&1; GUARD=$?
 echo "mutant=$MUT guard_exit=$GUARD"; tail -1 "$OUT/$MUT/guard.log"
