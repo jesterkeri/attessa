@@ -243,17 +243,19 @@ export function createGateway(deps: GatewayDeps): Gateway {
     );
   }
 
-  /** The stored result: exact bytes + `X-Attested-Proof` + `PAYMENT-RESPONSE` + `X-Request-Id` (SPEC §6.2 step 12). */
   /**
    * Marks the row live for this reply. The mark is tied to the reply's own end at once, so it is dropped on
    * every path the response can end by (written, client gone, stream error), even one that ends before the
-   * handler gets to write. `deliver()` makes this reply the row's delivery (SPEC §6.2 step 12): written →
-   * `delivered`; ended unwritten with no other handler delivering → `delivery_failed`. `release()` drops the
-   * mark early when the reply will not carry the result.
+   * handler gets to write. A reply that has already ended (its client left during execution, the lock or
+   * the signature check) can no longer emit that end, so it takes no mark at all. `deliver()` makes this
+   * reply the row's delivery (SPEC §6.2 step 12): written → `delivered`; ended unwritten with no other
+   * handler delivering → `delivery_failed`. `release()` drops the mark early when the reply will not carry
+   * the result.
    */
   function holdLive(reply: FastifyReply, requestId: string): { deliver(): void; release(): void } {
-    live.add(requestId);
-    let held = true;
+    const res = reply.raw;
+    let held = !(res.destroyed || res.closed || res.writableEnded);
+    if (held) live.add(requestId);
     let delivering = false;
     let finished = false;
     const end = (): void => {
@@ -265,15 +267,18 @@ export function createGateway(deps: GatewayDeps): Gateway {
       // Another handler still delivering this row decides its outcome (and keeps the reconciler off it).
       else if (last) db.transition(requestId, ['settled'], 'delivery_failed', now());
     };
-    reply.raw.once('finish', () => {
-      finished = true;
-      end();
-    });
-    reply.raw.once('close', end);
+    if (held) {
+      res.once('finish', () => {
+        finished = true;
+        end();
+      });
+      res.once('close', end);
+    }
     return {
       deliver() {
         if (!held) {
           // The client left before a byte was written: a failed delivery, unless another handler is delivering.
+          // (A written reply cannot be here: writing starts only after deliver().)
           if (!live.has(requestId)) db.transition(requestId, ['settled'], 'delivery_failed', now());
           return;
         }
@@ -285,6 +290,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     };
   }
 
+  /** The stored result: exact bytes + `X-Attested-Proof` + `PAYMENT-RESPONSE` + `X-Request-Id` (SPEC §6.2 step 12). */
   function storedResult(reply: FastifyReply, row: CallRow, hold: { deliver(): void } | null): FastifyReply {
     hold?.deliver();
     return reply
