@@ -172,9 +172,9 @@ test('E1. committed contracts/.env + .data/svm/0.8.26/solc-0.8.26: the pre-deplo
   );
 });
 
-test('E2. the same tree: the pre-deploy check must not PASS when the next compile builds a DeployRegistry that skips every check', () => {
-  // What forge script would compile next: the committed solc rewrote DeployBase and the refusals are gone.
-  assert.ok(results.callsAll.some((l) => l.startsWith('test ')), 'the next compile did not run the committed solc');
-  assert.deepEqual(REFUSALS.filter((t) => results.e.passed.has(t)), [], 'the next compile still refuses look-alikes; the attack did not take');
-  assert.notEqual(results.preDeployE.status, 0, 'the pre-deploy check PASSED a tree whose committed .env runs a committed solc (DEPLOYMENTS.md, ADR-001)');
+// E2 rewritten per Joshua's decision 2026-10-31: asserted through the check's own exit code and FAIL line.
+test('E2. the same tree: the pre-deploy check must refuse a tree whose committed .env runs a committed solc', () => {
+  assert.equal(results.preDeployE.status, 1, 'the pre-deploy check did not FAIL a tree whose committed .env runs a committed solc (DEPLOYMENTS.md, ADR-001)');
+  assert.match(results.preDeployE.out, /^FAIL {2}contracts\/\.env is committed/m);
+  assert.match(results.preDeployE.out, /^FAIL: /m);
 });
