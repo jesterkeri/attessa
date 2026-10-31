@@ -42,10 +42,15 @@ the command line. Run from `contracts/` on a clean checkout of the commit being 
 
 The deploy scripts' own checks run inside the build they guard, so a committed remapping,
 foundry.toml or source can switch them off (T10 adversary r5 to r8). `check-deploy.mjs --pre-deploy`
+first refuses, before any forge command, a committed `.env` anywhere in the repo (forge loads it
+into its own environment and solc's, unseen by `forge config`; T10 adversary r9) and any
+`contracts/foundry.toml` line other than a blank, a comment, `[profile.default]` or a key it knows,
+with solc exactly `"0.8.26"` (forge runs a solc named by path, even for `forge config`). It
 rebuilds the scripts and the production contracts from the committed blobs under fixed settings.
-It then requires forge's effective config in `contracts/` (foundry.toml, remappings.txt, `.env`,
-`~/.foundry/foundry.toml`) to equal those settings, refuses any `FOUNDRY_*` or `DAPP_*` variable,
-runs `forge clean` and `forge build`, and requires `contracts/out` to match byte for byte. Run it
+It then requires forge's effective config in `contracts/` (foundry.toml, remappings.txt, an
+uncommitted `.env`, `~/.foundry/foundry.toml`) to equal those settings, refuses any `FOUNDRY_*`
+or `DAPP_*` variable, runs `forge clean` and `forge build`, and requires `contracts/out` to match
+byte for byte. Run it
 right before every `forge script` below, simulation and broadcast alike, in the same shell: it must
 print `PASS` and exit 0. On `FAIL`, stop. Run each `forge script` exactly as written (the only
 extra flag allowed is the Gas note's `--gas-estimate-multiplier`), with no `FOUNDRY_*` or `DAPP_*`

@@ -6,8 +6,10 @@
 //   node scripts/check-deploy.mjs <network> [--rpc-url URL] [--deployments FILE] [--core FILE]
 //   node scripts/check-deploy.mjs --pre-deploy
 //
-// --pre-deploy, before every deploy simulation and broadcast: requires forge's effective config in
-// contracts/ to equal the reference build's and no FOUNDRY_*/DAPP_* variable, then runs `forge clean`
+// --pre-deploy, before every deploy simulation and broadcast: refuses, before any forge command, a
+// committed .env and a contracts/foundry.toml line outside a fixed list (T10 adversary r9), then
+// requires forge's effective config in contracts/ to equal the reference build's and no
+// FOUNDRY_*/DAPP_* variable, then runs `forge clean`
 // and `forge build` there and requires the deploy scripts and production contracts in that out to
 // equal the reference build (bytecode and runtime code, metadata included) and to be compiled only
 // from committed blobs. A committed remapping, foundry.toml or source that swaps the in-script
@@ -469,9 +471,55 @@ function forgeConfig(root, env) {
   return c;
 }
 
+// Keys a contracts/foundry.toml line may set: the ones the config comparison below knows about.
+const TOML_KEYS = [...CONFIG_SAFE_TO_BUILD, ...CONFIG_MAY_DIFFER, 'solc', 'solc_version'];
+
+/**
+ * What the committed tree must not contain before any forge command runs (T10 adversary r9).
+ * forge loads `.env` from the project root and the cwd into its own environment, and every process
+ * it starts, solc included, inherits it: one committed line (XDG_DATA_HOME to reach a committed
+ * svm solc, LD_PRELOAD to load a committed library into the real one) runs committed code while
+ * `forge config` shows nothing. So no tracked file, in HEAD or the index, may be named .env. And
+ * forge, `forge config` included, runs a solc that foundry.toml names by path (`<path> --version`),
+ * also through `extends`, an upper-case key or an escaped quoted key. So every contracts/foundry.toml
+ * line must be blank, a comment, `[profile.default]` or `<key> = <value>` with a bare key from
+ * TOML_KEYS, and solc/solc_version must be exactly "0.8.26". Returns one message per problem.
+ */
+function committedProblems(contracts) {
+  const problems = [];
+  let tracked;
+  try {
+    const list = (a) => gitRaw(ROOT, a, { encoding: 'utf8', maxBuffer: 64 << 20 }).split('\0');
+    tracked = new Set([...list(['ls-files', '-z']), ...list(['ls-tree', '-r', '-z', '--name-only', 'HEAD'])]);
+  } catch (e) {
+    throw new Refuse(`cannot list the committed files at ${ROOT}: ${e.message.split('\n')[0]}`);
+  }
+  for (const p of tracked) {
+    if (p.split('/').pop() === '.env') problems.push(`${p} is committed; forge loads it into its environment and every process it starts, unseen by forge config. Remove it from git`);
+  }
+  let toml;
+  try {
+    toml = readFileSync(join(contracts, 'foundry.toml'), 'utf8');
+  } catch (e) {
+    return [...problems, `contracts/foundry.toml cannot be read (${e.code})`];
+  }
+  toml.split('\n').forEach((line, i) => {
+    const l = line.trim();
+    if (l === '' || l.startsWith('#') || l === '[profile.default]') return;
+    const m = /^([a-z_]+)\s*=\s*(.*)$/.exec(l);
+    if (!m || !TOML_KEYS.includes(m[1])) {
+      problems.push(`contracts/foundry.toml line ${i + 1} is not blank, a comment, [profile.default] or a key check-deploy knows; forge could run a solc it names`);
+    } else if (m[1].startsWith('solc') && m[2] !== JSON.stringify(SOLC_VERSION)) {
+      problems.push(`contracts/foundry.toml line ${i + 1} sets ${m[1]} to something other than "${SOLC_VERSION}"; forge runs a solc named by path, even for forge config`);
+    }
+  });
+  return problems;
+}
+
 /**
  * --pre-deploy: what `forge script` from contracts/ will compile and run, against the reference
- * build. First, without compiling anything: no FOUNDRY_* or DAPP_* variable, and the effective
+ * build. First, before any forge command: committedProblems(). Then, without compiling anything:
+ * no FOUNDRY_* or DAPP_* variable, and the effective
  * config (foundry.toml and its profiles, remappings.txt, .env, ~/.foundry/foundry.toml) equal to the
  * reference build's but for CONFIG_MAY_DIFFER, so out, src, libs, solc (never a committed path),
  * remappings, optimizer, via_ir, evm_version and metadata settings all match (T10 adversary r8 O).
@@ -490,6 +538,7 @@ function preDeploy() {
   const problems = Object.keys(process.env)
     .filter((k) => k.startsWith('FOUNDRY_') || k.startsWith('DAPP_'))
     .map((k) => `environment sets ${k}; DEPLOYMENTS.md sets no FOUNDRY_* or DAPP_* variable, unset it`);
+  problems.push(...committedProblems(contracts));
   if (problems.length) return report(problems);
   const dir = mkdtempSync(join(tmpdir(), 'check-deploy-cfg-'));
   let want, got;
