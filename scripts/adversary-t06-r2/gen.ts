@@ -151,6 +151,12 @@ for (let k = 0; k < 400; k++) {
   else t = Buffer.concat([base.subarray(0, pos), ch, base.subarray(pos + 1)]);
   add(`fuzz ${k} op${op} @${pos}`, t);
 }
+// Codex r2: canonical numbers whose digits end in zeros (integer zeros, around the 1e21 switch to
+// exponent form, and past 2^53), under an unknown key. Valid JCS, so TS refuses them as a field.
+for (const v of [10, 100, 1000, 120, -1000, 1e20, 1e21, 1.5e21, -1.2e22, 2 ** 53 * 1000, 1e300, 1e-7, 100.25, 1050.5]) {
+  add(`extra proof number ${jcs(v)}`, withProof({ zz: v }));
+}
+add('extra top number 1000', jcs({ ...good, extra: 1000 }));
 
 // ------------------------------------------------------------ verdicts
 type Verdict = { accept: boolean; jcsValid: boolean };
