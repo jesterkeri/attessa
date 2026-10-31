@@ -104,7 +104,7 @@ jobs:
       - run: |
           links=$(find contracts -type l)
           if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
-          rc=0; grep -rn --exclude-dir=out --exclude-dir=cache slither-disable contracts || rc=$?
+          rc=0; grep -rn slither-disable contracts || rc=$?
           if [ $rc -ne 1 ]; then echo "slither-disable comments under contracts/ are not allowed (grep rc=$rc): triage by id in contracts/slither.db.json"; exit 1; fi
       # Nothing to analyse before the first contract lands; once one exists the config must too.
       - working-directory: contracts
