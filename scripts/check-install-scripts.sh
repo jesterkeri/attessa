@@ -15,19 +15,31 @@ git -C "$root" archive HEAD | tar -x -C "$work"
 cd "$work"
 # Static allow-list first: install-time code can also come from a pnpmfile, a config file or a
 # manifest field that no lifecycle event reports, so only the config this repo uses is accepted.
+# Manifests are read as data from git blobs, never through the archive, and every manifest name
+# must be a regular file: as a directory, node would run its "main" and pnpm would read inside it.
 # -z: without it git quotes non-ASCII paths and the basename checks below would miss them.
-git -C "$root" ls-tree -r -z --name-only HEAD | python3 -I -c '
-import json, os, re, sys, yaml
-bad = []
-for p in (os.fsdecode(r) for r in sys.stdin.buffer.read().split(b"\0") if r):
-    b = p.rsplit("/", 1)[-1].lower()
+pm=$(git -C "$root" ls-tree -r -z --full-tree HEAD | python3 -I -c '
+import json, os, re, subprocess, sys, yaml
+blob = lambda oid: subprocess.run(["git", "-C", sys.argv[1], "cat-file", "blob", oid], capture_output=True, check=True).stdout
+names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
+bad, reg = [], {}
+for r in sys.stdin.buffer.read().split(b"\0"):
+    if not r: continue
+    meta, raw = r.split(b"\t", 1); mode, _, oid = meta.decode().split()
+    p = os.fsdecode(raw); parts = p.split("/"); b = parts[-1].lower()
+    if mode == "100644": reg[p] = oid
     # A tracked node_modules is read at install (bins, .modules.yaml, the virtual store).
-    if "node_modules" in p.split("/"): bad.append(f"{p}: not allowed (tracked node_modules)")
+    if "node_modules" in parts: bad.append(f"{p}: not allowed (tracked node_modules)")
+    # Symlinks would make the install read a path other than the blob checked here.
+    if mode == "120000": bad.append(f"{p}: not allowed (symlink)")
+    if any(c.lower() in names for c in parts[:-1]) or (b in names and mode != "100644"):
+        bad.append(f"{p}: not allowed (a manifest name that is not a regular file, mode {mode})")
     # .gitattributes is refused too: export-ignore would hide a file from the archive installed below.
-    if b in (".npmrc", ".gitattributes") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b):
-        bad.append(f"{p}: not allowed (pnpm reads it at install)")
-    if b == "package.json":
-        m = json.load(open(p))
+    # package.json5 and package.yaml are pnpm manifests these checks do not parse; corepack reads .corepack.env.
+    if b in (".npmrc", ".gitattributes", ".corepack.env", "package.json5", "package.yaml") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b):
+        bad.append(f"{p}: not allowed (read at install)")
+    if b == "package.json" and p in reg:
+        m = json.loads(blob(oid))
         if p == "package.json":
             keys = {"name", "private", "packageManager", "engines", "devDependencies", "pnpm"}
             if set(m.get("pnpm", {})) - {"onlyBuiltDependencies"}: bad.append(f"{p}: pnpm keys other than onlyBuiltDependencies")
@@ -41,12 +53,15 @@ for p in (os.fsdecode(r) for r in sys.stdin.buffer.read().split(b"\0") if r):
         for k in ("dependencies", "devDependencies"):
             for n, v in m.get(k, {}).items():
                 if not re.fullmatch(r"workspace:[*^~]|[\^~]?\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
-w = yaml.safe_load(open("pnpm-workspace.yaml"))
+for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
+    if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
+w = yaml.safe_load(blob(reg["pnpm-workspace.yaml"])) if "pnpm-workspace.yaml" in reg else None
 if w != {"packages": ["packages/*"], "ignoreScripts": True}: bad.append(f"pnpm-workspace.yaml: must be exactly packages [packages/*] and ignoreScripts true, got {w!r}")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
-sys.exit(1 if bad else 0)
-' || { echo "FAIL: repo install config is outside the allow-list"; exit 1; }
-pm=$(node -p 'require("./package.json").packageManager || ""'); pm=${pm%%+*}
+if bad: sys.exit(1)
+print(json.loads(blob(reg["package.json"])).get("packageManager", ""))
+' "$root") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
+pm=${pm%%+*}
 [[ $pm =~ ^pnpm@[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL: packageManager is not pnpm@X.Y.Z: '$pm'"; exit 1; }
 # The pinned pnpm is fetched into a folder outside the archive (npx would first run a
 # node_modules/.bin/$pm found from the cwd) and must report exactly that version.
