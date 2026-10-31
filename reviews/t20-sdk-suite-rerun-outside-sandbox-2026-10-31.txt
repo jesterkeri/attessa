@@ -1,0 +1,28 @@
+?? reviews/t20-buyer-sdk-review-r1.md
+stdout | test/adversary-t20-r2.test.ts > adversary T20 r2 > a reservation dropped by the 10-minute sweep never lets its stalled owner sign over another entry
+{"a":["stopped","request_id_conflict"],"b":["verified",null],"signatures":1,"settled":1,"ledger":[["verified","0x0795fc7de5d9ee602b85d2b6fb7f662d845ed7bc8b120514d7d0b1bcff3de867"]],"bNonce":"0x0795fc7de5d9ee602b85d2b6fb7f662d845ed7bc8b120514d7d0b1bcff3de867"}
+
+ ✓ test/adversary-t20-r2.test.ts (3 tests) 848ms
+   ✓ adversary T20 r2 > a settled call whose results endpoint was briefly unreachable still verifies through getResult  760ms
+ ✓ test/refusals.test.ts (30 tests) 876ms
+ ✓ test/adversary-t20-r5.test.ts (1 test) 1612ms
+   ✓ adversary T20 r5: the lock > a pending.lock this user cannot write never lets two processes in at once  1610ms
+ ✓ test/outcomes.test.ts (18 tests) 1014ms
+ ✓ test/pay.test.ts (9 tests) 1061ms
+   ✓ payAndVerify happy path (V0-V12) > 202 that never resolves: uncertain until validBefore + 60, then chain decides (not charged)  437ms
+ ✓ test/adversary-t20-r6.test.ts (1 test) 1890ms
+   ✓ adversary T20 r6: the lock > processes racing to create pending.lock under umask 0277 never enter the lock together  1889ms
+ ✓ test/proof-checks.test.ts (31 tests) 1780ms
+ ✓ test/ledger.test.ts (10 tests) 8199ms
+   ✓ INV-19: reservations are shared across processes > two processes racing on one dataDir never reserve more than dailyCap in total  1583ms
+   ✓ INV-19: the lock holds when holders are killed or stopped inside it > 6 processes x 200 entries with random SIGKILLs and SIGSTOPs: never two inside, no write lost  6453ms
+ ✓ test/adversary-t20-r4.test.ts (3 tests) 30178ms
+   ✓ adversary T20 r4: the lock > a stalled live holder whose lock is broken by age never erases the breaker's reservation  30058ms
+
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+   Start at  18:22:46
+   Duration  31.34s (transform 1.14s, setup 0ms, collect 10.01s, tests 49.12s, environment 3ms, prepare 1.67s)
+
+
+[exited with code 0]
