@@ -5,9 +5,12 @@
 #   - files: .yml or .yaml only (any other name or case fails, so nothing goes unscanned).
 #   - top level: name, on, permissions (exactly contents: read), concurrency, jobs.
 #   - triggers: pull_request, push, each with branches only.
-#   - jobs: name, runs-on, timeout-minutes, steps. Steps: name, id, uses, with, run, env,
-#     working-directory. No local ./ actions, no docker://, no reusable workflows.
-#   - uses: only the actions below, pinned to a full commit sha, with only the inputs listed.
+#   - jobs: name, runs-on (exactly ubuntu-latest: never a self-hosted or labelled runner),
+#     timeout-minutes (an integer 1 to 30), steps. Steps: name, id, uses, with, run, env,
+#     working-directory (a relative path inside the checkout). No local ./ actions, no docker://,
+#     no reusable workflows. concurrency.cancel-in-progress is a boolean.
+#   - uses: only the actions below, pinned to a full commit sha, with only the inputs listed and
+#     only the values listed; actions/checkout always with persist-credentials: false.
 #   - ${{ }}: free inside env: values (the safe pattern: env, then "$VAR" in the script); in
 #     with: inputs and concurrency.group only the expressions in EXPR; nowhere else, run: included.
 # Keys are compared exactly, and a duplicate key (in any letter case) fails.
@@ -20,10 +23,14 @@ try:
 except ImportError:
     print("FAIL: PyYAML (python3-yaml) is required to parse workflows"); sys.exit(1)
 
-ACTIONS = {  # action -> inputs it may be given
-    "actions/checkout": {"persist-credentials", "submodules", "fetch-depth"},
-    "actions/setup-node": {"node-version-file"},
-    "foundry-rs/foundry-toolchain": {"version"},
+ACTIONS = {  # action -> input it may be given -> the values it may take
+    "actions/checkout": {
+        "persist-credentials": lambda v: v is False,
+        "submodules": lambda v: v == "recursive" or type(v) is bool,
+        "fetch-depth": lambda v: type(v) is int and v >= 0,
+    },
+    "actions/setup-node": {"node-version-file": lambda v: v == ".nvmrc"},
+    "foundry-rs/foundry-toolchain": {"version": lambda v: v == "${{ steps.foundry.outputs.version }}"},
 }
 EXPR = re.compile(r"github\.ref|github\.base_ref \|\| \x27main\x27|steps\.[a-z][a-z0-9_-]*\.outputs\.[a-z][a-z0-9_-]*")
 TOP = {"name", "on", "permissions", "concurrency", "jobs"}
@@ -64,6 +71,9 @@ def step(where, s):
     if ("uses" in s) == ("run" in s): fail(where, "a step needs exactly one of uses or run"); return
     for k in ("name", "id", "working-directory", "run"):
         if k in s: scalar(f"{where}.{k}", s[k])
+    wd = s.get("working-directory")
+    if "working-directory" in s and not (isinstance(wd, str) and re.fullmatch(r"[A-Za-z0-9_-][A-Za-z0-9._-]*(/[A-Za-z0-9_-][A-Za-z0-9._-]*)*", wd)):
+        fail(f"{where}.working-directory", f"{wd!r} must be a relative path inside the checkout")
     for k, v in keys(f"{where}.env", s.get("env", {}), set(s.get("env", {}) or {})).items():
         scalar(f"{where}.env.{k}", v, "free")
     if "uses" in s:
@@ -72,6 +82,10 @@ def step(where, s):
             fail(f"{where}.uses", f"{u!r} is not an allowed action pinned to a 40-character sha {sorted(ACTIONS)}"); return
         for k, v in keys(f"{where}.with", s.get("with", {}), ACTIONS[m.group(1)]).items():
             scalar(f"{where}.with.{k}", v, "list")
+            if k in ACTIONS[m.group(1)] and not ACTIONS[m.group(1)][k](v): fail(f"{where}.with.{k}", f"value {v!r} is not allowed")
+        # checkout persists the token on disk unless told not to, where every later step can read it.
+        if m.group(1) == "actions/checkout" and (s.get("with") or {}).get("persist-credentials") is not False:
+            fail(f"{where}.with", "actions/checkout needs persist-credentials: false")
     elif "with" in s: fail(where, "with: without uses:")
 
 files = sorted(pathlib.Path(sys.argv[1]).iterdir())
@@ -95,10 +109,16 @@ for f in files:
             for b in keys(f"{f}.on.{t}", v, {"branches"}).get("branches", []): scalar(f"{f}.on.{t}.branches", b)
     c = keys(f"{f}.concurrency", d.get("concurrency", {}), {"group", "cancel-in-progress"})
     for k, v in c.items(): scalar(f"{f}.concurrency.{k}", v, "list" if k == "group" else None)
+    if type(c.get("cancel-in-progress", True)) is not bool: fail(f"{f}.concurrency.cancel-in-progress", "must be true or false")
     for j, job in keys(f"{f}.jobs", d.get("jobs"), set(d.get("jobs") or {})).items():
         keys(f"{f}.jobs.{j}", job, JOB)
         for k in ("name", "runs-on", "timeout-minutes"):
             if k in job: scalar(f"{f}.jobs.{j}.{k}", job[k])
+        # A pull_request job runs fork code: only a fresh GitHub-hosted runner, never a persistent one.
+        ro = job.get("runs-on")
+        if ro != "ubuntu-latest": fail(f"{f}.jobs.{j}.runs-on", f"must be exactly ubuntu-latest, got {ro!r}")
+        tm = job.get("timeout-minutes", 1)
+        if type(tm) is not int or not 1 <= tm <= 30: fail(f"{f}.jobs.{j}.timeout-minutes", f"must be an integer 1 to 30, got {tm!r}")
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps: fail(f"{f}.jobs.{j}", "steps must be a non-empty list"); continue
         for i, s in enumerate(steps): step(f"{f}.jobs.{j}.steps[{i}]", s)
