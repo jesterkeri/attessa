@@ -110,3 +110,21 @@ npm error A complete log of this run can be found in: /tmp/tmp.3AKQ57Yn6q/_logs/
 exit=1
 ```
 reviewed: pending (Codex r2)
+
+## T02 adversary rounds 4-11 - 2026-10-31
+Adversary rounds 4 to 10 each found a defect in the two CI guard scripts, each fixed with its test committed under scripts/adversary-t02-r*/ (15 tests, all rc=0 at 0ebb889). Joshua chose allow-lists on 2026-10-30, so scripts/check-workflows.sh and scripts/check-install-scripts.sh now accept only what this repo uses today:
+- check-workflows.sh: fixed top-level, trigger, job and step keys; actions pinned by full sha with their current inputs only; `${{ }}` only in env values and a few listed places; `runs-on` exactly ubuntu-latest; checkout with persist-credentials false; bounded timeout-minutes and working-directory.
+- check-install-scripts.sh: manifests read as git blobs and must be regular files; no pnpmfile, .npmrc, .gitattributes, .corepack.env, package.yaml/json5 or tracked node_modules; pnpm fixed at 10.32.1 and fetched outside the tree under test; every lockfile resolution a default-registry integrity; allowlisted builds need a pinned integrity.
+Two Slither guard changes to ci.yml were applied by Joshua (5c0a049, 8612448). Round 11, on 0ebb889: no defect found.
+Verify (TASKS T02) at 0ebb889, 2026-10-31:
+```
+$ pnpm install --frozen-lockfile && pnpm -r typecheck && (cd contracts && forge build) && cargo build --locked --manifest-path enclave/Cargo.toml && git -C contracts/lib/nitro-validator rev-parse --short HEAD
+Done in 359ms using pnpm v10.32.1
+typecheck_ok
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.01s
+0ea0d12
+verify_exit=0
+```
+CI on 0ebb889: ci success, harness success.
+reviewed: pending (Codex r2)
