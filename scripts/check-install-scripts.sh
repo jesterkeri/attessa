@@ -6,6 +6,9 @@
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
 # archive, never inside it, and PATH keeps absolute entries only.
 set -u
+# The one pnpm the probe runs. packageManager must name exactly this: pnpm 10 would otherwise switch
+# to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
+pnpm_version=10.32.1
 PATH=$(printf %s "$PATH" | tr ':' '\n' | grep '^/' | paste -sd:)
 root=$(git rev-parse --show-toplevel)
 tmp=$(mktemp -d)
@@ -20,6 +23,10 @@ cd "$work"
 # -z: without it git quotes non-ASCII paths and the basename checks below would miss them.
 pm=$(git -C "$root" ls-tree -r -z --full-tree HEAD | python3 -I -c '
 import json, os, re, subprocess, sys, yaml
+V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
+# The allowlisted packages pnpm may build, as name@version: the integrity the default registry
+# publishes. Adding one to the lockfile means pinning its registry integrity here first.
+PINNED = {}
 blob = lambda oid: subprocess.run(["git", "-C", sys.argv[1], "cat-file", "blob", oid], capture_output=True, check=True).stdout
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
 bad, reg = [], {}
@@ -43,7 +50,11 @@ for r in sys.stdin.buffer.read().split(b"\0"):
         if p == "package.json":
             keys = {"name", "private", "packageManager", "engines", "devDependencies", "pnpm"}
             if set(m.get("pnpm", {})) - {"onlyBuiltDependencies"}: bad.append(f"{p}: pnpm keys other than onlyBuiltDependencies")
-            if set(m.get("pnpm", {}).get("onlyBuiltDependencies", [])) - {"better-sqlite3", "keytar"}: bad.append(f"{p}: onlyBuiltDependencies beyond better-sqlite3, keytar")
+            if set(m.get("pnpm", {}).get("onlyBuiltDependencies", [])) - set(ALLOW): bad.append(f"{p}: onlyBuiltDependencies beyond better-sqlite3, keytar")
+            pmv = m.get("packageManager")
+            if pmv != f"pnpm@{V}": bad.append(f"{p}: packageManager must be exactly pnpm@{V}, got {pmv!r}")
+            e = m.get("engines", {})
+            if set(e) - {"node", "pnpm"} or e.get("pnpm", f">={V}") not in (V, f">={V}"): bad.append(f"{p}: engines must be node and pnpm {V} or >={V} only, got {e!r}")
         else:
             keys = {"name", "version", "private", "type", "main", "types", "scripts", "dependencies", "devDependencies"}
         extra = set(m) - keys
@@ -57,12 +68,35 @@ for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
 w = yaml.safe_load(blob(reg["pnpm-workspace.yaml"])) if "pnpm-workspace.yaml" in reg else None
 if w != {"packages": ["packages/*"], "ignoreScripts": True}: bad.append(f"pnpm-workspace.yaml: must be exactly packages [packages/*] and ignoreScripts true, got {w!r}")
+# Every package comes from the default registry by integrity (no tarball, file, directory, git,
+# link or other registry), so pnpm installs the registry copy or fails the integrity check.
+L = yaml.safe_load(blob(reg["pnpm-lock.yaml"])) if "pnpm-lock.yaml" in reg else {}
+if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settings") != {"autoInstallPeers": True, "excludeLinksFromLockfile": False}:
+    bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
+    L = {}
+semver = r"(@[A-Za-z0-9._~-]+/)?[A-Za-z0-9._~-]+@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?"
+for k, v in (L.get("packages") or {}).items():
+    r = (v or {}).get("resolution")
+    if not re.fullmatch(semver, str(k)) or not isinstance(r, dict) or set(r) != {"integrity"} or not re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", str(r["integrity"])):
+        bad.append(f"pnpm-lock.yaml: {k}: resolution must be the default registry with a sha512 integrity only, got {r!r}")
+    elif str(k).rsplit("@", 1)[0] in ALLOW and PINNED.get(k) != r["integrity"]:
+        bad.append(f"pnpm-lock.yaml: {k}: allowlisted package without its pinned registry integrity")
+# Dependency versions never point into the tree: link: only for a workspace: specifier.
+for i, deps in (L.get("importers") or {}).items():
+    for f, d in (deps or {}).items():
+        for n, x in (d or {}).items():
+            xv = str(x.get("version"))
+            if ":" in xv and not (xv.startswith("link:") and str(x.get("specifier")).startswith("workspace:")):
+                bad.append(f"pnpm-lock.yaml: importer {i} {n}: version {xv!r} is not a registry version")
+for k, v in (L.get("snapshots") or {}).items():
+    for f in ("dependencies", "optionalDependencies"):
+        for n, x in ((v or {}).get(f) or {}).items():
+            if ":" in str(x): bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: version {x!r} is not a registry version")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
 print(json.loads(blob(reg["package.json"])).get("packageManager", ""))
-' "$root") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
-pm=${pm%%+*}
-[[ $pm =~ ^pnpm@[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "FAIL: packageManager is not pnpm@X.Y.Z: '$pm'"; exit 1; }
+' "$root" "$pnpm_version") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
+[ "$pm" = "pnpm@$pnpm_version" ] || { echo "FAIL: packageManager is not pnpm@$pnpm_version: '$pm'"; exit 1; }
 # The pinned pnpm is fetched into a folder outside the archive (npx would first run a
 # node_modules/.bin/$pm found from the cwd) and must report exactly that version.
 ( cd "$tmp/pm" && npm_config_userconfig=/dev/null npm install --prefix "$tmp/pm" --ignore-scripts \
