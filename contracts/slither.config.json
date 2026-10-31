@@ -1,5 +1,5 @@
 {
-  "include_paths": "contracts/(?!(lib|test|script)/)",
+  "include_paths": "contracts/(?!lib/nitro-validator/)",
   "exclude_dependencies": false,
   "compile_force_framework": "foundry",
   "foundry_compile_all": false
