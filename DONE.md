@@ -84,3 +84,40 @@ exit 0
 adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts; UTF-8 BOM accepted before X-Attested-Proof JCS); 120/120 vector values recomputed independently with cast. r2 on 705d515 NO DEFECT FOUND; 124/124 recomputed; 2,130-input TS vs Rust url differential fuzz, no originHash disagreement.
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
+
+## T10 Codex review r2 - 2026-10-31
+Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
+```
+scripts/check-deploy.adversary.test.mjs # tests 3
+scripts/check-deploy.adversary.test.mjs # fail 0
+scripts/check-deploy.adversary2.test.mjs # tests 4
+scripts/check-deploy.adversary2.test.mjs # fail 0
+scripts/check-deploy.adversary3.test.mjs # tests 2
+scripts/check-deploy.adversary3.test.mjs # fail 0
+scripts/check-deploy.adversary4.test.mjs # tests 3
+scripts/check-deploy.adversary4.test.mjs # fail 0
+scripts/check-deploy.adversary5.test.mjs # tests 3
+scripts/check-deploy.adversary5.test.mjs # fail 0
+scripts/check-deploy.adversary6.test.mjs # tests 3
+scripts/check-deploy.adversary6.test.mjs # fail 0
+scripts/check-deploy.adversary7.test.mjs # tests 3
+scripts/check-deploy.adversary7.test.mjs # fail 0
+scripts/check-deploy.adversary8.test.mjs # tests 2
+scripts/check-deploy.adversary8.test.mjs # fail 0
+scripts/check-deploy.adversary9.test.mjs # tests 3
+scripts/check-deploy.adversary9.test.mjs # fail 0
+scripts/check-deploy.committed-config.test.mjs # tests 6
+scripts/check-deploy.committed-config.test.mjs # fail 0
+scripts/check-deploy.test.mjs # tests 11
+scripts/check-deploy.test.mjs # fail 0
+REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+predeploy_exit=0
+```
+Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
+note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
