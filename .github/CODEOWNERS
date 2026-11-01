@@ -1,0 +1,11 @@
+# Changes to CI, its guards and the install config need Joshua's review. The guard scripts run from
+# the pull request's own checkout, so they are a review aid; this review, required by the main and
+# staging rulesets, is the boundary (OPEN-QUESTIONS.md, T02 Codex r2 M1).
+/.github/                       @jesterkeri
+/scripts/check-*.sh             @jesterkeri
+/scripts/adversary-*/           @jesterkeri
+/contracts/slither.config.json  @jesterkeri
+/contracts/foundry.toml         @jesterkeri
+/pnpm-workspace.yaml            @jesterkeri
+/package.json                   @jesterkeri
+/pnpm-lock.yaml                 @jesterkeri
