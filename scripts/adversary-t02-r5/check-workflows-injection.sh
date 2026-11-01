@@ -8,7 +8,7 @@ t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
 fails=0
 case_() { # name, run line, dir under .github holding the file, file name
   d="$t/$1"; mkdir -p "$d/.github/workflows" "$d/.github/$3"
-  printf 'on:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  a:\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - run: %s\n' "$2" > "$d/.github/$3/$4"
+  printf 'on:\n  pull_request:\npermissions:\n  contents: read\njobs:\n  a:\n    runs-on: ubuntu-latest\n    timeout-minutes: 1\n    steps:\n      - run: %s\n' "$2" > "$d/.github/$3/$4"
   out=$(cd "$d" && "$S" 2>&1); st=$?
   if [ $st -eq 0 ] || [ "$(grep -c '^FAIL ' <<<"$out")" != 1 ] || ! grep -q '^FAIL .*steps\[0\]\.run: expression not allowed here' <<<"$out"; then
     echo "$out"; echo "FAIL $1: check-workflows.sh did not refuse exactly the run: expression"; fails=1

@@ -6,8 +6,11 @@
 #   - top level: name, on, permissions (exactly contents: read), concurrency, jobs.
 #   - triggers: pull_request, push, each with branches only.
 #   - jobs: name, runs-on (exactly ubuntu-latest: never a self-hosted or labelled runner),
-#     timeout-minutes (required, an integer from 1 to the job's PIPELINE.md budget: ts 4, contracts 4,
-#     slither 3, enclave 5, guardrails and secrets 1, any other job id 5), steps. Steps: name, id, uses, with, run, env,
+#     timeout-minutes (required, an integer from 1 to the job's PIPELINE.md budget, looked up by
+#     both its id and its name (which defaults to the id) and the smaller one taken: ts 4,
+#     contracts 4, slither 3, enclave 5, guardrails 1, secrets / "no secrets in client output" 1;
+#     an id or name not listed counts as 1, the strictest budget, so a renamed or new job is held
+#     to 1 minute until it is added to BUDGET deliberately), steps. Steps: name, id, uses, with, run, env,
 #     working-directory (a relative path inside the checkout). No local ./ actions, no docker://,
 #     no reusable workflows. concurrency.cancel-in-progress is a boolean.
 #   - uses: only the actions below, pinned to a full commit sha, with only the inputs listed and
@@ -37,7 +40,8 @@ EXPR = re.compile(r"github\.ref|github\.base_ref \|\| \x27main\x27|steps\.[a-z][
 TOP = {"name", "on", "permissions", "concurrency", "jobs"}
 TRIGGERS = {"pull_request", "push"}
 JOB = {"name", "runs-on", "timeout-minutes", "steps"}
-BUDGET = {"ts": 4, "contracts": 4, "slither": 3, "enclave": 5, "guardrails": 1, "secrets": 1}  # PIPELINE.md minutes per job; any other id 5
+# PIPELINE.md minutes per job, keyed by job id and by job name; anything not listed gets 1.
+BUDGET = {"ts": 4, "contracts": 4, "slither": 3, "enclave": 5, "guardrails": 1, "secrets": 1, "no secrets in client output": 1}
 STEP = {"name", "id", "uses", "with", "run", "env", "working-directory"}
 
 class Loader(yaml.SafeLoader):
@@ -121,7 +125,7 @@ for f in files:
         if ro != "ubuntu-latest": fail(f"{f}.jobs.{j}.runs-on", f"must be exactly ubuntu-latest, got {ro!r}")
         # Required: without it GitHub applies its own default of hours, not a bound of ours.
         tm = job.get("timeout-minutes")
-        cap = BUDGET.get(j, 5)
+        cap = min(BUDGET.get(str(j), 1), BUDGET.get(str(job.get("name", j)), 1))
         if type(tm) is not int or not 1 <= tm <= cap: fail(f"{f}.jobs.{j}.timeout-minutes", f"is required, an integer 1 to {cap} (PIPELINE.md budget), got {tm!r}")
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps: fail(f"{f}.jobs.{j}", "steps must be a non-empty list"); continue

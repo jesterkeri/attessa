@@ -2,7 +2,7 @@
 # T02 Codex r3 m1: check-workflows.sh accepted any timeout-minutes from 1 to 30, so jobs above their
 # PIPELINE.md budget (ts 4, contracts 4, slither 3, enclave 5, harness jobs 1) passed. Each named job
 # at its budget must be clean; one minute over must be refused; a job id PIPELINE does not name may
-# take at most 5 (the largest PR budget).
+# take at most 1 (the strictest budget; T02 adversary r16).
 set -u
 S="$(cd "$(dirname "$0")/../.." && pwd)/scripts/check-workflows.sh"
 t=$(mktemp -d); trap 'rm -rf "$t"' EXIT
@@ -38,5 +38,5 @@ check slither 3 clean;    check slither 4 refused
 check enclave 5 clean;    check enclave 6 refused
 check guardrails 1 clean; check guardrails 2 refused
 check secrets 1 clean;    check secrets 2 refused
-check other 5 clean;      check other 6 refused
+check other 1 clean;      check other 2 refused
 exit $rc
