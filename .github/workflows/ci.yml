@@ -110,11 +110,17 @@ jobs:
           rc=0; grep -rn slither-disable contracts || rc=$?
           if [ $rc -ne 1 ]; then echo "slither-disable comments under contracts/ are not allowed (grep rc=$rc): triage by id in contracts/slither.db.json"; exit 1; fi
       # Nothing to analyse before the first contract lands; once one exists the config must too.
+      # Slither also hides any result marked reviewed in export.sarif + export.sarif.sarifexplorer in
+      # its working directory. Both are pointed at paths that cannot exist (/dev/null is not a folder),
+      # on the command line, which slither.config.json cannot override, so slither.db.json stays the
+      # only triage source.
       - working-directory: contracts
         run: |
           if [ -z "$(find src -name '*.sol' -print -quit 2>/dev/null)" ]; then echo "no contracts in contracts/src yet"; exit 0; fi
           test -f slither.config.json || { echo "contracts/slither.config.json is missing"; exit 1; }
-          slither . --config-file slither.config.json --fail-high
+          # The config can switch detectors or Highs off, so it is pinned by hash: changing it means changing this line too.
+          echo "286a5db0516ed27fe867c3f4f0502e5062eff84701a3d4c842fab4ece9c998ca  slither.config.json" | sha256sum -c - || { echo "contracts/slither.config.json differs from the pinned config"; exit 1; }
+          slither . --config-file slither.config.json --fail-high --sarif-input /dev/null/no-sarif-input --sarif-triage /dev/null/no-sarif-triage
 
   enclave:
     name: enclave
