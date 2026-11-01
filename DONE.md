@@ -229,3 +229,14 @@ scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
 scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
 ```
 reviewed: pending (Codex r4)
+
+## T02 Codex r4: SHIP (2026-11-01)
+
+Codex round 4 reviewed 6444f45 in a frozen worktree and found no critical, major or minor finding. Round-3 M1 (CODEOWNERS now a single `* @jesterkeri` rule) and m1 (job timeouts held to the PIPELINE.md budgets by id and by name) are both recorded as fixed. Network-bound checks (install probe, TASKS verify line) could not run in the Codex sandbox and are listed under U8; the unsandboxed output is the previous entry. The rulesets that enforce CODEOWNERS stay Joshua's to enable (OPEN-QUESTIONS.md).
+
+Final lines of the review, verbatim:
+```
+DECISION: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t02-scaffold-and-ci-guards-review-r4.md | verdict: implementation-ready (earlier rounds: reviews/t02-scaffold-and-ci-guards-review-r2.md, reviews/t02-scaffold-and-ci-guards-review-r3.md)
