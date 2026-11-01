@@ -103,8 +103,12 @@ jobs:
       # so triage goes only by id through contracts/slither.db.json (docs/SLITHER_TRIAGE.md).
       # Slither drops lib/nitro-validator/ only because it is pinned at 0ea0d12 (adr/001): the pin
       # check fails a moved gitlink, another .gitmodules url, or a checkout that differs from the pin.
+      # Slither analyses what forge builds, so forge's effective configuration and remappings are pinned
+      # by hash too (a .env under contracts/ or a FOUNDRY_* variable fails): changing the build means
+      # changing these two hashes (scripts/check-slither-build.sh --print).
       - run: |
           bash scripts/check-nitro-pin.sh
+          bash scripts/check-slither-build.sh c786f19f6b3447b730790ca955f962fecac6c43cbbbc77a309bcdf7f9d597cbd 13f8341e22c75c4486aaa3d448461acd3be099f47849fd3ed4d689e057fe0ddf
           links=$(find contracts -type l)
           if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
           rc=0; grep -rn slither-disable contracts || rc=$?
