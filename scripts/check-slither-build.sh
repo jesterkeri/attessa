@@ -11,15 +11,21 @@
 #   2. no FOUNDRY_* or DAPP_* variable in this environment (the same overrides; names only are printed).
 #   3. SHA-256 of `forge config --json`, normalised (keys sorted, compact), equals argv[1].
 #   4. SHA-256 of `forge remappings`, sorted, equals argv[2].
-#   5. the source set: a build of contracts/src with the same skips as Slither's own build
-#      (forge build --build-info --deny never --skip ./test/** ./script/** --force), into a temporary
-#      out/ and cache/ that are removed afterwards, must compile only files under src/ or
-#      lib/nitro-validator/src/ (the build-info source names). Any other file fails, by path: a src
+#   5. the source set of two builds, each into a temporary out/ and cache/ removed afterwards, read from
+#      the build-info source names. Any compiled file outside the allowed folders fails, by path: a
 #      contract importing a copy of the validator from vendor/, lib/<other>/, test/ or a relative path
 #      outside contracts/ would otherwise build against code the pin check does not hold.
-#      Accepted limit: a renamed copy of the validator inside src/ passes this check. Slither then
-#      analyses all of it as this repo's own code, and it is product code under review like any other
-#      file in src/.
+#      a. the src build, with the same skips as Slither's own build (forge build --build-info --deny
+#         never --skip ./test/** ./script/** --force): only src/ and lib/nitro-validator/src/.
+#      b. the deploy build, src/ plus script/, still skipping test/ (--skip ./test/**): the validator
+#         stack is deployed by a script (SPEC 3.5), which Slither does not build. Only src/, script/,
+#         lib/nitro-validator/src/ and lib/nitro-validator/lib/forge-std/src/, the forge-std the pinned
+#         submodule carries, which is where `forge-std/` resolves under the pinned remappings
+#         (forge-std/=lib/nitro-validator/lib/forge-std/src/).
+#      Accepted limit: code written inside src/ or script/ itself passes this check, a renamed copy of
+#      the validator included. Slither analyses all of src/ as this repo's own code; script/ is not
+#      analysed by Slither, and both are reviewed product code. T10's check-deploy compares the
+#      deployed bytecode with the artifacts of the deploy build this check has already constrained.
 # Stripped before hashing, because it differs from machine to machine and does not change the build:
 #   etherscan_api_key (taken from the ETHERSCAN_API_KEY environment variable; also a secret).
 # forge 1.8.1 prints no absolute path in either output (src, out, libs, cache_path, remappings and
@@ -63,26 +69,33 @@ fi
 
 tmp=$(mktemp -d) || { echo "FAIL: mktemp failed"; exit 1; }
 trap 'rm -rf "$tmp"' EXIT
-if forge build --build-info --deny never --skip './test/**' './script/**' --force \
-     --out "$tmp/out" --cache-path "$tmp/cache" > "$tmp/build.log" 2>&1; then
+# source_set <name> <allowed prefixes, space-separated> <skip glob>...: build into $tmp/<name>, fail on
+# any compiled file outside the allowed prefixes, and on a build that compiles nothing from src/.
+source_set() {
+  local name=$1 allowed=$2 srcs badsrc; shift 2
+  if ! forge build --build-info --deny never --skip "$@" --force \
+       --out "$tmp/$name/out" --cache-path "$tmp/$name/cache" > "$tmp/$name.log" 2>&1; then
+    fail "forge build ($name build) failed:"$'\n'"$(tail -20 "$tmp/$name.log")"; return
+  fi
   srcs=$(python3 -I -c '
 import glob, json, sys
 files = glob.glob(sys.argv[1] + "/*.json")
 if not files:
     sys.exit("no build-info written")
+allowed = tuple(sys.argv[2].split())
 names = set()
 for f in files:
     names.update(json.load(open(f))["input"]["sources"])
 for n in sorted(names):
-    ok = (n.startswith("src/") or n.startswith("lib/nitro-validator/src/")) and \
-         "/../" not in n and "/./" not in n and "//" not in n
-    print(("ok  " if ok else "BAD ") + n)' "$tmp/out/build-info" 2>&1) ||
-    fail "could not read the source set from build-info: $srcs"
+    ok = n.startswith(allowed) and "/../" not in n and "/./" not in n and "//" not in n
+    print(("ok  " if ok else "BAD ") + n)' "$tmp/$name/out/build-info" "$allowed" 2>&1) ||
+    { fail "could not read the source set of the $name build from build-info: $srcs"; return; }
   badsrc=$(printf '%s\n' "$srcs" | sed -n 's/^BAD //p')
-  [ -z "$badsrc" ] || fail "the build of contracts/src compiles files outside src/ and lib/nitro-validator/src/:"$'\n'"$badsrc"
-  printf '%s\n' "$srcs" | grep -q '^ok  src/' || fail "the build of contracts/src compiled nothing from src/"
-else
-  fail "forge build of contracts/src failed:"$'\n'"$(tail -20 "$tmp/build.log")"
-fi
-[ "$bad" = 0 ] && echo "ok: forge build configuration and remappings match the pinned hashes; the build compiles only src/ and lib/nitro-validator/src/"
+  [ -z "$badsrc" ] || fail "the $name build compiles files outside ${allowed// /, }:"$'\n'"$badsrc"
+  printf '%s\n' "$srcs" | grep -q '^ok  src/' || fail "the $name build compiled nothing from src/"
+}
+# a. what Slither analyses; b. what the deploy scripts deploy (script/ may not exist yet).
+source_set src "src/ lib/nitro-validator/src/" './test/**' './script/**'
+source_set deploy "src/ script/ lib/nitro-validator/src/ lib/nitro-validator/lib/forge-std/src/" './test/**'
+[ "$bad" = 0 ] && echo "ok: forge build configuration and remappings match the pinned hashes; the src build compiles only src/ and lib/nitro-validator/src/, the deploy build only those, script/ and the pinned forge-std"
 exit "$bad"
