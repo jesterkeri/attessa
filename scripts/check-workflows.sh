@@ -6,7 +6,8 @@
 #   - top level: name, on, permissions (exactly contents: read), concurrency, jobs.
 #   - triggers: pull_request, push, each with branches only.
 #   - jobs: name, runs-on (exactly ubuntu-latest: never a self-hosted or labelled runner),
-#     timeout-minutes (required, an integer 1 to 30), steps. Steps: name, id, uses, with, run, env,
+#     timeout-minutes (required, an integer from 1 to the job's PIPELINE.md budget: ts 4, contracts 4,
+#     slither 3, enclave 5, guardrails and secrets 1, any other job id 5), steps. Steps: name, id, uses, with, run, env,
 #     working-directory (a relative path inside the checkout). No local ./ actions, no docker://,
 #     no reusable workflows. concurrency.cancel-in-progress is a boolean.
 #   - uses: only the actions below, pinned to a full commit sha, with only the inputs listed and
@@ -36,6 +37,7 @@ EXPR = re.compile(r"github\.ref|github\.base_ref \|\| \x27main\x27|steps\.[a-z][
 TOP = {"name", "on", "permissions", "concurrency", "jobs"}
 TRIGGERS = {"pull_request", "push"}
 JOB = {"name", "runs-on", "timeout-minutes", "steps"}
+BUDGET = {"ts": 4, "contracts": 4, "slither": 3, "enclave": 5, "guardrails": 1, "secrets": 1}  # PIPELINE.md minutes per job; any other id 5
 STEP = {"name", "id", "uses", "with", "run", "env", "working-directory"}
 
 class Loader(yaml.SafeLoader):
@@ -119,7 +121,8 @@ for f in files:
         if ro != "ubuntu-latest": fail(f"{f}.jobs.{j}.runs-on", f"must be exactly ubuntu-latest, got {ro!r}")
         # Required: without it GitHub applies its own default of hours, not a bound of ours.
         tm = job.get("timeout-minutes")
-        if type(tm) is not int or not 1 <= tm <= 30: fail(f"{f}.jobs.{j}.timeout-minutes", f"is required, an integer 1 to 30, got {tm!r}")
+        cap = BUDGET.get(j, 5)
+        if type(tm) is not int or not 1 <= tm <= cap: fail(f"{f}.jobs.{j}.timeout-minutes", f"is required, an integer 1 to {cap} (PIPELINE.md budget), got {tm!r}")
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps: fail(f"{f}.jobs.{j}", "steps must be a non-empty list"); continue
         for i, s in enumerate(steps): step(f"{f}.jobs.{j}.steps[{i}]", s)

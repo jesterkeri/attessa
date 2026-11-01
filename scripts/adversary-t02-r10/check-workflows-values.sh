@@ -21,7 +21,7 @@ concurrency:
 jobs:
   a:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -47,8 +47,8 @@ Y
   else echo "ok   $1: $(grep -m1 '^FAIL ' <<<"$out")"; fi
 }
 run base ''
-run timeout-long 's/timeout-minutes: 8/timeout-minutes: 600/'
-run timeout-string 's/timeout-minutes: 8/timeout-minutes: "8"/'
+run timeout-long 's/timeout-minutes: 5/timeout-minutes: 600/'
+run timeout-string 's/timeout-minutes: 5/timeout-minutes: "5"/'
 run workdir-parent 's/working-directory: contracts/working-directory: ..\/..\/tmp/'
 run workdir-absolute 's/working-directory: contracts/working-directory: \/tmp/'
 run cancel-string 's/cancel-in-progress: true/cancel-in-progress: maybe/'
