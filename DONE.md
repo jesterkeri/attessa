@@ -128,3 +128,53 @@ verify_exit=0
 ```
 CI on 0ebb889: ci success, harness success.
 reviewed: pending (Codex r2)
+
+## T02 Codex r2 fixes and adversary rounds 12-15 - 2026-11-01
+commit: 021831c (this entry adds only DONE.md)
+review: reviews/t02-scaffold-and-ci-guards-review-r2.md on 7335c20 (VERDICT: changes required, M1 M2 m1)
+fixed:
+- M2: scripts/check-install-scripts.sh proves the checkout pnpm installs, not just HEAD. It runs from the repo root (`pwd -P`), git's toplevel must be that folder, every GIT_* variable is unset, and it refuses any .npmrc, pnpmfile or .corepack.env anywhere, and any manifest, lockfile or workspace file that differs from HEAD (9ed70f7, ee53a50). Adversary r12-r14 then showed repo-local git config could redirect or run programs (core.worktree, a git archive smudge filter, a promisor remote's uploadpack); the probe now refuses any extensions.* key, promisor remote, partialclonefilter or non-zero repositoryformatversion before reading any object, never runs archive or cat-file, and hashes each file on disk against the ls-tree blob id (5f642a2, 021831c).
+- m1: check-workflows.sh requires timeout-minutes on every job; harness jobs get 2 (9ed70f7, d492d70).
+- M1: .github/CODEOWNERS makes Joshua the owner of CI, the guards and the install config; OPEN-QUESTIONS.md records that the guards are a review aid and the boundary is code-owner review in the rulesets (f6f17ff). GitHub's codeowners/errors API reports 0 errors on feat/t02-scaffold.
+- Four old workflow fixtures (r4, r5, r6) passed for an unrelated refusal; each is now valid except for its own defect and asserts that single refusal (9639b2e).
+adversary: rounds 12, 13 and 14 found a defect each (tests under scripts/adversary-t02-r12..r14); round 15 on 021831c found none.
+CI on 021831c: ci success, harness success.
+verified (TASKS T02, run at 021831c):
+```
+$ pnpm install --frozen-lockfile && pnpm -r typecheck && (cd contracts && forge build) && cargo build --locked --manifest-path enclave/Cargo.toml && git -C contracts/lib/nitro-validator rev-parse --short HEAD
+Done in 356ms using pnpm v10.32.1
+typecheck_ok
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.00s
+0ea0d12
+verify_exit=0
+```
+guards and the full adversary suite, run outside any sandbox at 021831c under flock:
+```
+workflows clean
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+probe_rc=0
+scripts/adversary-t02-codex-r2/check-workflows-timeout-missing.sh rc=0
+scripts/adversary-t02-codex-r2/install-probe-dirty-checkout.sh rc=0
+scripts/adversary-t02-r10/check-workflows-self-hosted.sh rc=0
+scripts/adversary-t02-r10/check-workflows-values.sh rc=0
+scripts/adversary-t02-r12/install-probe-core-worktree.sh rc=0
+scripts/adversary-t02-r12/install-probe-git-env.sh rc=0
+scripts/adversary-t02-r13/install-probe-archive-filter.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch-tree.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch.sh rc=0
+scripts/adversary-t02-r4/check-workflows-bypass.sh rc=0
+scripts/adversary-t02-r4/install-probe-false-clean.sh rc=0
+scripts/adversary-t02-r5/check-workflows-injection.sh rc=0
+scripts/adversary-t02-r5/install-probe-keytar-dir.sh rc=0
+scripts/adversary-t02-r6/check-workflows-docker-args.sh rc=0
+scripts/adversary-t02-r6/install-probe-pnpmfile.sh rc=0
+scripts/adversary-t02-r7/install-probe-npx-local-bin.sh rc=0
+scripts/adversary-t02-r7/install-probe-xdg-config.sh rc=0
+scripts/adversary-t02-r7/install-static-nonascii-path.sh rc=0
+scripts/adversary-t02-r8/install-probe-manifest-dir.sh rc=0
+scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
+scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
+scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
+```
+reviewed: pending (Codex r3)
