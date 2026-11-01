@@ -10,15 +10,24 @@ set -u
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
 pnpm_version=10.32.1
 PATH=$(printf %s "$PATH" | tr ':' '\n' | grep '^/' | paste -sd:)
-root=$(git rev-parse --show-toplevel)
+# The checked folder is the one this is run from, where the developer runs pnpm install, and it
+# must be the repository root. Git is never left to choose it: GIT_* variables are dropped, git's
+# own toplevel (which core.worktree or a .git file can move) must be this same folder, and every
+# later git call names --git-dir and --work-tree explicitly.
+unset $(compgen -e | grep '^GIT_')
+root=$(pwd -P)
+top=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) && top=$(realpath -e "$top" 2>/dev/null)
+[ -e "$root/.git" ] && [ "$top" = "$root" ] \
+  || { echo "FAIL: run this from the repository root; git's work tree is '$top', not '$root'"; exit 1; }
+G=(git --git-dir="$root/.git" --work-tree="$root" -c core.fsmonitor=false)
 # The proof below is about HEAD, so it only holds for this checkout when every file pnpm reads at
 # install here is HEAD's. Refuse, by path, any .npmrc, pnpmfile or .corepack.env anywhere outside
 # node_modules (found by name only; a .npmrc is never opened), and any root or packages/* manifest,
 # lockfile or pnpm-workspace.yaml that is untracked, ignored, modified, missing or not a regular file.
-python3 -I - "$root" <<'PY' || { echo "FAIL: the checkout differs from HEAD in files pnpm reads at install"; exit 1; }
+python3 -I - "$root" "$root/.git" <<'PY' || { echo "FAIL: the checkout differs from HEAD in files pnpm reads at install"; exit 1; }
 import os, re, subprocess, sys
 root = sys.argv[1]
-git = lambda *a: subprocess.run(["git", "-C", root, *a], capture_output=True, check=True).stdout
+git = lambda *a: subprocess.run(["git", "--git-dir=" + sys.argv[2], "--work-tree=" + root, "-c", "core.fsmonitor=false", *a], capture_output=True, check=True).stdout
 never = lambda b: b in (".npmrc", ".corepack.env") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b)
 MANIFESTS = ("package.json", "package.json5", "package.yaml")
 ROOT_FILES = MANIFESTS + ("pnpm-lock.yaml", "pnpm-workspace.yaml")
@@ -54,20 +63,20 @@ PY
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 work="$tmp/src"; mkdir "$work" "$tmp/pm"
-git -C "$root" archive HEAD | tar -x -C "$work"
+"${G[@]}" archive HEAD | tar -x -C "$work"
 cd "$work"
 # Static allow-list first: install-time code can also come from a pnpmfile, a config file or a
 # manifest field that no lifecycle event reports, so only the config this repo uses is accepted.
 # Manifests are read as data from git blobs, never through the archive, and every manifest name
 # must be a regular file: as a directory, node would run its "main" and pnpm would read inside it.
 # -z: without it git quotes non-ASCII paths and the basename checks below would miss them.
-pm=$(git -C "$root" ls-tree -r -z --full-tree HEAD | python3 -I -c '
+pm=$("${G[@]}" ls-tree -r -z --full-tree HEAD | python3 -I -c '
 import json, os, re, subprocess, sys, yaml
 V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 # The allowlisted packages pnpm may build, as name@version: the integrity the default registry
 # publishes. Adding one to the lockfile means pinning its registry integrity here first.
 PINNED = {}
-blob = lambda oid: subprocess.run(["git", "-C", sys.argv[1], "cat-file", "blob", oid], capture_output=True, check=True).stdout
+blob = lambda oid: subprocess.run(["git", "--git-dir=" + sys.argv[1], "cat-file", "blob", oid], capture_output=True, check=True).stdout
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
 bad, reg = [], {}
 for r in sys.stdin.buffer.read().split(b"\0"):
@@ -135,7 +144,7 @@ for k, v in (L.get("snapshots") or {}).items():
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
 print(json.loads(blob(reg["package.json"])).get("packageManager", ""))
-' "$root" "$pnpm_version") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
+' "$root/.git" "$pnpm_version") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
 [ "$pm" = "pnpm@$pnpm_version" ] || { echo "FAIL: packageManager is not pnpm@$pnpm_version: '$pm'"; exit 1; }
 # The pinned pnpm is fetched into a folder outside the archive (npx would first run a
 # node_modules/.bin/$pm found from the cwd) and must report exactly that version.
