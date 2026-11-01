@@ -405,3 +405,12 @@ exit=0
 result: EnclaveRegistry branch coverage 100% (61/61), done-when is >= 90%; Slither 0 untriaged results.
 adversary: rounds 8-12 found a defect each (tests under scripts/adversary-t09-r8..r11; r12 probe archived), round 13 found none.
 reviewed: pending (Codex)
+
+## T09 Codex r2 - 2026-11-01
+Codex reviewed T09 at 098b435 under REVIEW-PROTOCOL U1 to U9: no critical, major or minor findings; the TASKS T09 verify line, both guard scripts and seven adversary probes reran and passed.
+Review file: reviews/t09-coverage-and-slither-review-r2.md. Its closing lines, verbatim:
+```
+SHIP: the T09 done-when condition and hardened Slither gate are evidenced.
+VERDICT: implementation-ready
+```
+reviewed: reviews/t09-coverage-and-slither-review-r2.md | verdict: implementation-ready | C0 M0 m0
