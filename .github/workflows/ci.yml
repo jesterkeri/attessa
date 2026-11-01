@@ -18,7 +18,7 @@ jobs:
   ts:
     name: ts
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 4   # PIPELINE.md budget
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -46,7 +46,7 @@ jobs:
   contracts:
     name: contracts
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 4   # PIPELINE.md budget
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -81,7 +81,7 @@ jobs:
   slither:
     name: slither
     runs-on: ubuntu-latest
-    timeout-minutes: 6
+    timeout-minutes: 3   # PIPELINE.md budget
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
@@ -116,7 +116,7 @@ jobs:
   enclave:
     name: enclave
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5   # PIPELINE.md budget
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
