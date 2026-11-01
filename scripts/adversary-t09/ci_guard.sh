@@ -17,4 +17,5 @@ PY
 ) || exit 2
 echo "--- guard step from ${CI_YML:-ci.yml}:"; printf '%s\n' "$STEP"; echo "---"
 cd "$1" || exit 2
-bash --noprofile --norc -eo pipefail -c "$STEP"
+# Under the heavy lock: the step builds contracts/src (scripts/check-slither-build.sh). Never call this under flock.
+flock -w 1800 /home/hr/.cache/attessa-heavy.lock bash --noprofile --norc -eo pipefail -c "$STEP"

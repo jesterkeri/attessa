@@ -11,6 +11,15 @@
 #   2. no FOUNDRY_* or DAPP_* variable in this environment (the same overrides; names only are printed).
 #   3. SHA-256 of `forge config --json`, normalised (keys sorted, compact), equals argv[1].
 #   4. SHA-256 of `forge remappings`, sorted, equals argv[2].
+#   5. the source set: a build of contracts/src with the same skips as Slither's own build
+#      (forge build --build-info --deny never --skip ./test/** ./script/** --force), into a temporary
+#      out/ and cache/ that are removed afterwards, must compile only files under src/ or
+#      lib/nitro-validator/src/ (the build-info source names). Any other file fails, by path: a src
+#      contract importing a copy of the validator from vendor/, lib/<other>/, test/ or a relative path
+#      outside contracts/ would otherwise build against code the pin check does not hold.
+#      Accepted limit: a renamed copy of the validator inside src/ passes this check. Slither then
+#      analyses all of it as this repo's own code, and it is product code under review like any other
+#      file in src/.
 # Stripped before hashing, because it differs from machine to machine and does not change the build:
 #   etherscan_api_key (taken from the ETHERSCAN_API_KEY environment variable; also a secret).
 # forge 1.8.1 prints no absolute path in either output (src, out, libs, cache_path, remappings and
@@ -51,5 +60,29 @@ fi
 [ $# = 2 ] || { echo "usage: $0 <config-sha256> <remappings-sha256> | --print"; exit 1; }
 [ "$cfg_sha" = "$1" ] || fail "forge's effective configuration changed (sha256 $cfg_sha, pinned $1): src, libs, remappings, allow_paths or a profile no longer match the pinned build"
 [ "$remap_sha" = "$2" ] || fail "forge's remappings changed (sha256 $remap_sha, pinned $2):"$'\n'"$remaps"
-[ "$bad" = 0 ] && echo "ok: forge build configuration and remappings match the pinned hashes"
+
+tmp=$(mktemp -d) || { echo "FAIL: mktemp failed"; exit 1; }
+trap 'rm -rf "$tmp"' EXIT
+if forge build --build-info --deny never --skip './test/**' './script/**' --force \
+     --out "$tmp/out" --cache-path "$tmp/cache" > "$tmp/build.log" 2>&1; then
+  srcs=$(python3 -I -c '
+import glob, json, sys
+files = glob.glob(sys.argv[1] + "/*.json")
+if not files:
+    sys.exit("no build-info written")
+names = set()
+for f in files:
+    names.update(json.load(open(f))["input"]["sources"])
+for n in sorted(names):
+    ok = (n.startswith("src/") or n.startswith("lib/nitro-validator/src/")) and \
+         "/../" not in n and "/./" not in n and "//" not in n
+    print(("ok  " if ok else "BAD ") + n)' "$tmp/out/build-info" 2>&1) ||
+    fail "could not read the source set from build-info: $srcs"
+  badsrc=$(printf '%s\n' "$srcs" | sed -n 's/^BAD //p')
+  [ -z "$badsrc" ] || fail "the build of contracts/src compiles files outside src/ and lib/nitro-validator/src/:"$'\n'"$badsrc"
+  printf '%s\n' "$srcs" | grep -q '^ok  src/' || fail "the build of contracts/src compiled nothing from src/"
+else
+  fail "forge build of contracts/src failed:"$'\n'"$(tail -20 "$tmp/build.log")"
+fi
+[ "$bad" = 0 ] && echo "ok: forge build configuration and remappings match the pinned hashes; the build compiles only src/ and lib/nitro-validator/src/"
 exit "$bad"
