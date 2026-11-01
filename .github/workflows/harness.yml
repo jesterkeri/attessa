@@ -6,7 +6,7 @@ name: harness
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, staging, 'feat/**']
 
 # Least privilege by default. Grant more only in the job that needs it.
 permissions:
@@ -20,9 +20,10 @@ jobs:
   guardrails:
     name: guardrails
     runs-on: ubuntu-latest
+    timeout-minutes: 1   # PIPELINE.md budget (jobs take 3-7 s)
     steps:
-      # Pin third-party actions to a full sha. actions/* is first-party; a tag is acceptable there.
-      - uses: actions/checkout@v4
+      # Every action is pinned to a full commit sha, first-party included (check-workflows.sh enforces).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
           persist-credentials: false   # the token is otherwise left in .git/config and can leak via artifacts
@@ -63,8 +64,9 @@ jobs:
   secrets:
     name: no secrets in client output
     runs-on: ubuntu-latest
+    timeout-minutes: 1   # PIPELINE.md budget (jobs take 3-7 s)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { persist-credentials: false }
       # Replace with your real build. The check is only meaningful against built output.
       # - run: npm ci --ignore-scripts && npm run build
