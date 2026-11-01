@@ -6,7 +6,7 @@
 #   - top level: name, on, permissions (exactly contents: read), concurrency, jobs.
 #   - triggers: pull_request, push, each with branches only.
 #   - jobs: name, runs-on (exactly ubuntu-latest: never a self-hosted or labelled runner),
-#     timeout-minutes (an integer 1 to 30), steps. Steps: name, id, uses, with, run, env,
+#     timeout-minutes (required, an integer 1 to 30), steps. Steps: name, id, uses, with, run, env,
 #     working-directory (a relative path inside the checkout). No local ./ actions, no docker://,
 #     no reusable workflows. concurrency.cancel-in-progress is a boolean.
 #   - uses: only the actions below, pinned to a full commit sha, with only the inputs listed and
@@ -117,8 +117,9 @@ for f in files:
         # A pull_request job runs fork code: only a fresh GitHub-hosted runner, never a persistent one.
         ro = job.get("runs-on")
         if ro != "ubuntu-latest": fail(f"{f}.jobs.{j}.runs-on", f"must be exactly ubuntu-latest, got {ro!r}")
-        tm = job.get("timeout-minutes", 1)
-        if type(tm) is not int or not 1 <= tm <= 30: fail(f"{f}.jobs.{j}.timeout-minutes", f"must be an integer 1 to 30, got {tm!r}")
+        # Required: without it GitHub applies its own default of hours, not a bound of ours.
+        tm = job.get("timeout-minutes")
+        if type(tm) is not int or not 1 <= tm <= 30: fail(f"{f}.jobs.{j}.timeout-minutes", f"is required, an integer 1 to 30, got {tm!r}")
         steps = job.get("steps")
         if not isinstance(steps, list) or not steps: fail(f"{f}.jobs.{j}", "steps must be a non-empty list"); continue
         for i, s in enumerate(steps): step(f"{f}.jobs.{j}.steps[{i}]", s)

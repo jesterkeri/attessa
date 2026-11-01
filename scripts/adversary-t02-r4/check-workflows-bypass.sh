@@ -18,6 +18,7 @@ permissions:
 jobs:
   a:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: ./.github/actions/setup
@@ -40,6 +41,7 @@ permissions:
 jobs:
   a:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - "uses": actions/checkout@v4
 Y

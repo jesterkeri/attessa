@@ -11,6 +11,46 @@ set -u
 pnpm_version=10.32.1
 PATH=$(printf %s "$PATH" | tr ':' '\n' | grep '^/' | paste -sd:)
 root=$(git rev-parse --show-toplevel)
+# The proof below is about HEAD, so it only holds for this checkout when every file pnpm reads at
+# install here is HEAD's. Refuse, by path, any .npmrc, pnpmfile or .corepack.env anywhere outside
+# node_modules (found by name only; a .npmrc is never opened), and any root or packages/* manifest,
+# lockfile or pnpm-workspace.yaml that is untracked, ignored, modified, missing or not a regular file.
+python3 -I - "$root" <<'PY' || { echo "FAIL: the checkout differs from HEAD in files pnpm reads at install"; exit 1; }
+import os, re, subprocess, sys
+root = sys.argv[1]
+git = lambda *a: subprocess.run(["git", "-C", root, *a], capture_output=True, check=True).stdout
+never = lambda b: b in (".npmrc", ".corepack.env") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b)
+MANIFESTS = ("package.json", "package.json5", "package.yaml")
+ROOT_FILES = MANIFESTS + ("pnpm-lock.yaml", "pnpm-workspace.yaml")
+bad = []
+# Submodules and other worktrees nested in this one are separate checkouts that pnpm does not read.
+nested = {os.path.realpath(os.path.join(root, os.fsdecode(e.split(b"\t", 1)[1])))
+          for e in git("ls-files", "-s", "-z").split(b"\0") if e.startswith(b"160000 ")}
+nested |= {os.path.realpath(os.fsdecode(l[9:])) for l in git("worktree", "list", "--porcelain").split(b"\n") if l.startswith(b"worktree ")}
+nested.discard(os.path.realpath(root))
+for d, dirs, files in os.walk(root):
+    for n in dirs + files:
+        if never(n.lower()): bad.append(os.path.relpath(os.path.join(d, n), root) + ": not allowed in the checkout")
+    dirs[:] = [n for n in dirs if n not in ("node_modules", ".git") and os.path.realpath(os.path.join(d, n)) not in nested]
+# Every manifest pnpm can read here, in the checkout or in HEAD, must be byte-for-byte HEAD.
+head = {os.fsdecode(p) for p in git("ls-tree", "-r", "-z", "--name-only", "HEAD").split(b"\0") if p}
+want = {p for p in head if p in ROOT_FILES or re.fullmatch(r"packages/[^/]+/(%s)" % "|".join(map(re.escape, MANIFESTS)), p)}
+want |= {n for n in ROOT_FILES if os.path.lexists(os.path.join(root, n))}
+pk = os.path.join(root, "packages")
+if os.path.islink(pk): bad.append("packages: a symlink in the checkout")
+elif os.path.isdir(pk):
+    for d in os.listdir(pk):
+        if os.path.islink(os.path.join(pk, d)): bad.append(f"packages/{d}: a symlink in the checkout")
+        want |= {f"packages/{d}/{m}" for m in MANIFESTS if os.path.lexists(os.path.join(pk, d, m))}
+for p in sorted(want):
+    f = os.path.join(root, p)
+    if p not in head: bad.append(f"{p}: untracked or ignored in the checkout")
+    elif not os.path.lexists(f): bad.append(f"{p}: missing from the checkout")
+    elif os.path.islink(f) or not os.path.isfile(f): bad.append(f"{p}: not a regular file in the checkout")
+    elif open(f, "rb").read() != git("cat-file", "blob", "HEAD:" + p): bad.append(f"{p}: modified in the checkout")
+for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
+sys.exit(1 if bad else 0)
+PY
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 work="$tmp/src"; mkdir "$work" "$tmp/pm"
