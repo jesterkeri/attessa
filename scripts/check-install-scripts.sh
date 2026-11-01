@@ -5,12 +5,17 @@
 # runs other than a registry copy of the allowlist (better-sqlite3, keytar).
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
 # snapshot, never inside it, and PATH keeps absolute entries only.
-# Git runs no program the repository configures. Only these commands are used, all reading objects,
-# refs or worktree metadata: rev-parse --show-toplevel, ls-tree, cat-file blob (no --filters or
-# --textconv) and worktree list. None reads the index or the working tree through git, so no
-# fsmonitor, filter, textconv, diff or merge driver, hook or pager from .git/config or attributes
-# applies; the snapshot is written blob by blob instead of git archive or checkout, which apply
-# attribute filters. Never add status, diff, archive, checkout or ls-files here.
+# Git runs no program the repository configures. In order, git is asked only for:
+#   1. rev-parse --show-toplevel and --git-common-dir: path resolution from config, no objects.
+#   2. config --includes --list: parses config files and runs nothing. The repository is refused
+#      here if it can fetch objects on demand (any extensions.*, a promisor remote or partial-clone
+#      filter, repositoryformatversion other than 0, a promisor pack), because a missing object
+#      would then be fetched through the remote's configured upload-pack. GIT_NO_LAZY_FETCH=1 is
+#      also set, for gits from 2.45. Only after this gate:
+#   3. ls-tree and worktree list: tree objects and worktree metadata. No blob is ever read through
+#      git (no cat-file): each file is read from the checkout and its blob id computed here.
+# None of these reads the index or applies attributes, so no fsmonitor, filter, textconv, diff or
+# merge driver, hook or pager runs. Never add status, diff, archive, checkout, ls-files or cat-file.
 set -u
 # The one pnpm the probe runs. packageManager must name exactly this: pnpm 10 would otherwise switch
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
@@ -27,13 +32,39 @@ top=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) && top=$(realpath -e
 [ -e "$root/.git" ] && [ "$top" = "$root" ] \
   || { echo "FAIL: run this from the repository root; git's work tree is '$top', not '$root'"; exit 1; }
 G=(git --git-dir="$root/.git" --work-tree="$root" -c core.fsmonitor=false)
+export GIT_NO_LAZY_FETCH=1
+# Gate (step 2 of the header), before any command that reads an object: refuse a repository that
+# can fetch a missing object on demand. Key names only are printed; config values are never shown.
+common=$("${G[@]}" rev-parse --git-common-dir) && common=$(cd "$root" && realpath -e "$common") \
+  || { echo "FAIL: cannot find the repository's object store"; exit 1; }
+gcfg=$(mktemp)
+"${G[@]}" config --includes --list --show-scope -z > "$gcfg" && python3 -I - "$common" "$gcfg" <<'PY'
+import glob, os, sys
+t = open(sys.argv[2], "rb").read().split(b"\0")
+bad = []
+for scope, kv in zip(t[0::2], t[1::2]):
+    k, _, v = kv.partition(b"\n"); k = k.decode("utf-8", "replace").lower(); v = v.decode("utf-8", "replace").strip().lower()
+    where = scope.decode("utf-8", "replace")
+    if k.startswith("extensions."): bad.append(f"{k} ({where} config): no repository extensions")
+    elif k.startswith("remote.") and k.endswith(".promisor") and v not in ("false", "no", "off", "0"): bad.append(f"{k} ({where} config): a promisor remote")
+    elif k.startswith("remote.") and k.endswith(".partialclonefilter"): bad.append(f"{k} ({where} config): a partial-clone filter")
+    elif k == "core.repositoryformatversion" and v != "0": bad.append(f"{k} ({where} config): must be 0")
+objects = os.path.join(sys.argv[1], "objects")
+for f in [os.path.join(objects, "info", "promisor")] + glob.glob(os.path.join(objects, "pack", "*.promisor")):
+    if os.path.lexists(f): bad.append(f"{os.path.relpath(f, sys.argv[1])}: promisor objects")
+for x in bad: print("FAIL " + x)
+sys.exit(1 if bad else 0)
+PY
+gst=$?; rm -f "$gcfg"
+[ $gst -eq 0 ] || { echo "FAIL: the repository can fetch objects on demand; the probe reads only local objects"; exit 1; }
 # The proof below is about HEAD, so it only holds for this checkout when every file pnpm reads at
 # install here is HEAD's. Refuse, by path, any .npmrc, pnpmfile or .corepack.env anywhere outside
 # node_modules (found by name only; a .npmrc is never opened), and any root or packages/* manifest,
 # lockfile or pnpm-workspace.yaml that is untracked, ignored, modified, missing or not a regular file.
 python3 -I - "$root" "$root/.git" <<'PY' || { echo "FAIL: the checkout differs from HEAD in files pnpm reads at install"; exit 1; }
-import os, re, subprocess, sys
+import hashlib, os, re, subprocess, sys
 root = sys.argv[1]
+oid_of = lambda b: hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
 git = lambda *a: subprocess.run(["git", "--git-dir=" + sys.argv[2], "--work-tree=" + root, "-c", "core.fsmonitor=false", *a], capture_output=True, check=True).stdout
 never = lambda b: b in (".npmrc", ".corepack.env") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b)
 MANIFESTS = ("package.json", "package.json5", "package.yaml")
@@ -49,7 +80,9 @@ for d, dirs, files in os.walk(root):
         if never(n.lower()): bad.append(os.path.relpath(os.path.join(d, n), root) + ": not allowed in the checkout")
     dirs[:] = [n for n in dirs if n not in ("node_modules", ".git") and os.path.realpath(os.path.join(d, n)) not in nested]
 # Every manifest pnpm can read here, in the checkout or in HEAD, must be byte-for-byte HEAD.
-head = {os.fsdecode(p) for p in git("ls-tree", "-r", "-z", "--name-only", "HEAD").split(b"\0") if p}
+head = {}
+for e in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split(b"\0"):
+    if e: meta, raw = e.split(b"\t", 1); head[os.fsdecode(raw)] = meta.decode().split()[2]
 want = {p for p in head if p in ROOT_FILES or re.fullmatch(r"packages/[^/]+/(%s)" % "|".join(map(re.escape, MANIFESTS)), p)}
 want |= {n for n in ROOT_FILES if os.path.lexists(os.path.join(root, n))}
 pk = os.path.join(root, "packages")
@@ -63,18 +96,21 @@ for p in sorted(want):
     if p not in head: bad.append(f"{p}: untracked or ignored in the checkout")
     elif not os.path.lexists(f): bad.append(f"{p}: missing from the checkout")
     elif os.path.islink(f) or not os.path.isfile(f): bad.append(f"{p}: not a regular file in the checkout")
-    elif open(f, "rb").read() != git("cat-file", "blob", "HEAD:" + p): bad.append(f"{p}: modified in the checkout")
+    elif oid_of(open(f, "rb").read()) != head[p]: bad.append(f"{p}: modified in the checkout")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 sys.exit(1 if bad else 0)
 PY
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 work="$tmp/src"; mkdir "$work" "$tmp/pm"
-# The snapshot is HEAD's blobs written byte for byte (see the header: no git archive). Regular files
-# only; a submodule becomes an empty folder, as in an archive; a symlink or any other mode is refused.
-python3 -I - "$root/.git" "$work" "$root" <<'PY' || { echo "FAIL: could not write HEAD's blobs as a snapshot"; exit 1; }
-import os, subprocess, sys
-gd, work = sys.argv[1], sys.argv[2]
+# The snapshot is HEAD's tree built from the checkout (see the header: no git archive, no cat-file):
+# each file is copied only if its blob id equals HEAD's, so every tracked file must be committed.
+# Regular files only; a submodule becomes an empty folder, as in an archive; a symlink, any other
+# mode, or a file missing or changed in the checkout is refused.
+python3 -I - "$root/.git" "$work" "$root" <<'PY' || { echo "FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first"; exit 1; }
+import hashlib, os, subprocess, sys
+gd, work, root = sys.argv[1], sys.argv[2], sys.argv[3]
+oid_of = lambda b: hashlib.sha1(b"blob %d\0" % len(b) + b).hexdigest()
 git = lambda *a: subprocess.run(["git", "--git-dir=" + gd, "--work-tree=" + sys.argv[3], "-c", "core.fsmonitor=false", *a], capture_output=True, check=True).stdout
 bad = []
 for e in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split(b"\0"):
@@ -87,8 +123,13 @@ for e in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split(b"\0"):
     if mode == "160000" and kind == "commit": os.makedirs(out, exist_ok=True); continue
     if kind != "blob" or mode not in ("100644", "100755"):
         bad.append(f"{p}: a {kind} with mode {mode}; only regular files are installed"); continue
+    src = os.path.join(root, p)
+    if os.path.islink(src) or not os.path.isfile(src):
+        bad.append(f"{p}: missing or not a regular file in the checkout"); continue
+    with open(src, "rb") as f: data = f.read()
+    if oid_of(data) != oid: bad.append(f"{p}: differs from HEAD in the checkout"); continue
     os.makedirs(os.path.dirname(out), exist_ok=True)
-    with open(out, "xb") as f: f.write(git("cat-file", "blob", oid))
+    with open(out, "xb") as f: f.write(data)
     if mode == "100755": os.chmod(out, 0o755)
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 sys.exit(1 if bad else 0)
@@ -96,7 +137,8 @@ PY
 cd "$work"
 # Static allow-list first: install-time code can also come from a pnpmfile, a config file or a
 # manifest field that no lifecycle event reports, so only the config this repo uses is accepted.
-# Manifests are read as data from git blobs, never through the archive, and every manifest name
+# Manifests are read as data from the verified snapshot (each file hashed equal to its HEAD blob)
+# and never evaluated, and every manifest name
 # must be a regular file: as a directory, node would run its "main" and pnpm would read inside it.
 # -z: without it git quotes non-ASCII paths and the basename checks below would miss them.
 pm=$("${G[@]}" ls-tree -r -z --full-tree HEAD | python3 -I -c '
@@ -105,7 +147,7 @@ V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 # The allowlisted packages pnpm may build, as name@version: the integrity the default registry
 # publishes. Adding one to the lockfile means pinning its registry integrity here first.
 PINNED = {}
-blob = lambda oid: subprocess.run(["git", "--git-dir=" + sys.argv[1], "--work-tree=" + sys.argv[3], "-c", "core.fsmonitor=false", "cat-file", "blob", oid], capture_output=True, check=True).stdout
+blob = lambda p: open(os.path.join(sys.argv[4], p), "rb").read()
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
 bad, reg = [], {}
 for r in sys.stdin.buffer.read().split(b"\0"):
@@ -124,7 +166,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
     if b in (".npmrc", ".gitattributes", ".corepack.env", "package.json5", "package.yaml") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b):
         bad.append(f"{p}: not allowed (read at install)")
     if b == "package.json" and p in reg:
-        m = json.loads(blob(oid))
+        m = json.loads(blob(p))
         if p == "package.json":
             keys = {"name", "private", "packageManager", "engines", "devDependencies", "pnpm"}
             if set(m.get("pnpm", {})) - {"onlyBuiltDependencies"}: bad.append(f"{p}: pnpm keys other than onlyBuiltDependencies")
@@ -144,11 +186,11 @@ for r in sys.stdin.buffer.read().split(b"\0"):
                 if not re.fullmatch(r"workspace:[*^~]|[\^~]?\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
-w = yaml.safe_load(blob(reg["pnpm-workspace.yaml"])) if "pnpm-workspace.yaml" in reg else None
+w = yaml.safe_load(blob("pnpm-workspace.yaml")) if "pnpm-workspace.yaml" in reg else None
 if w != {"packages": ["packages/*"], "ignoreScripts": True}: bad.append(f"pnpm-workspace.yaml: must be exactly packages [packages/*] and ignoreScripts true, got {w!r}")
 # Every package comes from the default registry by integrity (no tarball, file, directory, git,
 # link or other registry), so pnpm installs the registry copy or fails the integrity check.
-L = yaml.safe_load(blob(reg["pnpm-lock.yaml"])) if "pnpm-lock.yaml" in reg else {}
+L = yaml.safe_load(blob("pnpm-lock.yaml")) if "pnpm-lock.yaml" in reg else {}
 if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settings") != {"autoInstallPeers": True, "excludeLinksFromLockfile": False}:
     bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
     L = {}
@@ -172,8 +214,8 @@ for k, v in (L.get("snapshots") or {}).items():
             if ":" in str(x): bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: version {x!r} is not a registry version")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
-print(json.loads(blob(reg["package.json"])).get("packageManager", ""))
-' "$root/.git" "$pnpm_version" "$root") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
+print(json.loads(blob("package.json")).get("packageManager", ""))
+' "$root/.git" "$pnpm_version" "$root" "$work") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
 [ "$pm" = "pnpm@$pnpm_version" ] || { echo "FAIL: packageManager is not pnpm@$pnpm_version: '$pm'"; exit 1; }
 # The pinned pnpm is fetched into a folder outside the archive (npx would first run a
 # node_modules/.bin/$pm found from the cwd) and must report exactly that version.
