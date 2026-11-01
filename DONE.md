@@ -178,3 +178,54 @@ scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
 scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
 ```
 reviewed: pending (Codex r3)
+
+## T02 Codex r3 fixes and adversary rounds 16-17 - 2026-11-01
+commit: de462b9 (this entry adds only DONE.md)
+review: reviews/t02-scaffold-and-ci-guards-review-r3.md on da61075 (VERDICT: changes required, M1 m1; M2 fixed)
+fixed:
+- M1: .github/CODEOWNERS is one catch-all rule, `* @jesterkeri`, so every CI input (toolchain selectors .nvmrc, rust-toolchain.toml, contracts/FOUNDRY_VERSION, manifests, lockfiles, build config) needs code-owner review; a path list missed what it forgot (0474372). The test requires exactly that one rule (de462b9). GitHub's codeowners/errors API: 0 errors on feat/t02-scaffold.
+- m1: check-workflows.sh caps each job's timeout-minutes at its PIPELINE.md budget, looked up by job id and by name with the smaller taken; anything unlisted gets 1 minute (0474372, de462b9). ci.yml timeouts are ts 4, contracts 4, slither 3, enclave 5; harness guardrails and secrets 1 (6d0a037, patch applied by Joshua). Fixtures with made-up jobs moved to 1 minute and still fail only on their own defect.
+adversary: round 16 found a defect (a renamed job id escaped its budget; test under scripts/adversary-t02-r16); round 17 on de462b9 found none.
+CI on de462b9, all jobs inside the new timeouts: ts success 23s;enclave success 13s;slither success 21s;contracts success 10s;no secrets in client output success 5s;guardrails success 6s;
+verified (TASKS T02, run at de462b9):
+```
+$ pnpm install --frozen-lockfile && pnpm -r typecheck && (cd contracts && forge build) && cargo build --locked --manifest-path enclave/Cargo.toml && git -C contracts/lib/nitro-validator rev-parse --short HEAD
+Done in 754ms using pnpm v10.32.1
+typecheck_ok
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.02s
+0ea0d12
+verify_exit=0
+```
+guards and the full adversary suite, run outside any sandbox at de462b9 under flock:
+```
+workflows clean
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+probe_rc=0
+scripts/adversary-t02-codex-r2/check-workflows-timeout-missing.sh rc=0
+scripts/adversary-t02-codex-r2/install-probe-dirty-checkout.sh rc=0
+scripts/adversary-t02-codex-r3/check-workflows-budget.sh rc=0
+scripts/adversary-t02-codex-r3/codeowners-covers-everything.sh rc=0
+scripts/adversary-t02-r10/check-workflows-self-hosted.sh rc=0
+scripts/adversary-t02-r10/check-workflows-values.sh rc=0
+scripts/adversary-t02-r12/install-probe-core-worktree.sh rc=0
+scripts/adversary-t02-r12/install-probe-git-env.sh rc=0
+scripts/adversary-t02-r13/install-probe-archive-filter.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch-tree.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch.sh rc=0
+scripts/adversary-t02-r16/check-workflows-budget-by-id.sh rc=0
+scripts/adversary-t02-r4/check-workflows-bypass.sh rc=0
+scripts/adversary-t02-r4/install-probe-false-clean.sh rc=0
+scripts/adversary-t02-r5/check-workflows-injection.sh rc=0
+scripts/adversary-t02-r5/install-probe-keytar-dir.sh rc=0
+scripts/adversary-t02-r6/check-workflows-docker-args.sh rc=0
+scripts/adversary-t02-r6/install-probe-pnpmfile.sh rc=0
+scripts/adversary-t02-r7/install-probe-npx-local-bin.sh rc=0
+scripts/adversary-t02-r7/install-probe-xdg-config.sh rc=0
+scripts/adversary-t02-r7/install-static-nonascii-path.sh rc=0
+scripts/adversary-t02-r8/install-probe-manifest-dir.sh rc=0
+scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
+scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
+scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
+```
+reviewed: pending (Codex r4)
