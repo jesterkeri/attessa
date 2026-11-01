@@ -20,6 +20,7 @@ jobs:
   guardrails:
     name: guardrails
     runs-on: ubuntu-latest
+    timeout-minutes: 2   # PIPELINE.md budget is 1 min (jobs take 3-6 s); 2x, as the ci.yml jobs do
     steps:
       # Every action is pinned to a full commit sha, first-party included (check-workflows.sh enforces).
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -63,6 +64,7 @@ jobs:
   secrets:
     name: no secrets in client output
     runs-on: ubuntu-latest
+    timeout-minutes: 2   # PIPELINE.md budget is 1 min (jobs take 3-6 s); 2x, as the ci.yml jobs do
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with: { persist-credentials: false }
