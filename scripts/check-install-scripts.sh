@@ -4,7 +4,13 @@
 # (packageManager), a fresh store and no side-effects cache, and fail if any install-time script
 # runs other than a registry copy of the allowlist (better-sqlite3, keytar).
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
-# archive, never inside it, and PATH keeps absolute entries only.
+# snapshot, never inside it, and PATH keeps absolute entries only.
+# Git runs no program the repository configures. Only these commands are used, all reading objects,
+# refs or worktree metadata: rev-parse --show-toplevel, ls-tree, cat-file blob (no --filters or
+# --textconv) and worktree list. None reads the index or the working tree through git, so no
+# fsmonitor, filter, textconv, diff or merge driver, hook or pager from .git/config or attributes
+# applies; the snapshot is written blob by blob instead of git archive or checkout, which apply
+# attribute filters. Never add status, diff, archive, checkout or ls-files here.
 set -u
 # The one pnpm the probe runs. packageManager must name exactly this: pnpm 10 would otherwise switch
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
@@ -16,6 +22,7 @@ PATH=$(printf %s "$PATH" | tr ':' '\n' | grep '^/' | paste -sd:)
 # later git call names --git-dir and --work-tree explicitly.
 unset $(compgen -e | grep '^GIT_')
 root=$(pwd -P)
+# Only here does git choose the folder itself (-C, no --work-tree): its answer must be this one.
 top=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) && top=$(realpath -e "$top" 2>/dev/null)
 [ -e "$root/.git" ] && [ "$top" = "$root" ] \
   || { echo "FAIL: run this from the repository root; git's work tree is '$top', not '$root'"; exit 1; }
@@ -34,7 +41,7 @@ ROOT_FILES = MANIFESTS + ("pnpm-lock.yaml", "pnpm-workspace.yaml")
 bad = []
 # Submodules and other worktrees nested in this one are separate checkouts that pnpm does not read.
 nested = {os.path.realpath(os.path.join(root, os.fsdecode(e.split(b"\t", 1)[1])))
-          for e in git("ls-files", "-s", "-z").split(b"\0") if e.startswith(b"160000 ")}
+          for e in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split(b"\0") if e.startswith(b"160000 ")}
 nested |= {os.path.realpath(os.fsdecode(l[9:])) for l in git("worktree", "list", "--porcelain").split(b"\n") if l.startswith(b"worktree ")}
 nested.discard(os.path.realpath(root))
 for d, dirs, files in os.walk(root):
@@ -63,7 +70,29 @@ PY
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 work="$tmp/src"; mkdir "$work" "$tmp/pm"
-"${G[@]}" archive HEAD | tar -x -C "$work"
+# The snapshot is HEAD's blobs written byte for byte (see the header: no git archive). Regular files
+# only; a submodule becomes an empty folder, as in an archive; a symlink or any other mode is refused.
+python3 -I - "$root/.git" "$work" "$root" <<'PY' || { echo "FAIL: could not write HEAD's blobs as a snapshot"; exit 1; }
+import os, subprocess, sys
+gd, work = sys.argv[1], sys.argv[2]
+git = lambda *a: subprocess.run(["git", "--git-dir=" + gd, "--work-tree=" + sys.argv[3], "-c", "core.fsmonitor=false", *a], capture_output=True, check=True).stdout
+bad = []
+for e in git("ls-tree", "-r", "-z", "--full-tree", "HEAD").split(b"\0"):
+    if not e: continue
+    meta, raw = e.split(b"\t", 1); mode, kind, oid = meta.decode().split()
+    p = os.fsdecode(raw); parts = p.split("/")
+    if any(c in ("", ".", "..") or c.lower() == ".git" for c in parts) or p.startswith("/"):
+        bad.append(f"{p}: not a path inside the tree"); continue
+    out = os.path.join(work, p)
+    if mode == "160000" and kind == "commit": os.makedirs(out, exist_ok=True); continue
+    if kind != "blob" or mode not in ("100644", "100755"):
+        bad.append(f"{p}: a {kind} with mode {mode}; only regular files are installed"); continue
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "xb") as f: f.write(git("cat-file", "blob", oid))
+    if mode == "100755": os.chmod(out, 0o755)
+for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
+sys.exit(1 if bad else 0)
+PY
 cd "$work"
 # Static allow-list first: install-time code can also come from a pnpmfile, a config file or a
 # manifest field that no lifecycle event reports, so only the config this repo uses is accepted.
@@ -76,7 +105,7 @@ V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 # The allowlisted packages pnpm may build, as name@version: the integrity the default registry
 # publishes. Adding one to the lockfile means pinning its registry integrity here first.
 PINNED = {}
-blob = lambda oid: subprocess.run(["git", "--git-dir=" + sys.argv[1], "cat-file", "blob", oid], capture_output=True, check=True).stdout
+blob = lambda oid: subprocess.run(["git", "--git-dir=" + sys.argv[1], "--work-tree=" + sys.argv[3], "-c", "core.fsmonitor=false", "cat-file", "blob", oid], capture_output=True, check=True).stdout
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
 bad, reg = [], {}
 for r in sys.stdin.buffer.read().split(b"\0"):
@@ -90,7 +119,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
     if mode == "120000": bad.append(f"{p}: not allowed (symlink)")
     if any(c.lower() in names for c in parts[:-1]) or (b in names and mode != "100644"):
         bad.append(f"{p}: not allowed (a manifest name that is not a regular file, mode {mode})")
-    # .gitattributes is refused too: export-ignore would hide a file from the archive installed below.
+    # .gitattributes is refused too: git applies it to every checkout and archive of this tree.
     # package.json5 and package.yaml are pnpm manifests these checks do not parse; corepack reads .corepack.env.
     if b in (".npmrc", ".gitattributes", ".corepack.env", "package.json5", "package.yaml") or re.fullmatch(r"\.?pnpmfile\.[cm]?js", b):
         bad.append(f"{p}: not allowed (read at install)")
@@ -144,7 +173,7 @@ for k, v in (L.get("snapshots") or {}).items():
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
 print(json.loads(blob(reg["package.json"])).get("packageManager", ""))
-' "$root/.git" "$pnpm_version") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
+' "$root/.git" "$pnpm_version" "$root") || { echo "$pm"; echo "FAIL: repo install config is outside the allow-list"; exit 1; }
 [ "$pm" = "pnpm@$pnpm_version" ] || { echo "FAIL: packageManager is not pnpm@$pnpm_version: '$pm'"; exit 1; }
 # The pinned pnpm is fetched into a folder outside the archive (npx would first run a
 # node_modules/.bin/$pm found from the cwd) and must report exactly that version.
