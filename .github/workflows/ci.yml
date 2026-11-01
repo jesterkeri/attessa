@@ -101,7 +101,10 @@ jobs:
       # find, after the recursive checkout, also sees symlinks inside submodules (git ls-files does not).
       # Slither honours inline slither-disable comments in any file a result touches, lib/ included,
       # so triage goes only by id through contracts/slither.db.json (docs/SLITHER_TRIAGE.md).
+      # Slither drops lib/nitro-validator/ only because it is pinned at 0ea0d12 (adr/001): the pin
+      # check fails a moved gitlink, another .gitmodules url, or a checkout that differs from the pin.
       - run: |
+          bash scripts/check-nitro-pin.sh
           links=$(find contracts -type l)
           if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
           rc=0; grep -rn slither-disable contracts || rc=$?
