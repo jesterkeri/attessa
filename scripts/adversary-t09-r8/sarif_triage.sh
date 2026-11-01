@@ -9,7 +9,8 @@
 #   sarif : the "high" mutant (unprotected selfdestruct + arbitrary send in EnclaveRegistry.sol) with
 #           contracts/export.sarif and contracts/export.sarif.sarifexplorer hiding its two Highs.
 # Steps: scratch superproject (mkrepo.sh, so the pin check runs as in CI); Slither once to learn the
-# new High ids (as a SARIF export would); write the two files; CI guard step from ci.yml; Slither again.
+# new High ids (as a SARIF export would); write the two files; CI guard step from ci.yml; the CI
+# Slither step from ci.yml. CI_YML=<path> reads both steps from a patched copy of ci.yml.
 # Usage: sarif_triage.sh <scratch-dir>. Exit 1 = the Highs pass the gate (defect), 0 = rejected,
 # 2 = harness error.
 set -u
@@ -51,10 +52,13 @@ bash "$ROOT/scripts/adversary-t09/ci_guard.sh" "$OUT/sarif" > "$OUT/guard.log" 2
 echo "guard_exit=$GUARD"; grep -h "^ok:\|^FAIL\|not allowed" "$OUT/guard.log" | head -3
 [ "$GUARD" = 2 ] && { echo "harness error: ci_guard.sh could not run"; exit 2; }
 
-# 4. Slither as the CI job runs it.
-(cd "$W" && flock -w 1800 /home/hr/.cache/attessa-heavy.lock \
-  slither . --config-file slither.config.json --fail-high > "$OUT/second.log" 2>&1); SLITHER=$?
+# 4. Slither as the CI job runs it: the Slither step read from ci.yml (CI_YML=<path> for a patched copy).
+bash "$ROOT/scripts/adversary-t09/ci_slither.sh" "$W" > "$OUT/second.log" 2>&1; SLITHER=$?
+grep -h "^ *slither \." "$OUT/second.log" | head -1
 echo "slither_exit=$SLITHER"; grep -h "result(s) found" "$OUT/second.log" | tail -1
+if [ "$SLITHER" != 0 ] && ! grep -q "result(s) found" "$OUT/second.log"; then
+  echo "harness error: the Slither step failed without an analysis (see $OUT/second.log)"; exit 2
+fi
 if [ "$GUARD" = 0 ] && [ "$SLITHER" = 0 ]; then
   echo "verdict=PASSED_GATE (defect: a selfdestruct in src/EnclaveRegistry.sol is hidden outside slither.db.json)"; exit 1
 fi

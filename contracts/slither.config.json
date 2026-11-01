@@ -2,5 +2,7 @@
   "include_paths": "contracts/(?!lib/nitro-validator/)",
   "exclude_dependencies": false,
   "compile_force_framework": "foundry",
-  "foundry_compile_all": false
+  "foundry_compile_all": false,
+  "sarif_input": "/dev/null/no-sarif-input",
+  "sarif_triage": "/dev/null/no-sarif-triage"
 }
