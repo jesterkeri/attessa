@@ -8,6 +8,7 @@ import {
   responseHash,
   type ExecutionProof,
   type ProofCheck,
+  PROOF_TTL,
 } from '@attessa/core';
 import type { Address, Hex } from 'viem';
 import type { Chain, CheckName } from './chain.ts';
@@ -176,7 +177,8 @@ export async function checkProof(x: ProofCheckInput): Promise<ProofCheckResult> 
   const now = BigInt(x.now);
   const skew = proof.issuedAt > now ? proof.issuedAt - now : now - proof.issuedAt;
   if (skew > MAX_PROOF_SKEW_S) return fail('clock_skew');
-  if (proof.expiresAt <= now) return fail('proof_expired');
+  // SPEC §2.3 fixes the lifetime: expiresAt = issuedAt + 600.
+  if (proof.expiresAt <= now || proof.expiresAt !== proof.issuedAt + PROOF_TTL) return fail('proof_expired');
 
   const inputs = parseInputs(rawInputs);
   if (!inputs) return fail('inputs_mismatch');

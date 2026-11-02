@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import type { Socket } from 'node:net';
 import { join } from 'node:path';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import {
@@ -72,6 +73,27 @@ class Fail {
   }
 }
 
+/**
+ * Rows a request handler is answering right now, counted per handler: a duplicate request for a `settled` row
+ * can be delivering it while the first handler still is (SPEC §6.2 step 4 releases the lock before step 12).
+ * `delete` drops one handler and says whether none is left.
+ */
+export class LiveRows {
+  private readonly n = new Map<string, number>();
+  has(requestId: string): boolean {
+    return this.n.has(requestId);
+  }
+  add(requestId: string): void {
+    this.n.set(requestId, (this.n.get(requestId) ?? 0) + 1);
+  }
+  delete(requestId: string): boolean {
+    const left = (this.n.get(requestId) ?? 1) - 1;
+    if (left > 0) this.n.set(requestId, left);
+    else this.n.delete(requestId);
+    return left <= 0;
+  }
+}
+
 export interface Gateway {
   app: FastifyInstance;
   reconciler: Reconciler;
@@ -80,7 +102,7 @@ export interface Gateway {
   close(): Promise<void>;
   /** In-process sets, exposed for tests and the reconciler. */
   sending: Set<string>;
-  live: Set<string>;
+  live: LiveRows;
 }
 
 export function createGateway(deps: GatewayDeps): Gateway {
@@ -89,7 +111,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
   const log = deps.log ?? ((event, fields) => process.stdout.write(`${JSON.stringify({ t: now(), event, ...fields })}\n`));
   const locks = new Set<string>();
   const sending = new Set<string>();
-  const live = new Set<string>();
+  const live = new LiveRows();
   const limiter = new RateLimiter(() => now());
   let inFlight = 0;
   let signerCache: { signer: Address; at: number } | null = null;
@@ -207,7 +229,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     if (recovered === null || recovered !== row.payer) return notFound();
     if (PENDING_STATES.includes(row.state)) return pendingAnswer(reply, row, ctx);
     if (STORED_RESULT_STATES.includes(row.state) && row.response !== null && row.proof_header !== null) {
-      return storedResult(reply, row, false);
+      return storedResult(reply, row, null);
     }
     return notFound();
   });
@@ -222,21 +244,61 @@ export function createGateway(deps: GatewayDeps): Gateway {
     );
   }
 
-  /** The stored result: exact bytes + `X-Attested-Proof` + `PAYMENT-RESPONSE` + `X-Request-Id` (SPEC §6.2 step 12). */
-  function storedResult(reply: FastifyReply, row: CallRow, trackDelivery: boolean): FastifyReply {
-    if (trackDelivery) {
-      let finished = false;
-      reply.raw.once('finish', () => {
+  /**
+   * Marks the row live for this reply. The mark is tied to the reply's own end at once, so it is dropped on
+   * every path the response can end by (written, client gone, stream error), even one that ends before the
+   * handler gets to write. A reply that has already ended (its client left during execution, the lock or
+   * the signature check) can no longer emit that end, so it takes no mark at all. The connection's own close
+   * also ends the mark: a pipelined request's response that was never attached to the socket emits neither
+   * `finish` nor `close` (Node 22). The reconciler's LIVE_DEADLINE_S bounds any gap left. `deliver()` makes this
+   * reply the row's delivery (SPEC §6.2 step 12): written → `delivered`; ended unwritten with no other
+   * handler delivering → `delivery_failed`. `release()` drops the mark early when the reply will not carry
+   * the result.
+   */
+  function holdLive(reply: FastifyReply, requestId: string): { deliver(): void; release(): void } {
+    const res = reply.raw;
+    const sock = reply.request.raw.socket as Socket | null;
+    let held = !(res.destroyed || res.closed || res.writableEnded || sock?.destroyed);
+    if (held) live.add(requestId);
+    let delivering = false;
+    let finished = false;
+    const end = (): void => {
+      if (!held) return;
+      held = false;
+      sock?.off('close', end); // a kept-alive connection outlives this reply
+      const last = live.delete(requestId);
+      if (!delivering) return;
+      if (finished) db.transition(requestId, ['settled'], 'delivered', now());
+      // Another handler still delivering this row decides its outcome (and keeps the reconciler off it).
+      else if (last) db.transition(requestId, ['settled'], 'delivery_failed', now());
+    };
+    if (held) {
+      res.once('finish', () => {
         finished = true;
-        live.delete(row.request_id);
-        db.transition(row.request_id, ['settled'], 'delivered', now());
+        end();
       });
-      reply.raw.once('close', () => {
-        if (finished) return;
-        live.delete(row.request_id);
-        db.transition(row.request_id, ['settled'], 'delivery_failed', now());
-      });
+      res.once('close', end);
+      sock?.once('close', end);
     }
+    return {
+      deliver() {
+        if (!held) {
+          // The client left before a byte was written: a failed delivery, unless another handler is delivering.
+          // (A written reply cannot be here: writing starts only after deliver().)
+          if (!live.has(requestId)) db.transition(requestId, ['settled'], 'delivery_failed', now());
+          return;
+        }
+        delivering = true;
+      },
+      release() {
+        end();
+      },
+    };
+  }
+
+  /** The stored result: exact bytes + `X-Attested-Proof` + `PAYMENT-RESPONSE` + `X-Request-Id` (SPEC §6.2 step 12). */
+  function storedResult(reply: FastifyReply, row: CallRow, hold: { deliver(): void } | null): FastifyReply {
+    hold?.deliver();
     return reply
       .code(200)
       .header('cache-control', 'no-store')
@@ -354,10 +416,10 @@ export function createGateway(deps: GatewayDeps): Gateway {
           throw fail('payment_invalid', reason, ctx);
         }
         if (v.status < 200 || v.status >= 300 || !vb || vb.isValid !== true) throw fail('payment_invalid', 'unexpected_verify_error', ctx);
-        if (vb.payer !== undefined && (typeof vb.payer !== 'string' || vb.payer.toLowerCase() !== a.from)) {
-          throw fail('payment_invalid', 'payer_mismatch', ctx);
-        }
-        payer = a.from;
+        // Step 6 takes the payer from /verify, so a valid answer must name one.
+        if (typeof vb.payer !== 'string' || !/^0x[0-9a-fA-F]{40}$/.test(vb.payer)) throw fail('payment_invalid', 'unexpected_verify_error', ctx);
+        payer = vb.payer.toLowerCase() as Address;
+        if (payer !== a.from) throw fail('payment_invalid', 'payer_mismatch', ctx);
       } catch (e) {
         if (e instanceof Fail) throw e;
         throw fail('payment_invalid', 'unexpected_verify_error', ctx);
@@ -439,8 +501,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
       const signer = await recoverAuthorizationSigner(cfg.chainId, req402, a, d.signature);
       if (signer !== row.payer) throw fail('payment_reused', null, ctx);
       if (row.response === null || row.proof_header === null) throw fail('result_not_found', null, ctx);
-      if (row.state === 'settled') live.add(row.request_id);
-      return storedResult(reply, row, row.state === 'settled');
+      return storedResult(reply, row, row.state === 'settled' ? holdLive(reply, row.request_id) : null);
     }
     if (PENDING_STATES.includes(row.state)) return pendingAnswer(reply, row, ctx);
     if (RUNNING_STATES.includes(row.state)) throw fail('in_progress', null, ctx, { [HEADER.retryAfter]: '2' });
@@ -531,7 +592,7 @@ export function createGateway(deps: GatewayDeps): Gateway {
     }
 
     sending.add(requestId);
-    live.add(requestId);
+    const hold = holdLive(reply, requestId);
     let row: CallRow;
     try {
       const target = targetOf(db.byRequestId(requestId) as CallRow);
@@ -565,11 +626,11 @@ export function createGateway(deps: GatewayDeps): Gateway {
       row = db.byRequestId(requestId) as CallRow;
     }
     // 12. Deliver.
-    if (row.state === 'settled') return storedResult(reply, row, true);
-    live.delete(requestId);
+    if (row.state === 'settled') return storedResult(reply, row, hold);
+    hold.release();
     if (PENDING_STATES.includes(row.state)) return pendingAnswer(reply, row, ctx);
     // The reconciler may already have resolved the row while the handler waited.
-    if (STORED_RESULT_STATES.includes(row.state)) return storedResult(reply, row, false);
+    if (STORED_RESULT_STATES.includes(row.state)) return storedResult(reply, row, null);
     throw new Fail(repeatFailure(row, ctx));
   }
 
