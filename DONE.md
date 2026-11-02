@@ -58,6 +58,32 @@ exit 0
 reviewed: pending (adversary, then Codex; verdict appended as a new entry)
 notes: attempt 1 failed (rootDir in the shared tsconfig resolved to the repo root); fixed per package. Rust 1.98.1 pinned; locally it is a hardlink of the installed stable 1.98.1 because the rustup download stalled. esbuild install script is skipped by the pnpm allowlist (only better-sqlite3, keytar may run scripts).
 
+## T03 - 2026-10-30
+commit: 705d515 (built fd63419 by builder B2, Opus; fixed 705d515)
+verified: pnpm --filter @attessa/core test
+output:
+```
+
+> @attessa/core@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/b2-core/packages/core
+> vitest run --passWithNoTests
+
+
+ RUN  v3.2.7 /home/hr/myvscode_linux/attessa/.worktrees/b2-core/packages/core
+
+ ✓ test/regression-t03.test.ts (4 tests) 7ms
+ ✓ test/core.test.ts (21 tests) 52ms
+ ✓ test/vectors.test.ts (7 tests) 111ms
+
+ Test Files  3 passed (3)
+      Tests  32 passed (32)
+   Start at  08:47:06
+   Duration  630ms (transform 157ms, setup 0ms, collect 766ms, tests 171ms, environment 1ms, prepare 228ms)
+
+exit 0
+```
+adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts; UTF-8 BOM accepted before X-Attested-Proof JCS); 120/120 vector values recomputed independently with cast. r2 on 705d515 NO DEFECT FOUND; 124/124 recomputed; 2,130-input TS vs Rust url differential fuzz, no originHash disagreement.
+reviewed: pending (Codex)
+notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
 findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
@@ -241,3 +267,80 @@ VERDICT: implementation-ready
 ```
 reviewed: reviews/t02-scaffold-and-ci-guards-review-r4.md | verdict: implementation-ready (earlier rounds: reviews/t02-scaffold-and-ci-guards-review-r2.md, reviews/t02-scaffold-and-ci-guards-review-r3.md)
 Correction (same day): the r2 and r3 review files are not kept in `reviews/`. Both end at `VERDICT: changes required`, which `scripts/check-reviews.sh` refuses in a merged gate; they are archived outside the repo. Only the r4 SHIP review stays committed.
+
+## T03 Codex r1 fixes - 2026-10-30
+commit: this entry (merge of feat/t02-scaffold into feat/t03-core, plus the oracle)
+review: .worktrees/review-t03-r1/reviews/t03-review-r1.md (VERDICT: changes required, M2)
+fixed:
+- M1 (outside) `pnpm -r lint` had no script on this branch: merged feat/t02-scaffold, which adds lint to every package.
+- M2 vectors had no independent oracle: packages/core/test/oracle.test.ts asserts fixed values for every family (requestHash, responseHash, inputsHash, releaseId, requestId, originHash, binding typehash, user_data, signer, proof and liveness digests, payer-sig message and digest), each computed with Foundry cast from a preimage built by hand per SPEC §2 (oracle sanity: the generator point G gives the well-known 0x7e5f4552091a69125d5dfcb7b8c2659029395bdf). scripts/check-vectors-oracle.py recomputes all 124 values in vectors/*.json with cast, no viem and no core.
+verified: pnpm --filter @attessa/core test; pnpm -r lint; python3 -I scripts/check-vectors-oracle.py
+output:
+```
+$ pnpm install --frozen-lockfile
+$ pnpm --filter @attessa/core test
+ ✓ test/regression-t03.test.ts (4 tests) 9ms
+ ✓ test/oracle.test.ts (5 tests) 14ms
+ ✓ test/core.test.ts (21 tests) 66ms
+ ✓ test/vectors.test.ts (7 tests) 114ms
+ Test Files  4 passed (4)
+      Tests  37 passed (37)
+exit=0
+$ pnpm -r lint
+exit=0
+$ python3 -I scripts/check-vectors-oracle.py
+checks: 124 fails: 0
+exit=0
+```
+mutation check (Codex reproduction: drop the first 0x00 separator in requestHash, then gen:vectors):
+```
+$ (mutant: first 0x00 separator dropped from requestHash) pnpm --filter @attessa/core gen:vectors && pnpm --filter @attessa/core test; python3 -I scripts/check-vectors-oracle.py
+   × core against fixed values computed independently with cast (INV-18) > hashes (SPEC §2.2) 7ms
+   × hashes (SPEC §2.2) > requestHash is METHOD ‖ 0x00 ‖ pathAndQuery ‖ 0x00 ‖ body 6ms
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+ Test Files  2 failed | 2 passed (4)
+      Tests  2 failed | 35 passed (37)
+MISMATCH requestHash query string kept as sent: got 0xf927ca7c50002d67015850d24d5cd5f9c6cca42bcc06399a78e2528a2a5b591e want 0x4fc221efbe363eeea60a5e0d67d6b3b845031a51e7be098bd17285eb98656832
+checks: 124 fails: 6
+```
+restored: oracle back to `checks: 124 fails: 0`.
+reviewed: pending (Codex r2)
+
+## T03 adversary rounds 2-6 - 2026-10-30
+commit: 1333de5 (fix builders, Opus; branch feat/t03-core, rerun by lead)
+verified: pnpm --filter @attessa/core test; pnpm -r lint; python3 -I scripts/check-vectors-oracle.py; python3 -I scripts/mutate-vectors.py
+output:
+```
+$ pnpm --filter @attessa/core test
+ ✓ test/regression-t03.test.ts (4 tests) 8ms
+ ✓ test/adversary-t03-r4.test.ts (4 tests) 8ms
+ ✓ test/adversary-t03-r5.test.ts (4 tests) 10ms
+ ✓ test/oracle.test.ts (9 tests) 10ms
+ ✓ test/core.test.ts (21 tests) 68ms
+ ✓ test/vectors.test.ts (7 tests) 158ms
+ ✓ test/adversary-t03-r3.test.ts (7 tests) 4329ms
+ ✓ test/adversary-t03-r2.test.ts (11 tests) 10964ms
+ Test Files  8 passed (8)
+      Tests  67 passed (67)
+exit=0
+$ pnpm -r lint
+exit=0
+$ python3 -I scripts/check-vectors-oracle.py
+checks: 461 fails: 0
+exit=0
+$ python3 -I scripts/mutate-vectors.py
+survivors: 0 of 24
+exit=0
+```
+adversary: r2 (oracle missed JCS, signers, grammars), r3 (oracle origin check was not UTS-46; password-only userinfo, unsafe payer-sig seconds), r4 (ZWNJ CheckJoiners after a virama-exempt ZWNJ, tr46 5.1.1), r5 (joiner check decoded opaque hosts of non-special schemes) each found a defect, all fixed with their tests committed. The oracle now implements UTS-46 itself from pinned Unicode 16.0.0 data. r6 on 1333de5: NO DEFECT FOUND (6400-case scheme x host differential core vs oracle, 0 disagreements; 256-case joiner differential, 0). 1333de5 gives three r3 tests that spawn the oracle a 30 s limit (they timed out at 5 s under load; assertions unchanged).
+reviewed: pending (Codex r2)
+notes: core reads tr46 5.1.1 internal regex data (tr46/lib/regexes.js), the version whatwg-url 14.2.0 pins; a tr46 upgrade could break it. The enclave has no origin code yet, so the Rust side of INV-18 for origins is untested here.
+
+## T03 Codex review r2 - 2026-10-31
+Codex re-reviewed T03 (packages/core and vectors) at c6f5fdb under REVIEW-PROTOCOL U1 to U9 and found nothing to fix; every round-1 finding is recorded as fixed.
+Review files: reviews/t03-review-r1.md (round 1) and reviews/t03-core-formats-and-vectors-review-r2.md (round 2). Closing line of round 2, verbatim:
+```
+VERDICT: implementation-ready
+```
+reviewed: reviews/t03-core-formats-and-vectors-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, merging staging for the PR): `reviews/t03-review-r1.md` (round 1, `VERDICT: changes required`) is removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; it is archived outside the repo. The round-2 SHIP review stays.
