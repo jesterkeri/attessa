@@ -100,6 +100,7 @@ function gasLimit(estimate: bigint): bigint {
 export interface Sent {
   hash: Hex;
   blockNumber: bigint;
+  logs: Array<{ address: Address; topics: Hex[]; data: Hex }>;
 }
 
 /**
@@ -131,13 +132,18 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   });
   const hash = (await c.rpc.request('eth_sendRawTransaction', [raw])) as Hex;
   for (let i = 0; i < 180; i++) {
-    const r = (await c.rpc.request('eth_getTransactionReceipt', [hash])) as { status: string; blockNumber: string; gasUsed: string } | null;
+    const r = (await c.rpc.request('eth_getTransactionReceipt', [hash])) as {
+      status: string;
+      blockNumber: string;
+      gasUsed: string;
+      logs?: Array<{ address: Address; topics: Hex[]; data: Hex }>;
+    } | null;
     if (r) {
       if (r.status !== '0x1') {
         if (BigInt(r.gasUsed) >= gasLimit(sim.gas)) throw ERR.gasTooLow(step.label);
         throw new CliError('tx_reverted', `The transaction reverted at ${step.label} (tx ${hash}). Nothing changed.`, 'Run the command again to see why.');
       }
-      return { hash, blockNumber: BigInt(r.blockNumber) };
+      return { hash, blockNumber: BigInt(r.blockNumber), logs: (r.logs ?? []).map((l) => ({ ...l, address: l.address.toLowerCase() as Address })) };
     }
     await deps.sleep(1000);
   }

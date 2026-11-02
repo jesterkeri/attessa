@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { TcpEnclaveTransport } from '@attessa/seller-host';
 import { run, type Deps, type RunResult } from './index.ts';
@@ -42,6 +43,9 @@ const deps: Deps = {
   readdir: (p) => readdirSync(p),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   arch: process.arch,
+  home: homedir(),
+  // Loaded only for `attessa gateway …`: it opens the gateway's SQLite file and needs nothing else of the CLI.
+  gateway: async (args, out, err) => (await import('@attessa/gateway')).runGatewayCommand(args, out, err),
 };
 
 run(process.argv.slice(2), deps).then(

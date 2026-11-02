@@ -33,7 +33,7 @@ export function readMeasurements(deps: Deps, file: string): [Hex, Hex, Hex] {
   return hex;
 }
 
-async function ownerOf(c: Awaited<ReturnType<typeof connect>>, agentId: bigint): Promise<Address> {
+export async function ownerOf(c: Awaited<ReturnType<typeof connect>>, agentId: bigint): Promise<Address> {
   const identity = (await read(c, c.registry, REGISTRY_ABI, 'identityRegistry', [])) as Address;
   try {
     return ((await read(c, identity, IDENTITY_ABI, 'ownerOf', [agentId])) as Address).toLowerCase() as Address;

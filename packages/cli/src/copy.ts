@@ -170,3 +170,255 @@ export const RENEW = {
     ERR.renewRefused('release_not_approved', `this machine runs a build agent ${agent} hasn't approved (release ${short(rid)})`, false),
   bindingMismatch: (what: string, field: string) => ERR.renewRefused(`binding_mismatch{${field}}`, `the attestation was made for ${what}`, false),
 } as const;
+
+// ---------------------------------------------------------------- buyer (FLOWS §6 J0, J1, J2, interrupted; §8)
+
+/** USDC and USA₮ both have 6 decimals (SPEC §2.6 pins). */
+export const DECIMALS = 6;
+
+/** 20000n → "0.02"; at least two decimals, as FLOWS writes prices and limits ("0.10", "1.00", "0.005"). */
+export function amount(atomic: bigint): string {
+  const unit = 10n ** BigInt(DECIMALS);
+  let frac = (atomic % unit).toString().padStart(DECIMALS, '0').replace(/0+$/, '');
+  if (frac.length < 2) frac = frac.padEnd(2, '0');
+  return `${atomic / unit}.${frac}`;
+}
+
+/** "14:02:11" (UTC). */
+export function hms(sec: bigint | number): string {
+  return new Date(Number(sec) * 1000).toISOString().slice(11, 19);
+}
+
+/** 31204245n → "31,204,245". */
+export function blockNo(n: bigint | string): string {
+  return BigInt(n).toLocaleString('en-US');
+}
+
+/** What FLOWS §8 calls `{check in words}`, and the true term after it. Only response_hash_mismatch is in FLOWS (J2). */
+export const CHECK_WORDS: Record<string, [string, string]> = {
+  response_hash_mismatch: ["the answer doesn't match what the sealed machine signed", 'response hash differs from the proof'],
+  // not in FLOWS: the other checks' words.
+  missing_proof: ['the answer came without a proof from the sealed machine', 'missing_proof'],
+  bad_signature: ["the proof isn't signed by the sealed machine's key", 'bad_signature'],
+  request_mismatch: ['the proof is for a different request', 'request_mismatch'],
+  payment_mismatch: ['the proof is for a different payment', 'payment_mismatch'],
+  inputs_hash_mismatch: ["the Celo data in the answer doesn't match what the proof covers", 'inputs_hash_mismatch'],
+  inputs_mismatch: ["the Celo data in the answer doesn't match the chain", 'inputs_mismatch'],
+  stale_inputs: ['the answer used Celo data that is too old', 'stale_inputs'],
+  clock_skew: ["the proof's time is too far from Celo's clock", 'clock_skew'],
+  signer_not_active: ["the machine's key isn't active on Celo", 'signer_not_active'],
+  release_not_approved: ["the build that answered isn't approved by its owner", 'release_not_approved'],
+  endpoint_mismatch: ['the proof is for a different service address', 'endpoint_mismatch'],
+  agent_mismatch: ['the proof is for a different agent', 'agent_mismatch'],
+  operator_mismatch: ["the machine's key was registered by a different operator", 'operator_mismatch'],
+  proof_expired: ['the proof has expired', 'proof_expired'],
+};
+
+/** FLOWS §8 `{tail}` once a payment permission was signed. */
+export const SIGNED_TAIL = "Your payment permission wasn't used.";
+
+export const BUY = {
+  // §6 J0
+  initIntro: 'attessa checks which build a service runs before you pay it, and only pays if the answer checks out.',
+  networkSepolia: 'Network: Celo Sepolia (test money). Use --network mainnet for real payments.',
+  networkMainnet: 'Network: Celo mainnet (real money).', // not in FLOWS
+  networkLocal: (rpc: string) => `Network: local chain at ${rpc}.`, // not in FLOWS
+  walletCreated: (a: string) => `Wallet: none found. Created one for this computer: ${a} (key stored in your OS keychain, never printed)`,
+  walletFound: (a: string, from: string) => `Wallet: ${a} (key from ${from}, never printed)`, // not in FLOWS
+  fundSepolia: 'Fund it: CELO for gas at faucet.celo.org/celo-sepolia, test USDC at faucet.circle.com (choose Celo Sepolia)',
+  fundMainnet: 'Fund it: CELO for gas and USDC on Celo mainnet.', // not in FLOWS
+  limits: (per: string, day: string) =>
+    `Spending limits: at most ${per} USDC per call and ${day} USDC per day, unless you pass --max-amount / set --daily-cap.`,
+  next: 'Next: attessa call https://<service> --body input.json --max-amount 0.05',
+  // §6 J1
+  checking: (h: string) => `Checking ${h} before paying`,
+  runs: (agent: string, rid: string) => `  Runs agent ${agent}'s approved build in a sealed machine the seller can't change  (release ${short(rid)}, Nitro enclave)`,
+  ownerSays: (src: string) => `  Owner says it's built from ${src}  (not checked by attessa)`,
+  live: (sec: string) => `It's up and answering for this address right now  (liveness check, ${sec} s)`,
+  price: (p: string, sym: string, limit: string) => `Price: ${p} ${sym} (your limit per call: ${limit}), paid to the address registered for this service.`,
+  sign: "  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  (EIP-3009 authorization)",
+  paid: (p: string, sym: string, block: string, tx: string, signer: string) =>
+    `Paid ${p} ${sym}. The answer came from that approved build, for this request, using Celo data from block ${block}  (settled: tx ${short(tx)}, signer ${short(signer)})`,
+  saved: (file: string, record: string) => `Answer saved to ${file}. Record: ${record}`,
+  // SPEC §7 V10
+  inputsNotChecked: "  inputs not re-checked (your RPC doesn't keep state that old)",
+  dryRun: '  (dry run: nothing was signed)', // not in FLOWS (T15's "(dry run: nothing was sent)" for a call)
+  // §6 J2
+  refusedCheck: (words: string, term: string) => `Refused: ${words}  (${term})`,
+  confirming: (t: string, n: string) => `Confirming you weren't charged: your payment permission expires unused at ${t} UTC (in ${n} s). Waiting…`,
+  voidHint: (id: string) =>
+    `  To void it right now instead: attessa cancel ${id}  (on-chain cancel, ~0.0004 CELO gas). Ctrl-C stops waiting; attessa status --pending checks later.`,
+  notCharged: (block: string) => `Not charged: confirmed on Celo, your payment permission expired unused  (block ${block})`,
+  notChargedCancelled: (block: string) => `Not charged: confirmed on Celo, your payment permission was cancelled  (block ${block})`, // not in FLOWS
+  // §6 J2 variant
+  paidButRejected: (p: string, sym: string, tx: string, record: string, id: string) => [
+    `Warning: you were charged ${p} ${sym} (tx ${short(tx)}) but the answer didn't check out  (paid_but_rejected)`,
+    "  Payments made this way can't be reversed on chain. Only the gateway operator can send the money back.",
+    `  Your record (${record}, entry ${id}) proves the payment and the failed check.`,
+    '  Report the gateway to the marketplace that listed it (for buy: github.com/celo-org/buy-skill/issues).',
+  ],
+  settledAfterRefusal: (p: string, sym: string, tx: string, record: string, id: string) => [
+    `Warning: the service refused this call, but your payment permission was used anyway: ${p} ${sym} (tx ${short(tx)}). This is the gateway's fault.`,
+    `  Your record (${record}, entry ${id}) proves the payment and the refusal. Report the gateway to the marketplace that listed it.`,
+  ],
+  // §6 J1 interrupted
+  lost: 'Lost the connection after you signed. Checking whether you were charged…  (up to 2 minutes)',
+  notChargedAt: (t: string) => `Not charged: confirmed on Celo, your payment permission expired unused at ${t} UTC.`,
+  chargedChecksOut: (p: string, sym: string, tx: string) => `Charged ${p} ${sym} (tx ${short(tx)}). Fetching your answer… done. It checks out.`,
+  settlePending: (until: string, tx: string | null) =>
+    `Payment sent, confirming (usually under 5 s; checking until ${until} UTC)${tx ? `  (tx ${short(tx)})` : ''}`,
+  resuming: (id: string) => `You already have a call in progress for this input (request ${id}). Resuming it instead of paying again.`,
+  // §7 V10 rpc
+  rpcNoHistory: "Can't finish checking: your RPC doesn't have that block's data. Retry with --rpc <archive RPC>.",
+  // not in FLOWS: a call left open by --no-wait, or still undecided.
+  stillOpen: (id: string, t: string) =>
+    `Not confirmed yet: your payment permission expires unused at ${t} UTC unless the gateway used it. attessa status --pending checks it again; attessa cancel ${id} voids it now.`,
+  // §8 cancel
+  tooLateToCancel: (tx: string) => `Too late to cancel: the payment went through (tx ${short(tx)}). Fetching your answer.`,
+  cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
+  noPending: 'No calls in progress.', // not in FLOWS
+} as const;
+
+/** FLOWS §8 rows for refusals after signing: "{what happened} {tail}". */
+export function signedRefusal(code: string, detail: string | undefined): string {
+  const t = SIGNED_TAIL;
+  switch (code) {
+    case 'execution_timeout':
+      return `The service didn't respond in 20 s. ${t}`;
+    case 'enclave_unavailable':
+      return `The service is offline. ${t}`;
+    case 'authorization_expiring':
+      return `Not settled: your payment permission expires in under 10 s, too close to settle safely. ${t}`;
+    case 'settle_failed':
+      return `Payment didn't go through: ${(detail ?? 'unknown').replace(/_/g, ' ')}. The result was withheld. ${t}`;
+    case 'payment_invalid':
+      return `Not paid: the payment permission was refused because ${(detail ?? 'the facilitator refused it').replace(/_/g, ' ')}.`;
+    case 'gateway_paused':
+      return `The service can't take payments right now. ${t}`;
+    case 'bad_request':
+      return `The service can't read this input: ${detail ?? 'no detail'}. ${t}`;
+    case 'authorization_window_too_short':
+      return `Your payment permission expires too soon for this service (under 40 s left). ${t}`;
+    case 'payment_reused':
+    case 'request_id_conflict':
+      return `This request id or payment permission was already used for a different call. ${t}`;
+    case 'gateway_busy':
+    case 'rate_limited':
+      return `The service is busy. ${t}`; // not in FLOWS: that row's tail is the unpaid one
+    default:
+      return `Refused: ${code}${detail ? ` (${detail})` : ''}. ${t}`; // not in FLOWS
+  }
+}
+
+export const BUYERR = {
+  notRegistered: (origin: string) =>
+    new CliError('endpoint_not_registered', `${origin} isn't registered as an attested endpoint.`, 'Pay it without protection using `attessa call --via buy`, or ask the seller to register.'),
+  paytoMismatch: (x: string, y: string) =>
+    new CliError(
+      'payto_mismatch',
+      `Not paying: this service asked to be paid at ${x}, but its registered payment address is ${y}. It may be an impostor.`,
+      "Don't retry. Report it to where you found the link (for buy: github.com/celo-org/buy-skill/issues).",
+    ),
+  // §6 J1 "Price above the limit" (§8's row has shorter words; the dialog's are used).
+  overMax: (p: string, sym: string, m: string) =>
+    new CliError('over_max_amount', `Not paying: the price is ${p} ${sym} and your limit per call is ${m}. Pass --max-amount ${p} if that's fine. Nothing was signed.`),
+  overDailyCap: (s: string, c: string) =>
+    new CliError('over_daily_cap', `Not paying: this would take today's spend to ${s} USDC; your cap is ${c}.`, 'Wait until 00:00 UTC or raise `--daily-cap`.'),
+  livenessFailed: (origin: string, reason: string) =>
+    new CliError(
+      `liveness_failed{${reason}}`,
+      `Not paying: the sealed machine for ${origin} didn't answer a fresh check, so it may be down or this may not be the real address  (liveness).`,
+      `\`attessa status ${origin}\` shows when it last answered.`,
+    ),
+  maxAmountRequired: () =>
+    new CliError(
+      'max_amount_required',
+      'No per-call limit is set, so nothing was signed.',
+      'Run `attessa init` or pass --max-amount in USDC (for example --max-amount 0.05).',
+    ),
+  noWallet: () => new CliError('no_wallet', 'No wallet set up yet.', 'Run `attessa init`.'),
+  endpointRetired: (origin: string, a: string) =>
+    new CliError('endpoint_retired', `${origin} has stopped selling (its owner retired it). Nothing was signed.`, `\`attessa status --agent ${a}\` lists its current endpoints.`),
+  quoteUnavailable: (origin: string, got: string) =>
+    new CliError('quote_unavailable', `${origin} didn't ask for payment the expected way (got ${got}). Nothing was signed.`, `Check the URL; \`attessa status ${origin}\` shows the registered path.`),
+  quoteMalformed: (origin: string) =>
+    new CliError('quote_malformed', `${origin} asked for payment in a form this version can't read. Nothing was signed.`, 'Update with `npm i -g @attessa/cli`.'),
+  originAgentMismatch: (origin: string, x: string, y: string) =>
+    new CliError(
+      'origin_agent_mismatch',
+      `Not paying: ${origin} says it's agent ${x}, but the registry has it as agent ${y}. Nothing was signed.`,
+      "Don't retry. Report it to where you found the link.",
+    ),
+  // not in FLOWS: .well-known unreadable, or its registry/chain differ (no agent pair to name).
+  originUnverifiable: (origin: string, detail: string) =>
+    new CliError(
+      'origin_agent_mismatch',
+      `Not paying: ${origin} doesn't publish the identity the registry has for it (${detail}). Nothing was signed.`,
+      "Don't retry. Report it to where you found the link.",
+    ),
+  gatewayPaused: (origin: string) => new CliError('gateway_paused', "The service can't take payments right now. Nothing was signed.", `\`attessa status ${origin}\`.`),
+  badRequest: (detail: string) => new CliError('bad_request', `The service can't read this input: ${detail}. Nothing was signed.`, 'Fix the input and call again.'),
+  busy: (code: string) => new CliError(code, 'The service is busy. Nothing was signed.', 'Try again in a few seconds.'), // FLOWS: "Try again in {n} s."; the SDK doesn't return Retry-After
+  nothingToExport: () => new CliError('nothing_to_export', "No calls recorded yet, so there's nothing to export.", 'Make one with `attessa call`.'),
+  resultNotFound: (id: string) => new CliError('result_not_found', `No stored result for request ${id}.`, 'Check `attessa status --pending`.'),
+  // not in FLOWS
+  noKeychain: () =>
+    new CliError('no_keychain', "No OS keychain is available, so no wallet was created.", 'Set ATTESSA_PRIVATE_KEY or pass --keystore <file> (password in ATTESSA_KEYSTORE_PASSWORD).'),
+  unknownRequest: (id: string) => new CliError('unknown_request', `No call with request id ${id} in this computer's record.`, 'Check `attessa status --pending`.'),
+  inProgress: () => new CliError('in_progress', 'This call is already running in another attessa process. Nothing was signed.', 'Check `attessa status --pending`.'),
+} as const;
+
+// ---------------------------------------------------------------- owner (FLOWS §6 J3 agent register, J4; §8)
+
+export const OWN = {
+  // §6 J3
+  registerPrompt: (cost: string) => `This creates your agent's public identity (ERC-8004) from this wallet. One transaction, about ${cost} CELO.  [register/cancel]`,
+  registered: (agent: string, tx: string) => `Registered: agent ${agent}  (tx ${short(tx)}). Next: attessa enclave build.`,
+  // §6 J4
+  revokeReleasePrompt: (src: string, live: number, hosts: string[]) =>
+    `This stops buyers paying for answers from this build (owner says ${src}). ${
+      live === 0
+        ? 'It has no live signers.' // not in FLOWS
+        : `Its ${live} live signer${live === 1 ? ' stops' : 's stop'} working within 60 s, and ${hosts.join(' and ')} ${hosts.length === 1 ? 'refuses' : 'refuse'} calls until you approve and register another build.`
+    } Revoking is permanent.  [revoke/cancel]`,
+  revoked: (tx: string) => `Revoked (tx ${short(tx)}).`,
+  // not in FLOWS: the other owner prompts.
+  deprecatePrompt: (src: string) =>
+    `This stops new calls to this build (owner says ${src}); answers it already gave stay valid. You can approve it again later.  [deprecate/cancel]`,
+  deprecated: (tx: string) => `Deprecated (tx ${short(tx)}).`,
+  revokeSignerPrompt: (signer: string, h: string, agent: string) =>
+    `This stops signer ${short(signer)} for ${h} (agent ${agent}) within 60 s. Revoking is permanent; the operator registers a new key to continue.  [revoke/cancel]`,
+  retirePrompt: (h: string, agent: string) =>
+    `Buyers of ${h} stop paying agent ${agent}, and its signers stop working within 60 s. You can add it again later.  [retire/cancel]`,
+  retired: (tx: string) => `Retired (tx ${short(tx)}).`,
+  transferPrompt: (agent: string, to: string) => `This transfers agent ${agent} to ${to}, which becomes its owner. One transaction.  [transfer/cancel]`,
+  transferred: (tx: string) => `Transferred (tx ${short(tx)}). Next, on the EC2 host: attessa agent wallet-sig.`,
+  walletSig: (agent: string, wallet: string, sig: string, deadline: string, until: string) => [
+    `Signed: agent ${agent}'s wallet becomes ${wallet} if the owner submits this before ${until}.`,
+    `Next, from the owner wallet: attessa agent set-wallet --agent ${agent} --wallet ${wallet} --sig ${sig} --deadline ${deadline}`,
+  ],
+  setWalletPrompt: (agent: string, wallet: string) => `This sets agent ${agent}'s wallet to ${wallet}. One transaction.  [set/cancel]`,
+  walletSet: (tx: string) => `Wallet set (tx ${short(tx)}).`,
+  selflinkPrompt: (agent: string, sid: string) => `This links agent ${agent} to Self Agent ID ${sid} (informational). One transaction.  [link/cancel]`,
+  linked: (tx: string) => `Linked (tx ${short(tx)}).`,
+} as const;
+
+export const OWNERR = {
+  unknownRelease: (agent: string, id: string) => new CliError('unknown_release', `Agent ${agent} has no release ${id}.`, `\`attessa status --agent ${agent}\` lists them.`),
+  unknownSigner: (agent: string, id: string) => new CliError('unknown_signer', `Agent ${agent} has no signer ${id}.`, `\`attessa status --agent ${agent}\` lists them.`),
+  selfLinkInvalid: (sid: string) =>
+    new CliError(
+      'self_link_invalid',
+      `Can't link Self Agent ID ${sid}: it must be held by this wallet (Self's linked mode) and have a current human proof.`,
+      'Check it in the Self app, then run `attessa selflink` again.',
+    ),
+  // not in FLOWS
+  noSuchRelease: (id: string) => new CliError('unknown_release', `No agent has approved release ${id} on this network.`, 'Check the id with `attessa status --agent <id>`.'),
+  ambiguousRelease: (id: string, agents: string[]) =>
+    new CliError('usage', `Release ${id} is approved for agents ${agents.join(', ')}.`, 'Pass --agent <id>.'),
+  invalidTransition: (id: string, status: string) => new CliError('invalid_transition', `Release ${short(id)} is ${status}; that change isn't allowed.`),
+  signerNotActive: (id: string) => new CliError('signer_not_active', `Signer ${short(id)} is already revoked.`),
+  endpointNotActive: (origin: string) => new CliError('endpoint_not_active', `${origin} isn't an active endpoint.`, '`attessa status --agent <id>` lists the endpoints.'),
+  unknownAgent: (agent: string) => new CliError('unknown_agent', `Agent ${agent} doesn't exist on this network's identity registry.`, 'Check --agent and --network.'),
+  selfDisabled: () => new CliError('self_disabled', 'Self linking is turned off in this registry.'),
+} as const;

@@ -1,4 +1,5 @@
 import { DEPLOYMENTS } from '@attessa/core';
+import type { ClientOptions, Keychain } from '@attessa/sdk';
 import type { EnclaveTransport } from '@attessa/seller-host';
 import type { Address, Hex } from 'viem';
 import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
@@ -11,6 +12,8 @@ export interface Io {
   err(line: string): void;
   /** Shows `[yes/cancel]`-style prompts; true only on the yes word. */
   confirm(yesWord: string): Promise<boolean>;
+  /** Machine-readable result fields for `--json` (merged into the one JSON object `run` prints). */
+  data?(fields: Record<string, unknown>): void;
 }
 
 export interface RunResult {
@@ -40,6 +43,14 @@ export interface Deps {
   arch: string;
   /** Host socat port per enclave, SPEC §5 (5005 / 5007 / 5006) when absent. A test seam only. */
   socatPorts?: Record<'mainnet' | 'sepolia' | 'test', number> | undefined;
+  /** The buyer's home; data lives in `<home>/.attessa` unless ATTESSA_DATA_DIR is set. Defaults to the OS home. */
+  home?: string | undefined;
+  /** OS keychain for the buyer key (SPEC §7 key storage). Absent: keytar if it loads. A test seam. */
+  keychain?: Keychain | null | undefined;
+  /** SDK client options (transport, fetch, clock). Absent in production. A test seam. */
+  sdk?: Pick<ClientOptions, 'transport' | 'fetch' | 'sleep' | 'now' | 'receiptWaitMs' | 'httpTimeoutMs'> | undefined;
+  /** `attessa gateway …`: @attessa/gateway's runGatewayCommand, loaded only when used. */
+  gateway?: ((args: string[], out: (s: string) => void, err: (s: string) => void) => Promise<number>) | undefined;
 }
 
 export type NetworkFlag = 'sepolia' | 'mainnet' | 'local';
