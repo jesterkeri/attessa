@@ -85,6 +85,46 @@ adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
 
+## T20 - 2026-10-30
+commit: 9b4290c (builder, Opus; branch feat/t20-buyer-sdk, rerun by lead)
+verified: pnpm --filter @attessa/sdk test
+output:
+```
+$ pnpm --filter @attessa/sdk test
+ ✓ test/keys.test.ts (7 tests) 83ms
+ ✓ test/vectors.test.ts (9 tests) 111ms
+ ✓ test/adversary-t20-r3.test.ts (2 tests) 375ms
+ ✓ test/adversary-t20.test.ts (3 tests) 426ms
+ ✓ test/adversary-t20-r2.test.ts (3 tests) 697ms
+ ✓ test/regressions-t20.test.ts (11 tests) 708ms
+ ✓ test/refusals.test.ts (30 tests) 729ms
+ ✓ test/adversary-t20-r5.test.ts (1 test) 1616ms
+ ✓ test/pay.test.ts (9 tests) 1127ms
+ ✓ test/outcomes.test.ts (18 tests) 1203ms
+ ✓ test/adversary-t20-r6.test.ts (1 test) 1993ms
+ ✓ test/proof-checks.test.ts (31 tests) 1791ms
+ ✓ test/ledger.test.ts (10 tests) 9709ms
+ ✓ test/adversary-t20-r4.test.ts (3 tests) 30168ms
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+exit=0
+```
+adversary: rounds 1-6 each found defects (ledger lock races, terminal entries reopened, read-only and umask lock files, refused calls ending uncertain), all fixed with their tests committed; round 7 on 9b4290c: NO DEFECT FOUND (12 real processes x 12 rounds over five starting states: fresh dir under umask 0277, a killed holder's journal, a 0444 lock, old pid-format text under umask 022 and 0277; 0 overlaps, 0 lost writes). Four r3/r4 tests that drove the deleted pid lock through a fake process.kill were retired with Joshua's approval (4a09d04).
+reviewed: pending (Codex r1)
+notes: the ledger lock is an SQLite BEGIN IMMEDIATE (node:sqlite, Node >= 22.13) that proves its connection writable with a discarded write. Open questions logged: the node:sqlite ExperimentalWarning, a refused result with no code, a lock file owned by another user (refused with an error, untested without root).
+
+## T20 Codex review r2 - 2026-10-31
+Round 1 (reviews/t20-buyer-sdk-review-r1.md) returned REVISE with one major finding, M1: the lock adversaries failed inside Codex's sandbox. The same command on the same frozen commit 9d9d261, run outside the sandbox on 2026-10-31, passed in full; its tail is in reviews/t20-sdk-suite-rerun-outside-sandbox-2026-10-31.txt:
+```
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+```
+Round 2 withdrew M1: the sandbox denies child-process creation (EPERM), so the round-1 lock results were invalid. Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t20-buyer-sdk-review-r2.md | verdict: implementation-ready | C0 M0 m0
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
 findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
