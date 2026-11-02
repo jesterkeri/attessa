@@ -85,83 +85,6 @@ adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
 
-## T10 Codex review r2 - 2026-10-31
-Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
-```
-scripts/check-deploy.adversary.test.mjs # tests 3
-scripts/check-deploy.adversary.test.mjs # fail 0
-scripts/check-deploy.adversary2.test.mjs # tests 4
-scripts/check-deploy.adversary2.test.mjs # fail 0
-scripts/check-deploy.adversary3.test.mjs # tests 2
-scripts/check-deploy.adversary3.test.mjs # fail 0
-scripts/check-deploy.adversary4.test.mjs # tests 3
-scripts/check-deploy.adversary4.test.mjs # fail 0
-scripts/check-deploy.adversary5.test.mjs # tests 3
-scripts/check-deploy.adversary5.test.mjs # fail 0
-scripts/check-deploy.adversary6.test.mjs # tests 3
-scripts/check-deploy.adversary6.test.mjs # fail 0
-scripts/check-deploy.adversary7.test.mjs # tests 3
-scripts/check-deploy.adversary7.test.mjs # fail 0
-scripts/check-deploy.adversary8.test.mjs # tests 2
-scripts/check-deploy.adversary8.test.mjs # fail 0
-scripts/check-deploy.adversary9.test.mjs # tests 3
-scripts/check-deploy.adversary9.test.mjs # fail 0
-scripts/check-deploy.committed-config.test.mjs # tests 6
-scripts/check-deploy.committed-config.test.mjs # fail 0
-scripts/check-deploy.test.mjs # tests 11
-scripts/check-deploy.test.mjs # fail 0
-REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
-PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
-predeploy_exit=0
-```
-Closing lines of round 2, verbatim:
-```
-Decision: SHIP
-VERDICT: implementation-ready
-```
-reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
-note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
-Correction (2026-11-02, before the staging PR): design-review-r1.md, design-review-r2.md, design-review-r3.md, t10-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
-## T20 - 2026-10-30
-commit: 9b4290c (builder, Opus; branch feat/t20-buyer-sdk, rerun by lead)
-verified: pnpm --filter @attessa/sdk test
-output:
-```
-$ pnpm --filter @attessa/sdk test
- ✓ test/keys.test.ts (7 tests) 83ms
- ✓ test/vectors.test.ts (9 tests) 111ms
- ✓ test/adversary-t20-r3.test.ts (2 tests) 375ms
- ✓ test/adversary-t20.test.ts (3 tests) 426ms
- ✓ test/adversary-t20-r2.test.ts (3 tests) 697ms
- ✓ test/regressions-t20.test.ts (11 tests) 708ms
- ✓ test/refusals.test.ts (30 tests) 729ms
- ✓ test/adversary-t20-r5.test.ts (1 test) 1616ms
- ✓ test/pay.test.ts (9 tests) 1127ms
- ✓ test/outcomes.test.ts (18 tests) 1203ms
- ✓ test/adversary-t20-r6.test.ts (1 test) 1993ms
- ✓ test/proof-checks.test.ts (31 tests) 1791ms
- ✓ test/ledger.test.ts (10 tests) 9709ms
- ✓ test/adversary-t20-r4.test.ts (3 tests) 30168ms
- Test Files  14 passed (14)
-      Tests  138 passed (138)
-exit=0
-```
-adversary: rounds 1-6 each found defects (ledger lock races, terminal entries reopened, read-only and umask lock files, refused calls ending uncertain), all fixed with their tests committed; round 7 on 9b4290c: NO DEFECT FOUND (12 real processes x 12 rounds over five starting states: fresh dir under umask 0277, a killed holder's journal, a 0444 lock, old pid-format text under umask 022 and 0277; 0 overlaps, 0 lost writes). Four r3/r4 tests that drove the deleted pid lock through a fake process.kill were retired with Joshua's approval (4a09d04).
-reviewed: pending (Codex r1)
-notes: the ledger lock is an SQLite BEGIN IMMEDIATE (node:sqlite, Node >= 22.13) that proves its connection writable with a discarded write. Open questions logged: the node:sqlite ExperimentalWarning, a refused result with no code, a lock file owned by another user (refused with an error, untested without root).
-
-## T20 Codex review r2 - 2026-10-31
-Round 1 (reviews/t20-buyer-sdk-review-r1.md) returned REVISE with one major finding, M1: the lock adversaries failed inside Codex's sandbox. The same command on the same frozen commit 9d9d261, run outside the sandbox on 2026-10-31, passed in full; its tail is in reviews/t20-sdk-suite-rerun-outside-sandbox-2026-10-31.txt:
-```
- Test Files  14 passed (14)
-      Tests  138 passed (138)
-```
-Round 2 withdrew M1: the sandbox denies child-process creation (EPERM), so the round-1 lock results were invalid. Closing lines of round 2, verbatim:
-```
-Decision: SHIP
-VERDICT: implementation-ready
-```
-reviewed: reviews/t20-buyer-sdk-review-r2.md | verdict: implementation-ready | C0 M0 m0
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
 findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
@@ -241,31 +164,6 @@ adversary: r1 on 67e0122 DEFECT (INV-11: a serial reconciler re-send to a hung f
 reviewed: pending (Codex)
 notes: three SPEC questions from the fix round are in OPEN-QUESTIONS (unfunded authorizations vs the unpaid rate limit; nonce used before created_block; §6.2 step order vs the idempotency table).
 
-## T19 Codex r1 fixes and adversary rounds 3-9 - 2026-10-31
-Codex r1 (REVISE): the reconciler serialized slow RPC reconciliation; fixed with per-row concurrent checks. Adversary rounds 3 to 8 each found a defect, fixed with its test committed (packages/gateway/test/adversary-t19-r*.test.ts, delivery-overlap, delivery-stream-error, delivery-duplicate-gone, reconciler-deadline):
-- r5: a restart gave `settled` rows a fresh 30 s grace; the grace now starts from the stored `updated_at` for rows open at startup.
-- overlapping deliveries of one row: live handlers are counted per row.
-- r6, r7, r8: a client hanging up during settle, during execution, or behind a pipelined request left a live mark that nothing released, so the row stayed `settled` forever (INV-11). `holdLive` now checks the reply and socket state when it takes a mark and releases it on socket close, and the reconciler sweeps a still-live `settled` row once now > validBefore + 55.
-Round 9, on bdd4cd2: no defect found (12 kept-alive calls, read pipelining, LIVE_DEADLINE_S against the slowest legitimate delivery, SPEC §6.2 re-read).
-Verify at bdd4cd2, 2026-10-31:
-```
-$ pnpm --filter @attessa/gateway test
- Test Files  21 passed (21)
-      Tests  154 passed (154)
-test_exit=0
-$ pnpm -r typecheck
-typecheck_exit=0
-$ pnpm --filter @attessa/gateway lint
-lint_exit=0
-```
-reviewed: pending (Codex r2)
-
-## T19 Codex review r2 - 2026-10-31
-Codex r2 reviewed d3b5c57: all round-1 findings (m1 proof lifetime, m2 payer from /verify, M1 serial reconciliation) are fixed, no new findings. Its sandbox blocked the socket-based tests (U8); they passed outside it on the same code, recorded in the entry above (154 passed). Closing line of round 2, verbatim:
-```
-VERDICT: implementation-ready
-```
-reviewed: reviews/t19-x402-payment-gateway-review-r2.md | verdict: implementation-ready | C0 M0 m0
 ## T15 - 2026-10-30
 commit: fd24b45 (built fbe9bcf, 89b2e5d by a builder, Opus; fixed acbf654, fbafffe; merge fd24b45 brings in the T19 branch)
 verified: pnpm --filter @attessa/seller-host test && pnpm --filter @attessa/cli test -- -t "seller" (plus pnpm -r typecheck), on the merge
@@ -350,6 +248,109 @@ Review files: reviews/t15-seller-host-and-cli-review-r1.md (round 1) and reviews
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t15-seller-host-and-cli-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): t15-seller-host-and-cli-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T10 Codex review r2 - 2026-10-31
+Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
+```
+scripts/check-deploy.adversary.test.mjs # tests 3
+scripts/check-deploy.adversary.test.mjs # fail 0
+scripts/check-deploy.adversary2.test.mjs # tests 4
+scripts/check-deploy.adversary2.test.mjs # fail 0
+scripts/check-deploy.adversary3.test.mjs # tests 2
+scripts/check-deploy.adversary3.test.mjs # fail 0
+scripts/check-deploy.adversary4.test.mjs # tests 3
+scripts/check-deploy.adversary4.test.mjs # fail 0
+scripts/check-deploy.adversary5.test.mjs # tests 3
+scripts/check-deploy.adversary5.test.mjs # fail 0
+scripts/check-deploy.adversary6.test.mjs # tests 3
+scripts/check-deploy.adversary6.test.mjs # fail 0
+scripts/check-deploy.adversary7.test.mjs # tests 3
+scripts/check-deploy.adversary7.test.mjs # fail 0
+scripts/check-deploy.adversary8.test.mjs # tests 2
+scripts/check-deploy.adversary8.test.mjs # fail 0
+scripts/check-deploy.adversary9.test.mjs # tests 3
+scripts/check-deploy.adversary9.test.mjs # fail 0
+scripts/check-deploy.committed-config.test.mjs # tests 6
+scripts/check-deploy.committed-config.test.mjs # fail 0
+scripts/check-deploy.test.mjs # tests 11
+scripts/check-deploy.test.mjs # fail 0
+REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+predeploy_exit=0
+```
+Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
+note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
+Correction (2026-11-02, before the staging PR): design-review-r1.md, design-review-r2.md, design-review-r3.md, t10-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T20 - 2026-10-30
+commit: 9b4290c (builder, Opus; branch feat/t20-buyer-sdk, rerun by lead)
+verified: pnpm --filter @attessa/sdk test
+output:
+```
+$ pnpm --filter @attessa/sdk test
+ ✓ test/keys.test.ts (7 tests) 83ms
+ ✓ test/vectors.test.ts (9 tests) 111ms
+ ✓ test/adversary-t20-r3.test.ts (2 tests) 375ms
+ ✓ test/adversary-t20.test.ts (3 tests) 426ms
+ ✓ test/adversary-t20-r2.test.ts (3 tests) 697ms
+ ✓ test/regressions-t20.test.ts (11 tests) 708ms
+ ✓ test/refusals.test.ts (30 tests) 729ms
+ ✓ test/adversary-t20-r5.test.ts (1 test) 1616ms
+ ✓ test/pay.test.ts (9 tests) 1127ms
+ ✓ test/outcomes.test.ts (18 tests) 1203ms
+ ✓ test/adversary-t20-r6.test.ts (1 test) 1993ms
+ ✓ test/proof-checks.test.ts (31 tests) 1791ms
+ ✓ test/ledger.test.ts (10 tests) 9709ms
+ ✓ test/adversary-t20-r4.test.ts (3 tests) 30168ms
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+exit=0
+```
+adversary: rounds 1-6 each found defects (ledger lock races, terminal entries reopened, read-only and umask lock files, refused calls ending uncertain), all fixed with their tests committed; round 7 on 9b4290c: NO DEFECT FOUND (12 real processes x 12 rounds over five starting states: fresh dir under umask 0277, a killed holder's journal, a 0444 lock, old pid-format text under umask 022 and 0277; 0 overlaps, 0 lost writes). Four r3/r4 tests that drove the deleted pid lock through a fake process.kill were retired with Joshua's approval (4a09d04).
+reviewed: pending (Codex r1)
+notes: the ledger lock is an SQLite BEGIN IMMEDIATE (node:sqlite, Node >= 22.13) that proves its connection writable with a discarded write. Open questions logged: the node:sqlite ExperimentalWarning, a refused result with no code, a lock file owned by another user (refused with an error, untested without root).
+
+## T20 Codex review r2 - 2026-10-31
+Round 1 (reviews/t20-buyer-sdk-review-r1.md) returned REVISE with one major finding, M1: the lock adversaries failed inside Codex's sandbox. The same command on the same frozen commit 9d9d261, run outside the sandbox on 2026-10-31, passed in full; its tail is in reviews/t20-sdk-suite-rerun-outside-sandbox-2026-10-31.txt:
+```
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+```
+Round 2 withdrew M1: the sandbox denies child-process creation (EPERM), so the round-1 lock results were invalid. Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t20-buyer-sdk-review-r2.md | verdict: implementation-ready | C0 M0 m0
+## T19 Codex r1 fixes and adversary rounds 3-9 - 2026-10-31
+Codex r1 (REVISE): the reconciler serialized slow RPC reconciliation; fixed with per-row concurrent checks. Adversary rounds 3 to 8 each found a defect, fixed with its test committed (packages/gateway/test/adversary-t19-r*.test.ts, delivery-overlap, delivery-stream-error, delivery-duplicate-gone, reconciler-deadline):
+- r5: a restart gave `settled` rows a fresh 30 s grace; the grace now starts from the stored `updated_at` for rows open at startup.
+- overlapping deliveries of one row: live handlers are counted per row.
+- r6, r7, r8: a client hanging up during settle, during execution, or behind a pipelined request left a live mark that nothing released, so the row stayed `settled` forever (INV-11). `holdLive` now checks the reply and socket state when it takes a mark and releases it on socket close, and the reconciler sweeps a still-live `settled` row once now > validBefore + 55.
+Round 9, on bdd4cd2: no defect found (12 kept-alive calls, read pipelining, LIVE_DEADLINE_S against the slowest legitimate delivery, SPEC §6.2 re-read).
+Verify at bdd4cd2, 2026-10-31:
+```
+$ pnpm --filter @attessa/gateway test
+ Test Files  21 passed (21)
+      Tests  154 passed (154)
+test_exit=0
+$ pnpm -r typecheck
+typecheck_exit=0
+$ pnpm --filter @attessa/gateway lint
+lint_exit=0
+```
+reviewed: pending (Codex r2)
+
+## T19 Codex review r2 - 2026-10-31
+Codex r2 reviewed d3b5c57: all round-1 findings (m1 proof lifetime, m2 payer from /verify, M1 serial reconciliation) are fixed, no new findings. Its sandbox blocked the socket-based tests (U8); they passed outside it on the same code, recorded in the entry above (154 passed). Closing line of round 2, verbatim:
+```
+VERDICT: implementation-ready
+```
+reviewed: reviews/t19-x402-payment-gateway-review-r2.md | verdict: implementation-ready | C0 M0 m0
 ## T04 - 2026-10-30
 commit: b3347e1 (builder B1, Opus)
 verified: cd contracts && forge test --match-path 'test/unit/*' -vv && ../scripts/check-error-coverage.sh
