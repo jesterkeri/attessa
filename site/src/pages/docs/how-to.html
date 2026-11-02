@@ -11,7 +11,7 @@
     <p>Short recipes for one job each. They assume you've done the <a href="tutorial.html">tutorial</a> or know the basics.</p>
 
     <h2 id="run-a-seller">Run a seller</h2>
-    <p>Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends.</p>
+    <p>Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends. <span class="muted">Coming.</span> <code>attessa agent register</code> isn't built yet; the other five commands are.</p>
     <ol>
       <li>Register your agent's public identity (ERC-8004).</li>
       <li>On your AWS host, build the sealed machine image from the commit you'll publish.</li>
@@ -47,10 +47,10 @@
       <pre><code><span class="p">$ </span><span class="c">attessa release revoke &lt;releaseId&gt;</span>
 <span class="p">$ </span><span class="c">attessa revoke signer &lt;signerAddress&gt;</span></code></pre>
     </figure>
-    <p>Run these from the agent owner's wallet. <code>attessa status --agent &lt;id&gt;</code> lists your releases, endpoints and signers with their states.</p>
+    <p><span class="muted">Coming.</span> These commands, and <code>attessa status</code>, aren't built yet. Run them from the agent owner's wallet. <code>attessa status --agent &lt;id&gt;</code> lists your releases, endpoints and signers with their states.</p>
 
     <h2 id="mcp">Use Attessa from an MCP-capable agent</h2>
-    <p>The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.</p>
+    <p><span class="muted">Coming.</span> The MCP server isn't built yet. The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.</p>
     <figure class="code">
       <figcaption><span>MCP client config</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
       <pre><code>{
