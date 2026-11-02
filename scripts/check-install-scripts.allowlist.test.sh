@@ -40,6 +40,10 @@ check "bin as a string" "FAIL $C: bin must map command names to .js files under 
   set_json $C 'm["bin"] = "dist/bin.js"'
 check "bin command name with a path" "FAIL $C: bin must map command names to .js files under dist/, got {'attessa': 'dist/bin.js', 'attest': 'dist/bin.js', '../x': 'dist/bin.js'}" \
   set_json $C 'm["bin"]["../x"] = "dist/bin.js"'
+for b in node tsc sh; do
+  check "bin shadowing $b" "FAIL $C: bin must map command names to .js files under dist/, got {'attessa': 'dist/bin.js', 'attest': 'dist/bin.js', '$b': 'dist/bin.js'}" \
+    set_json $C "m['bin']['$b'] = 'dist/bin.js'"
+done
 S=packages/sdk/package.json
 check "engines beyond node" "FAIL $S: engines must be a node range only, got {'node': '>=22.13.0', 'pnpm': '9'}" \
   set_json $S 'm["engines"]["pnpm"] = "9"'

@@ -3,7 +3,8 @@
 # scripts, dependency specs, pnpm-workspace.yaml), then install HEAD with the pinned pnpm
 # (packageManager), a fresh store and no side-effects cache, and fail if any install-time script
 # runs other than a registry copy of the allowlist (better-sqlite3, keytar).
-# Workspace manifests may add only: bin (command names to .js files under the package's dist/),
+# Workspace manifests may add only: bin (attest or attessa[-name] commands, so no bin shadows a
+# tool such as node or tsc in other packages' scripts, to .js files under the package's dist/),
 # engines with a node range only, and the scripts gen:vectors and render-units, each `node` on a
 # tracked file under the package's scripts/; none of these runs at install.
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
@@ -184,7 +185,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
             # pnpm links each bin into the node_modules/.bin of dependents: command names to files
             # under the dist/ of this package only (no absolute path, no ".", ".." or hidden component).
             bn = m.get("bin", {})
-            if not isinstance(bn, dict) or any(not re.fullmatch(r"[a-z0-9][a-z0-9-]*", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.[cm]?js", f) for c, f in bn.items()):
+            if not isinstance(bn, dict) or any(not re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.[cm]?js", f) for c, f in bn.items()):
                 bad.append(f"{p}: bin must map command names to .js files under dist/, got {bn!r}")
             e = m.get("engines", {})
             if not isinstance(e, dict) or set(e) - {"node"} or not isinstance(e.get("node", "0"), str) or not re.fullmatch(r"(>=|\^|~)?\d+(\.\d+){0,2}", e.get("node", "0")):
