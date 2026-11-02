@@ -1296,4 +1296,21 @@ cli:       Tests  222 passed (222)
 sdk:  Test Files  17 passed (17)
 sdk:       Tests  176 passed (176)
 ```
-reviewed: pending (adversary r13, then Codex)
+reviewed: pending (adversary r13 found a defect; see below)
+
+### T21 adversary r13 fixes - 2026-11-02
+adversary r13 (461e24a, `packages/cli/test/adversary-t21-r13.test.ts`, failing): with the payment settled on chain but `/v1/results` still answering 202, `status --pending` (and an interrupted `call`) printed "your payment permission expires unused ... attessa cancel <id> voids it now", both false (FLOWS §8 "interrupted, payment found"; FLOWS §7 Uncertain resolves from chain state; FLOWS §9 one next action). Fixed in d5f5fcf:
+- `packages/cli/src/commands/buyer.ts`: one check, `paymentFound()`, decides whether the chain shows the payment settled. If so, call, status --pending and cancel print FLOWS §8 "The payment went through (tx {h}). Fetching your answer…" and one next action, "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.", never "expires unused" or cancel. --json uses the same check (code `uncertain`, suggestion `get_result`).
+- New tests cover status --pending, --json and cancel; no existing assertion changed. The new next-action line is in the OPEN-QUESTIONS cancel entry, not FLOWS.
+
+verify at d5f5fcf (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  33 passed (33)
+cli:       Tests  225 passed (225)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  176 passed (176)
+```
+reviewed: pending (adversary r14, then Codex)
