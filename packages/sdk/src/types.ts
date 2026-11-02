@@ -22,8 +22,9 @@ export interface AttestConfig {
 }
 
 /**
- * Not in SPEC §7's `AttestConfig`: injection points for tests and for chains with no deployed registry.
- * Production callers pass nothing.
+ * Not in SPEC §7's `AttestConfig`: injection points for tests and for a `deployments.ts` chain whose entry has
+ * no registry yet. Production callers pass nothing. A chain id with no `deployments.ts` entry at all (a plain
+ * anvil chain, 31337) is refused as `network_mismatch` whatever is passed here: it has no pinned assets either.
  */
 export interface ClientOptions {
   /**
