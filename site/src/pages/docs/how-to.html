@@ -44,7 +44,7 @@
     <p>Revoking a build stops buyers paying for answers from it. Its live signers stop working within 60 seconds, and your endpoint refuses calls until you approve and register another build. <strong>Revoking is permanent.</strong></p>
     <figure class="code" data-copy="commands">
       <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code><span class="p">$ </span><span class="c">attessa revoke release &lt;releaseId&gt;</span>
+      <pre><code><span class="p">$ </span><span class="c">attessa release revoke &lt;releaseId&gt;</span>
 <span class="p">$ </span><span class="c">attessa revoke signer &lt;signerAddress&gt;</span></code></pre>
     </figure>
     <p>Run these from the agent owner's wallet. <code>attessa status --agent &lt;id&gt;</code> lists your releases, endpoints and signers with their states.</p>

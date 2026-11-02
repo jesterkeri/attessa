@@ -36,7 +36,8 @@
         <tr><td><code>attessa enclave start</code></td><td>Starts the sealed machine and writes AWS's attestation to <code>att.bin</code>. <code>attessa signer register --fresh</code> gets a new one.</td></tr>
         <tr><td><code>attessa signer register</code></td><td>Registers the machine's key on Celo. <code>--fresh</code>, <code>--dry-run</code> (estimates gas).</td></tr>
         <tr><td><code>attessa signer renew</code></td><td>Renews a running signer without a restart.</td></tr>
-        <tr><td><code>attessa revoke release|signer</code></td><td>Permanently revokes a build or a signer. Takes effect within 60 s.</td></tr>
+        <tr><td><code>attessa release revoke</code></td><td>Permanently revokes a build. Its signers stop working within 60 s.</td></tr>
+        <tr><td><code>attessa revoke signer &lt;addr&gt;</code></td><td>Permanently revokes a signer. Takes effect within 60 s.</td></tr>
         <tr><td><code>attessa selflink</code></td><td>Links a Self Agent ID to your agent. Informational only.</td></tr>
         <tr><td><code>attessa gateway pause</code></td><td>Stops new paid calls at your gateway.</td></tr>
       </tbody>
