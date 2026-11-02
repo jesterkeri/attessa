@@ -1062,3 +1062,42 @@ packages/cli typecheck: Done
 ```
 adversary: r1 tests pass; r2 not run yet
 reviewed: pending (adversary r2, then Codex)
+
+### T21 adversary r2 fixes - 2026-11-02
+adversary r2 (d3ffd47, `packages/cli/test/adversary-t21-r2.test.ts`, 5 failing) fixed in d462f90 and d0ee4d7:
+- `claimLabel` (`packages/cli/src/commands/buyer.ts`) and `sourceLabel` (`packages/cli/src/copy.ts`, also `status --agent`) pass the GitHub-shaped label through `safe()` too; normal refs print unchanged (J1 FLOWS tests pass).
+- `safe()` escapes the full Bidi_Control set: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069.
+- SDK `loadAccount`/`decryptKeystore` (`packages/sdk/src/keys.ts`) throw only `KeyError` with a fixed reason (no cause, no file field interpolated); the CLI prints "Can't load the wallet from <path>: <reason>." and never another error's text. New tests: `packages/sdk/test/keys.test.ts` (2), `packages/cli/test/buyer.test.ts` (1).
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+ Test Files  17 passed (17)
+      Tests  137 passed (137)
+   Start at  18:19:06
+   Duration  8.12s (transform 1.53s, setup 0ms, collect 13.84s, tests 30.78s, environment 4ms, prepare 2.18s)
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  150 passed (150)
+   Start at  18:19:18
+   Duration  31.56s (transform 1.50s, setup 0ms, collect 12.41s, tests 71.05s, environment 10ms, prepare 1.60s)
+```
+
+`pnpm -r typecheck` (exit=0):
+```
+Scope: 5 of 6 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+```
+adversary: r2 tests pass; r3 not run yet
+reviewed: pending (adversary r3, then Codex)
