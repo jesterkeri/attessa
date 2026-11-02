@@ -1243,3 +1243,21 @@ sdk:  Test Files  17 passed (17)
 sdk:       Tests  168 passed (168)
 ```
 reviewed: pending (adversary r10, then Codex)
+
+### T21 adversary r10 fixes - 2026-11-02
+adversary r10 (092dc3e, `packages/cli/test/adversary-t21-r10.test.ts`, failing): `attessa cancel` on an RPC that dropped before signing, or after the cancel was broadcast, printed "Unexpected error" with no next action and no tx. Fixed in 2564603:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: a chain read's RpcError comes back unchanged only before the first signature. After the cancel permission is signed, any other failure is `CancelInterruptedError`, carrying the cancel tx once it may have been sent. The receipt wait is bounded by receiptWaitMs, not viem's 180 s.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`, `tx.ts`: before signing, FLOWS §8's rpc row. Signed but not sent: the rpc row ending "Nothing was sent.". Sent: "Lost the connection to Celo after sending the cancel (tx {hash}); it may still land." / "Run `attessa status --pending` to see whether it landed (with another `--rpc` if this one stays down)." Seller writes use the same lost-connection row with the explorer next action. The new lines are not in FLOWS; the OPEN-QUESTIONS cancel entry lists them.
+- `t21-r5-fix.test.ts` and `cancel-race.test.ts` (fix-round tests, not adversary tests) now expect these exact rows where they expected "Unexpected error". New tests are in `t21-r10-fix.test.ts`, `buyer.test.ts` and `cancel-race.test.ts`.
+
+verify at 2564603 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  30 passed (30)
+cli:       Tests  217 passed (217)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  171 passed (171)
+```
+reviewed: pending (adversary r11, then Codex)
