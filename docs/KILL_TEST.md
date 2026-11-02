@@ -10,7 +10,7 @@ bundled real attestation, exactly as base's `script/BaseSepoliaDemo.s.sol` sends
   `USE_BUNDLED_REAL_ATTESTATION=true` and `--gas-estimate-multiplier 110` (the simulation padded each
   validate call to 16,046,664 gas, under Celo's 16,777,216 per-transaction cap).
 - These are demo contracts (`CertManagerDemo` accepts expired certificates within a grace period). The
-  registry never uses them (SPEC §3.5); the production stack is in `docs/DEPLOYMENTS.md`.
+  registry never uses them (SPEC §3.5); the production validator stack is a separate deployment (task T10).
 
 Demo addresses: P384Verifier `0x485975462b921addB2C1Ad64FDD962e7C4E4b38e`, CertManagerDemo
 `0x5aB5bfb3e8b39D12aAEF2075B3B4836baFAFC09D`, NitroValidator `0x1a1CEca1b358C17b3Fb0a4965BDF8ACed06557A5`.
