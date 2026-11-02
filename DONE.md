@@ -1260,4 +1260,22 @@ cli:       Tests  217 passed (217)
 sdk:  Test Files  17 passed (17)
 sdk:       Tests  171 passed (171)
 ```
-reviewed: pending (adversary r11, then Codex)
+reviewed: pending (adversary r11 found a defect; see below)
+
+### T21 adversary r11 fixes - 2026-11-02
+adversary r11 (bf4f61c, `packages/cli/test/adversary-t21-r11.test.ts`, failing): re-running `attessa cancel` after an interrupted cancel that landed reported not_charged / cancelled but left the ledger entry `uncertain`, so the reservation stayed counted in today's spend (SPEC §7 "Cancel ... makes `not_charged` immediate on confirmation"; FLOWS §7 reservation released on NotCharged/Cancelled). Fixed in 55cc5e1:
+- `packages/sdk/src/client.ts`: one helper records every decision read from a log. A cancel log sets not_charged / cancelled; a "used" log records the settlement tx before "Too late".
+- A reachable node with the cancel not yet mined now gets "The cancel was sent (tx {hash}) but isn't confirmed yet." / "Run `attessa status --pending` to see whether it landed." instead of "Lost the connection to Celo". Not in FLOWS; the OPEN-QUESTIONS cancel entry lists it.
+- New tests in `packages/sdk/test/cancel-race.test.ts` and `packages/cli/test/buyer.test.ts`; no existing assertion changed.
+
+verify at 55cc5e1 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  31 passed (31)
+cli:       Tests  219 passed (219)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  174 passed (174)
+```
+reviewed: pending (adversary r12, then Codex)
