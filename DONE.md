@@ -1033,3 +1033,49 @@ Decision: SHIP
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t06-t07-vectors-and-real-fixture-review-r4.md | verdict: implementation-ready | C0 M0 m0
+
+## T10 Sepolia broadcast and check-deploy - 2026-11-02
+Joshua broadcast both deploy scripts from d3c48a1 (the T10 deploy commit, a clean checkout in .worktrees/sim-sepolia-deploys), each after `check-deploy.mjs --pre-deploy` printed PASS and a simulation without the broadcast flag:
+- DeployValidatorStack: P384Verifier, CertManager (production, owner and revoker = admin `0xD32AF5B881eC424435ECa3262065537dCcb64E65`), NitroValidator; 10,722,155 gas, 0.536 CELO.
+- DeployRegistry with ATTESSA_NITRO_VALIDATOR = the NitroValidator above: EnclaveRegistry, 3,444,473 gas, 0.172 CELO.
+The addresses and transactions are in docs/DEPLOYMENTS.md and packages/core/src/deployments.ts (`enclaveRegistry`, `validatorStack` for celo-sepolia; mainnet stays null until T30).
+Consequences in tests, no product code changed:
+- packages/core/test/core.test.ts: the check that every `enclaveRegistry` is null (commented "set by T10 / T30") now pins the Sepolia registry and validator stack to the deployed addresses and keeps mainnet null.
+- packages/cli/test/harness.ts: the FakeChain reports chain 11142220 and a pinned registry wins over ATTESSA_REGISTRY (SPEC §2.6), so with the real pin every seller test called `0x42bf...` on the fake chain (40 failures). The harness now pins the Sepolia entry to its fake registry once per test file (vitest forks, isolated); the ATTESSA_REGISTRY override and pin-precedence cases stay covered by adversary-t15 and adversary-t15-r2, which set the pins themselves.
+- The CI ts job also needs the nitro-validator submodule (packages/cli/test/attestation.test.ts reads the real AWS fixture from it), and the Slither forge-config hash changes with T10's `fs_permissions` entry: given to Joshua as a ci.yml patch (.worktrees/prompts/combined-branch-ci.patch), since workflows are his to edit.
+
+verify (`node scripts/check-deploy.mjs celo-sepolia`, live Celo Sepolia, 2026-11-02):
+```
+REF   reference bytecode compiled from HEAD e6777faaf161 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+OK    deployments.ts EnclaveRegistry matches DEPLOYMENTS.md
+OK    deployments.ts P384Verifier matches DEPLOYMENTS.md
+OK    deployments.ts CertManager matches DEPLOYMENTS.md
+OK    deployments.ts NitroValidator matches DEPLOYMENTS.md
+OK    deployments.ts chainId == SPEC §2.6 pin 11142220
+OK    chain id 11142220
+OK    deployments.ts identityRegistry matches DEPLOYMENTS.md
+OK    deployments.ts selfRegistry matches DEPLOYMENTS.md
+OK    deployments.ts identityRegistry == SPEC §3.5 pin 0x8004a818bfb912233c491871b3d84c89a494bd9e
+OK    deployments.ts selfRegistry == SPEC §3.5 pin 0x043dacac8b0771dd5b444bcc88f2f8bbdbedd379
+OK    P384Verifier 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e has code
+OK    P384Verifier runtime code equals the production artifact with immutables spliced
+OK    CertManager 0x29f2a69b5685d0db11fa10aa7c9079b3f14cf7fd has code
+OK    CertManager runtime code equals the production artifact with immutables spliced
+OK    NitroValidator 0x72b06e740d5f2c262b3193de69c7065a0c7424db has code
+OK    NitroValidator runtime code equals the production artifact with immutables spliced
+OK    EnclaveRegistry 0x42bf5cb440c3c321cb42b0f4c81c3c7435cb92ff has code
+OK    EnclaveRegistry runtime code equals the production artifact with immutables spliced
+OK    CertManager.p384Verifier() == 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e
+OK    NitroValidator.certManager() == 0x29f2a69b5685d0db11fa10aa7c9079b3f14cf7fd
+OK    NitroValidator.p384Verifier() == 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e
+OK    EnclaveRegistry.nitroValidator() == 0x72b06e740d5f2c262b3193de69c7065a0c7424db
+OK    EnclaveRegistry.identityRegistry() == 0x8004a818bfb912233c491871b3d84c89a494bd9e
+OK    EnclaveRegistry.selfRegistry() == 0x043dacac8b0771dd5b444bcc88f2f8bbdbedd379
+OK    CertManager.owner() == 0xd32af5b881ec424435eca3262065537dccb64e65
+OK    CertManager.revoker() == 0xd32af5b881ec424435eca3262065537dccb64e65
+OK    EnclaveRegistry.allowLocalOrigins() == false
+OK: all 27 checks passed
+exit=0
+```
+`pnpm -r test`: core 69 passed, seller-host 81 passed, gateway 154 passed, sdk 138 passed, cli 76 passed. `pnpm -r typecheck`: Done in all 5 packages.
+reviewed: pending (Codex)
