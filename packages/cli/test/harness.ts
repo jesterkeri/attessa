@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { encodeUserData, originHash, releaseId } from '@attessa/core';
+import { DEPLOYMENTS, encodeUserData, originHash, releaseId } from '@attessa/core';
 import { EnclaveClient, InputFetcher, HttpRpcSource, SellerHost, TcpEnclaveTransport } from '@attessa/seller-host';
 import { toHex, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
@@ -9,6 +9,10 @@ import { hintPlan, parseAttestation } from '../src/attestation.ts';
 import { run } from '../src/index.ts';
 import { FakeChain, REGISTRY } from './fake-chain.ts';
 import { FakeNitroChain } from './fake-nitro.ts';
+
+// The FakeChain reports Sepolia's chain id, and a pinned registry wins over ATTESSA_REGISTRY (SPEC §2.6). Since T10
+// pinned the real Sepolia registry, the fake one stands in for it here (each test file runs in its own fork).
+(DEPLOYMENTS['celo-sepolia'] as { enclaveRegistry: string | null }).enclaveRegistry = REGISTRY;
 
 export const AGENT = 412n;
 export const ORIGIN = 'https://risk.example';

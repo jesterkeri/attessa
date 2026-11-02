@@ -15,11 +15,11 @@ Chain 11142220.
 
 | Name | Address |
 |---|---|
-| Admin | `TODO(Joshua): cold admin EOA, CertManager owner and revoker (not the deployer)` |
-| P384Verifier | `TODO(Joshua): from the DeployValidatorStack broadcast` |
-| CertManager | `TODO(Joshua): from the DeployValidatorStack broadcast` |
-| NitroValidator | `TODO(Joshua): from the DeployValidatorStack broadcast` |
-| EnclaveRegistry | `TODO(Joshua): from the DeployRegistry broadcast` |
+| Admin | `0xD32AF5B881eC424435ECa3262065537dCcb64E65` |
+| P384Verifier | `0xd26C0d863B71CBBBa07E6EeeDaB545d0F7c1a84E` |
+| CertManager | `0x29F2a69B5685d0db11FA10aa7C9079B3F14CF7fd` |
+| NitroValidator | `0x72B06e740D5F2C262b3193De69c7065A0C7424db` |
+| EnclaveRegistry | `0x42Bf5Cb440c3C321CB42b0F4c81c3c7435cB92fF` |
 
 Not ours, pinned in SPEC §3.5 and passed to the registry constructor:
 
@@ -28,7 +28,13 @@ Not ours, pinned in SPEC §3.5 and passed to the registry constructor:
 | IdentityRegistry (ERC-8004) | `0x8004A818BFB912233c491871b3d84c89A494BD9e` |
 | SelfRegistry | `0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379` |
 
-Deploy transactions: TODO(Joshua): tx hashes and block numbers.
+Deploy transactions (2026-11-02, deployer `0xF31207eE5831fb2a7bFB6f844a4fb16776193964`, from commit
+`d3c48a1`, broadcast by Joshua):
+
+- P384Verifier: tx `0xa430544810c313083eb12869cb1888c0462c8b4b949da7cbbb8e100b22e56dfe`, block 40354686, gas used 1734631
+- CertManager: tx `0x9c9066b381af2e683c92abda97de3e3056297af4009aec97d85ee2d513f25372`, block 40354691, gas used 5366034
+- NitroValidator: tx `0xcbdf40ca42972f948935485f90563e44fb85c93a05b454d2c2099aa133b3bdeb`, block 40354696, gas used 3621490
+- EnclaveRegistry: tx `0x8a7f3fd883cde523c3719c02d9e14592cd056a002591c6542c54a7f4bf53d537`, block 40355491, gas used 3444473
 
 ## celo
 
