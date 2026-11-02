@@ -188,3 +188,4 @@ Codex r2 reviewed d3b5c57: all round-1 findings (m1 proof lifetime, m2 payer fro
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t19-x402-payment-gateway-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): t19-x402-payment-gateway-review-r1.md, t19-x402-payment-gateway-review-r1b.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
