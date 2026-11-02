@@ -330,8 +330,16 @@ describe('deployments and pins (SPEC §2.6, §3.5)', () => {
     expect(main.assets.usat).toEqual({ address: '0xd2ab3c9a02dbbab236bfec45d1d755df4267f771', name: 'Tether America USD', version: '1' });
     for (const d of Object.values(DEPLOYMENTS)) {
       expect(isAddress(d.identityRegistry) && isAddress(d.selfRegistry)).toBe(true);
-      expect(d.enclaveRegistry).toBeNull(); // set by T10 / T30
     }
+    // T10 deployed Sepolia (docs/DEPLOYMENTS.md, checked on chain by scripts/check-deploy.mjs); mainnet waits for T30.
+    expect(sep.enclaveRegistry).toBe('0x42Bf5Cb440c3C321CB42b0F4c81c3c7435cB92fF');
+    expect(sep.validatorStack).toEqual({
+      p384Verifier: '0xd26C0d863B71CBBBa07E6EeeDaB545d0F7c1a84E',
+      certManager: '0x29F2a69B5685d0db11FA10aa7C9079B3F14CF7fd',
+      nitroValidator: '0x72B06e740D5F2C262b3193De69c7065A0C7424db',
+    });
+    expect(main.enclaveRegistry).toBeNull();
+    expect(main.validatorStack).toBeNull();
     expect(() => deploymentForChainId(31337)).toThrow();
   });
 
