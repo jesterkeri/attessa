@@ -1,5 +1,5 @@
 <!-- title: Security and limits | Attessa -->
-<!-- description: Attessa's contracts and addresses, how every change was reviewed, its admin keys, and the known limits. -->
+<!-- description: Attessa's contracts and addresses, how changes are reviewed, its admin keys, and the known limits. -->
 <!-- nav: security -->
 <!-- body: security-page -->
 <section class="hero page-hero short-hero">
@@ -7,13 +7,13 @@
     <div>
       <h1 data-split data-intro>Security<br> and limits</h1>
       <div class="hero-sub">
-        <p class="lede" data-intro>What's deployed on Celo, how every change was reviewed, who holds which keys, and what Attessa doesn't cover.</p>
+        <p class="lede" data-intro>What's deployed on Celo, how changes are reviewed, who holds which keys, and what Attessa doesn't cover.</p>
       </div>
     </div>
     <nav class="page-index" aria-label="On this page" data-intro>
       <p class="label">On this page</p>
       <a href="#contracts">Contracts</a>
-      <a href="#review">How changes were reviewed</a>
+      <a href="#review">How changes are reviewed</a>
       <a href="#keys">Who holds which keys</a>
       <a href="#limits">Known limits</a>
       <a href="#report">Report a problem</a>
@@ -38,13 +38,13 @@
     </table></div>
     <div class="doc-note"><p>A deploy check confirms that each of our four contracts' code on chain matches the compiled production build, and that they point at each other.</p></div>
 
-    <h2 id="review">How every change was reviewed</h2>
+    <h2 id="review">How changes are reviewed</h2>
     <dl class="cast-list review-list">
-      <div><dt>Attacked first</dt><dd>Every change was attacked by an adversarial test writer, round after round, until a round found nothing.</dd></div>
-      <div><dt>Then a second model</dt><dd>Only then did a second model review it, before it was merged.</dd></div>
+      <div><dt>Attacked first</dt><dd>An adversarial test writer tries to break the code with failing tests, in rounds. The rounds and what they found are logged in DONE.md.</dd></div>
+      <div><dt>Then a second model</dt><dd>A second model then reviews each task's diff. Its finished reviews are in the reviews folder.</dd></div>
       <div><dt>No AI in the check</dt><dd>Whether a call is paid is decided by signatures and registry reads alone.</dd></div>
     </dl>
-    <p>The code and its review records are public: <a href="https://github.com/jesterkeri/attessa/blob/main/REVIEWS.md">REVIEWS.md on GitHub</a>.</p>
+    <p>The code and its review records are public: the <a href="https://github.com/jesterkeri/attessa/tree/staging/reviews">reviews folder</a> and <a href="https://github.com/jesterkeri/attessa/blob/staging/DONE.md">DONE.md</a> on GitHub.</p>
 
     <h2 id="keys">Who holds which keys</h2>
     <ul>
