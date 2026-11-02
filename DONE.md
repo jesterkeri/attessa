@@ -1283,4 +1283,16 @@ ok: gen:vectors on a tracked executable file accepted
 r3_rc=0
 26 ok lines, 0 FAIL
 ```
-reviewed: pending (adversary r4, then Codex)
+adversary r4 (c5416d7): one defect in the allow-list test, not the guard. The executable-file case counted any refusal without a "FAIL path:" line (a pnpm fetch failure, a failed install) as accepted. Fixed in 22bf312: the case passes only on probe exit 0 and the guard's ok line. A manifest, lockfile or workspace file at 100755, and a script target that is a gitlink, symlink, directory or dotted name, were all refused. Its script is archived at .worktrees/archive/adversary/install-r4-allowlist-accept-ignores-refusal.sh.
+
+verify at 22bf312 (guard, allow-list test, adversary r4 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r4_rc=0
+ok: the accepting case does not count a refused probe as accepted
+```
+reviewed: pending (adversary r5, then Codex)
