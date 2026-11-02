@@ -1,5 +1,5 @@
 <!-- title: Proof explorer | Attessa -->
-<!-- description: Re-check any past Attessa call from public Celo data and the proof its gateway publishes, with no wallet and no payment. -->
+<!-- description: Check the on-chain part of any past Attessa call from public Celo data, with no wallet and no payment. -->
 <!-- nav: explorer -->
 <!-- body: explorer-page -->
 <div data-explorer>
@@ -8,7 +8,7 @@
       <div>
       <h1 data-split data-intro>Re-check<br> any call</h1>
       <div class="explorer-sub">
-        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's request ID or its settlement transaction, and <span class="key">the explorer runs the five checks again from public Celo data and the proof the service's gateway publishes for that request ID</span> (never the answer itself): no wallet, no payment.</p>
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">the explorer checks its on-chain part from public Celo data</span>: the payment, the endpoint it paid, and that endpoint's approved builds and signers. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
         <form class="recheck" data-explorer-form novalidate role="search">
           <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
           {{i:search}}

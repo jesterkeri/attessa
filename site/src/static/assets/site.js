@@ -369,7 +369,7 @@
         ${head('Checking against the registry')}
         <ol class="checklist">${NAMES.map(n => `
           <li class="check" data-status="wait"><span class="status" data-status="wait">${icon('wait')}Checking</span>
-            <div><p class="check-name">${n}</p><p class="check-line muted">Reading Celo and the published proof…</p></div></li>`).join('')}
+            <div><p class="check-name">${n}</p><p class="check-line muted">Reading public Celo data…</p></div></li>`).join('')}
         </ol>
       </div>`;
     setVerdict('wait');
