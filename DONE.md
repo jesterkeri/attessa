@@ -2460,3 +2460,17 @@ For reference, the globbed command on this machine:
 # duration_ms 1123.324034
 ```
 reviewed: pending (Codex r3)
+
+## T38 - 2026-11-02
+Decisions from the PR #8 review (posted on PR #8 as a comment review), recorded in OPEN-QUESTIONS.md:
+- D1, explorer proof source: Joshua chose option A (public read-only proof route, T43), 2026-11-02.
+- D2, install path: Joshua left it to Claude, 2026-11-02; install from source with `pnpm link --global`, applied on feat/site-ui in 5ff468a.
+- The review's spec conflicts (M6), FLOWS' npm line after D2, and the T21b MCP path are open entries for Joshua.
+- TASKS.md gains the Website section, T38 to T48.
+
+verify (`grep -n -i -E 'explorer proof source|install path' OPEN-QUESTIONS.md`, lines cut at 120 characters), 2026-11-02:
+```
+94:- [x] **Explorer proof source (D1, PR #8 review C1).** The site said the explorer re-runs the buyer's checks "from pu
+95:- [x] **Install path (D2, PR #8 review C2).** `@attessa/cli` and `@attessa/mcp` are not on npm (E404 on 2026-11-02) a
+```
+reviewed: pending (adversary, then Codex)
