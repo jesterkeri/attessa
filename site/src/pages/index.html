@@ -65,7 +65,7 @@
             <p class="term">x402 quote, EIP-3009 permission</p>
           </li>
           <li data-step>
-            <h2>Tampered answers never get paid.</h2>
+            <h2>The gateway won't settle a tampered answer.</h2>
             <p>If the answer doesn't match what was signed, the gateway refuses to settle. The permission expires unused, and once Celo shows that, you're not charged.</p>
             <p class="term">response_hash_mismatch, not_charged</p>
           </li>
@@ -123,7 +123,7 @@
             <div><dt>expires in</dt><dd><span data-timer-text>120</span> s</dd></div>
           </dl>
           <i class="drain"><b data-timer></b></i>
-          <p class="callout-foot">EIP-3009. Moves no money until the proof passes.</p>
+          <p class="callout-foot">EIP-3009. Moves no money until the gateway settles it.</p>
         </div>
         <div class="callout glass is-fail" data-callout>
           <p class="label">Tampered answer</p>
