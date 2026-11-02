@@ -1,7 +1,7 @@
 import type { Address, Hex } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
 import { keccak256 } from 'viem';
-import { AlreadyUsedError, AttestError, CancelInterruptedError, CancelRevertedError, CancelUndecidedError } from '../src/client.ts';
+import { AlreadyUsedError, AttestError, CancelInterruptedError, CancelRevertedError, CancelUnconfirmedError, CancelUndecidedError } from '../src/client.ts';
 import { RpcError } from '../src/chain.ts';
 import { RpcFailure } from './fakes/chain.ts';
 import { makeWorld, type World } from './fakes/world.ts';
@@ -149,5 +149,59 @@ describe('cancelAuthorization when the RPC drops (T21 r10)', () => {
     expect(e).toBeInstanceOf(CancelInterruptedError);
     expect((e as CancelInterruptedError).tx).toBe(keccak256(raw!));
     expect(polls).toBeLessThanOrEqual(2);
+  });
+});
+
+describe('cancelAuthorization records every decision it reads from a log (T21 r11)', () => {
+  it('re-run after an interrupted cancel that landed: returns that cancel and records not_charged / cancelled', async () => {
+    const c = await openCall();
+    const orig = w.chain.request.bind(w.chain);
+    let raw: `0x${string}` | undefined;
+    let sentHash: `0x${string}` | undefined;
+    let down = true;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (down && raw && m === 'eth_getTransactionReceipt') throw new RpcFailure('connect ECONNREFUSED');
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') {
+        raw = p[0] as `0x${string}`;
+        sentHash = r as `0x${string}`;
+      }
+      return r;
+    };
+    await expect(w.client.cancelAuthorization(c.id)).rejects.toBeInstanceOf(CancelInterruptedError);
+    expect(w.client.ledger.get(c.id)!.state).not.toBe('not_charged');
+    down = false;
+    // The fake answers its own tx hash (a real node's is keccak256 of the signed bytes); the log carries that one.
+    expect(await w.client.cancelAuthorization(c.id)).toBe(sentHash);
+    expect(w.client.ledger.get(c.id)).toMatchObject({ state: 'not_charged', code: 'cancelled' });
+  });
+
+  it('used, found by its log before anything is signed: AlreadyUsedError, and the settlement tx is recorded', async () => {
+    const c = await openCall();
+    const tx = w.chain.settle(c.payer, w.payTo, c.amount, c.nonce);
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(AlreadyUsedError);
+    expect(w.client.ledger.get(c.id)!.settlementTx).toBe(tx);
+  });
+});
+
+describe('cancelAuthorization when the node answers but the cancel is not mined yet (T21 r11)', () => {
+  it('no receipt within receiptWaitMs from a reachable node: CancelUnconfirmedError with the tx, not CancelInterruptedError', async () => {
+    const c = await openCall();
+    const orig = w.chain.request.bind(w.chain);
+    let raw: `0x${string}` | undefined;
+    let sentHash: `0x${string}` | undefined;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_getTransactionReceipt' && raw) return null;
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') {
+        raw = p[0] as `0x${string}`;
+        sentHash = r as `0x${string}`;
+      }
+      return r;
+    };
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(CancelUnconfirmedError);
+    expect((e as CancelUnconfirmedError).tx).toBe(sentHash);
   });
 });

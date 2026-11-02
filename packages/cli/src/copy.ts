@@ -448,6 +448,9 @@ export const BUYERR = {
       tx ? `The cancel transaction reverted (tx ${short(tx)}).` : 'The transaction would revert. Nothing was sent.',
       `Run attessa status --pending after ${validBefore} UTC to confirm whether you were charged.`,
     ),
+  /** The cancel was sent and the node answers, but it isn't mined within the receipt wait. // not in FLOWS */
+  cancelUnconfirmed: (tx: string) =>
+    new CliError('tx_unconfirmed', `The cancel was sent (tx ${tx}) but isn't confirmed yet.`, 'Run `attessa status --pending` to see whether it landed.'),
   /** The RPC dropped after the cancel permission was signed, before its transaction was sent. // not in FLOWS: the rpc row's tail for it. */
   cancelNotSent: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpc}. Nothing was sent.`, 'Retry or set another `--rpc`.'),
   /** The token's one flag reads "used or cancelled" but neither log has appeared yet. // not in FLOWS */

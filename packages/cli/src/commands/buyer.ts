@@ -6,6 +6,7 @@ import {
   AttestError,
   CancelInterruptedError,
   CancelRevertedError,
+  CancelUnconfirmedError,
   CancelUndecidedError,
   InsufficientGasFundsError,
   KeyError,
@@ -501,6 +502,7 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     // whether the SDK refused before signing the transaction or the node refused its broadcast.
     if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
     if (e instanceof CancelRevertedError) throw BUYERR.cancelReverted(hms(e.validBefore), e.tx);
+    if (e instanceof CancelUnconfirmedError) throw BUYERR.cancelUnconfirmed(e.tx);
     if (e instanceof CancelInterruptedError) {
       // Signed, maybe sent: never the rpc row's "Nothing was signed"; with the cancel tx once it may land.
       throw e.tx

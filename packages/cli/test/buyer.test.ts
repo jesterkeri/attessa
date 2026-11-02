@@ -489,6 +489,24 @@ describe('buyer: cancel, status, evidence export', () => {
     expect(polls).toBeLessThanOrEqual(2); // receiptWaitMs 2000 in this world: one read a second
   });
 
+  it('attessa cancel sent to a reachable node that has not mined it yet: "sent but isn\'t confirmed yet", not "Lost the connection" (T21 r11)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    const orig = w.chain.request.bind(w.chain);
+    let sentHash: `0x${string}` | undefined;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_getTransactionReceipt' && sentHash) return null;
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') sentHash = r as `0x${string}`;
+      return r;
+    };
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.err).toEqual([`The cancel was sent (tx ${sentHash}) but isn't confirmed yet.`, 'Run `attessa status --pending` to see whether it landed.']);
+  });
+
   it('attessa cancel that would revert while the permission is unused: the revert line and one next action (T21 r9)', async () => {
     await initialized();
     w.gw.behavior = { paid: 'refuse' };

@@ -6,6 +6,7 @@ import {
   http,
   parseEventLogs,
   parseSignature,
+  TransactionReceiptNotFoundError,
   type Address,
   type Hash,
   type Hex,
@@ -111,6 +112,19 @@ export class CancelUndecidedError extends Error {
   constructor() {
     super('authorization used or cancelled, but no log shows which yet');
     this.name = 'CancelUndecidedError';
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when the cancel transaction was sent and the node answers, but has no receipt for it
+ * within `receiptWaitMs`: not mined yet. It may still land.
+ */
+export class CancelUnconfirmedError extends Error {
+  readonly tx: Hash;
+  constructor(tx: Hash) {
+    super(`the cancel ${tx} isn't mined yet`);
+    this.name = 'CancelUnconfirmedError';
+    this.tx = tx;
   }
 }
 
@@ -408,7 +422,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       try {
         return await n.chain.client.getTransactionReceipt({ hash });
       } catch (e) {
-        if (i >= tries) throw e;
+        // The node answered "no receipt" on the last read: sent, not mined yet, not a lost connection.
+        if (i >= tries) throw e instanceof TransactionReceiptNotFoundError ? new CancelUnconfirmedError(hash) : e;
       }
       await sleep(1000);
     }
@@ -1058,26 +1073,37 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
        * `open` too when `untilDecided` (after a revert, a node behind the one that estimated may not show the
        * settlement yet).
        */
-      const decide = async (untilDecided: boolean): Promise<{ canceled: Hash } | { used: Hash } | 'open' | 'unlogged'> => {
+      const decide = async (untilDecided: boolean): Promise<{ canceled: Hash; block: bigint } | { used: Hash } | 'open' | 'unlogged'> => {
         const tries = Math.max(1, Math.ceil(receiptWaitMs / 1000));
         for (let i = 1; ; i++) {
           const head = await n.chain.latest();
           const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
-          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]! };
+          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]!, block: head.number };
           if (logs.used.length > 0) return { used: logs.used[0]! };
           const state = (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)) ? 'unlogged' : 'open';
           if ((state === 'open' && !untilDecided) || i >= tries) return state;
           await sleep(1000);
         }
       };
-      /** A decision that ends the cancel: the earlier cancel's tx, or the matching error. `open` is the caller's. */
-      const ended = (d: Exclude<Awaited<ReturnType<typeof decide>>, 'open'>): Hash => {
+      /**
+       * A decision that ends the cancel, recorded the way finalize records it, whichever read found it: a cancel log
+       * is `not_charged` / `cancelled` at once (SPEC §7; FLOWS §7 releases the reservation) and returns that tx; a
+       * used log whose receipt holds the Transfer records the settlement tx (as settledPath does) and throws
+       * AlreadyUsedError, so getResult fetches the answer; no log yet throws CancelUndecidedError. `open` is the
+       * caller's.
+       */
+      const ended = async (d: Exclude<Awaited<ReturnType<typeof decide>>, 'open'>): Promise<Hash> => {
         if (d === 'unlogged') throw new CancelUndecidedError();
-        if ('used' in d) throw new AlreadyUsedError(d.used);
+        if ('used' in d) {
+          const settlement = await n.chain.settlementIn(d.used, entry.asset, entry.payer, entry.payTo, BigInt(entry.amount), nonce);
+          if (settlement && ledger.get(entry.requestId)) ledger.update(entry.requestId, { settlementTx: settlement.tx });
+          throw new AlreadyUsedError(d.used);
+        }
+        finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: d.block });
         return d.canceled;
       };
       const before = await decide(false);
-      if (before !== 'open') return ended(before);
+      if (before !== 'open') return await ended(before);
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
@@ -1105,7 +1131,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           if (!(e instanceof CancelWouldRevert)) throw e;
           const after = await decide(true);
           if (after === 'open') throw new CancelRevertedError(vb);
-          return ended(after);
+          return await ended(after);
         }
         const receipt = await receiptOf(n, hash);
         const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
@@ -1114,10 +1140,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         if (receipt.status !== 'success' || !canceled) {
           const after = await decide(true);
           if (after === 'open') throw new CancelRevertedError(vb, hash);
-          if (typeof after === 'object' && 'canceled' in after && after.canceled === hash) {
-            finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
-          }
-          return ended(after);
+          return await ended(after);
         }
         finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
         return hash;
@@ -1126,6 +1149,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           e instanceof AlreadyUsedError ||
           e instanceof CancelRevertedError ||
           e instanceof CancelUndecidedError ||
+          e instanceof CancelUnconfirmedError ||
           e instanceof InsufficientGasFundsError
         )
           throw e;
