@@ -1167,3 +1167,7 @@ check-migrations rc=0
 check-reviews rc=0
 ```
 reviewed: pending (Codex r2)
+
+## T10 deploy record, SDK pin and INV-19 oracle: Codex review r2 SHIP - 2026-11-02
+Codex r2 reviewed cd723b0 (`git diff 663bd89 cd723b0`, with `e6777fa..cd723b0` in scope): no critical, major or minor findings. The r1 minor (m1, the `ClientOptions.registry` doc) is closed; the INV-19 `alive()` change, the staging merge and the DONE reorder were judged sound. The r1 review (REVISE, m1) is archived outside the repo.
+reviewed: reviews/t10-deploy-record-and-sdk-pin-review-r2.md | verdict: implementation-ready | C0 M0 m0
