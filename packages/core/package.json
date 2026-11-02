@@ -9,9 +9,11 @@
     "build": "tsc -p .",
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run --passWithNoTests",
+    "lint": "tsc -p . --noEmit",
     "gen:vectors": "node scripts/gen-vectors.ts"
   },
   "dependencies": {
+    "tr46": "5.1.1",
     "viem": "^2.57.13",
     "whatwg-url": "14.2.0"
   },

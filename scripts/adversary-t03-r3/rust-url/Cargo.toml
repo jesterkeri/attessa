@@ -1,0 +1,7 @@
+[package]
+name = "adv-url"
+version = "0.0.0"
+edition = "2021"
+[dependencies]
+url = "=2.5.8"
+[workspace]
