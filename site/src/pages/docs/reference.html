@@ -120,7 +120,7 @@
         <tr><td><code>bad_request</code></td><td>The service can't read this input.</td><td>Fix the input and call again.</td></tr>
         <tr><td><code>quote_unavailable</code>, <code>quote_malformed</code></td><td>The service didn't ask for payment in a form Attessa can read.</td><td>Check the URL, or update the CLI.</td></tr>
         <tr><td><code>network_mismatch</code></td><td>Your RPC is on a different chain than the registry.</td><td>Set <code>--rpc</code> for the right network.</td></tr>
-        <tr><td><code>rpc_unavailable</code></td><td>Can't reach Celo. Nothing was signed.</td><td>Retry or set another <code>--rpc</code>.</td></tr>
+        <tr><td><code>rpc_unavailable</code></td><td>Can't reach Celo. Before signing, the call stops and nothing is signed. While checking a paid call, the call stays <code>uncertain</code> until Celo can be read; an RPC error never fails a check.</td><td>Retry or set another <code>--rpc</code>.</td></tr>
         <tr><td><code>max_amount_required</code></td><td>No limit per call is set, so nothing was signed.</td><td>Run <code>attessa init</code> or pass <code>--max-amount</code>.</td></tr>
         <tr><td><code>no_wallet</code></td><td>No wallet set up yet.</td><td>Run <code>attessa init</code>.</td></tr>
         <tr><td><code>attestation_stale</code> R</td><td>Seller: the machine's report is over 30 minutes old.</td><td><code>attessa signer register --fresh</code>.</td></tr>
