@@ -16,15 +16,18 @@ import { makeWorld, type World } from './fakes/world.ts';
  * `options.registry` override the pin (client.ts `opts.registry ?? deployment.enclaveRegistry`).
  *
  * Case 1 (celo-sepolia): resolveEndpoint returns the override registry, not the pin or a refusal.
- * Case 2 (local, Sepolia chain id, the default SDK test world): the fake serves a full endpoint at a
- * registry that is not the pin, and the SDK signs a payment against it. Using only the pin, it would
- * find no endpoint at 0x42Bf...92fF and stop before signing.
+ * Case 2 (local, Sepolia chain id): the fake serves a full endpoint, a gateway and a .well-known at a
+ * registry that is not the pin, and options.registry names it. makeWorld() pins the Sepolia entry to
+ * its fake registry, so the test puts the real T10 pin back before the client exists. Using only the
+ * pin, the SDK finds no endpoint at 0x42Bf...92fF and stops before signing.
  */
 
 let w: World;
 afterEach(async () => w?.close());
 
-const PIN = DEPLOYMENTS['celo-sepolia'].enclaveRegistry!.toLowerCase();
+// Read at import, before any makeWorld() swaps the pin.
+const REAL_PIN = DEPLOYMENTS['celo-sepolia'].enclaveRegistry!;
+const PIN = REAL_PIN.toLowerCase();
 const DECOY = '0x5fbdb2315678afecb367f032d93f642f64180aa3';
 
 describe('sdk: adversary T10 deploy record, the Sepolia pin is the only registry (SPEC §2.6)', () => {
@@ -52,10 +55,17 @@ describe('sdk: adversary T10 deploy record, the Sepolia pin is the only registry
   });
 
   it('network local on a Sepolia-chain RPC with options.registry set to a non-pinned registry signs no payment', async () => {
-    w = await makeWorld(); // network 'local', chain id 11142220, options.registry = the fake's registry
+    expect(PIN).toBe('0x42bf5cb440c3c321cb42b0f4c81c3c7435cb92ff');
+    w = await makeWorld();
+    // makeWorld() made the fake registry the pin; put the real T10 pin back (close() restores it again).
+    (DEPLOYMENTS['celo-sepolia'] as { enclaveRegistry: string | null }).enclaveRegistry = REAL_PIN;
+    expect(w.chain.chainId).toBe(11142220);
     expect(w.chain.registry).not.toBe(PIN);
-    const r = await w.client.payAndVerify(w.url, { body: w.body });
+    // A fresh client: network 'local', options.registry = the fake's (non-pinned) registry, same chain and gateway.
+    const c = w.mkClient({ registry: w.chain.registry });
+    const r = await c.payAndVerify(w.url, { body: w.body });
     expect(w.transferSignatures()).toBe(0);
     expect(r.outcome).toBe('stopped');
+    expect(w.gw.paid).toHaveLength(0);
   });
 });
