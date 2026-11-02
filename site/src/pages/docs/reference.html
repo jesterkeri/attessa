@@ -105,7 +105,7 @@
         <tr><td><code>execution_timeout</code></td><td>The service didn't respond in 20 s.</td><td>Retry with a new request.</td></tr>
         <tr><td><code>enclave_unavailable</code></td><td>The service is offline.</td><td>Retry later.</td></tr>
         <tr><td><code>gateway_paused</code></td><td>The service can't take payments right now.</td><td>Retry later.</td></tr>
-        <tr><td><code>gateway_busy</code></td><td>The service is busy. Nothing was signed.</td><td>Try again shortly.</td></tr>
+        <tr><td><code>gateway_busy</code></td><td>The service is busy, so the call was refused before it ran. If you had signed a payment permission, the gateway didn't use it, and the SDK confirms on Celo that you weren't charged.</td><td>Try again shortly.</td></tr>
         <tr><td><code>rate_limited</code></td><td>Too many requests from you, or too many of your paid calls to this service ended without settling in the last hour. The call was refused before it ran. If you had signed a payment permission, the gateway didn't use it, and the SDK confirms on Celo that you weren't charged.</td><td>Try again after the time the service gives.</td></tr>
         <tr><td><code>settle_pending</code></td><td>Payment sent and confirming, usually under 5 s.</td><td>None: the CLI keeps checking.</td></tr>
         <tr><td><code>settle_failed</code></td><td>The payment didn't go through, so the answer was withheld.</td><td>Retry with a new request.</td></tr>
