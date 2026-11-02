@@ -1101,3 +1101,31 @@ packages/cli typecheck: Done
 ```
 adversary: r2 tests pass; r3 not run yet
 reviewed: pending (adversary r3, then Codex)
+
+### T21 adversary r3 fixes - 2026-11-02
+adversary r3 (531b262, `packages/cli/test/adversary-t21-r3.test.ts`, 5 failing) fixed in 351aa26:
+- SDK `loadAccount` (`packages/sdk/src/keys.ts`): a keychain whose `getPassword`/`setPassword` rejects (keytar on headless Linux) is unavailable and returns null, so `init` prints the FLOWS `keychain_unavailable` lines.
+- Reads never load the wallet: `status <origin>` (`packages/cli/src/commands/buyer.ts`), `status --agent` and `enclave start` (`connect(g, deps, { wallet: false })`, `packages/cli/src/context.ts`). `status --pending` still needs the wallet: reconciling signs the payer's fetch-result message.
+- `ClientOptions.dryRun` (`packages/sdk/src/types.ts`, `client.ts`): the SDK stops at `authorizing` before signing whatever `onProgress` does; the CLI passes `--dry-run` there and its print handler no longer answers `'stop'`.
+- Owner/operator `ATTESSA_PRIVATE_KEY` goes through the SDK's exported `keyToAccount` (fixed `KeyError` reason, "Can't load the wallet from ATTESSA_PRIVATE_KEY: not a valid private key."). `run()` maps every unknown error to a fixed `unexpected` CliError (class name and code only), so `--json` prints its `{ok:false}` object; `bin.ts` never prints a raw message.
+- New tests: `packages/cli/test/t21-r3-fix.test.ts` (5), `packages/sdk/test/keys.test.ts` (1), `packages/sdk/test/progress.test.ts` (2).
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+ Test Files  19 passed (19)
+      Tests  147 passed (147)
+   Start at  18:30:20
+   Duration  8.32s (transform 1.45s, setup 0ms, collect 15.23s, tests 35.48s, environment 4ms, prepare 2.66s)
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  153 passed (153)
+   Start at  18:30:29
+   Duration  31.47s (transform 1.51s, setup 0ms, collect 11.68s, tests 53.35s, environment 3ms, prepare 1.88s)
+```
+
+`pnpm -r typecheck` (exit=0) and `pnpm -r lint` (exit=0): every package `Done` (core, gateway, sdk, seller-host, cli).
+adversary: r3 tests pass; r4 not run yet
+reviewed: pending (adversary r4, then Codex)
