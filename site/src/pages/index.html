@@ -146,11 +146,11 @@
     <div class="wrap scene-grid">
       <div class="scene-copy">
         <h2 id="outcomes" data-split>Three ways a call can end</h2>
-        <p class="sec-lede" data-fade>These are the three outcomes in the demo, and where each one's record lives. <span class="key">Two of them you can check on Celo yourself.</span></p>
+        <p class="sec-lede" data-fade>These are the three outcomes in the demo, and what each one leaves on Celo. <span class="key">Celo shows a settled payment or an unused permission. Whether a call was verified takes the proof, which your agent checks.</span></p>
         <ol class="beats">
           <li class="beat is-on" data-beat>
             <h3>Verified and paid</h3>
-            <p>Every check passes, so the payment goes through. Its record is the settlement transaction on Celo.</p>
+            <p>Every check passes, so the payment goes through. Celo shows the payment settled; your agent's SDK checks the proof itself, which is what makes the call verified.</p>
             {{track:pass pass pass pass paid}}
             <span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">sample</span></span>
           </li>
@@ -162,7 +162,7 @@
           </li>
           <li class="beat" data-beat>
             <h3>Unapproved build</h3>
-            <p>The machine runs a build the seller never approved on Celo, so the registry refuses to register its key and it can't sell a single call. The demo shows this on a local copy of Celo, so it leaves no record on Celo.</p>
+            <p>The machine runs a build the seller never approved on Celo, so the registry refuses to register its key and it can't sell a single call. The demo shows this on a local copy of Celo, so nothing reaches Celo.</p>
             {{track:fail na na na stopped}}
           </li>
         </ol>
