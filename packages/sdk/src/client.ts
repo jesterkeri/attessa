@@ -28,7 +28,7 @@ import {
 } from '@attessa/core';
 import { EIP3009_TYPES, ENDPOINT_STATUS, tokenAbi } from './abi.ts';
 import { Chain, RpcError, type Settlement } from './chain.ts';
-import { InsufficientGasFundsError, canPayGas, gasTerms, isInsufficientFundsReply } from './gas.ts';
+import { InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
 import { Ledger, isTerminal } from './ledger.ts';
 import {
   decodePaymentRequired,
@@ -81,6 +81,14 @@ export class AlreadyUsedError extends Error {
     super(`authorization already used${tx ? ` in ${tx}` : ''}`);
     this.name = 'AlreadyUsedError';
     this.tx = tx;
+  }
+}
+
+/** Internal: the cancel's eth_estimateGas reverted, so nothing was signed or sent; `cancelAuthorization` re-reads the state. */
+class CancelWouldRevert extends Error {
+  constructor() {
+    super('the cancel would revert');
+    this.name = 'CancelWouldRevert';
   }
 }
 
@@ -347,7 +355,6 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     }
   }
 
-  /** The settlement tx for an entry, from the chain: an `AuthorizationUsed` whose receipt also has the Transfer. */
   /**
    * Signs and broadcasts the payer's cancel transaction (value 0) with the shared gas terms (`gasTerms`). Refuses
    * before signing when the balance can't cover them, and maps the node's "insufficient funds" refusal of the
@@ -363,8 +370,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         throw new RpcError(`${method}: ${(e as Error).message?.split('\n')[0] ?? String(e)}`, { cause: e });
       }
     };
+    const estimateGas = async (): Promise<bigint> => {
+      try {
+        return await read('eth_estimateGas', [{ from, to, data }]);
+      } catch (e) {
+        if (causes(e).some((c) => isRevertReply(c.code, c.details) || isRevertReply(c.code, c.message))) throw new CancelWouldRevert();
+        throw e;
+      }
+    };
     const [estimate, price, tip, nonce, balance] = await Promise.all([
-      read('eth_estimateGas', [{ from, to, data }]),
+      estimateGas(),
       read('eth_gasPrice', []),
       read('eth_maxPriorityFeePerGas', []),
       read('eth_getTransactionCount', [from, 'pending']),
@@ -386,16 +401,14 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     try {
       return (await n.chain.client.request({ method: 'eth_sendRawTransaction', params: [raw] } as never)) as Hash;
     } catch (e) {
-      for (let c: unknown = e; c; c = (c as { cause?: unknown }).cause) {
-        const x = c as { code?: unknown; details?: unknown; message?: unknown };
-        if (isInsufficientFundsReply(x.code, x.details) || isInsufficientFundsReply(x.code, x.message)) {
-          throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, true);
-        }
+      if (causes(e).some((c) => isInsufficientFundsReply(c.code, c.details) || isInsufficientFundsReply(c.code, c.message))) {
+        throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, true);
       }
       throw e;
     }
   }
 
+  /** The settlement tx for an entry, from the chain: an `AuthorizationUsed` whose receipt also has the Transfer. */
   async function findSettlement(n: Net, entry: PendingEntry): Promise<Settlement | null> {
     const head = await n.chain.latest();
     const from = entry.signedAtBlock ? BigInt(entry.signedAtBlock) : head.number > 1000n ? head.number - 1000n : 0n;
@@ -975,11 +988,17 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const n = await net();
       const entry = await entryOf(lc(requestId));
       if (entry.nonce === null) throw new Error('nothing was signed for this request');
-      const head = await n.chain.latest();
-      const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, entry.nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
-      if (logs.canceled.length > 0) return logs.canceled[0]!;
-      if (logs.used.length > 0 || (await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce, head.number)))
-        throw new AlreadyUsedError(logs.used[0]);
+      // Already cancelled: that tx. Already used (settled): AlreadyUsedError with the settlement tx when one is found.
+      const decided = async (nonce: Hex): Promise<Hash | null> => {
+        const head = await n.chain.latest();
+        const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
+        if (logs.canceled.length > 0) return logs.canceled[0]!;
+        if (logs.used.length > 0 || (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)))
+          throw new AlreadyUsedError(logs.used[0] ?? (await findSettlement(n, entry))?.tx);
+        return null;
+      };
+      const before = await decided(entry.nonce);
+      if (before) return before;
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
@@ -990,11 +1009,21 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         message: { authorizer: entry.payer, nonce: entry.nonce },
       });
       const { r, s, v, yParity } = parseSignature(sig);
-      const hash = await sendCancel(n, entry.asset, encodeFunctionData({
-        abi: tokenAbi,
-        functionName: 'cancelAuthorization',
-        args: [entry.payer, entry.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
-      }));
+      let hash: Hash;
+      try {
+        hash = await sendCancel(n, entry.asset, encodeFunctionData({
+          abi: tokenAbi,
+          functionName: 'cancelAuthorization',
+          args: [entry.payer, entry.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
+        }));
+      } catch (e) {
+        // The cancel's estimate reverts when the authorization was used or cancelled after the check above (the
+        // facilitator settled meanwhile): read the state again. Any other revert stays the revert.
+        if (!(e instanceof CancelWouldRevert)) throw e;
+        const after = await decided(entry.nonce);
+        if (after) return after;
+        throw new RpcError('eth_estimateGas: the cancel would revert', { cause: e });
+      }
       const receipt = await n.chain.client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
       const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
         (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === entry.nonce,

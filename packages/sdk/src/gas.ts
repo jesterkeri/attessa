@@ -58,3 +58,15 @@ export class InsufficientGasFundsError extends Error {
     this.refusedByNode = refusedByNode;
   }
 }
+
+/** A JSON-RPC reply that is a contract revert: code 3 (geth's revert with data), or a message saying "execution reverted". */
+export function isRevertReply(code: unknown, message: unknown): boolean {
+  return code === 3 || (typeof message === 'string' && /\bexecution reverted\b/i.test(message));
+}
+
+/** An error and its `cause` chain (viem wraps a node's reply in one or more errors), with the fields replies carry. */
+export function causes(e: unknown): Array<{ code?: unknown; details?: unknown; message?: unknown }> {
+  const out: Array<{ code?: unknown; details?: unknown; message?: unknown }> = [];
+  for (let c: unknown = e; c && typeof c === 'object' && out.length < 16; c = (c as { cause?: unknown }).cause) out.push(c as never);
+  return out;
+}
