@@ -22,11 +22,15 @@ export interface AttestConfig {
 }
 
 /**
- * Not in SPEC §7's `AttestConfig`: injection points for tests and `--network local`. Production
- * callers pass nothing.
+ * Not in SPEC §7's `AttestConfig`: injection points for tests and for chains with no deployed registry.
+ * Production callers pass nothing.
  */
 export interface ClientOptions {
-  /** EnclaveRegistry override. Required while `deployments.ts` has no address for the chain (before T10/T30) and on local forks. */
+  /**
+   * EnclaveRegistry for a chain whose `deployments.ts` entry has no registry yet (mainnet before T30). Ignored
+   * whenever the RPC's chain has a pinned registry (SPEC §2.6), including `network: 'local'` on a fork that keeps
+   * a deployed chain's id: a Celo Sepolia fork (11142220) always uses the pinned Sepolia registry.
+   */
   registry?: Address;
   /** viem transport; defaults to `http(cfg.rpcUrl)`. */
   transport?: Transport;
