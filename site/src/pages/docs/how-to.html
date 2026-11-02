@@ -65,7 +65,7 @@
     <p>Two tools have side effects, and say so in their descriptions: <code>pay_and_verify</code> signs a payment within your bounds, and <code>cancel_authorization</code> sends a transaction. The full list is in the <a href="reference.html#tools">reference</a>.</p>
 
     <h2 id="buy">Use it with buy</h2>
-    <p>buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.</p>
+    <p><span class="muted">Optional, not built yet.</span> buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.</p>
     <figure class="code">
       <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
       <pre><code><span class="p">$ </span><span class="c">attessa call --via buy https://&lt;buy-capability&gt;</span>
