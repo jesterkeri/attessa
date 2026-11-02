@@ -306,6 +306,10 @@ export const BUY = {
   paid: (p: string, sym: string, block: string, tx: string, signer: string) =>
     `Paid ${p} ${sym}. The answer came from that approved build, for this request, using Celo data from block ${block}  (settled: tx ${short(tx)}, signer ${short(signer)})`,
   saved: (file: string, record: string) => `Answer saved to ${file}. Record: ${record}`,
+  // not in FLOWS: a stored `verified` outcome reported again (a second `cancel`): no answer comes with it, so none is
+  // written; the one saved when it arrived stays.
+  alreadyVerified: (p: string, sym: string, tx: string, record: string) =>
+    `Already done: you were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out. It was saved when it arrived. Record: ${record}`,
   // SPEC §7 V10
   inputsNotChecked: "  inputs not re-checked (your RPC doesn't keep state that old)",
   dryRun: '  (dry run: nothing was signed)', // not in FLOWS (T15's "(dry run: nothing was sent)" for a call)
@@ -316,6 +320,9 @@ export const BUY = {
     `  To void it right now instead: attessa cancel ${id}  (on-chain cancel, ~0.0004 CELO gas). Ctrl-C stops waiting; attessa status --pending checks later.`,
   notCharged: (block: string) => `Not charged: confirmed on Celo, your payment permission expired unused  (block ${block})`,
   notChargedCancelled: (block: string) => `Not charged: confirmed on Celo, your payment permission was cancelled  (block ${block})`, // not in FLOWS
+  // not in FLOWS: the same lines for an entry stored before the deciding block was recorded (never "(block 0)").
+  notChargedNoBlock: 'Not charged: confirmed on Celo, your payment permission expired unused.',
+  notChargedCancelledNoBlock: 'Not charged: confirmed on Celo, your payment permission was cancelled.',
   // §6 J2 variant
   paidButRejected: (p: string, sym: string, tx: string, record: string, id: string) => [
     `Warning: you were charged ${p} ${sym} (tx ${short(tx)}) but the answer didn't check out  (paid_but_rejected)`,

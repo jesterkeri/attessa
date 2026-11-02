@@ -191,6 +191,11 @@ export interface PendingEntry {
   state: LedgerState;
   code: string | null;
   settlementTx: Hash | null;
+  /**
+   * `not_charged` only: the block that decided it (the cancel's log or receipt, or the first read past expiry), so a
+   * later report of the stored outcome names the same block. Absent on entries written before it existed.
+   */
+  confirmedAtBlock?: string | null;
   createdAt: string;
 }
 

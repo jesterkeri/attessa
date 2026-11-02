@@ -542,6 +542,39 @@ describe('buyer: cancel, status, evidence export', () => {
     });
   });
 
+  it('attessa cancel run again on a cancelled call: the same block as the first run, never "(block 0)" (T21 r12)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(0);
+    const first = JSON.parse(w.out.at(-1)!) as { confirmedAtBlock?: string };
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    const block = BigInt(w.pending()[0]!.confirmedAtBlock as string);
+    expect(w.transcript).toEqual([`Not charged: confirmed on Celo, your payment permission was cancelled  (block ${block.toLocaleString('en-US')})`]);
+    expect(first.confirmedAtBlock ?? block.toString()).toBe(block.toString());
+  });
+
+  it('attessa cancel run again on a verified call: keeps the saved answer, one true line, exit 0 (T21 r12)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending' };
+    w.gw.behavior.pendingPolls = 1000;
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as `0x${string}`;
+    w.gw.release(id);
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(0);
+    const saved = readFileSync(join(w.home, `${id}.json`));
+    const tx = w.pending()[0]!.settlementTx as string;
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(0);
+    expect(readFileSync(join(w.home, `${id}.json`))).toEqual(saved);
+    expect(w.transcript).toEqual([
+      `Already done: you were charged 0.02 USDC (tx ${tx.slice(0, 6)}…${tx.slice(-2)}) and the answer checked out. It was saved when it arrived. Record: ~/.attessa/evidence.jsonl`,
+    ]);
+  });
+
   it('attessa cancel after the payment went through: "Too late to cancel", then the answer', async () => {
     await initialized();
     w.gw.behavior = { paid: 'pending' };

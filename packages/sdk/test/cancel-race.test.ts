@@ -205,3 +205,35 @@ describe('cancelAuthorization when the node answers but the cancel is not mined 
     expect((e as CancelUnconfirmedError).tx).toBe(sentHash);
   });
 });
+
+describe('the not_charged block is the one that decided it, and it is stored (T21 r12)', () => {
+  it('a cancel found by its log later: the cancel log\'s block, not the head, recorded and reported again', async () => {
+    const c = await openCall();
+    const orig = w.chain.request.bind(w.chain);
+    let sentHash: `0x${string}` | undefined;
+    let down = true;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (down && sentHash && m === 'eth_getTransactionReceipt') throw new RpcFailure('connect ECONNREFUSED');
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') sentHash = r as `0x${string}`;
+      return r;
+    };
+    await expect(w.client.cancelAuthorization(c.id)).rejects.toBeInstanceOf(CancelInterruptedError);
+    down = false;
+    const receipt = (await orig('eth_getTransactionReceipt', [sentHash])) as { blockNumber: string };
+    const cancelBlock = BigInt(receipt.blockNumber);
+    w.chain.advance(7);
+    await w.client.cancelAuthorization(c.id);
+    expect(w.client.ledger.get(c.id)).toMatchObject({ state: 'not_charged', code: 'cancelled', confirmedAtBlock: cancelBlock.toString() });
+    const again = await w.client.getResult(c.id);
+    expect(again).toMatchObject({ outcome: 'not_charged', code: 'cancelled', confirmedAtBlock: cancelBlock });
+  });
+
+  it('a cancel confirmed by its own receipt: that receipt\'s block, reported again by getResult', async () => {
+    const c = await openCall();
+    await w.client.cancelAuthorization(c.id);
+    const stored = w.client.ledger.get(c.id)!;
+    expect(stored.confirmedAtBlock).toMatch(/^\d+$/);
+    expect((await w.client.getResult(c.id)).confirmedAtBlock).toBe(BigInt(stored.confirmedAtBlock!));
+  });
+});

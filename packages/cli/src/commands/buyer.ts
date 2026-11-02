@@ -328,7 +328,14 @@ async function report(
   const entry = (): PendingEntry | undefined => client.ledger.get(r.requestId);
   switch (r.outcome) {
     case 'verified': {
-      d.writeFile(resolve(d.cwd, c.outFile), r.response ?? new Uint8Array());
+      // An answer is written only when one came with this result. A stored outcome reported again (getResult on a
+      // terminal entry never re-fetches; SPEC §7 never re-pays) has none, and the file saved when it arrived is the
+      // buyer's only copy: never overwrite it with nothing.
+      if (!r.response || r.response.length === 0) {
+        out(BUY.alreadyVerified(p, c.sym, r.settlementTx ?? entry()?.settlementTx ?? 'unknown', record));
+        return 0;
+      }
+      d.writeFile(resolve(d.cwd, c.outFile), r.response);
       if (c.uncertain) out(BUY.chargedChecksOut(p, c.sym, r.settlementTx!));
       else out(BUY.paid(p, c.sym, blockNo(lastEvidence(client, r.requestId)?.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       if (r.inputsChecked === false) out(BUY.inputsNotChecked);
@@ -336,10 +343,10 @@ async function report(
       return 0;
     }
     case 'not_charged': {
-      const b = blockNo(r.confirmedAtBlock ?? 0n);
-      if (r.code === 'cancelled') out(BUY.notChargedCancelled(b));
+      const b = r.confirmedAtBlock === undefined ? null : blockNo(r.confirmedAtBlock);
+      if (r.code === 'cancelled') out(b ? BUY.notChargedCancelled(b) : BUY.notChargedCancelledNoBlock);
       else if (c.uncertain) out(BUY.notChargedAt(hms(BigInt(entry()?.validBefore ?? '0'))));
-      else out(BUY.notCharged(b));
+      else out(b ? BUY.notCharged(b) : BUY.notChargedNoBlock);
       return 1;
     }
     case 'paid_but_rejected':

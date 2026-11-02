@@ -393,6 +393,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         state: ledgerState,
         code: keepRefusal ? stored.code : fields.code ? codeString(fields.code, fields.detail ?? fields.check) : entry.code,
         ...(fields.settlementTx ? { settlementTx: fields.settlementTx } : {}),
+        ...(ledgerState === 'not_charged' && fields.confirmedAtBlock !== undefined ? { confirmedAtBlock: fields.confirmedAtBlock.toString() } : {}),
       });
       // Another process decided this call first (V12): report its outcome, not this one's.
       if (e.state !== ledgerState) return current(e, meta);
@@ -629,7 +630,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           if (s) return settledPath(n, entry, s, meta);
         }
         if (logs.canceled.length > 0) {
-          return finish(entry, 'not_charged', meta, { code: 'cancelled', confirmedAtBlock: head.number });
+          return finish(entry, 'not_charged', meta, { code: 'cancelled', confirmedAtBlock: logs.canceledBlocks[0]! });
         }
         if (head.timestamp > vb + EXPIRY_MARGIN) {
           const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
@@ -659,6 +660,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     // A paid_but_rejected entry keeps its check in `proof_rejected{check}` (INV-13: the specific ProofCheck).
     const check = e.state === 'paid_but_rejected' && e.code?.startsWith('proof_rejected{') ? e.code.slice('proof_rejected{'.length, -1) : undefined;
     if (check) r.check = check as ProofCheck;
+    // The stored outcome names the block that decided it, as the first report did (never a made-up 0).
+    if (e.state === 'not_charged' && e.confirmedAtBlock) r.confirmedAtBlock = BigInt(e.confirmedAtBlock);
     return r;
   }
 
@@ -1078,7 +1081,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         for (let i = 1; ; i++) {
           const head = await n.chain.latest();
           const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
-          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]!, block: head.number };
+          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]!, block: logs.canceledBlocks[0]! };
           if (logs.used.length > 0) return { used: logs.used[0]! };
           const state = (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)) ? 'unlogged' : 'open';
           if ((state === 'open' && !untilDecided) || i >= tries) return state;
