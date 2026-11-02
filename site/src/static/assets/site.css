@@ -219,7 +219,7 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-event
 .con-title { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 10px; font: 500 10.5px/1 var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-3); }
 .con-dot { width: 6px; height: 6px; background: var(--text-2); }
 @media (prefers-reduced-motion: no-preference) { .con-dot { animation: blink 1.6s steps(1) infinite; } }
-.con-lines { min-height: calc(6 * 1.75em); }
+.con-lines { min-height: calc(7 * 1.75em); }
 .con-lines li { display: flex; align-items: center; gap: 9px; color: var(--text-2); white-space: nowrap; }
 .con-lines .ph { font-size: 14px; }
 .con-lines .p { color: var(--text-3); }

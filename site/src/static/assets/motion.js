@@ -68,6 +68,7 @@
     ],
     [
       ['pass', 'approved build'], ['pass', 'sealed machine'], ['fail', 'request and answer', 'response hash ≠ proof'], ['skip', 'celo data', 'skipped'],
+      ['skip', 'permission expired unused', 'read on Celo'],
       ['verdict bad', 'rejected, not charged'],
     ],
   ];
