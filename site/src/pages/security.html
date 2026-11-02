@@ -29,7 +29,7 @@
       <thead><tr><th scope="col">Contract</th><th scope="col">What it does</th><th scope="col">Celo Sepolia</th><th scope="col">Celo mainnet</th></tr></thead>
       <tbody>
         <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[slot:registryAddress]]</td><td>[[slot:registryAddress]]</td></tr>
-        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain, once per machine start. Built on base's nitro-validator.</td><td>[[slot:nitroValidatorAddress]]</td><td>[[slot:nitroValidatorAddress]]</td></tr>
+        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[slot:nitroValidatorAddress]]</td><td>[[slot:nitroValidatorAddress]]</td></tr>
         <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[slot:certManagerAddress]]</td><td>[[slot:certManagerAddress]]</td></tr>
         <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[slot:p384VerifierAddress]]</td><td>[[slot:p384VerifierAddress]]</td></tr>
         <tr><td>ERC-8004 identity registry</td><td>The agent identity registry. Not ours, and upgradeable by whoever holds its keys.</td><td>[[hash:0x8004A818BFB912233c491871b3d84c89A494BD9e]]</td><td>[[hash:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432]]</td></tr>
