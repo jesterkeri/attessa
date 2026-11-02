@@ -10,13 +10,37 @@ import {
 } from 'viem';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
 import type { Chain, Deps, Global } from './context.ts';
-import { CliError, ERR } from './copy.ts';
+import { CliError, ERR, unexpected } from './copy.ts';
 import { RpcError, RpcUnavailable, revertData } from './rpc.ts';
 
 /** Contract reads and writes. Writes are planned and simulated with `eth_call`; only `send` broadcasts. */
 
 /** EIP-7825 per-transaction gas cap; every registry function stays below it (SPEC §3.4, C1.1). */
 export const TX_GAS_CAP = 16_777_216n;
+
+/**
+ * The seller-side FLOWS §8 "rpc unavailable" row for a chain read made before anything is signed: a dropped
+ * connection, or a JSON-RPC error reply that isn't a contract revert (a rate limit, an internal error). A revert is
+ * the contract's own answer, so it stays an RpcError for the caller (`ownerOf` reads it as unknown_agent). The
+ * reply's text is never printed. Anything else passes through unchanged.
+ */
+export function rpcRow(url: string, e: unknown): unknown {
+  if (e instanceof RpcUnavailable || (e instanceof RpcError && !isRevert(e))) return ERR.rpcUnavailable(url);
+  return e;
+}
+
+function isRevert(e: RpcError): boolean {
+  return e.code === 3 || revertData(e) !== null || /revert/i.test(e.message);
+}
+
+/** One chain read, before anything is signed, with `rpcRow`'s mapping. */
+async function chainRead<T>(c: Chain, f: () => Promise<T>): Promise<T> {
+  try {
+    return await f();
+  } catch (e) {
+    throw rpcRow(c.url, e);
+  }
+}
 
 export async function read<const abi extends Abi, fn extends ContractFunctionName<abi, 'view'>>(
   c: Chain,
@@ -26,13 +50,7 @@ export async function read<const abi extends Abi, fn extends ContractFunctionNam
   args: ContractFunctionArgs<abi, 'view', fn>,
 ): Promise<any> {
   const data = encodeFunctionData({ abi, functionName, args } as never);
-  let out: unknown;
-  try {
-    out = await c.rpc.request('eth_call', [{ to, data }, 'latest']);
-  } catch (e) {
-    if (e instanceof RpcUnavailable) throw ERR.rpcUnavailable(c.rpc.url);
-    throw e;
-  }
+  const out = await chainRead(c, () => c.rpc.request('eth_call', [{ to, data }, 'latest']));
   return decodeFunctionResult({ abi, functionName, data: out as Hex } as never);
 }
 
@@ -42,7 +60,7 @@ export interface Head {
 }
 
 export async function head(c: Chain): Promise<Head> {
-  const b = (await c.rpc.request('eth_getBlockByNumber', ['latest', false])) as { number: string; timestamp: string };
+  const b = (await chainRead(c, () => c.rpc.request('eth_getBlockByNumber', ['latest', false]))) as { number: string; timestamp: string };
   return { number: BigInt(b.number), timestamp: BigInt(b.timestamp) };
 }
 
@@ -82,14 +100,14 @@ export async function simulate(c: Chain, from: Address, step: Step): Promise<Sim
     const gas = BigInt((await c.rpc.request('eth_estimateGas', [tx])) as string);
     return { ok: true, gas };
   } catch (e) {
-    if (e instanceof RpcUnavailable) throw ERR.rpcUnavailable(c.rpc.url);
+    if (e instanceof RpcUnavailable) throw ERR.rpcUnavailable(c.url);
     if (e instanceof RpcError) return { ok: false, revert: decodeRevert(e), message: e.message };
     throw e;
   }
 }
 
 export async function gasPrice(c: Chain): Promise<bigint> {
-  return BigInt((await c.rpc.request('eth_gasPrice', [])) as string);
+  return BigInt((await chainRead(c, () => c.rpc.request('eth_gasPrice', []))) as string);
 }
 
 function gasLimit(estimate: bigint): bigint {
@@ -114,9 +132,9 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   const sim = await simulate(c, account.address, step);
   if (!sim.ok) throw onRevert(sim.revert, sim.message);
   const [nonceHex, price, tip] = await Promise.all([
-    c.rpc.request('eth_getTransactionCount', [account.address, 'pending']),
+    chainRead(c, () => c.rpc.request('eth_getTransactionCount', [account.address, 'pending'])),
     gasPrice(c),
-    c.rpc.request('eth_maxPriorityFeePerGas', []).then((v) => BigInt(v as string)),
+    chainRead(c, () => c.rpc.request('eth_maxPriorityFeePerGas', [])).then((v) => BigInt(v as string)),
   ]);
   const maxFeePerGas = price * 2n + tip;
   const raw = await account.signTransaction({
@@ -174,6 +192,28 @@ export async function planOrSend(
     return 'planned';
   }
   if (!g.yes && !(await io.confirm(plan.yesWord))) return 'cancelled';
-  for (let i = 0; i < plan.steps.length; i++) await onSent(i, await send(c, deps, plan.steps[i]!, onRevert));
+  for (let i = 0; i < plan.steps.length; i++) {
+    let sent: Sent;
+    try {
+      sent = await send(c, deps, plan.steps[i]!, onRevert);
+    } catch (e) {
+      // Step 1's reads run before its signature; a later step's run after an earlier one was signed and sent.
+      throw i === 0 ? e : afterSigning(e);
+    }
+    try {
+      await onSent(i, sent);
+    } catch (e) {
+      throw afterSigning(e);
+    }
+  }
   return 'sent';
+}
+
+/**
+ * Once a transaction is signed, the rpc row's "Nothing was signed" is untrue, and FLOWS §8 has no row for a seller
+ * transaction whose outcome a dropped RPC hides. A dropped read after that point is said as a dropped receipt poll
+ * is (`send` maps nothing after signing): the unexpected-error line for RpcUnavailable. // not in FLOWS
+ */
+function afterSigning(e: unknown): unknown {
+  return e instanceof CliError && e.code === 'rpc_unavailable' ? unexpected(new RpcUnavailable('after signing')) : e;
 }

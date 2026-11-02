@@ -32,7 +32,7 @@ async function events(c: Chain, eventName: EventName, args: Record<string, unkno
   try {
     logs = (await c.rpc.request('eth_getLogs', [{ address: c.registry, topics, fromBlock: '0x0', toBlock: 'latest' }])) as typeof logs;
   } catch {
-    throw ERR.rpcUnavailable(c.rpc.url);
+    throw ERR.rpcUnavailable(c.url);
   }
   return logs.map((l) => ({
     args: decodeEventLog({ abi: REGISTRY_EVENTS, eventName, topics: l.topics as [Hex, ...Hex[]], data: l.data }).args as Record<string, any>,
