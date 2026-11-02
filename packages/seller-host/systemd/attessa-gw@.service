@@ -1,0 +1,32 @@
+# Gateway for one network: 127.0.0.1:<8080|8081> behind Caddy (SPEC §5, §6.5). No private key.
+[Unit]
+Description=Attessa gateway (%i)
+Wants=attessa-seller@%i.service
+After=attessa-seller@%i.service network-online.target
+
+[Service]
+Type=simple
+User=attessa-gw
+Group=attessa-gw
+EnvironmentFile=/etc/attessa/%i.env
+EnvironmentFile=/etc/attessa/gateway-%i.secret
+ExecStart=/usr/bin/node /opt/attessa/packages/gateway/dist/main.js /etc/attessa/gateway-%i.json
+StateDirectory=attessa
+StateDirectoryMode=0750
+Restart=always
+RestartSec=2
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+CapabilityBoundingSet=
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target
