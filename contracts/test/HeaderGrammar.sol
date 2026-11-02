@@ -18,6 +18,9 @@ library HeaderGrammar {
         TooDeep
     }
 
+    /// SPEC §2.5 nesting limit for the decoded `X-Attested-Proof` JSON; the outer object is level 1.
+    uint256 internal constant MAX_DEPTH = 32;
+
     struct AttestedProof {
         IEnclaveRegistry.ExecutionProof proof;
         bytes signature;
@@ -161,14 +164,17 @@ library HeaderGrammar {
 
     /// `X-Attested-Proof`: base64 of JCS `{"proof":{...strings...},"signature":"0x...","signer":"0x..."}`.
     ///
-    /// Reasons rank as in vectors/headers.json: base64, then not_jcs (the text is not valid UTF-8 JSON
-    /// in RFC 8785 canonical form, checked over every value, nested ones included), then a top-level
-    /// value that is not an object (field_grammar), then unknown/missing top-level fields, `proof`
-    /// not an object, unknown/missing proof fields, and last a field value off its §2.3 grammar.
+    /// Reasons rank as in vectors/headers.json: base64, then too_deep (the decoded bytes nest more
+    /// than MAX_DEPTH levels, checked before anything else reads them), then not_jcs (the text is not
+    /// valid UTF-8 JSON in RFC 8785 canonical form, checked over every value, nested ones included),
+    /// then a top-level value that is not an object (field_grammar), then unknown/missing top-level
+    /// fields, `proof` not an object, unknown/missing proof fields, and last a field value off its
+    /// §2.3 grammar.
     function decodeAttestedProof(string memory v) internal pure returns (Err, AttestedProof memory out) {
         (bool ok, bytes memory text) = decodeBase64(v);
         AttestedProof memory empty;
         if (!ok) return (Err.Base64, empty);
+        if (_nestsDeeperThan(text, MAX_DEPTH)) return (Err.TooDeep, empty);
         if (!_isJcs(text)) return (Err.NotJcs, empty);
         if (text[0] != "{") return (Err.FieldGrammar, empty);
         uint256 bad = _members(text, 0, false, out);
@@ -177,6 +183,29 @@ library HeaderGrammar {
         if (bad == TOP_UNKNOWN || bad == PROOF_UNKNOWN) return (Err.UnknownField, empty);
         if (bad == TOP_MISSING || bad == PROOF_MISSING) return (Err.MissingField, empty);
         return (Err.FieldGrammar, empty);
+    }
+
+    /// Whether b nests deeper than max: each `{` or `[` opens a level and each `}` or `]` closes one
+    /// (never below zero); brackets inside strings do not count, where a string runs from `"` to the
+    /// next `"` not taken by a `\` escape. Runs on raw bytes, before UTF-8 or JSON checks, as TS core's
+    /// `nestsDeeperThan` does. Iterative.
+    function _nestsDeeperThan(bytes memory b, uint256 max) private pure returns (bool) {
+        uint256 depth;
+        bool str;
+        for (uint256 i = 0; i < b.length; i++) {
+            bytes1 c = b[i];
+            if (str) {
+                if (c == "\\") i++;
+                else if (c == '"') str = false;
+            } else if (c == '"') {
+                str = true;
+            } else if (c == "{" || c == "[") {
+                if (++depth > max) return true;
+            } else if ((c == "}" || c == "]") && depth > 0) {
+                depth--;
+            }
+        }
+        return false;
     }
 
     /// Field errors of the canonical object at b[i] (the header, or its `proof` when `proof` is set).

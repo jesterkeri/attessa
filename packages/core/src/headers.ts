@@ -78,10 +78,42 @@ export function encodeAttestedProof(a: AttestedProof): string {
   return Buffer.from(json, 'utf8').toString('base64');
 }
 
+/** SPEC §2.5 nesting limit for the decoded `X-Attested-Proof` JSON; the outer object is level 1. */
+export const ATTESTED_PROOF_MAX_DEPTH = 32;
+
+/**
+ * Whether the decoded `X-Attested-Proof` bytes nest deeper than `max`. Each `{` or `[` opens a level
+ * and each `}` or `]` closes one (never below zero); brackets inside strings do not count, where a
+ * string runs from `"` to the next `"` not taken by a `\` escape. Iterative, and run on the bytes
+ * before UTF-8 decoding, parsing or the JCS check, so any input gets the same answer as in the
+ * Solidity and Rust grammars. Every byte it looks at is ASCII, which never occurs inside a
+ * multi-byte UTF-8 sequence.
+ */
+export function nestsDeeperThan(bytes: Uint8Array, max: number): boolean {
+  let depth = 0;
+  let str = false;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (str) {
+      if (c === 0x5c) i++;
+      else if (c === 0x22) str = false;
+    } else if (c === 0x22) {
+      str = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > max) return true;
+    } else if ((c === 0x7d || c === 0x5d) && depth > 0) {
+      depth--;
+    }
+  }
+  return false;
+}
+
 /** Parses `X-Attested-Proof`; throws on any grammar violation, including non-canonical JSON. */
 export function decodeAttestedProof(v: string): AttestedProof {
   const bytes = decodeBase64Strict(v);
   if (!bytes) throw new Error('X-Attested-Proof: not strict base64');
+  // SPEC §2.5 nesting limit, checked before anything recursive (JSON.parse, jcs) sees the text.
+  if (nestsDeeperThan(bytes, ATTESTED_PROOF_MAX_DEPTH)) throw new Error('X-Attested-Proof: too deep');
   // ignoreBOM keeps a leading U+FEFF in the text, so JSON.parse refuses it as serde_json does.
   const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   const obj: unknown = JSON.parse(text);
