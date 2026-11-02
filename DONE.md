@@ -1194,3 +1194,63 @@ reviewed: reviews/t01-kill-test-review-r1.md | verdict: implementation-ready | C
 - 8301b50: the sentence names task T10 for the production validator stack instead.
 - Adversary r2 on 8301b50: CLEAN (the wording matches TASKS.md and SPEC §3.5, every reference resolves, the check script passes, the verify command prints 9 lines all under the cap, the guard scripts pass).
 reviewed: reviews/t01-kill-test-review-r1.md | verdict: implementation-ready | C0 M0 m0
+
+## Install-scripts allow-list for bin, engines and two scripts - 2026-11-02
+commit: 724d652 (this entry adds only DONE.md)
+why: `./scripts/check-install-scripts.sh` failed on staging with 7 lines from T15, T19 and T20 (bin in cli, gateway and seller-host; engines in sdk; scripts gen:vectors in core and render-units in seller-host; better-sqlite3@13.0.3 without a pinned integrity). T39 needs the check to pass.
+changed (scripts/check-install-scripts.sh, workspace manifests only; the root manifest rules are unchanged):
+- bin: a map of command names (`[a-z0-9][a-z0-9-]*`) to .js files under the package's dist/; a string, an absolute path, a `.`/`..` or hidden component, or a path outside dist/ fails.
+- engines: a node range only (`>=`, `^` or `~` and up to three numbers); any other engine fails.
+- scripts gen:vectors and render-units: only as `node [--experimental-strip-types] scripts/<file>.(ts|js|mjs)` where that file is a tracked regular file of the same package. Neither runs at install; preinstall, install, postinstall and prepare are still refused (test cases below).
+- PINNED gets better-sqlite3@13.0.3. pnpm-lock.yaml and the registry agree:
+```
+lock: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+npm:  sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+integrity_match
+```
+test: scripts/check-install-scripts.allowlist.test.sh. Each case changes one thing in a scratch copy of HEAD and the probe must print exactly that one FAIL line, so none of the 7 original lines may appear (the old guard fails all 16 cases).
+verified at 724d652:
+```
+$ flock -w 3600 /home/hr/.cache/attessa-heavy.lock ./scripts/check-install-scripts.sh; echo "probe_rc=$?"
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+probe_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh; echo "test_rc=$?"
+ok: bin outside dist/
+ok: bin with .. out of dist/
+ok: bin absolute
+ok: bin as a string
+ok: bin command name with a path
+ok: engines beyond node
+ok: engines node not a range
+ok: extra unknown key
+ok: preinstall script
+ok: install script
+ok: postinstall script
+ok: prepare script
+ok: gen:vectors running more than node
+ok: gen:vectors in the root manifest
+ok: render-units on an untracked file
+ok: wrong better-sqlite3 integrity
+16 cases, rc=0
+test_rc=0
+```
+The T02 install-guard adversary tests, run at 724d652 under flock:
+```
+scripts/adversary-t02-codex-r2/install-probe-dirty-checkout.sh rc=0
+scripts/adversary-t02-r12/install-probe-core-worktree.sh rc=0
+scripts/adversary-t02-r12/install-probe-git-env.sh rc=0
+scripts/adversary-t02-r13/install-probe-archive-filter.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch-tree.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch.sh rc=0
+scripts/adversary-t02-r4/install-probe-false-clean.sh rc=0
+scripts/adversary-t02-r5/install-probe-keytar-dir.sh rc=0
+scripts/adversary-t02-r6/install-probe-pnpmfile.sh rc=0
+scripts/adversary-t02-r7/install-probe-npx-local-bin.sh rc=0
+scripts/adversary-t02-r7/install-probe-xdg-config.sh rc=0
+scripts/adversary-t02-r7/install-static-nonascii-path.sh rc=0
+scripts/adversary-t02-r8/install-probe-manifest-dir.sh rc=0
+scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
+scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
+scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
+```
+reviewed: pending (adversary, then Codex)
