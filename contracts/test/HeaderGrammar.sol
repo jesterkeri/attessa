@@ -14,7 +14,8 @@ library HeaderGrammar {
         NotJcs,
         UnknownField,
         MissingField,
-        FieldGrammar
+        FieldGrammar,
+        TooDeep
     }
 
     struct AttestedProof {

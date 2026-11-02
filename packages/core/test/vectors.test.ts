@@ -132,6 +132,10 @@ describe('committed vectors', () => {
       const digest = proofDigest(eip712Domain(BigInt(c.chainId), c.verifyingContract as Address), a.proof);
       expect(await recoverDigestSigner(digest, a.signature), c.name).toBe(c.signer);
     }
-    for (const c of v.attestedProof.invalid) expect(() => decodeAttestedProof(c.header), c.name).toThrow();
+    for (const c of v.attestedProof.invalid) {
+      expect(() => decodeAttestedProof(c.header), c.name).toThrow();
+      // SPEC §2.5 nesting limit: refused for depth exactly when the vector says too_deep.
+      expect(() => decodeAttestedProof(c.header), c.name).toThrow(c.reason === 'too_deep' ? /: too deep$/ : /^(?!.*: too deep$)/);
+    }
   });
 });

@@ -534,6 +534,7 @@ contract VectorsTest is RegistryBase {
         if (h == keccak256("unknown_field")) return HeaderGrammar.Err.UnknownField;
         if (h == keccak256("missing_field")) return HeaderGrammar.Err.MissingField;
         if (h == keccak256("field_grammar")) return HeaderGrammar.Err.FieldGrammar;
+        if (h == keccak256("too_deep")) return HeaderGrammar.Err.TooDeep;
         revert(string.concat("unknown attestedProof reason: ", reason));
     }
 
