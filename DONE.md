@@ -818,3 +818,405 @@ Decision: SHIP
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t06-t07-vectors-and-real-fixture-review-r4.md | verdict: implementation-ready | C0 M0 m0
+## T20 - 2026-10-30
+commit: 9b4290c (builder, Opus; branch feat/t20-buyer-sdk, rerun by lead)
+verified: pnpm --filter @attessa/sdk test
+output:
+```
+$ pnpm --filter @attessa/sdk test
+ ✓ test/keys.test.ts (7 tests) 83ms
+ ✓ test/vectors.test.ts (9 tests) 111ms
+ ✓ test/adversary-t20-r3.test.ts (2 tests) 375ms
+ ✓ test/adversary-t20.test.ts (3 tests) 426ms
+ ✓ test/adversary-t20-r2.test.ts (3 tests) 697ms
+ ✓ test/regressions-t20.test.ts (11 tests) 708ms
+ ✓ test/refusals.test.ts (30 tests) 729ms
+ ✓ test/adversary-t20-r5.test.ts (1 test) 1616ms
+ ✓ test/pay.test.ts (9 tests) 1127ms
+ ✓ test/outcomes.test.ts (18 tests) 1203ms
+ ✓ test/adversary-t20-r6.test.ts (1 test) 1993ms
+ ✓ test/proof-checks.test.ts (31 tests) 1791ms
+ ✓ test/ledger.test.ts (10 tests) 9709ms
+ ✓ test/adversary-t20-r4.test.ts (3 tests) 30168ms
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+exit=0
+```
+adversary: rounds 1-6 each found defects (ledger lock races, terminal entries reopened, read-only and umask lock files, refused calls ending uncertain), all fixed with their tests committed; round 7 on 9b4290c: NO DEFECT FOUND (12 real processes x 12 rounds over five starting states: fresh dir under umask 0277, a killed holder's journal, a 0444 lock, old pid-format text under umask 022 and 0277; 0 overlaps, 0 lost writes). Four r3/r4 tests that drove the deleted pid lock through a fake process.kill were retired with Joshua's approval (4a09d04).
+reviewed: pending (Codex r1)
+notes: the ledger lock is an SQLite BEGIN IMMEDIATE (node:sqlite, Node >= 22.13) that proves its connection writable with a discarded write. Open questions logged: the node:sqlite ExperimentalWarning, a refused result with no code, a lock file owned by another user (refused with an error, untested without root).
+
+## T20 Codex review r2 - 2026-10-31
+Round 1 (reviews/t20-buyer-sdk-review-r1.md) returned REVISE with one major finding, M1: the lock adversaries failed inside Codex's sandbox. The same command on the same frozen commit 9d9d261, run outside the sandbox on 2026-10-31, passed in full; its tail is in reviews/t20-sdk-suite-rerun-outside-sandbox-2026-10-31.txt:
+```
+ Test Files  14 passed (14)
+      Tests  138 passed (138)
+```
+Round 2 withdrew M1: the sandbox denies child-process creation (EPERM), so the round-1 lock results were invalid. Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t20-buyer-sdk-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): design-review-r1.md, design-review-r2.md, design-review-r3.md, t20-buyer-sdk-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T19 - 2026-10-30
+commit: 3bb4af3 plus merge 5198af1 (built 2d55778, 67e0122 by a builder, Opus; fixed b76a43d)
+verified: pnpm --filter @attessa/gateway test (plus pnpm --filter @attessa/gateway typecheck), on the merge
+output (file lines and totals verbatim; the per-test lines are in the run log and omitted here):
+```
+$ pnpm --filter @attessa/gateway test
+ ✓ test/smoke.test.ts (1 test) 694ms
+ ✓ test/admin.test.ts (4 tests) 3938ms
+ ✓ test/reconciler-resend.test.ts (3 tests) 4621ms
+ ✓ test/adversary-t19-r2.test.ts (9 tests) 9409ms
+ ✓ test/adversary-t19.test.ts (2 tests) 10198ms
+ ✓ test/idempotency.test.ts (17 tests) 13068ms
+ ✓ test/quote.test.ts (32 tests) 15087ms
+ ✓ test/settlement.test.ts (25 tests) 15712ms
+ ✓ test/evaluate.test.ts (37 tests) 17677ms
+ Test Files  9 passed (9)
+      Tests  130 passed (130)
+exit=0
+$ pnpm --filter @attessa/gateway typecheck
+> tsc -p ../core && tsc -p . --noEmit
+exit=0
+```
+adversary: r1 on 67e0122 DEFECT (INV-11: a serial reconciler re-send to a hung facilitator delayed other rows' expiry; fixed b76a43d, test kept as test/adversary-t19.test.ts). r2 on b76a43d NO DEFECT FOUND (late re-send answers vs terminal states, in-flight leak, concurrent ticks, corrupt payload, stop() mid-pass, background 402); its 9 tests kept as test/adversary-t19-r2.test.ts.
+reviewed: pending (Codex)
+notes: three SPEC questions from the fix round are in OPEN-QUESTIONS (unfunded authorizations vs the unpaid rate limit; nonce used before created_block; §6.2 step order vs the idempotency table).
+
+## T19 Codex r1 fixes and adversary rounds 3-9 - 2026-10-31
+Codex r1 (REVISE): the reconciler serialized slow RPC reconciliation; fixed with per-row concurrent checks. Adversary rounds 3 to 8 each found a defect, fixed with its test committed (packages/gateway/test/adversary-t19-r*.test.ts, delivery-overlap, delivery-stream-error, delivery-duplicate-gone, reconciler-deadline):
+- r5: a restart gave `settled` rows a fresh 30 s grace; the grace now starts from the stored `updated_at` for rows open at startup.
+- overlapping deliveries of one row: live handlers are counted per row.
+- r6, r7, r8: a client hanging up during settle, during execution, or behind a pipelined request left a live mark that nothing released, so the row stayed `settled` forever (INV-11). `holdLive` now checks the reply and socket state when it takes a mark and releases it on socket close, and the reconciler sweeps a still-live `settled` row once now > validBefore + 55.
+Round 9, on bdd4cd2: no defect found (12 kept-alive calls, read pipelining, LIVE_DEADLINE_S against the slowest legitimate delivery, SPEC §6.2 re-read).
+Verify at bdd4cd2, 2026-10-31:
+```
+$ pnpm --filter @attessa/gateway test
+ Test Files  21 passed (21)
+      Tests  154 passed (154)
+test_exit=0
+$ pnpm -r typecheck
+typecheck_exit=0
+$ pnpm --filter @attessa/gateway lint
+lint_exit=0
+```
+reviewed: pending (Codex r2)
+
+## T19 Codex review r2 - 2026-10-31
+Codex r2 reviewed d3b5c57: all round-1 findings (m1 proof lifetime, m2 payer from /verify, M1 serial reconciliation) are fixed, no new findings. Its sandbox blocked the socket-based tests (U8); they passed outside it on the same code, recorded in the entry above (154 passed). Closing line of round 2, verbatim:
+```
+VERDICT: implementation-ready
+```
+reviewed: reviews/t19-x402-payment-gateway-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): t19-x402-payment-gateway-review-r1.md, t19-x402-payment-gateway-review-r1b.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T15 - 2026-10-30
+commit: fd24b45 (built fbe9bcf, 89b2e5d by a builder, Opus; fixed acbf654, fbafffe; merge fd24b45 brings in the T19 branch)
+verified: pnpm --filter @attessa/seller-host test && pnpm --filter @attessa/cli test -- -t "seller" (plus pnpm -r typecheck), on the merge
+output (file lines and totals verbatim):
+```
+$ pnpm --filter @attessa/seller-host test && pnpm --filter @attessa/cli test -- -t "seller"
+ ✓ test/framing.test.ts (4 tests) 5ms
+ ✓ test/units.test.ts (8 tests) 9ms
+ ✓ test/server.test.ts (23 tests) 222ms
+ ✓ test/enclave.test.ts (6 tests) 253ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 647ms
+ ✓ test/inputs.test.ts (11 tests) 502ms
+ ✓ test/adversary-t15.test.ts (8 tests) 468ms
+ Test Files  7 passed (7)
+      Tests  68 passed (68)
+seller-host exit=0
+ ✓ test/attestation.test.ts (4 tests) 447ms
+ ✓ test/enclave.test.ts (8 tests) 1207ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1605ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 1789ms
+ ✓ test/owner.test.ts (15 tests) 2085ms
+ ✓ test/signer.test.ts (17 tests) 5784ms
+ Test Files  6 passed (6)
+      Tests  59 passed (59)
+cli exit=0
+$ pnpm -r typecheck
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+exit=0
+```
+adversary: r1 on 89b2e5d DEFECT x2 (`--network local` ignored the pinned deployments, SPEC §2.6; the spend guard dated revenue by updated_at so a row counted on two days, SPEC §5); fixed acbf654, fbafffe; tests kept as packages/{cli,seller-host}/test/adversary-t15.test.ts. r2 on fbafffe NO DEFECT FOUND (all 11 §6.4 states, day boundary, WAL reads, time zones, pin vs override on every network); its 16 tests kept as adversary-t15-r2.test.ts.
+reviewed: pending (Codex)
+notes: no buy source yet (needs S7); the guard is not wired into main.ts; `enclave start --port` can point at another network's enclave (SPEC §8 lists --port as free) and `enclave build` does not refuse gitignored files in the build context: both left as design questions; one existing fixture column renamed updated_at -> created_at to match the §6.4 schema.
+
+## T15 Codex r1 fixes and adversary rounds 3-5 - 2026-10-30
+commit: cb83abf (fix builder, Opus; branch feat/t15-seller-host, rerun by lead)
+review: Codex r1 (.worktrees/archive/reviews/t15-seller-host-and-cli-review-r1.md): REVISE, M1 renew sent certificate-cache txs before checks registration makes; M2 seller-host could boot against another network's enclave and trusted bad_frame; m1 framed replies not checked as JCS. Fixed in 2056eff.
+verified: pnpm --filter @attessa/seller-host test; pnpm --filter @attessa/cli test; pnpm -r typecheck; pnpm -r lint
+output:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/framing.test.ts (4 tests) 4ms
+ ✓ test/units.test.ts (8 tests) 9ms
+ ✓ test/review-t15-r1.test.ts (13 tests) 70ms
+ ✓ test/server.test.ts (23 tests) 223ms
+ ✓ test/enclave.test.ts (6 tests) 257ms
+ ✓ test/inputs.test.ts (11 tests) 1090ms
+ ✓ test/adversary-t15.test.ts (8 tests) 1177ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 5245ms
+ Test Files  8 passed (8)
+      Tests  81 passed (81)
+exit=0
+$ pnpm --filter @attessa/cli test
+ ✓ test/adversary-t15-r3.test.ts (1 test) 260ms
+ ✓ test/attestation.test.ts (4 tests) 547ms
+ ✓ test/adversary-t15-r4.test.ts (1 test) 705ms
+ ✓ test/review-t15-r1.test.ts (3 tests) 1437ms
+ ✓ test/enclave.test.ts (8 tests) 1539ms
+ ✓ test/review-t15-r3.test.ts (8 tests) 1570ms
+ ✓ test/review-t15-r4.test.ts (4 tests) 1667ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1983ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 2232ms
+ ✓ test/owner.test.ts (15 tests) 2454ms
+ ✓ test/signer.test.ts (17 tests) 6202ms
+ Test Files  11 passed (11)
+      Tests  76 passed (76)
+exit=0
+$ pnpm -r typecheck
+exit=0
+$ pnpm -r lint
+exit=0
+```
+adversary: r3 (enclave start --port could configure the other network's enclave) and r4 (a late AttestationStale on renew used registration wording and advice) found defects, fixed in 949259f and cb83abf with their tests committed. r5 on cb83abf: NO DEFECT FOUND (renew reverts incl. a signer expiring during caching, port seam unreachable from bin.ts, boot binding check, JCS replies, port pins).
+reviewed: pending (Codex r2)
+notes: suspicions from r5, unproven and not fixed: after certificate txs land, the generic revert lines still end "Nothing was sent."; invalid_pcr and invalid_public_key renew lines carry restart or no advice (both unreachable with a genuine AWS document). `--port` now accepts only the network's fixed port (logged in OPEN-QUESTIONS).
+
+## T15 Codex review r2 - 2026-10-31
+Codex re-reviewed T15 (seller-host and CLI) at 7e00940 under REVIEW-PROTOCOL U1 to U9 and found nothing to fix; every round-1 finding is recorded as fixed.
+Review files: reviews/t15-seller-host-and-cli-review-r1.md (round 1) and reviews/t15-seller-host-and-cli-review-r2.md (round 2). Closing line of round 2, verbatim:
+```
+VERDICT: implementation-ready
+```
+reviewed: reviews/t15-seller-host-and-cli-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): t15-seller-host-and-cli-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T10 Codex review r2 - 2026-10-31
+Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
+```
+scripts/check-deploy.adversary.test.mjs # tests 3
+scripts/check-deploy.adversary.test.mjs # fail 0
+scripts/check-deploy.adversary2.test.mjs # tests 4
+scripts/check-deploy.adversary2.test.mjs # fail 0
+scripts/check-deploy.adversary3.test.mjs # tests 2
+scripts/check-deploy.adversary3.test.mjs # fail 0
+scripts/check-deploy.adversary4.test.mjs # tests 3
+scripts/check-deploy.adversary4.test.mjs # fail 0
+scripts/check-deploy.adversary5.test.mjs # tests 3
+scripts/check-deploy.adversary5.test.mjs # fail 0
+scripts/check-deploy.adversary6.test.mjs # tests 3
+scripts/check-deploy.adversary6.test.mjs # fail 0
+scripts/check-deploy.adversary7.test.mjs # tests 3
+scripts/check-deploy.adversary7.test.mjs # fail 0
+scripts/check-deploy.adversary8.test.mjs # tests 2
+scripts/check-deploy.adversary8.test.mjs # fail 0
+scripts/check-deploy.adversary9.test.mjs # tests 3
+scripts/check-deploy.adversary9.test.mjs # fail 0
+scripts/check-deploy.committed-config.test.mjs # tests 6
+scripts/check-deploy.committed-config.test.mjs # fail 0
+scripts/check-deploy.test.mjs # tests 11
+scripts/check-deploy.test.mjs # fail 0
+REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+predeploy_exit=0
+```
+Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
+note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
+Correction (2026-11-02, before the staging PR): design-review-r1.md, design-review-r2.md, design-review-r3.md, t10-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
+## T10 Sepolia broadcast and check-deploy - 2026-11-02
+Joshua broadcast both deploy scripts from d3c48a1 (the T10 deploy commit, a clean checkout in .worktrees/sim-sepolia-deploys), each after `check-deploy.mjs --pre-deploy` printed PASS and a simulation without the broadcast flag:
+- DeployValidatorStack: P384Verifier, CertManager (production, owner and revoker = admin `0xD32AF5B881eC424435ECa3262065537dCcb64E65`), NitroValidator; 10,722,155 gas, 0.536 CELO.
+- DeployRegistry with ATTESSA_NITRO_VALIDATOR = the NitroValidator above: EnclaveRegistry, 3,444,473 gas, 0.172 CELO.
+The addresses and transactions are in docs/DEPLOYMENTS.md and packages/core/src/deployments.ts (`enclaveRegistry`, `validatorStack` for celo-sepolia; mainnet stays null until T30).
+Consequences in tests, no product code changed:
+- packages/core/test/core.test.ts: the check that every `enclaveRegistry` is null (commented "set by T10 / T30") now pins the Sepolia registry and validator stack to the deployed addresses and keeps mainnet null.
+- packages/cli/test/harness.ts: the FakeChain reports chain 11142220 and a pinned registry wins over ATTESSA_REGISTRY (SPEC §2.6), so with the real pin every seller test called `0x42bf...` on the fake chain (40 failures). The harness now pins the Sepolia entry to its fake registry once per test file (vitest forks, isolated); the ATTESSA_REGISTRY override and pin-precedence cases stay covered by adversary-t15 and adversary-t15-r2, which set the pins themselves.
+- The CI ts job also needs the nitro-validator submodule (packages/cli/test/attestation.test.ts reads the real AWS fixture from it), and the Slither forge-config hash changes with T10's `fs_permissions` entry: given to Joshua as a ci.yml patch (.worktrees/prompts/combined-branch-ci.patch), since workflows are his to edit.
+
+verify (`node scripts/check-deploy.mjs celo-sepolia`, live Celo Sepolia, 2026-11-02):
+```
+REF   reference bytecode compiled from HEAD e6777faaf161 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+OK    deployments.ts EnclaveRegistry matches DEPLOYMENTS.md
+OK    deployments.ts P384Verifier matches DEPLOYMENTS.md
+OK    deployments.ts CertManager matches DEPLOYMENTS.md
+OK    deployments.ts NitroValidator matches DEPLOYMENTS.md
+OK    deployments.ts chainId == SPEC §2.6 pin 11142220
+OK    chain id 11142220
+OK    deployments.ts identityRegistry matches DEPLOYMENTS.md
+OK    deployments.ts selfRegistry matches DEPLOYMENTS.md
+OK    deployments.ts identityRegistry == SPEC §3.5 pin 0x8004a818bfb912233c491871b3d84c89a494bd9e
+OK    deployments.ts selfRegistry == SPEC §3.5 pin 0x043dacac8b0771dd5b444bcc88f2f8bbdbedd379
+OK    P384Verifier 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e has code
+OK    P384Verifier runtime code equals the production artifact with immutables spliced
+OK    CertManager 0x29f2a69b5685d0db11fa10aa7c9079b3f14cf7fd has code
+OK    CertManager runtime code equals the production artifact with immutables spliced
+OK    NitroValidator 0x72b06e740d5f2c262b3193de69c7065a0c7424db has code
+OK    NitroValidator runtime code equals the production artifact with immutables spliced
+OK    EnclaveRegistry 0x42bf5cb440c3c321cb42b0f4c81c3c7435cb92ff has code
+OK    EnclaveRegistry runtime code equals the production artifact with immutables spliced
+OK    CertManager.p384Verifier() == 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e
+OK    NitroValidator.certManager() == 0x29f2a69b5685d0db11fa10aa7c9079b3f14cf7fd
+OK    NitroValidator.p384Verifier() == 0xd26c0d863b71cbbba07e6eeedab545d0f7c1a84e
+OK    EnclaveRegistry.nitroValidator() == 0x72b06e740d5f2c262b3193de69c7065a0c7424db
+OK    EnclaveRegistry.identityRegistry() == 0x8004a818bfb912233c491871b3d84c89a494bd9e
+OK    EnclaveRegistry.selfRegistry() == 0x043dacac8b0771dd5b444bcc88f2f8bbdbedd379
+OK    CertManager.owner() == 0xd32af5b881ec424435eca3262065537dccb64e65
+OK    CertManager.revoker() == 0xd32af5b881ec424435eca3262065537dccb64e65
+OK    EnclaveRegistry.allowLocalOrigins() == false
+OK: all 27 checks passed
+exit=0
+```
+`pnpm -r test`: core 69 passed, seller-host 81 passed, gateway 154 passed, sdk 138 passed, cli 76 passed. `pnpm -r typecheck`: Done in all 5 packages.
+reviewed: pending (Codex)
+
+## T10 deploy-record adversary rounds 1-2 - 2026-11-02
+Adversary r1 on 2709dec checked every recorded address, tx hash, block and gas figure against `cast receipt` (all status 1) and re-ran check-deploy (27 OK). It found one defect the deploy record made live: the SDK let `options.registry` override the pinned Sepolia registry (`opts.registry ?? deployment.enclaveRegistry`), against SPEC §2.6 "The SDK uses only these pinned addresses" (b72610d, failing).
+- 4ec4df9: the pin wins and `options.registry` only fills in where nothing is deployed, as the CLI does for ATTESSA_REGISTRY. The SDK test world (`makeWorld`) pins its fake registry as the Sepolia entry while open and restores it on `close()`.
+- d1d26c6 (adversary r2): the local case restated against the real pin (`0x42bf...92ff`, read before any world swaps it); it fails on the old line (2 failed) and passes on the fix.
+- Adversary r2 on 4ec4df9: CLEAN (mainnet null pin, `local` on 42220, address case, every other read of options.registry).
+
+verify at d1d26c6 (`pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm -r test`, plus the harness scripts), 2026-11-02:
+```
+build=0
+typecheck: Done in 5 of 5 packages; lint: Done in 5 of 5 packages
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  15 passed (15)
+packages/sdk test:       Tests  140 passed (140)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+check-workflows rc=0
+check-migrations rc=0
+check-reviews rc=0
+```
+reviewed: pending (Codex)
+
+## T10 deploy record Codex r1 fix and doc adversary rounds 1-2 - 2026-11-02
+Codex r1 on 663bd89 (archived, `.worktrees/archive/reviews/t10-deploy-record-and-sdk-pin-review-r1.md`): REVISE, one minor (m1): the `ClientOptions.registry` doc still said the override is required on local forks, which the pin-first fix made false. No runtime finding; the pin fix, the address record and the CI change were confirmed.
+- 08bd164: the doc says the pin wins whenever the RPC's chain has one, a Sepolia fork included.
+- Adversary r1 on 08bd164: one doc defect, "chains with no deployed registry" also read as a plain anvil chain (31337), which the SDK refuses as network_mismatch (correct per SPEC §2.6: no pinned assets either). de31b87 (its test, failing then).
+- f3dec7f: the doc names the deployments.ts chain case and says a chain with no entry is refused.
+- Adversary r2: CLEAN on f3dec7f's wording; 8aae342 restates its third case (31337 refused) and adds celo-sepolia against a 31337 RPC.
+
+verify at 8aae342 (`pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm -r test`, then the harness scripts), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:    × INV-19: the lock holds when holders are killed or stopped inside it > 6 processes x 200 entries with random SIGKILLs and SIGSTOPs: never two inside, no write lost 4652ms
+packages/sdk test: ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+packages/sdk test:  Test Files  1 failed | 15 passed (16)
+packages/sdk test:       Tests  1 failed | 143 passed (144)
+check-workflows rc=0
+check-migrations rc=0
+check-reviews rc=0
+```
+The CLI suite did not run in that pass (pnpm stops after the first failing package). The INV-19 test is untouched by this change; re-runs, same commit:
+```
+npx vitest run test/ledger.test.ts (3 runs):  Tests  10 passed (10) / 10 passed (10) / 10 passed (10)
+npx vitest run (packages/sdk, 2 runs):  Test Files  16 passed (16)  Tests  144 passed (144) / 144 passed (144)
+npx vitest run (packages/cli):  Test Files  11 passed (11)  Tests  76 passed (76)
+```
+Logged in OPEN-QUESTIONS (INV-19 stress test flaked once under load).
+reviewed: pending (Codex r2)
+
+## INV-19 stress test oracle fix and the staging merge - 2026-11-02
+The INV-19 stress test (`packages/sdk/test/ledger.test.ts`, "6 processes x 200 entries with random SIGKILLs and SIGSTOPs") failed in CI on eb302cb: "12248 entered while 12234 was inside". Diagnosis: no lock defect. The lock is an SQLite write transaction (`BEGIN IMMEDIATE`, `packages/sdk/src/ledger.ts`); Linux releases a killed holder's file locks (exit_files) before it becomes a zombie (exit_notify), and in that gap the test child's `alive()` read the dead holder as state R. Under 16 busy loops the test failed 14 of 20 runs.
+- 964dc4a (approved by Joshua, it edits a test helper): `alive()` in `packages/sdk/test/helpers/lock-stress-child.ts` also treats PF_EXITING (0x4, /proc/<pid>/stat field 9) as not alive. The lock is unchanged. Under 16 busy loops: 30 of 30 passed.
+- Adversary on 964dc4a: CLEAN. A killed holder always shows PF_EXITING by the time the lock is free; no live process showed it in 24,305 samples; stopped or resumed holders never carry it; three deliberately broken locks (no lock, early release, a 150 ms stale-takeover lock) each still produced violations.
+- c7f0de5 merged staging after PR 7 (no file changes), 417ae95 reordered DONE.md so staging's entries come first.
+The OPEN-QUESTIONS entry for this flake is resolved by the above.
+
+verify at 964dc4a (`pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm -r test`, then the harness scripts), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  16 passed (16)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+check-workflows rc=0
+check-migrations rc=0
+check-reviews rc=0
+```
+reviewed: pending (Codex r2)
+
+## T10 deploy record, SDK pin and INV-19 oracle: Codex review r2 SHIP - 2026-11-02
+Codex r2 reviewed cd723b0 (`git diff 663bd89 cd723b0`, with `e6777fa..cd723b0` in scope): no critical, major or minor findings. The r1 minor (m1, the `ClientOptions.registry` doc) is closed; the INV-19 `alive()` change, the staging merge and the DONE reorder were judged sound. The r1 review (REVISE, m1) is archived outside the repo.
+reviewed: reviews/t10-deploy-record-and-sdk-pin-review-r2.md | verdict: implementation-ready | C0 M0 m0
+## T01 - 2026-11-02
+Kill test on Celo Sepolia: base/nitro-validator's demo stack (P384Verifier, CertManagerDemo, NitroValidator) at the pinned `0ea0d12`, deployed and run on its cold path with the bundled real AWS Nitro attestation by `script/BaseSepoliaDemo.s.sol` (`USE_BUNDLED_REAL_ATTESTATION=true`, `--gas-estimate-multiplier 110`). Joshua broadcast it from the deployer `0xF31207eE5831fb2a7bFB6f844a4fb16776193964` after Claude's simulation on an anvil fork with a throwaway key (9 transactions, validate calls padded to 16,046,664 gas). Table and gas in `docs/KILL_TEST.md`. Largest gasUsed 12,967,002 (each validate), 77% of the 16,777,216 cap; total 60,991,030 gas, 3.0496 CELO. These demo addresses are never used by the registry (SPEC §3.5).
+
+verify (the TASKS.md command with `SEP=https://forno.celo-sepolia.celo-testnet.org`), 2026-11-02:
+```
+0xb581a2adf816be631abe5e750dee1c2ed0c93be5fc1c1038acc27b403d59e7eb 1734631 true
+0x4642793c366c3773c4b072389c09363d96050d5b1cda9f4b0b38fe27baa3e7c7 5382414 true
+0xb1de54d54ae97636a0d8d27738aa9f19669f58ebd491128acdd8d5672b02b37e 3621490 true
+0x8685c3a154eea475ae7cb5490fdbc7fcff4f4233b364c73095df75900c0f8978 5993778 true
+0x08ca0ea3a978808ac788a99616343c98a5106d465a8acb6e970259f7574e0d3c 6246708 true
+0xe48859922349c1b50d25dee787c9b9cd47569b565dc89baf72650be343ac42c5 6026223 true
+0xb4f1d7dde86649def564b7c1a12228558563276d1e5d88413fea819ad365d3db 6051782 true
+0xc32ca82c85fd0f0b8c56c35936c1ae6a62e7c73112986cdab1dc58afe8566096 12967002 true
+0x41642666e7f7a58285c8852c5479b4be744a1b7437d4c39bf4a7ddffd332f236 12967002 true
+```
+Exactly 9 lines, every gasUsed under 16777216. cast 1.8.1 prints a receipt's status as `true`; the raw field is `0x1` for all nine (`cast receipt <hash> --json`: status 0x1 on each).
+reviewed: reviews/t01-kill-test-review-r1.md | verdict: implementation-ready | C0 M0 m0
+
+## T01 adversary rounds 1-2 - 2026-11-02
+- Adversary r1 on 04d8390 checked the record against the chain: all 9 transactions from the deployer with consecutive nonces 4 to 12; tx 1-3 create the three documented addresses; the cert calls chain from the pinned AWS root through the CertVerified events (CA index 1, 2, 3, then the client cert); both validate calls carry the bundled fixture and succeed (replayed before the client cert was cached, the call reverts); creation inputs match a scratch build of nitro-validator 0ea0d12 byte for byte; total 60,991,030 gas, 3.049551 CELO equals the deployer's balance change. One doc defect: KILL_TEST.md pointed to docs/DEPLOYMENTS.md, not on staging yet (dc68c5a, `scripts/adversary-t01-r1/check_kill_test_refs.sh`, failing then).
+- 8301b50: the sentence names task T10 for the production validator stack instead.
+- Adversary r2 on 8301b50: CLEAN (the wording matches TASKS.md and SPEC §3.5, every reference resolves, the check script passes, the verify command prints 9 lines all under the cap, the guard scripts pass).
+reviewed: reviews/t01-kill-test-review-r1.md | verdict: implementation-ready | C0 M0 m0
+## Gateway CI timing fix - 2026-11-02
+Two gateway tests from T19 failed `ci / ts (push)` twice on PR 10 (a docs-only branch): "17th concurrent evaluate → 503 gateway_busy" (only 10 to 12 of 16 calls got 200) and "two concurrent ticks share one pass" (20 s timeout). Reproduced locally with `pnpm -r test` pinned to 2 cores (run 2: 3 of 16 got 200). A probe showed the other calls got 402 `unexpected_verify_error` and 202 `settle_pending`: the harness shortens the gateway's timeouts (settle 400 ms, verify 2 s), and on a starved runner 17 calls through the in-process facilitator overrun them. The gateway answered as SPEC §6.2 says; the tests assumed a fast machine. The ticks test's `holdable` helper counted a re-send before its answer arrived and kept holding after `release()`, so an answer that arrived late was held forever.
+Joshua approved changing only the timing, with every assertion unchanged:
+- `packages/gateway/test/evaluate.test.ts`: the 17-call test runs with production timeouts (`DEFAULT_TIMEOUTS`).
+- `packages/gateway/test/adversary-t19-r2.test.ts`: `release()` stops holding before it releases; the ticks test waits for the 4 sends (`vi.waitFor`, 5 s) instead of a fixed 50 ms.
+
+verify (run by Claude), 2026-11-02: the two files on one core shared with 4 busy loops, three runs; then `taskset -c 0,1 pnpm -r test` twice; then gateway typecheck and lint:
+```
+loaded 1:       Tests  46 passed (46)
+loaded 2:       Tests  46 passed (46)
+loaded 3:       Tests  46 passed (46)
+full2core 1: packages/core test:       Tests  69 passed (69)
+full2core 1: packages/gateway test:       Tests  154 passed (154)
+full2core 1: packages/seller-host test:       Tests  81 passed (81)
+full2core 1: packages/sdk test:       Tests  144 passed (144)
+full2core 1: packages/cli test:       Tests  76 passed (76)
+full2core 2: packages/core test:       Tests  69 passed (69)
+full2core 2: packages/gateway test:       Tests  154 passed (154)
+full2core 2: packages/seller-host test:       Tests  81 passed (81)
+full2core 2: packages/sdk test:       Tests  144 passed (144)
+full2core 2: packages/cli test:       Tests  76 passed (76)
+typecheck=0
+lint=0
+```
+- Adversary r1 on 133c133: CLEAN. Weakening check: 5 gateway mutants (cap 17, cap 15, the 17th call executed and settled, two re-sends per row, ticks run one after the other) fail both the old and the new form of the tests. 3 more pass both forms (existing blind spots, none added by this change). Flake check: the two files on one core with 8 busy loops failed in the old form 3 runs of 3 (7, 9 and 10 of 16 calls got 200; the ticks test timed out at 20 s). In the new form they passed 4 of 4, and 5 of 5 with 4 busy loops. `taskset -c 0,1 pnpm -r test` twice: gateway 154/154. The other `holdable` tests pass with the new `release()`. Its side-by-side test and scripts are archived outside the repo.
+reviewed: reviews/gateway-ci-timing-review-r1.md | verdict: implementation-ready | C0 M0 m0
