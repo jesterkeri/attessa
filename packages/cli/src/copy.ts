@@ -103,6 +103,18 @@ export class CliError extends Error {
   }
 }
 
+/**
+ * An error the CLI didn't expect, said without its message: a library's text can quote its input, and the input may
+ * be a key (viem prints a key above the curve order in decimal; SPEC §7 "Never printed"). Only the error's class
+ * name and a Node-style code get out, and only when they look like identifiers. // not in FLOWS
+ */
+export function unexpected(e: unknown): CliError {
+  const name = e instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(e.name) ? e.name : 'Error';
+  const raw = (e as { code?: unknown } | null)?.code;
+  const code = typeof raw === 'string' && /^[A-Z][A-Z0-9_]{0,63}$/.test(raw) ? `, ${raw}` : '';
+  return new CliError('unexpected', `Unexpected error (${name}${code}). Its message isn't printed, because it could contain a key.`);
+}
+
 export const ERR = {
   // §6 J3 repair paths
   attestationStale: (min: number) =>

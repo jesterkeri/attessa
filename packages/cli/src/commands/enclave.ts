@@ -123,8 +123,9 @@ export async function enclaveStart(g: Global, deps: Deps, o: StartOptions): Prom
   // not in FLOWS: worded like seller-host's "enclavePort must be 5007 on sepolia".
   if (port !== fixedPort) throw ERR.usage(`--port must be ${fixedPort} ${net === 'test' ? 'with --test-build' : `on ${net}`}.`);
   const eif = findEif(deps, o.eif);
-  // The registry and chain id the enclave binds into its attestation come from the chain itself.
-  const c = await connect(g, deps);
+  // The registry and chain id the enclave binds into its attestation come from the chain itself. Nothing is sent
+  // from a wallet here, so none is loaded.
+  const c = await connect(g, deps, { wallet: false });
 
   const run = await deps.runner.run('nitro-cli', [
     'run-enclave', '--eif-path', eif, '--cpu-count', ENCLAVE_CPU, '--memory', ENCLAVE_MEMORY_MIB, '--enclave-cid', String(layout.cid),

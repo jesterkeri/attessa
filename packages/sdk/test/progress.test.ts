@@ -51,6 +51,32 @@ describe('payAndVerify progress events', () => {
     expect(client.ledger.list()).toEqual([]);
   });
 
+  // Adversary T21 r3: the CLI's price lines can fail to print (a closed stdout). The handler's throw is "no answer",
+  // so ClientOptions.dryRun is the stop, independent of onProgress.
+  it('dryRun: stopped dry_run before signing even when onProgress throws', async () => {
+    w = await makeWorld();
+    const client = w.mkClient({
+      dryRun: true,
+      onProgress: () => {
+        throw new Error('EPIPE: broken pipe, write');
+      },
+    });
+    const r = await client.payAndVerify(w.url, { body: w.body });
+    expect(r.outcome).toBe('stopped');
+    expect(r.code).toBe('dry_run');
+    expect(w.transferSignatures()).toBe(0);
+    expect(w.gw.paid).toHaveLength(0);
+    expect(client.ledger.list()).toEqual([]);
+  });
+
+  it('dryRun with no onProgress at all: still stopped before signing', async () => {
+    w = await makeWorld();
+    const r = await w.mkClient({ dryRun: true }).payAndVerify(w.url, { body: w.body });
+    expect(r).toMatchObject({ outcome: 'stopped', code: 'dry_run' });
+    expect(w.transferSignatures()).toBe(0);
+    expect(w.gw.paid).toHaveLength(0);
+  });
+
   it('refused: a refused event with the code, then one waiting event with chain time before validBefore', async () => {
     const { r, events, kinds } = await run((w) => (w.gw.behavior = { paid: 'refuse' }));
     expect(r.outcome).toBe('not_charged');

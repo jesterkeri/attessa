@@ -360,7 +360,7 @@ export async function endpointRetire(g: Global, deps: Deps, o: { origin?: string
 export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | undefined }): Promise<number> {
   const agentId = needAgent(o.agent);
   const agent = agentId.toString();
-  const c = await connect(g, deps);
+  const c = await connect(g, deps, { wallet: false }); // a read: no wallet
   const now = (await head(c)).timestamp;
   const out = deps.io.out;
   const releases: Array<{ releaseId: Hex; status: string; sourceRef: string }> = [];

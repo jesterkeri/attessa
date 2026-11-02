@@ -15,7 +15,7 @@ import {
 } from './commands/registry.ts';
 import { signerRegister, signerRenew } from './commands/signer.ts';
 import type { Deps, Global, NetworkFlag } from './context.ts';
-import { COPY, CliError } from './copy.ts';
+import { COPY, CliError, unexpected } from './copy.ts';
 
 export * from './context.ts';
 export * from './copy.ts';
@@ -227,8 +227,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         ? e
         : e instanceof TypeError && (e as { code?: string }).code?.startsWith('ERR_PARSE_ARGS')
           ? new CliError('usage', e.message)
-          : null;
-    if (!err) throw e;
+          : unexpected(e); // never a raw message: it could carry a key, and --json still gets its error object
     if (json) {
       deps.io.out(JSON.stringify({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
     } else {

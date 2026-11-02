@@ -74,6 +74,17 @@ describe('key storage', () => {
     expect(await loadAccount({ env: {}, keychain: null, create: true })).toBeNull();
   });
 
+  // keytar on a headless Linux host loads but every call rejects (no Secret Service): that is no keychain too.
+  it('a keychain whose calls reject is unavailable: null, nothing created, no error', async () => {
+    const reject = async () => {
+      throw new Error('Cannot autolaunch D-Bus without X11 $DISPLAY');
+    };
+    expect(await loadAccount({ env: {}, keychain: { getPassword: reject, setPassword: reject }, create: true })).toBeNull();
+    expect(await loadAccount({ env: {}, keychain: { getPassword: reject, setPassword: reject } })).toBeNull();
+    const writeFails = { getPassword: async () => null, setPassword: reject };
+    expect(await loadAccount({ env: {}, keychain: writeFails, create: true })).toBeNull();
+  });
+
   it('a malformed key is refused without echoing it', async () => {
     const secretish = `0x${'ab'.repeat(31)}`;
     const err = await loadAccount({ env: { ATTESSA_PRIVATE_KEY: secretish }, keychain: null }).catch((e: Error) => e);

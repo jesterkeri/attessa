@@ -1,9 +1,9 @@
 import { DEPLOYMENTS } from '@attessa/core';
-import type { ClientOptions, Keychain } from '@attessa/sdk';
+import { KeyError, keyToAccount, type ClientOptions, type Keychain } from '@attessa/sdk';
 import type { EnclaveTransport } from '@attessa/seller-host';
-import type { Address, Hex } from 'viem';
-import { privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
-import { ERR } from './copy.ts';
+import type { Address } from 'viem';
+import type { PrivateKeyAccount } from 'viem/accounts';
+import { CliError, ERR } from './copy.ts';
 import { HttpRpc, RpcUnavailable, type Rpc } from './rpc.ts';
 
 /** Everything a command touches outside the process, so tests swap each one for a fake. */
@@ -91,11 +91,21 @@ export function loadAccount(env: Deps['env']): PrivateKeyAccount | null {
   const k = env.ATTESSA_PRIVATE_KEY;
   if (k === undefined || k === '') return null;
   if (!KEY.test(k)) throw ERR.usage('ATTESSA_PRIVATE_KEY must be 0x followed by 64 hex characters.');
-  return privateKeyToAccount(k as Hex);
+  try {
+    return keyToAccount(k, 'env');
+  } catch (e) {
+    // viem's own message for zero or a key above the curve order quotes the key in decimal (SPEC §7 "Never
+    // printed"): only the SDK's fixed reason gets out, worded as the buyer commands word it. // not in FLOWS
+    throw new CliError('bad_key', `Can't load the wallet from ATTESSA_PRIVATE_KEY: ${e instanceof KeyError ? e.reason : 'not a valid private key'}.`);
+  }
 }
 
-/** Resolves network, RPC and registry, and checks the RPC's chain id (FLOWS §7 wrong network). */
-export async function connect(g: Global, deps: Deps): Promise<Chain> {
+/**
+ * Resolves network, RPC and registry, and checks the RPC's chain id (FLOWS §7 wrong network). A read-only command
+ * passes `{ wallet: false }`: FLOWS "Reading doesn't require a wallet", so it never loads ATTESSA_PRIVATE_KEY and a
+ * malformed one can't block it.
+ */
+export async function connect(g: Global, deps: Deps, o: { wallet?: boolean } = {}): Promise<Chain> {
   const url = g.rpc ?? (g.network === 'local' ? undefined : DEFAULT_RPC[g.network]);
   if (!url) throw ERR.usage('--network local needs --rpc.');
   const rpc = deps.rpc(url);
@@ -122,5 +132,5 @@ export async function connect(g: Global, deps: Deps): Promise<Chain> {
   const registry = deployed ?? deps.env.ATTESSA_REGISTRY ?? null;
   if (!registry) throw ERR.noRegistry(g.network);
   if (!ADDRESS.test(registry)) throw ERR.usage('ATTESSA_REGISTRY must be an address.');
-  return { network: g.network, chainId, rpc, registry: registry.toLowerCase() as Address, account: loadAccount(deps.env) };
+  return { network: g.network, chainId, rpc, registry: registry.toLowerCase() as Address, account: o.wallet === false ? null : loadAccount(deps.env) };
 }

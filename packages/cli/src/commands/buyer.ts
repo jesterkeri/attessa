@@ -146,6 +146,8 @@ function makeClient(
     opts.registry = reg.toLowerCase() as Hex;
   }
   if (o.onProgress) opts.onProgress = o.onProgress;
+  // --dry-run is the SDK's own stop, not the price-line handler's answer: printing can fail, the stop can't.
+  if (g.dryRun) opts.dryRun = true;
   return createAttestClient(cfg, opts);
 }
 
@@ -263,7 +265,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           out(BUY.live((e.quoteMs / 1000).toFixed(1)));
           out(BUY.price(amount(e.amount), sym, amount(e.maxAmount)));
           out(BUY.sign);
-          return g.dryRun ? 'stop' : undefined;
+          return;
         case 'refused':
           if (e.code === 'proof_rejected') {
             const [words, term] = checkWords(e.detail) ?? [`the proof failed a check (${safe(e.detail ?? 'unnamed')})`, 'proof_rejected'];
@@ -467,9 +469,9 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     }
     return 0;
   }
-  // `status <origin>`: the registry entry and a fresh liveness check; no wallet needed.
-  const w = await wallet(d, o.keystore);
-  const account = w?.account ?? privateKeyToAccount(generatePrivateKey()); // read-only: this client never signs
+  // `status <origin>`: the registry entry and a fresh liveness check. A read never loads the wallet (FLOWS: "Reading
+  // doesn't require a wallet"), so an unavailable keychain or a malformed ATTESSA_PRIVATE_KEY can't block it.
+  const account = privateKeyToAccount(generatePrivateKey()); // read-only: this client never signs
   const client = makeClient(g, d, account, { limits: NO_LIMITS, asset: 'usdc', wait: false });
   try {
     normalizeOrigin(o.target, { local: g.network === 'local' });

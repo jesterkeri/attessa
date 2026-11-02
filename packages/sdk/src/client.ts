@@ -792,7 +792,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       ...(source !== undefined ? { ownerClaimedSource: source } : {}),
       quoteMs,
     });
-    if (go === 'stop') {
+    if (opts.dryRun === true || go === 'stop') {
       ledger.removeIfUnchanged(entry);
       return stopped('dry_run');
     }

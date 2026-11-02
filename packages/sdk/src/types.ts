@@ -44,6 +44,12 @@ export interface ClientOptions {
    * the result is `stopped` with code `dry_run`.
    */
   onProgress?: (e: Progress) => void | 'stop';
+  /**
+   * `--dry-run`: every call ends at `authorizing`, before anything is signed, as if `onProgress` returned `'stop'`.
+   * It does not depend on `onProgress` at all, so a handler that throws (a closed stdout) can't turn a dry run
+   * into a payment.
+   */
+  dryRun?: boolean;
 }
 
 /** Not in SPEC §7: the moments a caller shows progress for (FLOWS §6 J1, J2, interrupted). */

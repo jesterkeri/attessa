@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { TcpEnclaveTransport } from '@attessa/seller-host';
-import { run, type Deps, type RunResult } from './index.ts';
+import { run, unexpected, type Deps, type RunResult } from './index.ts';
 import { HttpRpc } from './rpc.ts';
 
 /** `attessa` / `attest`: real process wiring for `run`. */
@@ -51,7 +51,8 @@ const deps: Deps = {
 run(process.argv.slice(2), deps).then(
   (code) => process.exit(code),
   (e: unknown) => {
-    process.stderr.write(`${(e as Error).message}\n`);
+    // run() reports its own errors; this is a last resort, and still never prints a raw message (it could quote a key).
+    process.stderr.write(`${unexpected(e).message}\n`);
     process.exit(1);
   },
 );

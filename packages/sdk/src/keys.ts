@@ -1,7 +1,7 @@
 import { createDecipheriv, pbkdf2Sync, scryptSync, timingSafeEqual } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { bytesToHex, concat, hexToBytes, keccak256, type Hex, type LocalAccount } from 'viem';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 
 // SPEC §7 key storage: OS keychain (keytar); fallback env ATTESSA_PRIVATE_KEY or --keystore.
 // A key is never printed, logged or put in an error message.
@@ -35,7 +35,11 @@ export class KeyError extends Error {
   }
 }
 
-function toAccount(key: string, source: KeyError['source']): LocalAccount {
+/**
+ * A viem account for a hex private key. Throws only a KeyError with a fixed reason: viem's own message for a key
+ * above the curve order quotes the key's value in decimal. Exported for the CLI's owner and operator commands.
+ */
+export function keyToAccount(key: string, source: KeyError['source']): PrivateKeyAccount {
   const k = key.trim();
   if (!PRIVATE_KEY.test(k)) throw new KeyError(source, 'not a 32-byte hex private key');
   try {
@@ -121,7 +125,7 @@ export async function loadAccount(opts: {
 } = {}): Promise<{ account: LocalAccount; source: KeySource } | null> {
   const env = opts.env ?? process.env;
   const fromEnv = env.ATTESSA_PRIVATE_KEY;
-  if (fromEnv !== undefined && fromEnv !== '') return { account: toAccount(fromEnv, 'env'), source: 'env' };
+  if (fromEnv !== undefined && fromEnv !== '') return { account: keyToAccount(fromEnv, 'env'), source: 'env' };
   if (opts.keystore) {
     let text: string;
     try {
@@ -130,14 +134,25 @@ export async function loadAccount(opts: {
       throw new KeyError('keystore', "can't read the file");
     }
     const key = decryptKeystore(text, opts.keystore.password);
-    return { account: toAccount(key, 'keystore'), source: 'keystore' };
+    return { account: keyToAccount(key, 'keystore'), source: 'keystore' };
   }
   const kc = opts.keychain === undefined ? await systemKeychain() : opts.keychain;
   if (!kc) return null;
-  const stored = await kc.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
-  if (stored) return { account: toAccount(stored, 'keychain'), source: 'keychain' };
+  // keytar can load and still be unusable: on a headless Linux host with no Secret Service every call rejects.
+  // That keychain is unavailable, exactly like a missing one, so the caller's no-keychain path applies.
+  let stored: string | null;
+  try {
+    stored = await kc.getPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT);
+  } catch {
+    return null;
+  }
+  if (stored) return { account: keyToAccount(stored, 'keychain'), source: 'keychain' };
   if (!opts.create) return null;
   const key = generatePrivateKey();
-  await kc.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, key);
+  try {
+    await kc.setPassword(KEYCHAIN_SERVICE, KEYCHAIN_ACCOUNT, key);
+  } catch {
+    return null; // not stored, so not created: the key is dropped and never used
+  }
   return { account: privateKeyToAccount(key), source: 'created' };
 }
