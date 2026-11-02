@@ -49,6 +49,9 @@ check "engines beyond node" "FAIL $S: engines must be a node range only, got {'n
   set_json $S 'm["engines"]["pnpm"] = "9"'
 check "engines node not a range" "FAIL $S: engines must be a node range only, got {'node': '>=22 || file:x'}" \
   set_json $S 'm["engines"]["node"] = ">=22 || file:x"'
+# Python's \d also matches non-ASCII digits; pnpm's semver does not.
+check "engines node with fullwidth digits" "FAIL $S: engines must be a node range only, got {'node': '>=２２'}" \
+  set_json $S 'm["engines"]["node"] = ">=２２"'
 G=packages/gateway/package.json
 check "extra unknown key" "FAIL $G: keys not allowed: ['pnpm']" \
   set_json $G 'm["pnpm"] = {"overrides": {"typescript": "5.9.3"}}'

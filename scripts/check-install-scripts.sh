@@ -188,7 +188,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
             if not isinstance(bn, dict) or any(not re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.[cm]?js", f) for c, f in bn.items()):
                 bad.append(f"{p}: bin must map command names to .js files under dist/, got {bn!r}")
             e = m.get("engines", {})
-            if not isinstance(e, dict) or set(e) - {"node"} or not isinstance(e.get("node", "0"), str) or not re.fullmatch(r"(>=|\^|~)?\d+(\.\d+){0,2}", e.get("node", "0")):
+            if not isinstance(e, dict) or set(e) - {"node"} or not isinstance(e.get("node", "0"), str) or not re.fullmatch(r"(>=|\^|~)?[0-9]+(\.[0-9]+){0,2}", e.get("node", "0")):
                 bad.append(f"{p}: engines must be a node range only, got {e!r}")
         extra = set(m) - keys
         if extra: bad.append(f"{p}: keys not allowed: {sorted(extra)}")
@@ -201,7 +201,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
         if scripts: bad.append(f"{p}: scripts not allowed: {sorted(scripts)}")
         for k in ("dependencies", "devDependencies"):
             for n, v in m.get(k, {}).items():
-                if not re.fullmatch(r"workspace:[*^~]|[\^~]?\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
+                if not re.fullmatch(r"workspace:[*^~]|[\^~]?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
 for p, s, f in later:
     if f not in reg: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
@@ -214,7 +214,7 @@ L = yaml.safe_load(blob("pnpm-lock.yaml")) if "pnpm-lock.yaml" in reg else {}
 if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settings") != {"autoInstallPeers": True, "excludeLinksFromLockfile": False}:
     bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
     L = {}
-semver = r"(@[A-Za-z0-9._~-]+/)?[A-Za-z0-9._~-]+@\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?"
+semver = r"(@[A-Za-z0-9._~-]+/)?[A-Za-z0-9._~-]+@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
 for k, v in (L.get("packages") or {}).items():
     r = (v or {}).get("resolution")
     if not re.fullmatch(semver, str(k)) or not isinstance(r, dict) or set(r) != {"integrity"} or not re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", str(r["integrity"])):
@@ -256,7 +256,7 @@ st=$?
 ran=$(python3 -I -c '
 import json, os, re, sys
 work = os.path.realpath(sys.argv[1])
-ok = re.compile(r"node_modules/\.pnpm/(better-sqlite3|keytar)@\d+\.\d+\.\d+[^/]*/node_modules/\1")
+ok = re.compile(r"node_modules/\.pnpm/(better-sqlite3|keytar)@[0-9]+\.[0-9]+\.[0-9]+[^/]*/node_modules/\1")
 events = 0
 for line in open(sys.argv[2], errors="replace"):
     try: e = json.loads(line)
