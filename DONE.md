@@ -1139,3 +1139,31 @@ npx vitest run (packages/cli):  Test Files  11 passed (11)  Tests  76 passed (76
 ```
 Logged in OPEN-QUESTIONS (INV-19 stress test flaked once under load).
 reviewed: pending (Codex r2)
+
+## INV-19 stress test oracle fix and the staging merge - 2026-11-02
+The INV-19 stress test (`packages/sdk/test/ledger.test.ts`, "6 processes x 200 entries with random SIGKILLs and SIGSTOPs") failed in CI on eb302cb: "12248 entered while 12234 was inside". Diagnosis: no lock defect. The lock is an SQLite write transaction (`BEGIN IMMEDIATE`, `packages/sdk/src/ledger.ts`); Linux releases a killed holder's file locks (exit_files) before it becomes a zombie (exit_notify), and in that gap the test child's `alive()` read the dead holder as state R. Under 16 busy loops the test failed 14 of 20 runs.
+- 964dc4a (approved by Joshua, it edits a test helper): `alive()` in `packages/sdk/test/helpers/lock-stress-child.ts` also treats PF_EXITING (0x4, /proc/<pid>/stat field 9) as not alive. The lock is unchanged. Under 16 busy loops: 30 of 30 passed.
+- Adversary on 964dc4a: CLEAN. A killed holder always shows PF_EXITING by the time the lock is free; no live process showed it in 24,305 samples; stopped or resumed holders never carry it; three deliberately broken locks (no lock, early release, a 150 ms stale-takeover lock) each still produced violations.
+- c7f0de5 merged staging after PR 7 (no file changes), 417ae95 reordered DONE.md so staging's entries come first.
+The OPEN-QUESTIONS entry for this flake is resolved by the above.
+
+verify at 964dc4a (`pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm -r test`, then the harness scripts), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  16 passed (16)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+check-workflows rc=0
+check-migrations rc=0
+check-reviews rc=0
+```
+reviewed: pending (Codex r2)
