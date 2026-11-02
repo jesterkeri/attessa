@@ -115,6 +115,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   const httpTimeout = opts.httpTimeoutMs ?? 60_000;
   const receiptWaitMs = opts.receiptWaitMs ?? 10_000;
   const waitForExpiry = cfg.waitForExpiry ?? true;
+  const progress = opts.onProgress ?? (() => undefined);
   const ledger = new Ledger(cfg.dataDir, now);
   const payer = lc(cfg.account.address);
   const transport: Transport =
@@ -469,9 +470,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   async function finalize(n: Net, entry: PendingEntry, meta: CallMeta, wait: boolean): Promise<CallResult> {
     const vb = BigInt(entry.validBefore!);
     let lagging = 0;
+    let chainNow: bigint | undefined;
+    let announced = false;
     for (;;) {
       try {
         const head = await n.chain.latest();
+        chainNow = head.timestamp;
         const from = BigInt(entry.signedAtBlock ?? '0');
         const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, entry.nonce!, from, head.number);
         for (const tx of logs.used) {
@@ -492,6 +496,10 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         if (!wait) return current(entry, meta, 'rpc_unavailable');
       }
       if (!wait) return current(entry, meta);
+      if (!announced && chainNow !== undefined) {
+        announced = true;
+        progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow });
+      }
       await sleep(POLL_MS);
     }
   }
@@ -538,7 +546,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     if (res.status === 200) {
       return settleAndVerify(n, entry, bytes, res.headers.get(HEADER.attestedProof), res.headers.get(HEADER.paymentResponse), meta);
     }
-    if (res.status === 202) return pollResults(n, entry, meta);
+    if (res.status === 202) {
+      const pr = decodePaymentResponse(res.headers.get(HEADER.paymentResponse));
+      progress({ kind: 'settle_pending', entry, tx: pr?.transaction ? (lc(pr.transaction) as Hash) : null });
+      return pollResults(n, entry, meta);
+    }
 
     const err = parseErrorBody(new TextDecoder().decode(bytes));
     if (res.status === 409 && err?.error === 'in_progress' && err.requestId === entry.requestId) return pollResults(n, entry, meta);
@@ -547,6 +559,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const e = ledger.update(entry.requestId, { state: 'refused', code: codeString(code, err.detail ?? undefined) });
       const r: Partial<CallResult> = { code };
       if (err.detail) r.detail = err.detail;
+      progress(err.detail ? { kind: 'refused', entry: e, code, detail: err.detail } : { kind: 'refused', entry: e, code });
       if (!waitForExpiry) return finish(e, 'refused', meta, r);
       evidence(e, { ...baseResult(e, 'refused', meta), ...r });
       return finalize(n, e, meta, true);
@@ -576,6 +589,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
 
   async function afterUnknown(n: Net, entry: PendingEntry, meta: CallMeta): Promise<CallResult> {
     const e = ledger.update(entry.requestId, { state: 'uncertain' });
+    progress({ kind: 'uncertain', entry: e });
     if (!waitForExpiry) return finish(e, 'uncertain', meta, {});
     return finalize(n, e, meta, true);
   }
@@ -600,6 +614,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       }
     }
     if (isTerminal(entry)) return current(entry, {});
+    progress({ kind: 'resuming', entry });
     const f = await fetchResult(n, entry);
     if (f.kind === 'result') return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, {});
     return finalize(n, entry, {}, waitForExpiry);
@@ -659,13 +674,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     // V2
     const challenge = random32();
     let pr;
+    let quoteMs = 0;
     try {
+      const t0 = now();
       const res = await httpRequest(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', [HEADER.requestId]: requestId, [HEADER.challenge]: challenge },
         body: body as Uint8Array<ArrayBuffer>,
       });
       const text = await res.text();
+      quoteMs = now() - t0;
       if (res.status !== 402) {
         const err = parseErrorBody(text);
         if (err && (err.error === 'gateway_paused' || err.error === 'bad_request' || err.error === 'rate_limited' || err.error === 'gateway_busy'))
@@ -754,6 +772,21 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const meta: CallMeta = { selfVerifiedOwner: ep.selfVerifiedOwner, releaseId: live.releaseId };
     const source = await n.chain.sourceRef(ep.agentId, live.releaseId);
     if (source !== undefined) meta.ownerClaimedSource = source;
+    const go = progress({
+      kind: 'authorizing',
+      endpoint: ep,
+      amount,
+      asset: pin.address,
+      maxAmount: max,
+      signer: live.signer,
+      releaseId: live.releaseId,
+      ...(source !== undefined ? { ownerClaimedSource: source } : {}),
+      quoteMs,
+    });
+    if (go === 'stop') {
+      ledger.removeIfUnchanged(entry);
+      return stopped('dry_run');
+    }
 
     // V8: the window comes from chain time, never the local clock.
     let head;

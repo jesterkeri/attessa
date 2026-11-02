@@ -38,7 +38,38 @@ export interface ClientOptions {
   httpTimeoutMs?: number;
   /** How long V11 polls the settlement receipt, ms. SPEC §7: 10 s. */
   receiptWaitMs?: number;
+  /**
+   * Called at the points of `payAndVerify` where the CLI prints a line (FLOWS §6). Returning `'stop'` from
+   * `authorizing` ends the call before anything is signed (`--dry-run`): the reservation is released and
+   * the result is `stopped` with code `dry_run`.
+   */
+  onProgress?: (e: Progress) => void | 'stop';
 }
+
+/** Not in SPEC §7: the moments a caller shows progress for (FLOWS §6 J1, J2, interrupted). */
+export type Progress =
+  /** V0: an open ledger entry for the same input is being resumed instead of paying again. */
+  | { kind: 'resuming'; entry: PendingEntry }
+  /** After V7, before V8 signs: everything checked so far. `quoteMs` is the round trip of the 402 that carried the liveness proof. */
+  | {
+      kind: 'authorizing';
+      endpoint: ResolvedEndpoint;
+      amount: bigint;
+      asset: Address;
+      maxAmount: bigint;
+      signer: Address;
+      releaseId: Hex;
+      ownerClaimedSource?: string;
+      quoteMs: number;
+    }
+  /** V9: the gateway refused a signed payment with a §10 body. */
+  | { kind: 'refused'; entry: PendingEntry; code: CallCode; detail?: string }
+  /** V9: no usable answer after signing (timeout, drop, a non-2xx without a §10 body, 202 polling ran out). */
+  | { kind: 'uncertain'; entry: PendingEntry }
+  /** V9: 202 `settle_pending`; `tx` from `PAYMENT-RESPONSE` when the gateway knows it. */
+  | { kind: 'settle_pending'; entry: PendingEntry; tx: Hash | null }
+  /** Refused or uncertain → final: about to wait for the chain, with the chain time it read. Once per call. */
+  | { kind: 'waiting'; entry: PendingEntry; chainNow: bigint };
 
 /** SPEC §7. */
 export type Outcome =
@@ -52,7 +83,7 @@ export type Outcome =
   | 'uncertain';
 
 /** Codes the SDK adds to SPEC §10's: `in_progress` reuse, and the V7 detail. */
-export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce';
+export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run';
 
 export interface CallResult {
   outcome: Outcome;

@@ -73,6 +73,8 @@ export interface Behavior {
   noResults?: boolean;
   /** For `paid: 'pending'`: how many /v1/results polls answer 202 before the result is served. Default 1. */
   pendingPolls?: number;
+  /** For `paid: 'pending'`: the 202 carries `PAYMENT-RESPONSE` with the settlement tx (SPEC §2.5: when a tx hash is known). */
+  pendingTx?: boolean;
 }
 
 export interface Paid {
@@ -321,6 +323,8 @@ export class FakeGateway {
       this.results.set(requestId, { status: 'pending', body: out, proofHeader, tx });
       res.statusCode = 202;
       res.setHeader('retry-after', '3');
+      if (b.pendingTx)
+        res.setHeader('PAYMENT-RESPONSE', Buffer.from(JSON.stringify({ success: true, transaction: tx, network: `eip155:${this.chain.chainId}`, payer: '0x' })).toString('base64'));
       res.end(JSON.stringify({ error: 'settle_pending', detail: null, message: 'pending', suggestion: 'poll_results', correlationId: 'c', requestId }));
       return;
     }
