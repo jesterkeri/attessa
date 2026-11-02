@@ -1,6 +1,6 @@
 import type { Address, Hex } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AlreadyUsedError, AttestError } from '../src/client.ts';
+import { AlreadyUsedError, AttestError, CancelRevertedError, CancelUndecidedError } from '../src/client.ts';
 import { RpcError } from '../src/chain.ts';
 import { RpcFailure } from './fakes/chain.ts';
 import { makeWorld, type World } from './fakes/world.ts';
@@ -52,12 +52,13 @@ describe('cancelAuthorization when its estimate reverts', () => {
     await expect(w.client.cancelAuthorization(c.id)).rejects.toBeInstanceOf(AlreadyUsedError);
   });
 
-  it('a revert while the authorization is still unused stays a revert (RpcError), and the call stays open', async () => {
+  it('a revert while the authorization is still unused stays a revert (CancelRevertedError, nothing sent), and the call stays open', async () => {
     const c = await openCall();
     revertEstimate(() => {}, 3, 'execution reverted: something else');
     const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
-    expect(e).toBeInstanceOf(RpcError);
-    expect(e).not.toBeInstanceOf(AlreadyUsedError);
+    expect(e).toBeInstanceOf(CancelRevertedError);
+    expect(e).toMatchObject({ tx: undefined, validBefore: BigInt(w.client.ledger.get(c.id)!.validBefore!) });
+    expect(w.chain.calls).not.toContain('eth_sendRawTransaction');
     expect(e).not.toBeInstanceOf(AttestError);
     expect(w.client.ledger.get(c.id)!.state).not.toBe('not_charged');
   });
@@ -68,5 +69,40 @@ describe('cancelAuthorization when its estimate reverts', () => {
     const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
     expect(e).toBeInstanceOf(RpcError);
     expect(e).not.toBeInstanceOf(AlreadyUsedError);
+  });
+});
+
+describe('cancelAuthorization reads the decision from logs, polling briefly', () => {
+  it('settled meanwhile, re-read on a node one block behind: AlreadyUsedError with the settlement tx', async () => {
+    const c = await openCall();
+    let settleTx: Hex | undefined;
+    revertEstimate(() => {
+      settleTx ??= w.chain.settle(c.payer, w.payTo, c.amount, c.nonce);
+      w.chain.headLag = 1;
+    }, 3, 'execution reverted: FiatTokenV2: authorization is used or canceled');
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(AlreadyUsedError);
+    expect((e as AlreadyUsedError).tx).toBe(settleTx);
+  });
+
+  it('state reads used-or-cancelled but no log appears while polling: CancelUndecidedError, never AlreadyUsedError without a tx', async () => {
+    const c = await openCall();
+    w.chain.settle(c.payer, w.payTo, c.amount, c.nonce);
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_getLogs' ? [] : orig(m, p));
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(CancelUndecidedError);
+    expect(w.chain.calls).not.toContain('eth_sendRawTransaction');
+  });
+
+  it('the AuthorizationUsed log shows up on the second read: AlreadyUsedError with its tx', async () => {
+    const c = await openCall();
+    const tx = w.chain.settle(c.payer, w.payTo, c.amount, c.nonce);
+    const orig = w.chain.request.bind(w.chain);
+    let reads = 0;
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_getLogs' && reads++ < 2 ? [] : orig(m, p));
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(AlreadyUsedError);
+    expect((e as AlreadyUsedError).tx).toBe(tx);
   });
 });

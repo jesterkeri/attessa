@@ -335,6 +335,8 @@ export const BUY = {
   stillOpen: (id: string, t: string) =>
     `Not confirmed yet: your payment permission expires unused at ${t} UTC unless the gateway used it. attessa status --pending checks it again; attessa cancel ${id} voids it now.`,
   // §8 cancel
+  // not in FLOWS: after "Too late to cancel", when the answer isn't confirmed yet (never "attessa cancel … voids it now").
+  answerNotYet: "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.",
   tooLateToCancel: (tx: string) => `Too late to cancel: the payment went through (tx ${short(tx)}). Fetching your answer.`,
   cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
   noPending: 'No calls in progress.', // not in FLOWS
@@ -428,6 +430,20 @@ export const BUYERR = {
   noKeychain: () =>
     new CliError('no_keychain', "No OS keychain is available, so no wallet was created.", 'Set ATTESSA_PRIVATE_KEY or pass --keystore <file> (password in ATTESSA_KEYSTORE_PASSWORD).'),
   unknownRequest: (id: string) => new CliError('unknown_request', `No call with request id ${id} in this computer's record.`, 'Check `attessa status --pending`.'),
+  /**
+   * `attessa cancel` when the cancel reverts while the permission still reads as unused (a paused token, say). The
+   * line is the registry writes' generic revert line (not in FLOWS) when nothing was sent; the next action is the
+   * one thing that settles it: the permission expires unused at validBefore unless the gateway used it. // not in FLOWS
+   */
+  cancelReverted: (validBefore: string, tx?: string) =>
+    new CliError(
+      'reverted',
+      tx ? `The cancel transaction reverted (tx ${short(tx)}).` : 'The transaction would revert. Nothing was sent.',
+      `Run attessa status --pending after ${validBefore} UTC to confirm whether you were charged.`,
+    ),
+  /** The token's one flag reads "used or cancelled" but neither log has appeared yet. // not in FLOWS */
+  cancelUndecided: () =>
+    new CliError('uncertain', "Your payment permission was already used or cancelled, but Celo doesn't show which yet.", 'Run attessa status --pending in a minute to see which.'),
   inProgress: () => new CliError('in_progress', 'This call is already running in another attessa process. Nothing was signed.', 'Check `attessa status --pending`.'),
 } as const;
 

@@ -447,6 +447,41 @@ describe('buyer: cancel, status, evidence export', () => {
     expect(w.out.join('\n')).not.toMatch(/NODE-TEXT/);
   });
 
+  it('attessa cancel that would revert while the permission is unused: the revert line and one next action (T21 r9)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const { requestId: id, validBefore } = w.pending()[0]! as { requestId: string; validBefore: string };
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_estimateGas') throw new RpcFailure('execution reverted: Pausable: paused', 3);
+      return orig(m, p);
+    };
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    const t = new Date(Number(validBefore) * 1000).toISOString().slice(11, 19);
+    expect(w.transcript).toEqual(['The transaction would revert. Nothing was sent.', `Run attessa status --pending after ${t} UTC to confirm whether you were charged.`]);
+  });
+
+  it('attessa cancel when the permission reads used-or-cancelled with no log yet: the undecided line, never "(tx )" (T21 r9)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const e = w.pending()[0]! as { requestId: string; payer: `0x${string}`; nonce: `0x${string}`; amount: string };
+    w.chain.settle(e.payer, w.payTo, BigInt(e.amount), e.nonce);
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_getLogs' ? [] : orig(m, p));
+    w.transcript.length = 0;
+    w.out.length = 0;
+    expect(await w.cli('cancel', e.requestId, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({
+      ok: false,
+      error: 'uncertain',
+      message: "Your payment permission was already used or cancelled, but Celo doesn't show which yet.",
+      next: 'Run attessa status --pending in a minute to see which.',
+    });
+  });
+
   it('attessa cancel after the payment went through: "Too late to cancel", then the answer', async () => {
     await initialized();
     w.gw.behavior = { paid: 'pending' };

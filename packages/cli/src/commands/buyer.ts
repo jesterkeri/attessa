@@ -4,6 +4,8 @@ import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
   AttestError,
+  CancelRevertedError,
+  CancelUndecidedError,
   InsufficientGasFundsError,
   KeyError,
   RpcError as SdkRpcError,
@@ -315,7 +317,7 @@ async function report(
   d: Deps,
   client: AttestClient,
   r: CallResult,
-  c: { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint },
+  c: { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint; paid?: boolean },
 ): Promise<number> {
   const out = d.io.out;
   d.io.data?.(jsonResult(r));
@@ -347,6 +349,7 @@ async function report(
     case 'refused':
     case 'uncertain':
       if (r.code === 'rpc_unavailable' && r.settlementTx) out(BUY.rpcNoHistory);
+      else if (c.paid) out(BUY.answerNotYet);
       else out(BUY.stillOpen(r.requestId, hms(BigInt(entry()?.validBefore ?? '0'))));
       return 1;
     case 'stopped':
@@ -494,9 +497,12 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     // The cancel permission is signed before its transaction, so a wallet without CELO ends "Nothing was sent.",
     // whether the SDK refused before signing the transaction or the node refused its broadcast.
     if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
+    if (e instanceof CancelRevertedError) throw BUYERR.cancelReverted(hms(e.validBefore), e.tx);
+    // FLOWS §8 "(tx {h})": "went through" only with the settlement tx; without it, which happened isn't known.
+    if (e instanceof CancelUndecidedError || (e instanceof AlreadyUsedError && !e.tx)) throw BUYERR.cancelUndecided();
     if (!(e instanceof AlreadyUsedError)) throw e;
-    d.io.out(BUY.tooLateToCancel(e.tx ?? ''));
-    return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));
+    d.io.out(BUY.tooLateToCancel(e.tx!));
+    return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), { ...ctx(entry), paid: true });
   }
 }
 

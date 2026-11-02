@@ -84,6 +84,35 @@ export class AlreadyUsedError extends Error {
   }
 }
 
+/**
+ * Thrown by `cancelAuthorization` when the cancel reverts while the authorization still reads as unused after
+ * polling (for example, the token is paused). `tx` is the reverted cancel when it was sent (a revert at the
+ * receipt); absent when the estimate reverted and nothing was sent. The payment permission stays open until
+ * `validBefore`.
+ */
+export class CancelRevertedError extends Error {
+  readonly tx: Hash | undefined;
+  readonly validBefore: bigint;
+  constructor(validBefore: bigint, tx?: Hash) {
+    super(tx ? `the cancel reverted in ${tx}` : 'the cancel would revert');
+    this.name = 'CancelRevertedError';
+    this.tx = tx;
+    this.validBefore = validBefore;
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when `authorizationState` reads true (used or cancelled; the token keeps one flag
+ * for both) but no AuthorizationUsed or AuthorizationCanceled log for it appeared while polling, so which one
+ * happened is not known yet.
+ */
+export class CancelUndecidedError extends Error {
+  constructor() {
+    super('authorization used or cancelled, but no log shows which yet');
+    this.name = 'CancelUndecidedError';
+  }
+}
+
 /** Internal: the cancel's eth_estimateGas reverted, so nothing was signed or sent; `cancelAuthorization` re-reads the state. */
 class CancelWouldRevert extends Error {
   constructor() {
@@ -988,17 +1017,35 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const n = await net();
       const entry = await entryOf(lc(requestId));
       if (entry.nonce === null) throw new Error('nothing was signed for this request');
-      // Already cancelled: that tx. Already used (settled): AlreadyUsedError with the settlement tx when one is found.
-      const decided = async (nonce: Hex): Promise<Hash | null> => {
-        const head = await n.chain.latest();
-        const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
-        if (logs.canceled.length > 0) return logs.canceled[0]!;
-        if (logs.used.length > 0 || (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)))
-          throw new AlreadyUsedError(logs.used[0] ?? (await findSettlement(n, entry))?.tx);
-        return null;
+      const vb = BigInt(entry.validBefore ?? '0');
+      const nonce = entry.nonce;
+      /**
+       * What the chain says about the authorization, by its logs: cancelled (that tx), used (the settlement tx), or
+       * neither. `authorizationState` is true for both used and cancelled, so it alone never says "went through":
+       * true with no log yet is `unlogged`. Polls (once a second, up to `receiptWaitMs`) while `unlogged`, and while
+       * `open` too when `untilDecided` (after a revert, a node behind the one that estimated may not show the
+       * settlement yet).
+       */
+      const decide = async (untilDecided: boolean): Promise<{ canceled: Hash } | { used: Hash } | 'open' | 'unlogged'> => {
+        const tries = Math.max(1, Math.ceil(receiptWaitMs / 1000));
+        for (let i = 1; ; i++) {
+          const head = await n.chain.latest();
+          const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
+          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]! };
+          if (logs.used.length > 0) return { used: logs.used[0]! };
+          const state = (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)) ? 'unlogged' : 'open';
+          if ((state === 'open' && !untilDecided) || i >= tries) return state;
+          await sleep(1000);
+        }
       };
-      const before = await decided(entry.nonce);
-      if (before) return before;
+      /** A decision that ends the cancel: the earlier cancel's tx, or the matching error. `open` is the caller's. */
+      const ended = (d: Exclude<Awaited<ReturnType<typeof decide>>, 'open'>): Hash => {
+        if (d === 'unlogged') throw new CancelUndecidedError();
+        if ('used' in d) throw new AlreadyUsedError(d.used);
+        return d.canceled;
+      };
+      const before = await decide(false);
+      if (before !== 'open') return ended(before);
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
@@ -1006,7 +1053,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         domain: { name: pin.name, version: pin.version, chainId: n.chainId, verifyingContract: entry.asset },
         types: { CancelAuthorization: EIP3009_TYPES.CancelAuthorization },
         primaryType: 'CancelAuthorization',
-        message: { authorizer: entry.payer, nonce: entry.nonce },
+        message: { authorizer: entry.payer, nonce },
       });
       const { r, s, v, yParity } = parseSignature(sig);
       let hash: Hash;
@@ -1014,23 +1061,27 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         hash = await sendCancel(n, entry.asset, encodeFunctionData({
           abi: tokenAbi,
           functionName: 'cancelAuthorization',
-          args: [entry.payer, entry.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
+          args: [entry.payer, nonce, Number(v ?? BigInt(yParity + 27)), r, s],
         }));
       } catch (e) {
         // The cancel's estimate reverts when the authorization was used or cancelled after the check above (the
         // facilitator settled meanwhile): read the state again. Any other revert stays the revert.
         if (!(e instanceof CancelWouldRevert)) throw e;
-        const after = await decided(entry.nonce);
-        if (after) return after;
-        throw new RpcError('eth_estimateGas: the cancel would revert', { cause: e });
+        const after = await decide(true);
+        if (after === 'open') throw new CancelRevertedError(vb);
+        return ended(after);
       }
       const receipt = await n.chain.client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
       const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
-        (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === entry.nonce,
+        (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === nonce,
       );
       if (receipt.status !== 'success' || !canceled) {
-        const found = await findSettlement(n, entry);
-        throw new AlreadyUsedError(found?.tx);
+        const after = await decide(true);
+        if (after === 'open') throw new CancelRevertedError(vb, hash);
+        if (typeof after === 'object' && 'canceled' in after && after.canceled === hash) {
+          finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
+        }
+        return ended(after);
       }
       finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
       return hash;
