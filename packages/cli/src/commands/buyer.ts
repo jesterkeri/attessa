@@ -298,13 +298,13 @@ function readBody(d: Deps, file: string): Uint8Array {
 }
 
 /** The end state of a call, in FLOWS §6 words. Exit 0 only for `verified` (and a dry run). */
-function report(
+async function report(
   g: Global,
   d: Deps,
   client: AttestClient,
   r: CallResult,
   c: { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint },
-): number {
+): Promise<number> {
   const out = d.io.out;
   d.io.data?.(jsonResult(r));
   const p = amount(r.amount ?? 0n);
@@ -342,22 +342,23 @@ function report(
         out(BUY.dryRun);
         return 0;
       }
-      throw stoppedError(g, client, r, c);
+      throw await stoppedError(g, client, r, c);
     case 'unattested':
       return 1;
   }
 }
 
 /** FLOWS §8 rows for a call that stopped before anything was signed. */
-function stoppedError(g: Global, client: AttestClient, r: CallResult, c: { origin: string; sym: string; asset: AssetKey; dailyCap: bigint }): CliError {
+async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: { origin: string; sym: string; asset: AssetKey; dailyCap: bigint }): Promise<CliError> {
   const detail = r.detail ?? '';
   const nums = (re: RegExp) => re.exec(detail);
   switch (r.code) {
     case 'endpoint_not_registered':
       return BUYERR.notRegistered(c.origin);
     case 'endpoint_retired': {
-      const ev = lastEvidence(client, r.requestId);
-      return BUYERR.endpointRetired(c.origin, ev?.agentId ?? '<id>');
+      // The retired record keeps its agent (SPEC §3.4 retireEndpoint).
+      const agent = await client.status(c.origin).then((s) => s.agentId?.toString(), () => undefined);
+      return BUYERR.endpointRetired(c.origin, agent ?? '<id>');
     }
     case 'origin_agent_mismatch': {
       const m = nums(/says agent (\S+), registry says (\S+)$/);
@@ -458,7 +459,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       const c = { origin: e?.origin ?? '', sym: SYMBOL[asset], asset, uncertain: false, outFile: `${r.requestId}.json`, dailyCap: 0n };
       out(`${r.requestId}  ${host(c.origin)}`); // not in FLOWS
       if (r.outcome === 'stopped') continue;
-      report(g, d, client, r, c);
+      await report(g, d, client, r, c);
     }
     return 0;
   }
