@@ -388,7 +388,7 @@
       <p class="muted">If the call was made in the last few seconds, it may still be settling. Check that the network in the footer is the one the call used, or paste the settlement transaction instead. The gateway keeps results by request ID for 24 hours; settlement transactions can be checked any time.</p>`),
     malformed: () => message('fail', 'alert', "That isn't a request ID or a transaction hash", `
       <p>Both start with <code>0x</code> and have 64 hex characters after it (0 to 9, a to f).</p>
-      <p class="muted">A request ID is printed when a call is made with Attessa's command-line tool, <code>attessa call</code>, and saved in <code>~/.attessa/evidence.jsonl</code>. A settlement transaction is the payment's transaction on Celoscan.</p>`),
+      <p class="muted">A request ID is printed when a call is made with Attessa's command-line tool, <code>attessa call</code> (coming: not built yet), and saved in <code>~/.attessa/evidence.jsonl</code>. A settlement transaction is the payment's transaction on Celoscan.</p>`),
     rpc: () => message('wait', 'plug', "Can't reach Celo right now", `
       <p>The explorer couldn't read <span data-network-name>${networkName()}</span> from its connection to the network (${chip('rpcUrl')}). Nothing was checked, and nothing about the call itself has changed. Try again in a moment.</p>
       <p><button type="button" class="bracket-link" data-retry>Retry</button></p>`),
