@@ -247,3 +247,4 @@ Review files: reviews/t15-seller-host-and-cli-review-r1.md (round 1) and reviews
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t15-seller-host-and-cli-review-r2.md | verdict: implementation-ready | C0 M0 m0
+Correction (2026-11-02, before the staging PR): t15-seller-host-and-cli-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
