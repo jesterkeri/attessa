@@ -1278,4 +1278,22 @@ cli:       Tests  219 passed (219)
 sdk:  Test Files  17 passed (17)
 sdk:       Tests  174 passed (174)
 ```
-reviewed: pending (adversary r12, then Codex)
+reviewed: pending (adversary r12 found a defect; see below)
+
+### T21 adversary r12 fixes - 2026-11-02
+adversary r12 (926f3d4, `packages/cli/test/adversary-t21-r12.test.ts`, failing): a second `attessa cancel` on a call the first cancel found paid overwrote the saved `<id>.json` answer with nothing and exited "Unexpected error (TypeError)" with no next action (SPEC §7 getResult never re-pays, so that file is the buyer's only copy; FLOWS §8 one next action). Fixed in d39c438:
+- `packages/cli/src/commands/buyer.ts` `report()`, the only writer of the answer file (call, cancel, status --pending), writes it only when the result carries an answer. A stored verified outcome reported again prints "Already done: you were charged {p} {sym} (tx {h}) and the answer checked out. It was saved when it arrived." and exits 0, needing no signer.
+- `packages/sdk`: a not_charged entry stores the block that decided it (the cancel's log or receipt block; for expiry, the first read past it), so a re-read no longer prints "(block 0)"; older entries omit the block.
+- New tests in `packages/cli/test/buyer.test.ts` and `packages/sdk/test/cancel-race.test.ts`; no existing assertion changed. New lines are in the OPEN-QUESTIONS cancel entry, not FLOWS.
+
+verify at d39c438 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  32 passed (32)
+cli:       Tests  222 passed (222)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  176 passed (176)
+```
+reviewed: pending (adversary r13, then Codex)
