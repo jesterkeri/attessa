@@ -33,6 +33,11 @@ function isRevert(e: RpcError): boolean {
   return e.code === 3 || revertData(e) !== null || /revert/i.test(e.message);
 }
 
+/** geth's (and op-geth's) txpool refusal `core.ErrInsufficientFunds`: JSON-RPC -32000, "insufficient funds for gas * price + value: …". */
+function isInsufficientFunds(e: unknown): boolean {
+  return e instanceof RpcError && e.code === -32000 && /^insufficient funds\b/i.test(e.message);
+}
+
 /** One chain read, before anything is signed, with `rpcRow`'s mapping. */
 async function chainRead<T>(c: Chain, f: () => Promise<T>): Promise<T> {
   try {
@@ -135,12 +140,20 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   if (!account) throw new Error('send: no account');
   const sim = await simulate(c, account.address, step);
   if (!sim.ok) throw onRevert(sim.revert, sim.message);
-  const [nonceHex, price, tip] = await Promise.all([
+  const [nonceHex, price, tip, balance] = await Promise.all([
     chainRead(c, () => c.rpc.request('eth_getTransactionCount', [account.address, 'pending'])),
     gasPrice(c),
     chainRead(c, () => c.rpc.request('eth_maxPriorityFeePerGas', [])).then((v) => BigInt(v as string)),
+    chainRead(c, () => c.rpc.request('eth_getBalance', [account.address, 'latest'])).then((v) => BigInt(v as string)),
   ]);
   const maxFeePerGas = price * 2n + tip;
+  const gas = gasLimit(sim.gas);
+  // The node's own admission rule for a value-0 tx: balance >= gas * maxFeePerGas. eth_call and eth_estimateGas
+  // above carry no fee fields, so they never check the balance; this read does, before anything is signed.
+  const maxCost = gas * maxFeePerGas;
+  const noFunds = (tail: 'Nothing was signed.' | 'Nothing was sent.') =>
+    ERR.insufficientGasFunds(account.address.toLowerCase(), step.label, maxCost, c.network === 'sepolia', tail);
+  if (balance < maxCost) throw noFunds('Nothing was signed.');
   const raw = await account.signTransaction({
     type: 'eip1559',
     chainId: c.chainId,
@@ -148,11 +161,19 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     to: step.to,
     data: step.data,
     value: 0n,
-    gas: gasLimit(sim.gas),
+    gas,
     maxFeePerGas,
     maxPriorityFeePerGas: tip,
   });
-  const hash = (await c.rpc.request('eth_sendRawTransaction', [raw])) as Hex;
+  let hash: Hex;
+  try {
+    hash = (await c.rpc.request('eth_sendRawTransaction', [raw])) as Hex;
+  } catch (e) {
+    // The balance moved since the read, or the node counts more (pending txs, an L1 fee). A refused broadcast never
+    // entered the pool, so the signed bytes went nowhere: "Nothing was sent." The node's text is never printed.
+    if (isInsufficientFunds(e)) throw noFunds('Nothing was sent.');
+    throw e;
+  }
   for (let i = 0; i < 180; i++) {
     const r = (await c.rpc.request('eth_getTransactionReceipt', [hash])) as {
       status: string;

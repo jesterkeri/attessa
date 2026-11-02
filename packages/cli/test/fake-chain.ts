@@ -62,6 +62,9 @@ export class FakeChain implements Rpc {
   readonly calls: Array<{ method: string; params: unknown[] }> = [];
   private receipts = new Map<Hex, { status: string; blockNumber: string; gasUsed: string; logs: Array<{ address: Address; topics: Hex[]; data: Hex }> }>();
   nonces = new Map<string, number>();
+  /** CELO balance (wei) by lowercase address; anyone not listed has `defaultBalance`. */
+  balances = new Map<string, bigint>();
+  defaultBalance = 10n ** 24n;
   down = false;
   /** Gas each write costs in eth_estimateGas. */
   gasFor = (fn: string) =>
@@ -100,6 +103,8 @@ export class FakeChain implements Rpc {
         return toHex(this.gasPrice);
       case 'eth_maxPriorityFeePerGas':
         return toHex(1_000_000_000n);
+      case 'eth_getBalance':
+        return toHex(this.balances.get(String(params[0]).toLowerCase()) ?? this.defaultBalance);
       case 'eth_getTransactionCount':
         return toHex(this.nonces.get(String(params[0]).toLowerCase()) ?? 0);
       case 'eth_call': {

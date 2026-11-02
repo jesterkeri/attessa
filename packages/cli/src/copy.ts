@@ -16,6 +16,14 @@ export function celo(wei: bigint): string {
   return c.toFixed(2);
 }
 
+/** An upper bound in CELO, rounded up: "0.62" below 1 CELO (hundredths), "13" from 1 CELO (whole). */
+export function celoUp(wei: bigint): string {
+  const ceil = (unit: bigint) => (wei + unit - 1n) / unit;
+  const cents = ceil(10n ** 16n);
+  if (cents >= 100n) return String(ceil(10n ** 18n));
+  return `0.${String(cents).padStart(2, '0')}`;
+}
+
 /** "Oct 26 14:00 UTC". */
 export function utcShort(sec: bigint | number): string {
   const d = new Date(Number(sec) * 1000);
@@ -174,6 +182,18 @@ export const ERR = {
       'Use an instance type with enclaves enabled, like c6g.xlarge with --enclave-options Enabled=true.',
     ),
   gasTooLow: (step: string) => new CliError('gas_too_low', `The transaction ran out of gas at ${step}. Nothing changed.`, 'Run again; the CLI re-estimates.'),
+  /**
+   * FLOWS §5 row 26 names the code `insufficient_gas_funds` but §8 has no row for it. // not in FLOWS: the line and
+   * its next action, worded like §8 "gas too low" and "payment invalid" ("Add at least {n} USDC to {address}."), with
+   * J0's "CELO for gas at faucet.celo.org/celo-sepolia". `tail` is "Nothing was signed." before the signature and
+   * "Nothing was sent." when the node refused the signed transaction.
+   */
+  insufficientGasFunds: (address: string, step: string, maxCost: bigint, sepolia: boolean, tail: 'Nothing was signed.' | 'Nothing was sent.') =>
+    new CliError(
+      'insufficient_gas_funds',
+      `${address} doesn't have enough CELO to pay the gas for ${step} (up to ${celoUp(maxCost)} CELO). ${tail}`,
+      sepolia ? `Add CELO to ${address} at faucet.celo.org/celo-sepolia, then run the command again.` : `Add CELO to ${address}, then run the command again.`,
+    ),
   // not in FLOWS
   noRegistry: (network: string) =>
     new CliError('no_registry', `No EnclaveRegistry address is known for ${network}.`, 'Set ATTESSA_REGISTRY to the registry address.'),
