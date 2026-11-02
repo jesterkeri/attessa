@@ -24,14 +24,14 @@
 <div class="wrap page-body">
   <article class="docs-main">
     <h2 id="contracts">Contracts</h2>
-    <p>Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Our addresses fill in once deployed.</p>
+    <p>Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Ours are live on Celo Sepolia; our Celo mainnet addresses fill in once deployed.</p>
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">Contract</th><th scope="col">What it does</th><th scope="col">Celo Sepolia</th><th scope="col">Celo mainnet</th></tr></thead>
       <tbody>
-        <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[slot:registryAddress]]</td><td>[[slot:registryAddress]]</td></tr>
-        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[slot:nitroValidatorAddress]]</td><td>[[slot:nitroValidatorAddress]]</td></tr>
-        <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[slot:certManagerAddress]]</td><td>[[slot:certManagerAddress]]</td></tr>
-        <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[slot:p384VerifierAddress]]</td><td>[[slot:p384VerifierAddress]]</td></tr>
+        <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[hash:0x42Bf5Cb440c3C321CB42b0F4c81c3c7435cB92fF]]</td><td class="muted">After launch</td></tr>
+        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[hash:0x72B06e740D5F2C262b3193De69c7065A0C7424db]]</td><td class="muted">After launch</td></tr>
+        <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[hash:0x29F2a69B5685d0db11FA10aa7C9079B3F14CF7fd]]</td><td class="muted">After launch</td></tr>
+        <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[hash:0xd26C0d863B71CBBBa07E6EeeDaB545d0F7c1a84E]]</td><td class="muted">After launch</td></tr>
         <tr><td>ERC-8004 identity registry</td><td>The agent identity registry. Not ours, and upgradeable by whoever holds its keys.</td><td>[[hash:0x8004A818BFB912233c491871b3d84c89A494BD9e]]</td><td>[[hash:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432]]</td></tr>
         <tr><td>Self Agent ID registry</td><td>Links a person-verified ID to an agent. Shown for information only, never part of the check. Not ours, and upgradeable.</td><td>[[hash:0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379]]</td><td>[[hash:0xaC3DF9ABf80d0F5c020C06B04Cced27763355944]]</td></tr>
       </tbody>
