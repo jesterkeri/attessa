@@ -1149,3 +1149,22 @@ sdk:       Tests  154 passed (154)
 ```
 Not fixed here, for adversary r5 to judge: seller commands (`packages/cli/src/tx.ts`, `signer.ts`) may still turn a raw RpcUnavailable into the `unexpected` line.
 reviewed: pending (adversary r5, then Codex)
+
+### T21 adversary r5 fixes - 2026-11-02
+adversary r5 (224bce0, `packages/cli/test/adversary-t21-r5.test.ts`, 4 failing): seller and owner chain reads (`gasPrice()` in `write`, `head()` in revoke release and `status --agent`) let a raw RpcUnavailable reach `run()`, which printed the `unexpected` line instead of the FLOWS §8 "rpc unavailable" row. Fixed in a1112e6:
+- `packages/cli/src/tx.ts` `rpcRow` and `chainRead` reuse `read()`'s existing mapping for every read before anything is signed: `head`, `gasPrice`, `send()`'s nonce and tip reads, and `connect`'s `eth_chainId`. A JSON-RPC error reply that is not a revert gets the row too; reverts still reach the caller (`ownerOf` keeps `unknown_agent`). The signer.ts reads are covered through the same helpers.
+- `Chain.url` (`packages/cli/src/context.ts`) so the row names the RPC the user set.
+- Once a transaction is signed, "Nothing was signed" is never printed: FLOWS has no row for a seller transaction whose outcome is unknown, so a drop after signing keeps the existing `unexpected` line. This also removed two older false "Nothing was signed" lines (after step 2's simulation and the read after registering).
+- New tests: `packages/cli/test/t21-r5-fix.test.ts` (16).
+
+verify at a1112e6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  22 passed (22)
+cli:       Tests  177 passed (177)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+reviewed: pending (adversary r6, then Codex)
