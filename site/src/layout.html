@@ -8,7 +8,7 @@
 <meta name="theme-color" content="#030304">
 <meta name="color-scheme" content="dark">
 <link rel="icon" href="{{root}}assets/favicon.svg" type="image/svg+xml">
-<script>document.documentElement.classList.remove('no-js');try{if(localStorage.getItem('attessa-network')==='mainnet')document.documentElement.dataset.network='mainnet'}catch(e){}</script>
+<script>document.documentElement.classList.remove('no-js')</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,300..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap">
@@ -70,7 +70,7 @@
     <fieldset class="net-switch" id="network">
       <legend>Network</legend>
       <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
-      <label><input type="radio" name="network" value="mainnet"> Celo mainnet</label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
     </fieldset>
   </div>
   <div class="footer-land" data-land aria-hidden="true"></div>

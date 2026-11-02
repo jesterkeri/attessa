@@ -27,8 +27,8 @@ screenshots and checking layouts).
 - **Proof explorer:** a "UI preview" switcher at the top of the results shows every state from the brief
   (verified, tampered, unapproved, unattested, checking, not found, malformed ID, Celo unreachable). The
   checklist rows are rendered by `assets/site.js` from sample slots. The recent-calls table is samples too.
-- **Network switch** (footer): stores Celo Sepolia or mainnet in `localStorage` and updates the labels. It
-  changes nothing else yet.
+- **Network switch** (footer): Celo Sepolia only. Mainnet is shown, disabled and marked "After launch" until
+  Gate 5, and a stored `mainnet` from an earlier version is ignored. It changes nothing else yet.
 - **Terminal output** on the homepage and How it works is the CLI's example output from `FLOWS.md`, marked
   illustrative.
 - **Privacy and Terms** are marked Draft; the legal wording is still to be written.

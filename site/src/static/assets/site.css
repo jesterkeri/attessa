@@ -626,6 +626,7 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
   .preview-bar select { font-size: 16px; }
 }
 .net-switch input { accent-color: var(--text); width: 15px; height: 15px; margin: 0; }
+.net-switch label.is-disabled { cursor: not-allowed; color: var(--text-2); }
 @media (max-width: 860px) { .footer-grid { grid-template-columns: minmax(0, 1fr); } }
 
 /* Generic fade-up for elements GSAP doesn't handle (gated on motion) */
