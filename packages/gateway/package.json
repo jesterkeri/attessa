@@ -7,8 +7,20 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc -p .",
-    "typecheck": "tsc -p . --noEmit",
-    "test": "vitest run --passWithNoTests",
-    "lint": "tsc -p . --noEmit"
+    "typecheck": "tsc -p ../core && tsc -p . --noEmit",
+    "test": "vitest run",
+    "lint": "tsc -p ../core && tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "better-sqlite3": "13.0.3",
+    "fastify": "5.12.7",
+    "viem": "2.57.13"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  },
+  "bin": {
+    "attessa-gateway-server": "dist/main.js"
   }
 }
