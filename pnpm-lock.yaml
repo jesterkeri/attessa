@@ -65,7 +65,14 @@ importers:
         specifier: 7.6.13
         version: 7.6.13
 
-  packages/sdk: {}
+  packages/sdk:
+    dependencies:
+      '@attessa/core':
+        specifier: workspace:*
+        version: link:../core
+      viem:
+        specifier: 2.57.13
+        version: 2.57.13(typescript@5.9.3)
 
   packages/seller-host:
     dependencies:
