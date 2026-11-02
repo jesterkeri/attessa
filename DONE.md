@@ -1187,3 +1187,22 @@ sdk:  Test Files  15 passed (15)
 sdk:       Tests  154 passed (154)
 ```
 reviewed: pending (adversary r7, then Codex)
+
+### T21 adversary r7 fixes - 2026-11-02
+adversary r7 (c75c27c, `packages/cli/test/adversary-t21-r7.test.ts`, failing): `attessa agent register` from a wallet with no CELO printed "Unexpected error (RpcError)", not FLOWS §5 row 26 `insufficient_gas_funds`. Fixed in b796155, eb7707f and 23549a4:
+- `packages/sdk/src/gas.ts` holds the one gas rule: refuse before signing when the balance is below gas limit x maxFeePerGas, and read a node's "insufficient funds" reply (-32000) as the same error. The CLI's `send()` (tx.ts) and the SDK's `cancelAuthorization` (client.ts) both use it.
+- `ERR.insufficientGasFunds` (copy.ts): "{address} doesn't have enough CELO to pay the gas for {step} (up to {n} CELO). Nothing was signed." (or "Nothing was sent." once something was signed). The next action names faucet.celo.org/celo-sepolia only on chain 11142220; elsewhere, mainnet included, "Add CELO to {address}, then run the command again." FLOWS §8 has no row for this code, so the line is new and marked not in FLOWS; OPEN-QUESTIONS asks Joshua for FLOWS copy.
+- Buyer `attessa cancel` (buyer.ts) gets the same refusal, ending "Nothing was sent." because the cancel permission is already signed. Its OPEN-QUESTIONS entry is ticked.
+- New tests: `packages/cli/test/t21-r7-fix.test.ts`, `packages/cli/test/buyer.test.ts` (cancel), `packages/sdk/test/gas-funds.test.ts`.
+
+verify at 23549a4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  26 passed (26)
+cli:       Tests  203 passed (203)
+sdk:  Test Files  16 passed (16)
+sdk:       Tests  161 passed (161)
+```
+reviewed: pending (adversary r8, then Codex)
