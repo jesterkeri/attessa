@@ -1271,4 +1271,16 @@ pnpm@10.32.1 install ran no non-allowlisted install script: ok
 ok: engines.node ２２ refused
 ok: engines.node >=٢٢.١٣.٠ refused
 ```
-reviewed: pending (adversary r3, then Codex)
+adversary r3 (fb5ce94): one defect, failing closed. The snapshot accepts tracked 100755 files, but the later script check looked only at 100644 blobs, so `chmod +x packages/core/scripts/gen-vectors.ts` was refused as "not a tracked regular file". Fixed in 6c88a6e: a script file may be 100644 or 100755 (node runs it either way); one accepting case added. Its other 25 cases (newlines, upper case, dotless i, the Kelvin sign, non-string types, compound ranges, tabs, doubled extensions, Arabic-Indic digits, `pre` hooks, fullwidth versions) were all refused as they should be. Its script is archived at .worktrees/archive/adversary/install-r3-allowlist-semantics.sh.
+
+verify at 6c88a6e (guard, allow-list test, adversary r3 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r3_rc=0
+26 ok lines, 0 FAIL
+```
+reviewed: pending (adversary r4, then Codex)
