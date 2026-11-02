@@ -1261,4 +1261,14 @@ guard_rc=0
 pnpm@10.32.1 install ran no non-allowlisted install script: ok
 19 cases, rc=0
 ```
-reviewed: pending (adversary r2, then Codex)
+adversary r2 (0448791): one defect. Python's `\d` matches non-ASCII digits, so engines.node "２２" and ">=٢٢.١٣.٠" passed as node ranges, though semver rejects them (nothing runs: pnpm only warns on engines). Fixed in 4ea81d9: every `\d` in the guard's patterns is now `[0-9]`, with one case added to the allow-list test. The adversary's script is archived at .worktrees/archive/adversary/install-r2-engines-nonascii-digits.sh and passes. Bin names with a trailing newline, upper case, a Cyrillic look-alike or dotless i were refused. Its unproven suspicion, that a registry dependency's own bin named node would still shadow node, is outside this guard (registry packages are lockfile- and integrity-pinned; none today has such a bin).
+
+verify at 4ea81d9 (guard, allow-list test, adversary r2 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+20 cases, rc=0
+ok: engines.node ２２ refused
+ok: engines.node >=٢٢.١٣.٠ refused
+```
+reviewed: pending (adversary r3, then Codex)
