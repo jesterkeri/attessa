@@ -1168,3 +1168,22 @@ sdk:  Test Files  15 passed (15)
 sdk:       Tests  154 passed (154)
 ```
 reviewed: pending (adversary r6, then Codex)
+
+### T21 adversary r6 fixes - 2026-11-02
+adversary r6 (a0ca8b4, `packages/cli/test/adversary-t21-r6.test.ts`, 4 failing): `simulate` read a rate-limit (-32005) or internal (-32603) JSON-RPC error as a revert and printed the node's reply text; and "Nothing was sent." was printed after an earlier transaction of the same command had been sent. Fixed in b1fc5f0:
+- `packages/cli/src/tx.ts` `simulate`: eth_call and eth_estimateGas go through `chainRead`, so a non-revert error gets the FLOWS §8 rpc_unavailable row; a real revert is still decoded.
+- `packages/cli/src/reverts.ts` `revertToError`: node reply text is never printed; the catch-all row is "The transaction would revert (Name). Nothing was sent."; an ABI-decoded `Error(string)` reason is still shown, escaped by `safe()`.
+- `afterSigning` (tx.ts) also drops a trailing " Nothing was sent." / " Nothing was signed." once an earlier transaction of the command was sent. FLOWS §6 J3 and §8 have no line for a partly completed seller flow, so the line keeps its text without the false clause.
+- New tests: `packages/cli/test/t21-r6-fix.test.ts` (5). 8e11bf8: OPEN-QUESTIONS entry on `{rpc}` printing `--rpc` verbatim, an API key in the URL included (spec question for Joshua).
+
+verify at 8e11bf8 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  24 passed (24)
+cli:       Tests  186 passed (186)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+reviewed: pending (adversary r7, then Codex)
