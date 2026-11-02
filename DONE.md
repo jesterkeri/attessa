@@ -1206,3 +1206,22 @@ sdk:  Test Files  16 passed (16)
 sdk:       Tests  161 passed (161)
 ```
 reviewed: pending (adversary r8, then Codex)
+
+### T21 adversary r8 fixes - 2026-11-02
+adversary r8 (59a2933, `packages/cli/test/adversary-t21-r8.test.ts`, failing): when the facilitator settled while a buyer ran `attessa cancel`, the cancel's gas estimate reverted and the buyer saw "Unexpected error (RpcError)" instead of FLOWS §8 "cancel: already used" ("Too late to cancel: the payment went through (tx {h}). Fetching your answer."). Fixed in 5891632:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: a revert in the cancel's `eth_estimateGas` re-reads the authorization. Used meanwhile is `AlreadyUsedError` with the settlement tx when one is found; cancelled meanwhile returns that cancel; any other revert stays an error.
+- `packages/sdk/src/gas.ts`: `isRevertReply` (code 3 or "execution reverted") and `causes` (an error's cause chain, at most 16 deep).
+- The CLI's seller, owner and operator writes already turn a simulate or estimate revert into their own revert line, so they had no such gap.
+- New tests: `packages/sdk/test/cancel-race.test.ts` (4).
+
+verify at 5891632 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  27 passed (27)
+cli:       Tests  204 passed (204)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  165 passed (165)
+```
+reviewed: pending (adversary r9, then Codex)
