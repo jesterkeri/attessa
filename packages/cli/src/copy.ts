@@ -27,12 +27,13 @@ export function utcShort(sec: bigint | number): string {
 
 /**
  * Seller- or chain-supplied text (an on-chain sourceRef, a gateway's `detail`) rendered for a terminal: C0 and C1
- * controls and DEL become `\xNN`, and line/paragraph separators and bidi controls become `\u{NNNN}`, so a `\r`, an
- * ANSI escape or a direction override can't overwrite or hide the text around it, e.g. "(not checked by attessa)"
- * (KNOWN-LIMITS L20). Printable text, FLOWS' included, comes back unchanged.
+ * controls and DEL become `\xNN`, and line/paragraph separators and Unicode's Bidi_Control set (U+061C, U+200E,
+ * U+200F, U+202A to U+202E, U+2066 to U+2069) become `\u{NNNN}`, so a `\r`, an ANSI escape or a direction override
+ * can't overwrite or hide the text around it, e.g. "(not checked by attessa)" (KNOWN-LIMITS L20). Printable text,
+ * FLOWS' included, comes back unchanged.
  */
 export function safe(text: string): string {
-  return text.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (ch) => {
+  return text.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (ch) => {
     const n = ch.charCodeAt(0);
     return n <= 0xff ? `\\x${n.toString(16).padStart(2, '0')}` : `\\u{${n.toString(16)}}`;
   });
@@ -48,10 +49,13 @@ export function host(origin: string): string {
   return origin.replace(/^https?:\/\//, '');
 }
 
-/** `https://github.com/acme/risk/commit/a1b2c3d…` → `acme/risk @ a1b2c3d`; anything else as given. */
+/**
+ * `https://github.com/acme/risk/commit/a1b2c3d…` → `acme/risk @ a1b2c3d`; anything else as given. Escaped on every
+ * path: a GitHub-shaped ref is still the owner's unchecked text (KNOWN-LIMITS L20).
+ */
 export function sourceLabel(sourceRef: string): string {
   const m = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/(?:commit|tree)\/([0-9a-f]{7,40})\/?$/i.exec(sourceRef);
-  return m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : safe(sourceRef);
+  return safe(m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : sourceRef);
 }
 
 export const COPY = {

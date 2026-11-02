@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
+  KeyError,
   Ledger,
   createAttestClient,
   loadAccount,
@@ -107,7 +108,11 @@ async function wallet(d: Deps, keystore: string | undefined, create = false) {
   try {
     return await loadAccount(opts);
   } catch (e) {
-    throw new CliError('bad_key', `Can't load the wallet: ${(e as Error).message}.`);
+    // Never print an error's own text here: a parser quotes its input, and the input may be a key (SPEC §7
+    // "Never printed"). Only the SDK's fixed KeyError reasons and the path the user typed get out. // not in FLOWS
+    if (!(e instanceof KeyError)) throw new CliError('bad_key', "Can't load the wallet.");
+    const where = e.source === 'keystore' && keystore !== undefined ? ` from ${safe(keystore)}` : e.source === 'env' ? ' from ATTESSA_PRIVATE_KEY' : ' from your OS keychain';
+    throw new CliError('bad_key', `Can't load the wallet${where}: ${e.reason}.`);
   }
 }
 
@@ -144,10 +149,10 @@ function makeClient(
   return createAttestClient(cfg, opts);
 }
 
-/** FLOWS J1 shows the owner's claim as `github.com/acme/risk @ a1b2c3d`. */
+/** FLOWS J1 shows the owner's claim as `github.com/acme/risk @ a1b2c3d`; escaped on every path (KNOWN-LIMITS L20). */
 function claimLabel(ref: string): string {
   const m = /^(?:https:\/\/)?(github\.com\/[^/\s@]+\/[^/\s@]+?)(?:\/(?:commit|tree)\/|@)([0-9a-f]{7,40})\/?$/i.exec(ref);
-  return m ? `${m[1]} @ ${m[2]!.slice(0, 7)}` : safe(ref);
+  return safe(m ? `${m[1]} @ ${m[2]!.slice(0, 7)}` : ref);
 }
 
 function lastEvidence(client: AttestClient, requestId: Hex): EvidenceRow | undefined {
