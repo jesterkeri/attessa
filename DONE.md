@@ -85,6 +85,43 @@ adversary: r1 on fd63419 DEFECT x2 (CheckBidi skipped by Node URL for bidi hosts
 reviewed: pending (Codex)
 notes: whatwg-url 14.2.0 (tr46 5.1.1) replaces Node URL for host parsing; requestHash uppercases ASCII only; new vectors for bidi, BOM, non-ASCII method, UTF-16 key order, RFC 8785 Appendix B numbers. Open: Unicode version not pinned, -0 vector, local IP literals, empty labels (OPEN-QUESTIONS).
 
+## T10 Codex review r2 - 2026-10-31
+Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
+```
+scripts/check-deploy.adversary.test.mjs # tests 3
+scripts/check-deploy.adversary.test.mjs # fail 0
+scripts/check-deploy.adversary2.test.mjs # tests 4
+scripts/check-deploy.adversary2.test.mjs # fail 0
+scripts/check-deploy.adversary3.test.mjs # tests 2
+scripts/check-deploy.adversary3.test.mjs # fail 0
+scripts/check-deploy.adversary4.test.mjs # tests 3
+scripts/check-deploy.adversary4.test.mjs # fail 0
+scripts/check-deploy.adversary5.test.mjs # tests 3
+scripts/check-deploy.adversary5.test.mjs # fail 0
+scripts/check-deploy.adversary6.test.mjs # tests 3
+scripts/check-deploy.adversary6.test.mjs # fail 0
+scripts/check-deploy.adversary7.test.mjs # tests 3
+scripts/check-deploy.adversary7.test.mjs # fail 0
+scripts/check-deploy.adversary8.test.mjs # tests 2
+scripts/check-deploy.adversary8.test.mjs # fail 0
+scripts/check-deploy.adversary9.test.mjs # tests 3
+scripts/check-deploy.adversary9.test.mjs # fail 0
+scripts/check-deploy.committed-config.test.mjs # tests 6
+scripts/check-deploy.committed-config.test.mjs # fail 0
+scripts/check-deploy.test.mjs # tests 11
+scripts/check-deploy.test.mjs # fail 0
+REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+predeploy_exit=0
+```
+Closing lines of round 2, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
+note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
+Correction (2026-11-02, before the staging PR): design-review-r1.md, design-review-r2.md, design-review-r3.md, t10-review-r1.md (`VERDICT: changes required`) removed from `reviews/`, because `scripts/check-reviews.sh` refuses a merged review at that verdict; archived outside the repo. The SHIP review stays.
 ## T20 - 2026-10-30
 commit: 9b4290c (builder, Opus; branch feat/t20-buyer-sdk, rerun by lead)
 verified: pnpm --filter @attessa/sdk test
@@ -313,42 +350,6 @@ Review files: reviews/t15-seller-host-and-cli-review-r1.md (round 1) and reviews
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t15-seller-host-and-cli-review-r2.md | verdict: implementation-ready | C0 M0 m0
-## T10 Codex review r2 - 2026-10-31
-Codex r2 reviewed 515a202: both round-1 majors (M1 identity/Self pins, M2 look-alike validator before broadcast) are fixed, no new findings. Its sandbox blocked the Node/anvil and pre-deploy subprocess checks (U8), so they were run outside it on the same commit, 2026-10-31:
-```
-scripts/check-deploy.adversary.test.mjs # tests 3
-scripts/check-deploy.adversary.test.mjs # fail 0
-scripts/check-deploy.adversary2.test.mjs # tests 4
-scripts/check-deploy.adversary2.test.mjs # fail 0
-scripts/check-deploy.adversary3.test.mjs # tests 2
-scripts/check-deploy.adversary3.test.mjs # fail 0
-scripts/check-deploy.adversary4.test.mjs # tests 3
-scripts/check-deploy.adversary4.test.mjs # fail 0
-scripts/check-deploy.adversary5.test.mjs # tests 3
-scripts/check-deploy.adversary5.test.mjs # fail 0
-scripts/check-deploy.adversary6.test.mjs # tests 3
-scripts/check-deploy.adversary6.test.mjs # fail 0
-scripts/check-deploy.adversary7.test.mjs # tests 3
-scripts/check-deploy.adversary7.test.mjs # fail 0
-scripts/check-deploy.adversary8.test.mjs # tests 2
-scripts/check-deploy.adversary8.test.mjs # fail 0
-scripts/check-deploy.adversary9.test.mjs # tests 3
-scripts/check-deploy.adversary9.test.mjs # fail 0
-scripts/check-deploy.committed-config.test.mjs # tests 6
-scripts/check-deploy.committed-config.test.mjs # fail 0
-scripts/check-deploy.test.mjs # tests 11
-scripts/check-deploy.test.mjs # fail 0
-REF   reference build from HEAD 515a2028a008 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
-PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
-predeploy_exit=0
-```
-Closing lines of round 2, verbatim:
-```
-Decision: SHIP
-VERDICT: implementation-ready
-```
-reviewed: reviews/t10-registry-deploy-scripts-review-r2.md | verdict: implementation-ready | C0 M0 m0
-note: T10 stays open until Joshua broadcasts the deploy and `node scripts/check-deploy.mjs celo-sepolia` prints OK.
 ## T04 - 2026-10-30
 commit: b3347e1 (builder B1, Opus)
 verified: cd contracts && forge test --match-path 'test/unit/*' -vv && ../scripts/check-error-coverage.sh
