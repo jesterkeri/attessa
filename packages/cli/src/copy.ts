@@ -159,6 +159,13 @@ export const ERR = {
   networkMismatch: (x: number, y: number) =>
     new CliError('network_mismatch', `Your RPC is on chain ${x}; this registry is on ${y}.`, `Set \`--rpc\` for ${y}.`),
   rpcUnavailable: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpc}. Nothing was signed.`, 'Retry or set another `--rpc`.'),
+  /**
+   * A transaction was signed and may have been broadcast, then the RPC dropped (the broadcast's reply, or the
+   * receipt poll): it may still land, so never "Nothing was sent". The full hash, so it can be looked up.
+   * // not in FLOWS: §8 has no row for a sent transaction whose outcome a dropped RPC hides.
+   */
+  sentUnconfirmed: (what: string, hash: string, next: string) =>
+    new CliError('tx_unconfirmed', `Lost the connection to Celo after sending ${what} (tx ${hash}); it may still land.`, next),
   invalidOrigin: () => new CliError('invalid_origin', 'Use just the scheme and host, like https://risk.example (no path, lowercase).'),
   invalidBuildFile: (file: string) =>
     new CliError(
@@ -441,6 +448,8 @@ export const BUYERR = {
       tx ? `The cancel transaction reverted (tx ${short(tx)}).` : 'The transaction would revert. Nothing was sent.',
       `Run attessa status --pending after ${validBefore} UTC to confirm whether you were charged.`,
     ),
+  /** The RPC dropped after the cancel permission was signed, before its transaction was sent. // not in FLOWS: the rpc row's tail for it. */
+  cancelNotSent: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpc}. Nothing was sent.`, 'Retry or set another `--rpc`.'),
   /** The token's one flag reads "used or cancelled" but neither log has appeared yet. // not in FLOWS */
   cancelUndecided: () =>
     new CliError('uncertain', "Your payment permission was already used or cancelled, but Celo doesn't show which yet.", 'Run attessa status --pending in a minute to see which.'),

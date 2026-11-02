@@ -4,6 +4,7 @@ import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
   AttestError,
+  CancelInterruptedError,
   CancelRevertedError,
   CancelUndecidedError,
   InsufficientGasFundsError,
@@ -449,22 +450,22 @@ export function sdkError(g: Global, code: string, rawDetail: string | undefined,
  * read the SDK couldn't make (RpcError) as rpc_unavailable. Their messages are never printed: an RPC error's text
  * can carry the node URL's credentials. Anything else is not the SDK's to map: null.
  */
-export function fromSdk(g: Global, e: unknown, origin?: string, o: { chainReads?: boolean } = {}): CliError | null {
+export function fromSdk(g: Global, e: unknown, origin?: string): CliError | null {
   if (e instanceof AttestError) return sdkError(g, e.code, e.code === 'rpc_unavailable' ? undefined : e.detail, origin);
-  if (e instanceof SdkRpcError && o.chainReads !== false) return ERR.rpcUnavailable(rpcShown(g));
+  if (e instanceof SdkRpcError) return ERR.rpcUnavailable(rpcShown(g));
   return null;
 }
 
 /**
- * Runs an SDK client call, turning its thrown SDK errors into their FLOWS rows. `chainReads: false` for a call that
- * can fail a chain read after it sent something (cancelAuthorization), where the rpc row's "Nothing was signed" could
- * be untrue: there only an AttestError (raised before anything is sent) is mapped.
+ * Runs an SDK client call, turning its thrown SDK errors into their FLOWS rows: AttestError by its code, RpcError as
+ * the rpc row. cancelAuthorization throws RpcError only for reads before its first signature; what fails after it is
+ * CancelInterruptedError, mapped by `cancel`.
  */
-async function viaSdk<T>(g: Global, f: () => Promise<T>, origin?: string, o: { chainReads?: boolean } = {}): Promise<T> {
+async function viaSdk<T>(g: Global, f: () => Promise<T>, origin?: string): Promise<T> {
   try {
     return await f();
   } catch (e) {
-    throw fromSdk(g, e, origin, o) ?? e;
+    throw fromSdk(g, e, origin) ?? e;
   }
 }
 
@@ -489,7 +490,9 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   }
   if (!g.yes && !(await d.io.confirm('cancel'))) return 1;
   try {
-    const tx = await viaSdk(g, () => client.cancelAuthorization(id), entry.origin, { chainReads: false });
+    // A chain read the SDK throws as RpcError is one made before anything was signed (cancelAuthorization wraps every
+    // failure after the cancel permission's signature in CancelInterruptedError), so the rpc row is true for it.
+    const tx = await viaSdk(g, () => client.cancelAuthorization(id), entry.origin);
     d.io.out(BUY.cancelled(tx));
     d.io.data?.({ requestId: id, outcome: 'not_charged', code: 'cancelled', cancelTx: tx });
     return 0;
@@ -498,6 +501,12 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     // whether the SDK refused before signing the transaction or the node refused its broadcast.
     if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
     if (e instanceof CancelRevertedError) throw BUYERR.cancelReverted(hms(e.validBefore), e.tx);
+    if (e instanceof CancelInterruptedError) {
+      // Signed, maybe sent: never the rpc row's "Nothing was signed"; with the cancel tx once it may land.
+      throw e.tx
+        ? ERR.sentUnconfirmed('the cancel', e.tx, 'Run `attessa status --pending` to see whether it landed (with another `--rpc` if this one stays down).')
+        : BUYERR.cancelNotSent(rpcShown(g));
+    }
     // FLOWS §8 "(tx {h})": "went through" only with the settlement tx; without it, which happened isn't known.
     if (e instanceof CancelUndecidedError || (e instanceof AlreadyUsedError && !e.tx)) throw BUYERR.cancelUndecided();
     if (!(e instanceof AlreadyUsedError)) throw e;

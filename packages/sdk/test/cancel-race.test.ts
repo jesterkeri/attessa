@@ -1,6 +1,7 @@
 import type { Address, Hex } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
-import { AlreadyUsedError, AttestError, CancelRevertedError, CancelUndecidedError } from '../src/client.ts';
+import { keccak256 } from 'viem';
+import { AlreadyUsedError, AttestError, CancelInterruptedError, CancelRevertedError, CancelUndecidedError } from '../src/client.ts';
 import { RpcError } from '../src/chain.ts';
 import { RpcFailure } from './fakes/chain.ts';
 import { makeWorld, type World } from './fakes/world.ts';
@@ -63,11 +64,12 @@ describe('cancelAuthorization when its estimate reverts', () => {
     expect(w.client.ledger.get(c.id)!.state).not.toBe('not_charged');
   });
 
-  it('a non-revert estimate failure is not read as a race: RpcError, no state re-read decides it', async () => {
+  it('a non-revert estimate failure is not read as a race: no state re-read decides it; after the signature it is CancelInterruptedError (r10)', async () => {
     const c = await openCall();
     revertEstimate(() => void (w.chain.authUsed(c.payer, c.nonce) || w.chain.settle(c.payer, w.payTo, c.amount, c.nonce)), -32005, 'rate limited');
     const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
-    expect(e).toBeInstanceOf(RpcError);
+    expect(e).toBeInstanceOf(CancelInterruptedError);
+    expect((e as CancelInterruptedError).tx).toBeUndefined();
     expect(e).not.toBeInstanceOf(AlreadyUsedError);
   });
 });
@@ -104,5 +106,48 @@ describe('cancelAuthorization reads the decision from logs, polling briefly', ()
     const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
     expect(e).toBeInstanceOf(AlreadyUsedError);
     expect((e as AlreadyUsedError).tx).toBe(tx);
+  });
+});
+
+describe('cancelAuthorization when the RPC drops (T21 r10)', () => {
+  it('before anything is signed: the read\'s RpcError, unwrapped, and no signature', async () => {
+    const c = await openCall();
+    w.chain.logsDown = true;
+    const signs = w.signSpy.mock.calls.length;
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(RpcError);
+    expect(w.signSpy.mock.calls.length).toBe(signs);
+  });
+
+  it('after the permission is signed, before the broadcast: CancelInterruptedError without a tx', async () => {
+    const c = await openCall();
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_gasPrice') throw new RpcFailure('connect ECONNREFUSED');
+      return orig(m, p);
+    };
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(CancelInterruptedError);
+    expect((e as CancelInterruptedError).tx).toBeUndefined();
+  });
+
+  it('after the broadcast, the receipt poll fails: CancelInterruptedError with the cancel tx, polled at most receiptWaitMs', async () => {
+    const c = await openCall();
+    const orig = w.chain.request.bind(w.chain);
+    let raw: `0x${string}` | undefined;
+    let polls = 0;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_getTransactionReceipt' && raw) {
+        polls++;
+        throw new RpcFailure('connect ECONNREFUSED');
+      }
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') raw = p[0] as `0x${string}`;
+      return r;
+    };
+    const e = await w.client.cancelAuthorization(c.id).catch((x: unknown) => x);
+    expect(e).toBeInstanceOf(CancelInterruptedError);
+    expect((e as CancelInterruptedError).tx).toBe(keccak256(raw!));
+    expect(polls).toBeLessThanOrEqual(2);
   });
 });

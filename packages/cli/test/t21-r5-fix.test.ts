@@ -1,7 +1,7 @@
 import { signerFromPublicKey } from '@attessa/core';
 import { originHash } from '@attessa/core';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import type { Address } from 'viem';
+import { keccak256, type Address } from 'viem';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { hintPlan, parseAttestation } from '../src/attestation.ts';
 import { RpcError, RpcUnavailable } from '../src/rpc.ts';
@@ -13,7 +13,9 @@ import { AGENT, ORIGIN, attestation, onboarded, world, type World } from './harn
 
 const FORNO = 'https://forno.celo-sepolia.celo-testnet.org';
 const RPC_ROW = [`Can't reach Celo at ${FORNO}. Nothing was signed.`, 'Retry or set another `--rpc`.'];
-const DROPPED_AFTER_SIGNING = ["Unexpected error (RpcUnavailable). Its message isn't printed, because it could contain a key."];
+// T21 r10: after an earlier transaction landed, the rpc row without its "Nothing was signed." (re-running skips what
+// landed); a sent transaction whose receipt a dropped RPC hides is the sent-unconfirmed row with its hash.
+const DROPPED_AFTER_SIGNING = [`Can't reach Celo at ${FORNO}.`, 'Retry or set another `--rpc`.'];
 
 let w: World;
 beforeEach(() => {
@@ -156,7 +158,10 @@ describe('after a transaction is signed, a dropped RPC never says "Nothing was s
     failAt('eth_getTransactionReceipt', drop('eth_getTransactionReceipt'));
     expect(await w.cli('agent', 'register', '--name', 'Acme risk check', '--uri', 'https://example.org/agent.json')).toBe(1);
     expect(w.chain.sent).toHaveLength(1);
-    expect(w.err).toEqual(DROPPED_AFTER_SIGNING);
+    expect(w.err).toEqual([
+      `Lost the connection to Celo after sending register (tx ${keccak256(w.chain.sent[0]!)}); it may still land.`,
+      'Check the tx on a Celo explorer before running again.',
+    ]);
   });
 
   it('signer register, 2 transactions: the RPC drops at the second one\'s simulation, after the first was sent', async () => {
@@ -183,12 +188,12 @@ describe('after a transaction is signed, a dropped RPC never says "Nothing was s
     expect(w.err).toEqual(DROPPED_AFTER_SIGNING);
   });
 
-  it('signer register --json after a send: no rpc_unavailable code either', async () => {
+  it('signer register --json after a send: rpc_unavailable without "Nothing was signed"', async () => {
     const argv = registerSetup(4);
     failAt('eth_call', drop('eth_call'), 1);
     expect(await w.cli(...argv, '--json')).toBe(1);
     const out = JSON.parse(w.out.at(-1)!);
-    expect(out).toMatchObject({ ok: false, error: 'unexpected' });
+    expect(out).toMatchObject({ ok: false, error: 'rpc_unavailable', next: 'Retry or set another `--rpc`.' });
     expect(out.message).not.toContain('Nothing was signed');
   });
 });

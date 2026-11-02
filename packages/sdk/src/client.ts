@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   bytesToHex,
+  keccak256,
   encodeFunctionData,
   http,
   parseEventLogs,
@@ -110,6 +111,19 @@ export class CancelUndecidedError extends Error {
   constructor() {
     super('authorization used or cancelled, but no log shows which yet');
     this.name = 'CancelUndecidedError';
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when the chain couldn't be read or reached after the cancel permission was signed.
+ * `tx` is the cancel transaction once it may have been broadcast (it may still land); absent when nothing was sent.
+ */
+export class CancelInterruptedError extends Error {
+  readonly tx: Hash | undefined;
+  constructor(tx: Hash | undefined, options?: { cause?: unknown }) {
+    super(tx ? `lost the chain after sending the cancel ${tx}` : 'lost the chain before sending the cancel', options);
+    this.name = 'CancelInterruptedError';
+    this.tx = tx;
   }
 }
 
@@ -385,12 +399,28 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   }
 
   /**
+   * The receipt of `hash`, polled once a second up to `receiptWaitMs` (not viem's 180 s default). A missing receipt
+   * and a failed read are both retried; the last failure is thrown when time runs out.
+   */
+  async function receiptOf(n: Net, hash: Hash) {
+    const tries = Math.max(1, Math.ceil(receiptWaitMs / 1000));
+    for (let i = 1; ; i++) {
+      try {
+        return await n.chain.client.getTransactionReceipt({ hash });
+      } catch (e) {
+        if (i >= tries) throw e;
+      }
+      await sleep(1000);
+    }
+  }
+
+  /**
    * Signs and broadcasts the payer's cancel transaction (value 0) with the shared gas terms (`gasTerms`). Refuses
    * before signing when the balance can't cover them, and maps the node's "insufficient funds" refusal of the
    * broadcast to the same error: either way nothing was sent. Reads that fail are RpcError; the node's text of a
    * funds refusal is not kept.
    */
-  async function sendCancel(n: Net, to: Address, data: Hex): Promise<Hash> {
+  async function sendCancel(n: Net, to: Address, data: Hex, sent: { hash?: Hash }): Promise<Hash> {
     const from = cfg.account.address;
     const read = async (method: string, params: unknown[]): Promise<bigint> => {
       try {
@@ -427,6 +457,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       maxFeePerGas: t.maxFeePerGas,
       maxPriorityFeePerGas: t.maxPriorityFeePerGas,
     });
+    // From here the cancel may reach the chain even if the broadcast's reply is lost: the caller reports its hash.
+    sent.hash = keccak256(raw);
     try {
       return (await n.chain.client.request({ method: 'eth_sendRawTransaction', params: [raw] } as never)) as Hash;
     } catch (e) {
@@ -1056,35 +1088,49 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         message: { authorizer: entry.payer, nonce },
       });
       const { r, s, v, yParity } = parseSignature(sig);
-      let hash: Hash;
+      // The cancel permission is signed: from here a failed chain read can't say "Nothing was signed". Every error
+      // that isn't one of the cancel's own outcomes is CancelInterruptedError, with the cancel tx once it may be sent.
+      const sent: { hash?: Hash } = {};
       try {
-        hash = await sendCancel(n, entry.asset, encodeFunctionData({
-          abi: tokenAbi,
-          functionName: 'cancelAuthorization',
-          args: [entry.payer, nonce, Number(v ?? BigInt(yParity + 27)), r, s],
-        }));
-      } catch (e) {
-        // The cancel's estimate reverts when the authorization was used or cancelled after the check above (the
-        // facilitator settled meanwhile): read the state again. Any other revert stays the revert.
-        if (!(e instanceof CancelWouldRevert)) throw e;
-        const after = await decide(true);
-        if (after === 'open') throw new CancelRevertedError(vb);
-        return ended(after);
-      }
-      const receipt = await n.chain.client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
-      const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
-        (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === nonce,
-      );
-      if (receipt.status !== 'success' || !canceled) {
-        const after = await decide(true);
-        if (after === 'open') throw new CancelRevertedError(vb, hash);
-        if (typeof after === 'object' && 'canceled' in after && after.canceled === hash) {
-          finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
+        let hash: Hash;
+        try {
+          hash = await sendCancel(n, entry.asset, encodeFunctionData({
+            abi: tokenAbi,
+            functionName: 'cancelAuthorization',
+            args: [entry.payer, nonce, Number(v ?? BigInt(yParity + 27)), r, s],
+          }), sent);
+        } catch (e) {
+          // The cancel's estimate reverts when the authorization was used or cancelled after the check above (the
+          // facilitator settled meanwhile): read the state again. Any other revert stays the revert.
+          if (!(e instanceof CancelWouldRevert)) throw e;
+          const after = await decide(true);
+          if (after === 'open') throw new CancelRevertedError(vb);
+          return ended(after);
         }
-        return ended(after);
+        const receipt = await receiptOf(n, hash);
+        const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
+          (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === nonce,
+        );
+        if (receipt.status !== 'success' || !canceled) {
+          const after = await decide(true);
+          if (after === 'open') throw new CancelRevertedError(vb, hash);
+          if (typeof after === 'object' && 'canceled' in after && after.canceled === hash) {
+            finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
+          }
+          return ended(after);
+        }
+        finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
+        return hash;
+      } catch (e) {
+        if (
+          e instanceof AlreadyUsedError ||
+          e instanceof CancelRevertedError ||
+          e instanceof CancelUndecidedError ||
+          e instanceof InsufficientGasFundsError
+        )
+          throw e;
+        throw new CancelInterruptedError(sent.hash, { cause: e });
       }
-      finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
-      return hash;
     },
 
     async listPending(): Promise<PendingEntry[]> {

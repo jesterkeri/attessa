@@ -2,6 +2,7 @@ import {
   decodeErrorResult,
   decodeFunctionResult,
   encodeFunctionData,
+  keccak256,
   type Abi,
   type Address,
   type ContractFunctionArgs,
@@ -11,7 +12,7 @@ import {
 import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
 import type { Chain, Deps, Global } from './context.ts';
-import { CliError, ERR, unexpected } from './copy.ts';
+import { CliError, ERR } from './copy.ts';
 import { RpcError, RpcUnavailable, revertData } from './rpc.ts';
 
 /** Contract reads and writes. Writes are planned and simulated with `eth_call`; only `send` broadcasts. */
@@ -155,22 +156,27 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     maxFeePerGas: t.maxFeePerGas,
     maxPriorityFeePerGas: t.maxPriorityFeePerGas,
   });
-  let hash: Hex;
+  // From the broadcast on, the transaction may land even if a reply is lost, so a dropped RPC is the sent-unconfirmed
+  // row with the hash (from the signed bytes), never the rpc row and never the unexpected-error line.
+  const hash = keccak256(raw);
+  const lost = () => ERR.sentUnconfirmed(step.label, hash, 'Check the tx on a Celo explorer before running again.');
   try {
-    hash = (await c.rpc.request('eth_sendRawTransaction', [raw])) as Hex;
+    await c.rpc.request('eth_sendRawTransaction', [raw]);
   } catch (e) {
     // The balance moved since the read, or the node counts more (pending txs, an L1 fee). A refused broadcast never
     // entered the pool, so the signed bytes went nowhere: "Nothing was sent." The node's text is never printed.
     if (e instanceof RpcError && isInsufficientFundsReply(e.code, e.message)) throw noFunds('Nothing was sent.');
+    if (e instanceof RpcUnavailable) throw lost();
     throw e;
   }
   for (let i = 0; i < 180; i++) {
-    const r = (await c.rpc.request('eth_getTransactionReceipt', [hash])) as {
-      status: string;
-      blockNumber: string;
-      gasUsed: string;
-      logs?: Array<{ address: Address; topics: Hex[]; data: Hex }>;
-    } | null;
+    let r: { status: string; blockNumber: string; gasUsed: string; logs?: Array<{ address: Address; topics: Hex[]; data: Hex }> } | null;
+    try {
+      r = (await c.rpc.request('eth_getTransactionReceipt', [hash])) as typeof r;
+    } catch (e) {
+      if (e instanceof RpcUnavailable || e instanceof RpcError) throw lost();
+      throw e;
+    }
     if (r) {
       if (r.status !== '0x1') {
         if (BigInt(r.gasUsed) >= t.gas) throw ERR.gasTooLow(step.label);
@@ -225,16 +231,14 @@ export async function planOrSend(
 }
 
 /**
- * Once a transaction is signed, the rpc row's "Nothing was signed" is untrue, and FLOWS §8 has no row for a seller
- * transaction whose outcome a dropped RPC hides. A dropped read after that point is said as a dropped receipt poll
- * is (`send` maps nothing after signing): the unexpected-error line for RpcUnavailable. // not in FLOWS
- * Any other line that closes with "Nothing was sent." or "Nothing was signed." (a later step's simulated revert)
- * is untrue for the command too, and FLOWS §6 J3 and §8 have no line for a partly done seller flow, so that closing
- * sentence is dropped and the rest is kept. // not in FLOWS
+ * Once a transaction of the command landed, a line that closes with "Nothing was sent." or "Nothing was signed."
+ * (the rpc row for a later step's dropped read, a later step's simulated revert) is untrue for the command, and FLOWS
+ * §6 J3 and §8 have no line for a partly done seller flow, so that closing sentence is dropped and the rest, with
+ * its one next action, is kept: "Can't reach Celo at {rpc}." / "Retry or set another `--rpc`." (re-running skips
+ * what landed). A transaction whose own outcome a dropped RPC hides is `send`'s sent-unconfirmed row. // not in FLOWS
  */
 function afterSigning(e: unknown): unknown {
   if (!(e instanceof CliError)) return e;
-  if (e.code === 'rpc_unavailable') return unexpected(new RpcUnavailable('after signing'));
   const kept = e.message.replace(NOTHING_DONE, '');
   return kept === e.message ? e : new CliError(e.code, kept, e.next);
 }

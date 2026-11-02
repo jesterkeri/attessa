@@ -447,6 +447,48 @@ describe('buyer: cancel, status, evidence export', () => {
     expect(w.out.join('\n')).not.toMatch(/NODE-TEXT/);
   });
 
+  it('attessa cancel: the RPC drops after the permission is signed, before the cancel is sent: "Nothing was sent.", never "Nothing was signed." (T21 r10)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_gasPrice') throw new RpcFailure('connect ECONNREFUSED');
+      return orig(m, p);
+    };
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.chain.calls).not.toContain('eth_sendRawTransaction');
+    expect(w.err).toEqual(["Can't reach Celo at http://127.0.0.1:1. Nothing was sent.", 'Retry or set another `--rpc`.']);
+  });
+
+  it('attessa cancel: the receipt poll drops after the broadcast: the full cancel tx and one next action, polled at most receiptWaitMs (T21 r10)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    const orig = w.chain.request.bind(w.chain);
+    let raw: `0x${string}` | undefined;
+    let polls = 0;
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_getTransactionReceipt' && raw) {
+        polls++;
+        throw new RpcFailure('connect ECONNREFUSED');
+      }
+      const r = await orig(m, p);
+      if (m === 'eth_sendRawTransaction') raw = p[0] as `0x${string}`;
+      return r;
+    };
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.err).toEqual([
+      `Lost the connection to Celo after sending the cancel (tx ${keccak256(raw!)}); it may still land.`,
+      'Run `attessa status --pending` to see whether it landed (with another `--rpc` if this one stays down).',
+    ]);
+    expect(polls).toBeLessThanOrEqual(2); // receiptWaitMs 2000 in this world: one read a second
+  });
+
   it('attessa cancel that would revert while the permission is unused: the revert line and one next action (T21 r9)', async () => {
     await initialized();
     w.gw.behavior = { paid: 'refuse' };
