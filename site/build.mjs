@@ -92,7 +92,8 @@ const copyIcon = icon('copy');
 // Two stacked arrows: on hover the first slides out and the second slides in.
 const arrow = `<span class="arrow" aria-hidden="true">${icon('arrow')}${icon('arrow')}</span>`;
 // Outcome track: four check nodes joined by a line, ending in the payment result.
-// {{track:pass pass fail na free}}: four states (pass, fail, na) then paid or free (not charged).
+// {{track:pass pass fail na free}}: four states (pass, fail, na) then paid, free (not charged, confirmed on
+// Celo) or stopped (nothing signed, so there is nothing for Celo to confirm).
 const TRACK_LABELS = ['Build', 'Machine', 'Request', 'Celo data'];
 const NODE_ICON = { pass: 'yes', fail: 'x', na: 'no' };
 function track(spec) {
@@ -101,7 +102,9 @@ function track(spec) {
     `<li class="tk" data-state="${s}">${i ? '<i class="seg"></i>' : ''}<span class="nd"><i class="node">${icon(NODE_ICON[s])}</i><b>${TRACK_LABELS[i]}</b></span></li>`).join('');
   const end = st[4] === 'paid'
     ? `<li class="tk tk-end" data-state="pass"><i class="seg"></i><span class="end-pill" data-end="paid">${icon('pass')}Paid</span></li>`
-    : `<li class="tk tk-end" data-state="na"><i class="seg"></i><span class="end-pill" data-end="free">${icon('fail')}Not charged</span></li>`;
+    : st[4] === 'stopped'
+      ? `<li class="tk tk-end" data-state="na"><i class="seg"></i><span class="end-pill" data-end="stopped">${icon('na')}Nothing signed</span></li>`
+      : `<li class="tk tk-end" data-state="na"><i class="seg"></i><span class="end-pill" data-end="free">${icon('fail')}Not charged</span></li>`;
   return `<ol class="track" aria-hidden="true">${nodes}${end}</ol>`;
 }
 

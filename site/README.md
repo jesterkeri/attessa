@@ -51,7 +51,7 @@ and a few shorthands are expanded.
 | `{{root}}` | the relative path back to the site root (pages work from any folder) |
 | `{{> name}}` | `src/partials/name.html` |
 | `{{i:name}}`, `{{arrow}}`, `{{copyIcon}}`, `{{logo}}` | icons (Phosphor), the hover arrow, the copy icon, the logo |
-| `{{track:pass pass fail na free}}` | an outcome track: four checks and the payment result |
+| `{{track:pass pass fail na free}}` | an outcome track: four checks, then `paid`, `free` (not charged) or `stopped` (nothing signed) |
 | `[[slot:name]]`, `[[hash:0x...]]` | a sample slot chip, or a real value with copy and expand |
 
 `src/static/` is copied as is. The four scripts:
