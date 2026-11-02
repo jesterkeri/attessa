@@ -285,6 +285,11 @@
         "name": "depth 33: unterminated text",
         "header": "e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7e3t7",
         "reason": "too_deep"
+      },
+      {
+        "name": "depth 33: openers after two stray closers",
+        "header": "XV1bW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1tbW1s=",
+        "reason": "too_deep"
       }
     ]
   }

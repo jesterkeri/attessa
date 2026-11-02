@@ -438,6 +438,8 @@ function depthCases(good: { proof: Record<string, string>; signature: string; si
     { name: 'depth 32: not JCS (space after colon)', header: b64(`${g.slice(0, -1)},"zz": ${objs(31)}}`), reason: 'not_jcs' },
     { name: 'depth 33: not JCS (space after colon), refused for depth first', header: b64(`${g.slice(0, -1)},"zz": ${objs(32)}}`), reason: 'too_deep' },
     { name: 'depth 33: unterminated text', header: b64('{'.repeat(33)), reason: 'too_deep' },
+    // Stray closers never take depth below zero, so the 33 openers after them reach depth 33.
+    { name: 'depth 33: openers after two stray closers', header: b64(`]]${'['.repeat(33)}`), reason: 'too_deep' },
   ];
   return cases;
 }
