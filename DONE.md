@@ -689,3 +689,28 @@ VERDICT: implementation-ready
 ```
 reviewed: reviews/t13-review-r1.md | verdict: implementation-ready | C0 M0 m0
 note: commit 2a2dab8 left git conflict markers in DONE.md (from a shared git stash). The commit after it restores DONE.md to the merge plus this entry.
+## T19a - 2026-10-30
+commit: this entry (spike, no code)
+verified: the T19a loop from TASKS.md, SEP=https://forno.celo-sepolia.celo-testnet.org MAIN=https://forno.celo.org (read-only cast balance, no writes)
+output:
+```
+https://forno.celo-sepolia.celo-testnet.org -400 ok
+https://forno.celo-sepolia.celo-testnet.org -7200 ok
+https://forno.celo.org -400 ok
+https://forno.celo.org -7200 ok
+```
+result: -400 ok on both, so the gateway inputs value check can read state 400 blocks back on Forno. -7200 ok on both, so the SDK late re-read usually works.
+reviewed: n/a (spike)
+## T08 - 2026-10-30
+commit: (this commit)
+verified: SELF_ID=85; for f in "ownerOf(uint256)(address)" "hasHumanProof(uint256)(bool)" "isProofFresh(uint256)(bool)"; do cast call 0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379 "$f" $SELF_ID --rpc-url $SEP; done
+output:
+```
+0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a
+true
+true
+exit 0
+```
+reviewed: n/a (read-only spike, no code; reproducible by the verify command)
+notes: agent 85 found via the registry's Registered/AgentRegisteredWithHumanProof events (Blockscout API, block 39967457; Forno caps eth_getLogs ranges). Owner 0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a has no code (a human wallet), i.e. linked mode. All three selectors answer at block ~40062906, so linkSelfAgent stays enabled on Sepolia.
+Note (2026-11-02): T19a is Spike S8 and T08 is Spike S4. The harness pack check reads the first `[A-Z]+[0-9]+` word of a ticked task line, which for `T19a` is `S8`, so the spike ids are named here.
