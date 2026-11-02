@@ -6,7 +6,7 @@ import type { Keychain } from '@attessa/sdk';
 import { keccak256, stringToBytes, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FakeChain } from '../../sdk/test/fakes/chain.ts';
+import { FakeChain, RpcFailure } from '../../sdk/test/fakes/chain.ts';
 import { FakeGateway } from '../../sdk/test/fakes/gateway.ts';
 import type { Deps } from '../src/context.ts';
 import { run } from '../src/index.ts';
@@ -411,6 +411,40 @@ describe('buyer: cancel, status, evidence export', () => {
     expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(0);
     expect(w.transcript[0]).toMatch(/^Cancelled \(tx 0x[0-9a-f]{4}…[0-9a-f]{2}\)\.$/);
     expect(w.pending()[0]).toMatchObject({ state: 'not_charged', code: 'cancelled' });
+  });
+
+  it('attessa cancel from a wallet without CELO for gas: insufficient_gas_funds, "Nothing was sent.", the call stays open', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const { requestId: id, payer } = w.pending()[0]! as { requestId: string; payer: `0x${string}` };
+    w.chain.setAccount(payer, { code: '0x', nonce: 0n, balance: 0n });
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.err).toEqual([
+      `${payer} doesn't have enough CELO to pay the gas for cancelAuthorization (up to 0.01 CELO). Nothing was sent.`,
+      `Add CELO to ${payer} at faucet.celo.org/celo-sepolia, then run the command again.`,
+    ]);
+    expect(w.chain.calls).not.toContain('eth_sendRawTransaction');
+    expect(w.pending()[0]!.state).not.toBe('not_charged');
+  });
+
+  it('attessa cancel --json when the node refuses the signed broadcast for funds: insufficient_gas_funds, node text not printed', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => {
+      if (m === 'eth_sendRawTransaction') throw new RpcFailure('insufficient funds for gas * price + value: balance 0, tx cost 1, overshot 1 NODE-TEXT');
+      return orig(m, p);
+    };
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    const out = JSON.parse(w.out.at(-1)!);
+    expect(out).toMatchObject({ ok: false, error: 'insufficient_gas_funds' });
+    expect(out.message).toMatch(/ Nothing was sent\.$/);
+    expect(w.out.join('\n')).not.toMatch(/NODE-TEXT/);
   });
 
   it('attessa cancel after the payment went through: "Too late to cancel", then the answer', async () => {

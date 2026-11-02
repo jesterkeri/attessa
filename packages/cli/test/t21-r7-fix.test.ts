@@ -116,6 +116,50 @@ describe('every write command, not only agent register', () => {
   });
 });
 
+describe('the next action depends on the chain: a faucet only on Celo Sepolia', () => {
+  function revokeUnfunded(chainId: number): string[] {
+    w.chain.chainId = chainId;
+    onboarded(w);
+    const signer = privateKeyToAccount(generatePrivateKey()).address.toLowerCase() as Address;
+    w.chain.addSigner(signer, { agentId: AGENT, releaseId: w.rid, originHash: originHash(ORIGIN), operator: w.operator });
+    w.env.ATTESSA_PRIVATE_KEY = w.ownerKey;
+    w.chain.balances.set(w.owner, 0n);
+    return ['revoke', 'signer', signer, '--yes'];
+  }
+  const plain = () => `Add CELO to ${w.owner}, then run the command again.`;
+  const faucet = () => `Add CELO to ${w.owner} at faucet.celo.org/celo-sepolia, then run the command again.`;
+
+  it('--network mainnet (42220): no faucet', async () => {
+    const argv = revokeUnfunded(42220);
+    expect(await w.cli(...argv, '--network', 'mainnet')).toBe(1);
+    expect(w.err).toEqual([expect.stringMatching(/^0x[0-9a-f]{40} doesn't have enough CELO .* Nothing was signed\.$/), plain()]);
+  });
+
+  it('--network local on a fork of mainnet (42220): no faucet', async () => {
+    const argv = revokeUnfunded(42220);
+    expect(await w.cli(...argv, '--network', 'local', '--rpc', 'http://127.0.0.1:8545')).toBe(1);
+    expect(w.err.at(-1)).toBe(plain());
+  });
+
+  it('--network sepolia (11142220): the faucet', async () => {
+    const argv = revokeUnfunded(11142220);
+    expect(await w.cli(...argv, '--network', 'sepolia')).toBe(1);
+    expect(w.err.at(-1)).toBe(faucet());
+  });
+
+  it('--network local on a fork of Celo Sepolia (11142220): the faucet', async () => {
+    const argv = revokeUnfunded(11142220);
+    expect(await w.cli(...argv, '--network', 'local', '--rpc', 'http://127.0.0.1:8545')).toBe(1);
+    expect(w.err.at(-1)).toBe(faucet());
+  });
+
+  it('--network local on another chain (31337): no faucet', async () => {
+    const argv = revokeUnfunded(31337);
+    expect(await w.cli(...argv, '--network', 'local', '--rpc', 'http://127.0.0.1:8545')).toBe(1);
+    expect(w.err.at(-1)).toBe(plain());
+  });
+});
+
 describe('celoUp', () => {
   it('rounds up, to hundredths below 1 CELO and to whole CELO from 1', () => {
     expect(celoUp(0n)).toBe('0.00');

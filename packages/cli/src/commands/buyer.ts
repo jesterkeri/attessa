@@ -4,6 +4,7 @@ import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
   AttestError,
+  InsufficientGasFundsError,
   KeyError,
   RpcError as SdkRpcError,
   Ledger,
@@ -490,6 +491,9 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     d.io.data?.({ requestId: id, outcome: 'not_charged', code: 'cancelled', cancelTx: tx });
     return 0;
   } catch (e) {
+    // The cancel permission is signed before its transaction, so a wallet without CELO ends "Nothing was sent.",
+    // whether the SDK refused before signing the transaction or the node refused its broadcast.
+    if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
     if (!(e instanceof AlreadyUsedError)) throw e;
     d.io.out(BUY.tooLateToCancel(e.tx ?? ''));
     return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));

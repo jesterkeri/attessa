@@ -1,3 +1,5 @@
+import { DEPLOYMENTS } from '@attessa/core';
+
 /**
  * User-facing lines, verbatim from FLOWS.md §6 (J3 dialog) and §8 (errors), with only their `{…}` slots
  * filled. Lines FLOWS doesn't have are marked `// not in FLOWS` and listed as design questions.
@@ -185,14 +187,17 @@ export const ERR = {
   /**
    * FLOWS §5 row 26 names the code `insufficient_gas_funds` but §8 has no row for it. // not in FLOWS: the line and
    * its next action, worded like §8 "gas too low" and "payment invalid" ("Add at least {n} USDC to {address}."), with
-   * J0's "CELO for gas at faucet.celo.org/celo-sepolia". `tail` is "Nothing was signed." before the signature and
-   * "Nothing was sent." when the node refused the signed transaction.
+   * J0's "CELO for gas at faucet.celo.org/celo-sepolia" only on Celo Sepolia (chain 11142220, `--network sepolia` or a
+   * local fork of it); anywhere else, mainnet included, there is no faucet. `tail` is "Nothing was signed." before any
+   * signature and "Nothing was sent." once something was signed but not broadcast.
    */
-  insufficientGasFunds: (address: string, step: string, maxCost: bigint, sepolia: boolean, tail: 'Nothing was signed.' | 'Nothing was sent.') =>
+  insufficientGasFunds: (address: string, step: string, maxCost: bigint, chainId: number, tail: 'Nothing was signed.' | 'Nothing was sent.') =>
     new CliError(
       'insufficient_gas_funds',
       `${address} doesn't have enough CELO to pay the gas for ${step} (up to ${celoUp(maxCost)} CELO). ${tail}`,
-      sepolia ? `Add CELO to ${address} at faucet.celo.org/celo-sepolia, then run the command again.` : `Add CELO to ${address}, then run the command again.`,
+      chainId === DEPLOYMENTS['celo-sepolia'].chainId
+        ? `Add CELO to ${address} at faucet.celo.org/celo-sepolia, then run the command again.`
+        : `Add CELO to ${address}, then run the command again.`,
     ),
   // not in FLOWS
   noRegistry: (network: string) =>

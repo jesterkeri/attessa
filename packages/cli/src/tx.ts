@@ -8,6 +8,7 @@ import {
   type ContractFunctionName,
   type Hex,
 } from 'viem';
+import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
 import type { Chain, Deps, Global } from './context.ts';
 import { CliError, ERR, unexpected } from './copy.ts';
@@ -15,8 +16,8 @@ import { RpcError, RpcUnavailable, revertData } from './rpc.ts';
 
 /** Contract reads and writes. Writes are planned and simulated with `eth_call`; only `send` broadcasts. */
 
-/** EIP-7825 per-transaction gas cap; every registry function stays below it (SPEC §3.4, C1.1). */
-export const TX_GAS_CAP = 16_777_216n;
+/** EIP-7825 per-transaction gas cap; every registry function stays below it (SPEC §3.4, C1.1). Shared with the SDK. */
+export { TX_GAS_CAP } from '@attessa/sdk';
 
 /**
  * The seller-side FLOWS §8 "rpc unavailable" row for a chain read made before anything is signed: a dropped
@@ -33,10 +34,6 @@ function isRevert(e: RpcError): boolean {
   return e.code === 3 || revertData(e) !== null || /revert/i.test(e.message);
 }
 
-/** geth's (and op-geth's) txpool refusal `core.ErrInsufficientFunds`: JSON-RPC -32000, "insufficient funds for gas * price + value: …". */
-function isInsufficientFunds(e: unknown): boolean {
-  return e instanceof RpcError && e.code === -32000 && /^insufficient funds\b/i.test(e.message);
-}
 
 /** One chain read, before anything is signed, with `rpcRow`'s mapping. */
 async function chainRead<T>(c: Chain, f: () => Promise<T>): Promise<T> {
@@ -119,11 +116,6 @@ export async function gasPrice(c: Chain): Promise<bigint> {
   return BigInt((await chainRead(c, () => c.rpc.request('eth_gasPrice', []))) as string);
 }
 
-function gasLimit(estimate: bigint): bigint {
-  const padded = (estimate * 12n) / 10n;
-  return padded < TX_GAS_CAP ? padded : TX_GAS_CAP - 1n;
-}
-
 export interface Sent {
   hash: Hex;
   blockNumber: bigint;
@@ -146,14 +138,12 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     chainRead(c, () => c.rpc.request('eth_maxPriorityFeePerGas', [])).then((v) => BigInt(v as string)),
     chainRead(c, () => c.rpc.request('eth_getBalance', [account.address, 'latest'])).then((v) => BigInt(v as string)),
   ]);
-  const maxFeePerGas = price * 2n + tip;
-  const gas = gasLimit(sim.gas);
-  // The node's own admission rule for a value-0 tx: balance >= gas * maxFeePerGas. eth_call and eth_estimateGas
-  // above carry no fee fields, so they never check the balance; this read does, before anything is signed.
-  const maxCost = gas * maxFeePerGas;
+  // The shared gas terms and funds rule (@attessa/sdk gas.ts): refused before signing when the balance can't
+  // cover gas x maxFeePerGas; eth_call and eth_estimateGas above carry no fee fields, so they never check it.
+  const t = gasTerms(sim.gas, price, tip);
   const noFunds = (tail: 'Nothing was signed.' | 'Nothing was sent.') =>
-    ERR.insufficientGasFunds(account.address.toLowerCase(), step.label, maxCost, c.network === 'sepolia', tail);
-  if (balance < maxCost) throw noFunds('Nothing was signed.');
+    ERR.insufficientGasFunds(account.address.toLowerCase(), step.label, t.maxCost, c.chainId, tail);
+  if (!canPayGas(balance, t)) throw noFunds('Nothing was signed.');
   const raw = await account.signTransaction({
     type: 'eip1559',
     chainId: c.chainId,
@@ -161,9 +151,9 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     to: step.to,
     data: step.data,
     value: 0n,
-    gas,
-    maxFeePerGas,
-    maxPriorityFeePerGas: tip,
+    gas: t.gas,
+    maxFeePerGas: t.maxFeePerGas,
+    maxPriorityFeePerGas: t.maxPriorityFeePerGas,
   });
   let hash: Hex;
   try {
@@ -171,7 +161,7 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   } catch (e) {
     // The balance moved since the read, or the node counts more (pending txs, an L1 fee). A refused broadcast never
     // entered the pool, so the signed bytes went nowhere: "Nothing was sent." The node's text is never printed.
-    if (isInsufficientFunds(e)) throw noFunds('Nothing was sent.');
+    if (e instanceof RpcError && isInsufficientFundsReply(e.code, e.message)) throw noFunds('Nothing was sent.');
     throw e;
   }
   for (let i = 0; i < 180; i++) {
@@ -183,7 +173,7 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     } | null;
     if (r) {
       if (r.status !== '0x1') {
-        if (BigInt(r.gasUsed) >= gasLimit(sim.gas)) throw ERR.gasTooLow(step.label);
+        if (BigInt(r.gasUsed) >= t.gas) throw ERR.gasTooLow(step.label);
         throw new CliError('tx_reverted', `The transaction reverted at ${step.label} (tx ${hash}). Nothing changed.`, 'Run the command again to see why.');
       }
       return { hash, blockNumber: BigInt(r.blockNumber), logs: (r.logs ?? []).map((l) => ({ ...l, address: l.address.toLowerCase() as Address })) };

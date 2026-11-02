@@ -1,8 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import {
   bytesToHex,
-  createWalletClient,
-  defineChain,
+  encodeFunctionData,
   http,
   parseEventLogs,
   parseSignature,
@@ -29,6 +28,7 @@ import {
 } from '@attessa/core';
 import { EIP3009_TYPES, ENDPOINT_STATUS, tokenAbi } from './abi.ts';
 import { Chain, RpcError, type Settlement } from './chain.ts';
+import { InsufficientGasFundsError, canPayGas, gasTerms, isInsufficientFundsReply } from './gas.ts';
 import { Ledger, isTerminal } from './ledger.ts';
 import {
   decodePaymentRequired,
@@ -348,6 +348,54 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   }
 
   /** The settlement tx for an entry, from the chain: an `AuthorizationUsed` whose receipt also has the Transfer. */
+  /**
+   * Signs and broadcasts the payer's cancel transaction (value 0) with the shared gas terms (`gasTerms`). Refuses
+   * before signing when the balance can't cover them, and maps the node's "insufficient funds" refusal of the
+   * broadcast to the same error: either way nothing was sent. Reads that fail are RpcError; the node's text of a
+   * funds refusal is not kept.
+   */
+  async function sendCancel(n: Net, to: Address, data: Hex): Promise<Hash> {
+    const from = cfg.account.address;
+    const read = async (method: string, params: unknown[]): Promise<bigint> => {
+      try {
+        return BigInt((await n.chain.client.request({ method, params } as never)) as string);
+      } catch (e) {
+        throw new RpcError(`${method}: ${(e as Error).message?.split('\n')[0] ?? String(e)}`, { cause: e });
+      }
+    };
+    const [estimate, price, tip, nonce, balance] = await Promise.all([
+      read('eth_estimateGas', [{ from, to, data }]),
+      read('eth_gasPrice', []),
+      read('eth_maxPriorityFeePerGas', []),
+      read('eth_getTransactionCount', [from, 'pending']),
+      read('eth_getBalance', [from, 'latest']),
+    ]);
+    const t = gasTerms(estimate, price, tip);
+    if (!canPayGas(balance, t)) throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, false);
+    const raw = await cfg.account.signTransaction({
+      type: 'eip1559',
+      chainId: n.chainId,
+      nonce: Number(nonce),
+      to,
+      data,
+      value: 0n,
+      gas: t.gas,
+      maxFeePerGas: t.maxFeePerGas,
+      maxPriorityFeePerGas: t.maxPriorityFeePerGas,
+    });
+    try {
+      return (await n.chain.client.request({ method: 'eth_sendRawTransaction', params: [raw] } as never)) as Hash;
+    } catch (e) {
+      for (let c: unknown = e; c; c = (c as { cause?: unknown }).cause) {
+        const x = c as { code?: unknown; details?: unknown; message?: unknown };
+        if (isInsufficientFundsReply(x.code, x.details) || isInsufficientFundsReply(x.code, x.message)) {
+          throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, true);
+        }
+      }
+      throw e;
+    }
+  }
+
   async function findSettlement(n: Net, entry: PendingEntry): Promise<Settlement | null> {
     const head = await n.chain.latest();
     const from = entry.signedAtBlock ? BigInt(entry.signedAtBlock) : head.number > 1000n ? head.number - 1000n : 0n;
@@ -942,19 +990,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         message: { authorizer: entry.payer, nonce: entry.nonce },
       });
       const { r, s, v, yParity } = parseSignature(sig);
-      const chain = defineChain({
-        id: n.chainId,
-        name: `chain-${n.chainId}`,
-        nativeCurrency: { name: 'CELO', symbol: 'CELO', decimals: 18 },
-        rpcUrls: { default: { http: [] } },
-      });
-      const wallet = createWalletClient({ account: cfg.account, chain, transport });
-      const hash = await wallet.writeContract({
-        address: entry.asset,
+      const hash = await sendCancel(n, entry.asset, encodeFunctionData({
         abi: tokenAbi,
         functionName: 'cancelAuthorization',
         args: [entry.payer, entry.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
-      });
+      }));
       const receipt = await n.chain.client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
       const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
         (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === entry.nonce,
