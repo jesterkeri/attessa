@@ -2,7 +2,7 @@
 //   1. hero: loose dust drifts behind the headline; scrolling into the statement assembles it
 //      into a cluster of cubes ("sealed machines") beside the text, with labels pinned to corners
 //   2. story (pinned): one build is approved (lime), its machine lifts out, its corners tick off the
-//      five checks, then a tampered machine breaks apart in red
+//      four checks that pass before paying, then a tampered machine breaks apart in red
 //   3. after the story: the cubes burst back into dust, and each pinned scene gathers it into an object
 //      in the slot beside its text: a seal that answers each outcome, the globe with labels, a coin that
 //      turns as the spending limits arrive around it, one big cube whose right half comes loose for
@@ -629,7 +629,7 @@ function initGL() {
   pts.frustumCulled = false;
   cluster.add(pts);
 
-  // Corner dots: eight per cube. The approved machine's first five light up as the checks pass.
+  // Corner dots: eight per cube. The approved machine's first four light up as the checks pass.
   const cn = CUBES.length * 8;
   const cpos = new Float32Array(cn * 3), ccube = new Float32Array(cn), ccorner = new Float32Array(cn), crand = new Float32Array(cn * 4);
   CUBES.forEach((c, ci) => {
@@ -824,7 +824,7 @@ function targets() {
     x: wide ? viewW * 0.2 : gap.x, y: wide ? -viewH * 0.04 : gap.y, scale: baseScale * 0.74 * (wide ? 1 : fit),
     turn: 0.15 + s * 0.12, spin: 0.02,
     active: ramp(s, 0.1, 0.7), dim: ramp(s, 0.1, 0.7), lift: ramp(s, 1.05, 1.8) * 1.3, edgeA: ramp(s, 2.0, 2.6),
-    checks: ramp(s, 3.0, 3.85) * 5, tamper: ramp(s, 4.0, 4.3), scatter: ramp(s, 4.15, 4.9),
+    checks: ramp(s, 3.0, 3.85) * 4, tamper: ramp(s, 4.0, 4.3), scatter: ramp(s, 4.15, 4.9),
     // On phones the camera barely moves, so the cubes stay inside their gap
     camZ: 10 - ramp(s, 0.6, 2.2) * (wide ? 2.2 : 0.6) + ramp(s, 3.9, 4.6) * (wide ? 1.1 : 0.3),
     camX: wide ? viewW * 0.2 * ramp(s, 0.6, 2.2) * 0.35 - ramp(s, 3.9, 4.6) * 0.4 : 0,
