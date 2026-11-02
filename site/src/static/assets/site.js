@@ -281,17 +281,19 @@
   const NAMES = ['Approved build', 'Sealed machine', 'This exact request and answer', 'Real Celo data', 'Payment'];
   const build = { s: 'pass', line: "The agent's owner approved this build.", term: `release ${chip('releaseId')} for agent ${chip('agentId')}`, more: `Owner says it's built from ${chip('sourceRepo')} @ ${chip('sourceCommit')} <span class="muted">(not checked by Attessa)</span>`, link: scan('approval tx') };
   const machine = { s: 'pass', line: () => `AWS attests that this signer runs that build at ${chip('endpointOrigin')}.`, term: `signer ${chip('signerAddress')}, Nitro enclave, valid until ${chip('signerExpiry')}`, link: scan('signer tx') };
-  const exact = { s: 'pass', line: 'The proof covers this request and this answer, byte for byte.', term: `request hash ${chip('requestHash')}, response hash ${chip('responseHash')}, EIP-712 ExecutionProof` };
-  const data = { s: 'pass', line: () => `The inputs came from Celo block ${chip('inputsBlock')}, checked by hash.`, term: `inputs hash ${chip('inputsHash')}, block under 300 s old when read`, link: scan('block') };
   const skipped = { s: 'na', w: 'Skipped', line: 'Not checked: the call stopped at the failed check.' };
+  // What a settlement tx shows on Celo alone; the proof checks need the call's proof, which no public route serves yet.
+  const buildChain = { ...build, line: "The endpoint's agent has this build approved on Celo." };
+  const machineChain = { ...machine, line: () => `A signer for that build is registered for ${chip('endpointOrigin')}, with AWS's attestation checked on Celo.` };
+  const planned = { s: 'na', w: 'Planned', line: "Planned: this check needs the call's signed proof, and no public route serves it yet." };
   const noProof = { s: 'na', line: 'No proof offered, so there is nothing to check.' };
 
   const STATES = {
     verified: {
-      verdict: 'verified', word: 'Verified', sub: 'and paid',
-      rows: [build, machine, exact, data,
-        { s: 'pass', w: 'Paid', line: () => `Paid ${chip('amount')} ${chip('asset')}, settled after the proof was checked.`, term: `settled in tx ${chip('settlementTx')}, EIP-3009 authorization`, link: scan('settlement tx') }],
-      verdictLine: 'This answer came from the approved build, for this request, with these inputs, and was paid for only after the check passed.',
+      verdict: 'verified', word: 'Verified on chain', sub: 'and paid',
+      rows: [buildChain, machineChain, planned, planned,
+        { s: 'pass', w: 'Paid', line: () => `Paid ${chip('amount')} ${chip('asset')} to the endpoint's registered pay-to address.`, term: `settled in tx ${chip('settlementTx')}, EIP-3009 authorization`, link: scan('settlement tx') }],
+      verdictLine: "The on-chain part checks out: the call paid a registered endpoint whose build was approved, with a signer registered, when it settled. Which build answered, for this exact request and these inputs, needs the call's proof: planned.",
     },
     tampered: {
       verdict: 'rejected', word: 'Rejected', sub: 'not charged',

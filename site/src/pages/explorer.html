@@ -24,8 +24,8 @@
         <ol>
           <li>Approved build<span>registry</span></li>
           <li>Sealed machine<span>AWS attestation</span></li>
-          <li>This exact request and answer<span>signed hashes</span></li>
-          <li>Real Celo data<span>block read</span></li>
+          <li>This exact request and answer<span>signed hashes, planned</span></li>
+          <li>Real Celo data<span>block read, planned</span></li>
           <li>Payment<span>settlement</span></li>
         </ol>
       </div>
@@ -35,7 +35,7 @@
   <section class="explorer-results" aria-label="Result">
     <div class="wrap">
       <div class="preview-bar">
-        <p><span class="preview-k">UI preview</span>Nothing is read from Celo yet, so results show sample slots. Pick a state to see each one.</p>
+        <p><span class="preview-k">UI preview</span>Nothing is read from Celo yet, so results show sample slots. Pick a state to see each one. The rejected states need request-ID lookup and the call's proof, which are planned.</p>
         <label class="sr-only" for="preview">Preview state</label>
         <select id="preview" data-preview>
           <option value="verified">Verified</option>
@@ -63,7 +63,7 @@
     <div class="wrap">
       <div class="sec-head">
         <h2 id="recent" data-split>Recent calls</h2>
-        <p class="sec-lede" data-fade>The latest settlements, read from Celo events. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: <code>attessa status --pending</code> checks it later (<span class="muted">Coming</span>). <span class="muted">Planned:</span> looking it up here by its request ID. The rows below are samples until the explorer reads Celo.</p>
+        <p class="sec-lede" data-fade>The latest settlements, read from Celo events. Each row shows what Celo shows: the payment, not the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: <code>attessa status</code> shows your recent verdicts (<span class="muted">Coming</span>). <span class="muted">Planned:</span> looking it up here by its request ID. The rows below are samples until the explorer reads Celo.</p>
       </div>
       <table class="feed" data-fade>
         <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Endpoint</th><th scope="col">Outcome</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Checklist</span></th></tr></thead>
@@ -71,35 +71,35 @@
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled">{{i:pass}}Settled</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
             <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled">{{i:pass}}Settled</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
             <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled">{{i:pass}}Settled</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
             <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled">{{i:pass}}Settled</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
             <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled">{{i:pass}}Settled</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
             <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
