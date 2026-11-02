@@ -81,7 +81,7 @@
         <tr><td><code>maxAmount</code></td><td>The most this call may cost, in the asset's atomic units. The SDK uses the lower of this and your configured limit per call. Over it, nothing is signed: <code>over_max_amount</code>.</td></tr>
         <tr><td><code>dailyCap</code></td><td>Set in <code>Limits</code>. Today's settled plus reserved spend, per asset, per UTC day. Over it, nothing is signed: <code>over_daily_cap</code>.</td></tr>
         <tr><td><code>asset</code></td><td>Which stablecoin to pay in: USDC, or USA₮ on mainnet.</td></tr>
-        <tr><td><code>requestId</code></td><td>Reuse an ID to resume a call instead of paying again.</td></tr>
+        <tr><td><code>requestId</code></td><td>Your own ID for this call: 32 random bytes, fresh for every new call. Never reuse one after its call has ended; the gateway answers <code>request_id_conflict</code>. To resume an interrupted call, send the same request again: the SDK finds it in its ledger and never pays twice.</td></tr>
         <tr><td><code>newRequest</code></td><td>Force a fresh request ID.</td></tr>
       </tbody>
     </table></div>
