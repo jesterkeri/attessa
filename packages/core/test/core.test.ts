@@ -12,6 +12,7 @@ import {
 } from 'viem';
 import { privateKeyToAccount, sign } from 'viem/accounts';
 import {
+  ATTESTED_PROOF_MAX_DEPTH,
   BINDING_TYPEHASH,
   DEPLOYMENTS,
   GATEWAY_ERRORS,
@@ -25,6 +26,7 @@ import {
   inputsHash,
   jcs,
   livenessDigest,
+  nestsDeeperThan,
   normalizeOrigin,
   originHash,
   parsePayerSig,
@@ -257,6 +259,56 @@ describe('headers (SPEC §2.5)', () => {
     expect(text).toBe(jcs(JSON.parse(text)));
     expect(text.startsWith('{"proof":{"agentId":"3",')).toBe(true);
     expect(decodeAttestedProof(header)).toEqual({ proof: PROOF, signature: sig, signer });
+  });
+
+  it('X-Attested-Proof nesting limit: depth 32 passes the depth check, 33 is refused first', async () => {
+    const sig = await sign({ hash: proofDigest(eip712Domain(1n, REGISTRY), PROOF), privateKey: KEY, to: 'hex' });
+    const signer = privateKeyToAccount(KEY).address.toLowerCase() as `0x${string}`;
+    const text = Buffer.from(encodeAttestedProof({ proof: PROOF, signature: sig, signer }), 'base64').toString('utf8');
+    const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
+    // An extra member under the outer object (level 1): total depth is the value's depth + 1.
+    const withExtra = (value: string) => b64(`${text.slice(0, -1)},"zz":${value}}`);
+    const objs = (n: number) => `${'{"a":'.repeat(n)}1${'}'.repeat(n)}`;
+    const arrs = (n: number) => `${'['.repeat(n)}${']'.repeat(n)}`;
+    const TOO_DEEP = 'X-Attested-Proof: too deep';
+    const reason = (header: string) => {
+      try {
+        decodeAttestedProof(header);
+        return 'accepted';
+      } catch (e) {
+        return (e as Error).message;
+      }
+    };
+
+    expect(ATTESTED_PROOF_MAX_DEPTH).toBe(32);
+    // Depth 32 is judged by the remaining rules (here: an unknown field), not by depth.
+    expect(reason(withExtra(objs(31)))).toBe('X-Attested-Proof: unknown field');
+    expect(reason(withExtra(arrs(31)))).toBe('X-Attested-Proof: unknown field');
+    // Depth 33, by objects or by arrays.
+    expect(reason(withExtra(objs(32)))).toBe(TOO_DEEP);
+    expect(reason(withExtra(arrs(32)))).toBe(TOO_DEEP);
+    expect(reason(b64('['.repeat(33)))).toBe(TOO_DEEP);
+    // The Codex r3 case: about 3,000 levels made the recursive jcs throw RangeError.
+    expect(reason(withExtra(objs(3000)))).toBe(TOO_DEEP);
+    // Checked before JCS: a deep text that is also not canonical is refused for depth.
+    expect(reason(b64(`${text.slice(0, -1)},"zz": ${objs(32)}}`))).toBe(TOO_DEEP);
+    expect(reason(b64(`${text.slice(0, -1)},"zz": ${objs(31)}}`))).toBe('X-Attested-Proof: not JCS');
+
+    // Brackets inside strings do not count, escaped quotes and backslashes included.
+    const s = jcs(`${'{['.repeat(50)}"${'[{'.repeat(50)}\\`);
+    expect(s).toContain('"[{');
+    expect(s.endsWith('\\\\"')).toBe(true);
+    expect(reason(withExtra(s))).toBe('X-Attested-Proof: unknown field');
+    // A string ending in an escaped backslash closes, so the brackets after it count.
+    expect(reason(withExtra(`[${jcs('x\\')},${arrs(31)}]`))).toBe(TOO_DEEP);
+    expect(reason(withExtra(`[${jcs('x\\')},${arrs(30)}]`))).toBe('X-Attested-Proof: unknown field');
+
+    // The scanner alone: closers never take depth below zero, and multi-byte UTF-8 is opaque.
+    const bytes = (t: string) => new TextEncoder().encode(t);
+    expect(nestsDeeperThan(bytes(arrs(32)), 32)).toBe(false);
+    expect(nestsDeeperThan(bytes(`]]]${'['.repeat(32)}`), 32)).toBe(false);
+    expect(nestsDeeperThan(bytes(`]]]${'['.repeat(33)}`), 32)).toBe(true);
+    expect(nestsDeeperThan(bytes(`["é€😀${'['.repeat(40)}"]`), 1)).toBe(false);
   });
 
   it('X-Attest-Payer-Sig grammar and message', () => {

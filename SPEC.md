@@ -125,7 +125,7 @@ Liveness(uint256 agentId,bytes32 releaseId,bytes32 originHash,bytes32 challenge,
 | `PAYMENT-REQUIRED` | gw→buyer | base64 JSON x402 v2 `PaymentRequired`. Present on 402 |
 | `PAYMENT-SIGNATURE` | buyer→gw | base64 JSON x402 v2 `PaymentPayload` |
 | `PAYMENT-RESPONSE` | gw→buyer | base64 JSON x402 v2 settlement response. Present on 200; on 202 `settle_pending` only when a tx hash is known |
-| `X-Attested-Proof` | gw→buyer | base64 of JCS `{"proof":{…strings…},"signature":"0x…","signer":"0x…"}` |
+| `X-Attested-Proof` | gw→buyer | base64 of JCS `{"proof":{…strings…},"signature":"0x…","signer":"0x…"}`. Nesting limit: the decoded JSON nests at most 32 levels, where each object or array opens one level and the outer object is level 1 (brackets inside strings do not count). Every implementation checks depth on the decoded text first, before parsing it or comparing it with JCS, and refuses deeper input with reason `TooDeep`. Vectors cover depth 32 (judged by the remaining rules) and depth 33 (`TooDeep`) |
 | `X-Attest-Payer-Sig` | buyer→gw | `<unixSeconds>.<0x65-byte-hex>`. The signature is EIP-191 `personal_sign` over the ASCII string `attested-exec:results:<requestId lowercase>:<unixSeconds>`. Accepted within 300 s of gateway time |
 | `Retry-After` | gw→buyer | seconds, on 202/429/503 |
 

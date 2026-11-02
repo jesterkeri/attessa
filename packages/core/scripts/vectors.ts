@@ -423,6 +423,41 @@ async function eip712() {
 
 // ---------------------------------------------------------------- headers
 
+/**
+ * SPEC §2.5 nesting limit: the decoded JSON nests at most 32 levels, the outer object being level 1,
+ * and deeper input is refused as too_deep before parsing or the JCS check. Cases at depth 32 are
+ * judged by the remaining rules; brackets inside strings do not count.
+ */
+function depthCases(good: { proof: Record<string, string>; signature: string; signer: string }) {
+  const b64 = (s: string) => Buffer.from(s, 'utf8').toString('base64');
+  const g = jcs(good);
+  // An extra top-level key whose value nests n objects (or arrays): total depth n + 1.
+  const objs = (n: number) => `${'{"a":'.repeat(n)}1${'}'.repeat(n)}`;
+  const arrs = (n: number) => `${'['.repeat(n)}${']'.repeat(n)}`;
+  const extra = (value: string) => b64(`${g.slice(0, -1)},"zz":${value}}`);
+  // The same inside `proof`: total depth n + 2.
+  const inProof = (value: string) => b64(g.replace('"proof":{', `"proof":{"aa":${value},`));
+  // A string full of brackets, with an escaped quote and an escaped backslash among them.
+  const bracketString = jcs(`${'{['.repeat(40)}"${'{['.repeat(40)}\\${'['.repeat(40)}`);
+  const cases = [
+    { name: 'depth 32: objects under an extra key', header: extra(objs(31)), reason: 'unknown_field' },
+    { name: 'depth 33: objects under an extra key', header: extra(objs(32)), reason: 'too_deep' },
+    { name: 'depth 32: arrays under an extra key', header: extra(arrs(31)), reason: 'unknown_field' },
+    { name: 'depth 33: arrays under an extra key', header: extra(arrs(32)), reason: 'too_deep' },
+    { name: 'depth 32: mixed objects and arrays inside proof', header: inProof(`[${objs(14)},${'[{"b":'.repeat(14)}[0]${'}]'.repeat(14)}]`), reason: 'unknown_field' },
+    { name: 'depth 33: objects inside proof', header: inProof(objs(31)), reason: 'too_deep' },
+    { name: 'depth 33: arrays after a string that ends in an escaped backslash', header: extra(`[${jcs('x\\')},${arrs(31)}]`), reason: 'too_deep' },
+    { name: 'depth 3001: objects under an extra key', header: extra(objs(3000)), reason: 'too_deep' },
+    { name: 'brackets inside a string do not count', header: extra(bracketString), reason: 'unknown_field' },
+    { name: 'depth 32: not JCS (space after colon)', header: b64(`${g.slice(0, -1)},"zz": ${objs(31)}}`), reason: 'not_jcs' },
+    { name: 'depth 33: not JCS (space after colon), refused for depth first', header: b64(`${g.slice(0, -1)},"zz": ${objs(32)}}`), reason: 'too_deep' },
+    { name: 'depth 33: unterminated text', header: b64('{'.repeat(33)), reason: 'too_deep' },
+    // Stray closers never take depth below zero, so the 33 openers after them reach depth 33.
+    { name: 'depth 33: openers after two stray closers', header: b64(`]]${'['.repeat(33)}`), reason: 'too_deep' },
+  ];
+  return cases;
+}
+
 async function headers() {
   const bytes32 = {
     valid: [
@@ -526,19 +561,21 @@ async function headers() {
     { name: 'uint256 overflow', header: withProof({ agentId: (MAX_UINT256 + 1n).toString() }), reason: 'field_grammar' },
     { name: 'UTF-8 BOM before the JCS bytes', header: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(jcs(goodJson), 'utf8')]).toString('base64'), reason: 'not_jcs' },
     { name: 'uppercase signer', header: b64(jcs({ ...goodJson, signer: goodJson.signer.toUpperCase().replace('0X', '0x') })), reason: 'field_grammar' },
+    ...depthCases(goodJson),
   ];
   for (const c of proofInvalid) {
-    let threw = false;
+    let msg = '';
     try {
       decodeAttestedProof(c.header);
-    } catch {
-      threw = true;
+    } catch (e) {
+      msg = e instanceof Error ? e.message : String(e);
     }
-    check(threw, `attested proof invalid ${c.name}`);
+    check(msg !== '', `attested proof invalid ${c.name}`);
+    check(msg.endsWith(': too deep') === (c.reason === 'too_deep'), `attested proof invalid ${c.name}: got ${msg}`);
   }
 
   return {
-    spec: 'SPEC §2.5. X-Request-Id and X-Attest-Challenge share the bytes32 grammar. X-Attest-Payer-Sig message is EIP-191 personal_sign. X-Attested-Proof is base64(JCS); its proof fields are in eip712.json grammar.',
+    spec: 'SPEC §2.5. X-Request-Id and X-Attest-Challenge share the bytes32 grammar. X-Attest-Payer-Sig message is EIP-191 personal_sign. X-Attested-Proof is base64(JCS) nesting at most 32 levels (deeper is too_deep, checked right after base64, before parsing or JCS); its proof fields are in eip712.json grammar.',
     bytes32: bytes32,
     retryAfter,
     payerSig: { valid: payerValid, invalid: payerInvalid },

@@ -714,3 +714,107 @@ exit 0
 reviewed: n/a (read-only spike, no code; reproducible by the verify command)
 notes: agent 85 found via the registry's Registered/AgentRegisteredWithHumanProof events (Blockscout API, block 39967457; Forno caps eth_getLogs ranges). Owner 0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a has no code (a human wallet), i.e. linked mode. All three selectors answer at block ~40062906, so linkSelfAgent stays enabled on Sepolia.
 Note (2026-11-02): T19a is Spike S8 and T08 is Spike S4. The harness pack check reads the first `[A-Z]+[0-9]+` word of a ticked task line, which for `T19a` is `S8`, so the spike ids are named here.
+## T06 - 2026-10-30
+commit: 8ee8186 (builder B1, Opus; branch feat/t06-vectors, rerun by lead)
+verified: cd contracts && forge test --match-contract VectorsTest
+output:
+```
+$ cd contracts && forge test --match-contract VectorsTest
+No files changed, compilation skipped
+
+Ran 15 tests for test/VectorsTest.t.sol:VectorsTest
+[PASS] test_vectors_binding_signer() (gas: 1790017)
+[PASS] test_vectors_binding_typehash() (gas: 18777)
+[PASS] test_vectors_binding_userData() (gas: 179226)
+[PASS] test_vectors_binding_userData_acceptedByRegistry() (gas: 635611)
+[PASS] test_vectors_eip712_liveness() (gas: 224650)
+[PASS] test_vectors_eip712_proof() (gas: 264624)
+[PASS] test_vectors_eip712_signatures() (gas: 860515)
+[PASS] test_vectors_eip712_typehashes() (gas: 18753)
+[PASS] test_vectors_inputsHash() (gas: 97332)
+[PASS] test_vectors_origins_invalid_prefixAndLength() (gas: 404885)
+[PASS] test_vectors_origins_valid() (gas: 2370496)
+[PASS] test_vectors_releaseId() (gas: 254532)
+[PASS] test_vectors_requestHash() (gas: 148486)
+[PASS] test_vectors_requestId() (gas: 54355)
+[PASS] test_vectors_responseHash() (gas: 56062)
+Suite result: ok. 15 passed; 0 failed; 0 skipped; finished in 10.24ms (36.29ms CPU time)
+
+Ran 1 test suite in 11.01ms (10.24ms CPU time): 15 tests passed, 0 failed, 0 skipped (15 total tests)
+exit=0
+```
+adversary: NO DEFECT FOUND (with T07). 21 single-field vector mutations (first and last list entries, typehashes, signer, valid flags, invalid origins) each failed VectorsTest; 3 production mutants (high-s check removed, origin length cap 267 to 268, minimum 9 to 10) each failed it.
+reviewed: pending (Codex)
+notes: only not_https and length invalid-origin reasons are checkable on chain; the other four are off-chain by design. headers.json is outside T06 scope.
+
+## T07 - 2026-10-30
+commit: 8aa7938 (builder B1, Opus; rerun by lead)
+verified: cd contracts && forge test --match-test 'test_realFixture' --fork-url $SEP -vvv (SEP=https://forno.celo-sepolia.celo-testnet.org)
+output:
+```
+$ cd contracts && forge test --match-test 'test_realFixture' --fork-url $SEP -vvv   (SEP=https://forno.celo-sepolia.celo-testnet.org)
+No files changed, compilation skipped
+
+Ran 3 tests for test/fork/RealFixture.t.sol:RealFixtureTest
+[PASS] test_realFixture_a_registerReverts_BindingMismatch0() (gas: 28817506)
+[PASS] test_realFixture_b_paddedUnprotectedHeader_sameTbsSameRevert() (gas: 42965196)
+Logs:
+  unprotected header bytes K: 770
+
+[PASS] test_realFixture_c_validateGas_under16M() (gas: 45904844)
+Logs:
+  validateAttestationWithHints gas (measured)            : 12994642
+  validateAttestationWithHints gas (projected post-Fusaka): 13907842
+  registerSigner gas to BindingMismatch (measured)       : 13104719
+  registerSigner tx gas (projected post-Fusaka, calldata): 14547623
+  hint bytes / MODEXP calls                              : 27312 3044
+
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 7.02s (1.09s CPU time)
+
+Ran 1 test suite in 8.74s (7.02s CPU time): 3 tests passed, 0 failed, 0 skipped (3 total tests)
+exit=0
+```
+adversary: NO DEFECT FOUND. Fixture equals upstream `node tools/nitro_attestation_input.js fixture` at 0ea0d12 byte for byte (4482 bytes, keccak 0x9f0c...0e9f). Padded header is valid CBOR (K=770) through upstream decodeAttestationTbs. 3044 MODEXP calls confirmed by trace; each hits the EIP-7883 500 floor, so +300 per call is exact. Without --fork-url all three SKIP, none pass silently.
+reviewed: pending (Codex)
+notes: first run of (c) failed on a measurement error (cold SLOADs of test storage inside the measured span), fixed by copying to memory first; no threshold changed. Open: gas headroom about 1.45M (OPEN-QUESTIONS). Adversary suspicions, unproven: the validator in the test is NitroParseHarness (a NitroValidator subclass exposing the parser), not the production bytecode; and in (b) user_data has the wrong length, so the test cannot show the registry ignores a binding planted in the unprotected header. T16b covers the positive real-attestation path.
+
+## T06 Codex r3 fix and adversary rounds 1-2 (depth limit) - 2026-11-02
+Codex r3 (major): SPEC §2.5 set no nesting bound for `X-Attested-Proof`, so a ~3,000-deep canonical proof made TS throw RangeError while Solidity answered UnknownField (INV-18). Joshua chose a limit of 32 and applied the SPEC §2.5 patch himself (9f3671b).
+- 6a727d5 (failing) and 8700040: TS `decodeAttestedProof` and Solidity `HeaderGrammar` scan bracket depth on the decoded bytes first (strings and escapes skipped, a stray closer stops at 0) and refuse depth 33 as `too_deep` / `Err.TooDeep`; vectors at depth 32 (judged by the other rules) and 33.
+- Adversary r1 (on 9f3671b) found one defect: a 4.5 MB header overflowed the strict-base64 regex before the depth check (RangeError instead of too_deep). d000f21 (failing test) and 94f2a25: base64 checked by a linear loop, identical accept/reject set on 1.8M compared inputs; a `]]` + 33 `[` vector pins the stray-closer rule for the future Rust parser.
+- d378b33 merged staging (T02-T05, T09, T13). The T03 oracle test then failed: the Python oracle's recursive JCS hit RecursionError on the new deep vector. 93084fd gives the oracle its own byte scan for the same rule and pins 27 attestedProof refusals.
+- Adversary r2 (on 93084fd) found no defect: 50,020 generated headers with 0 TS/Python disagreements, 1,520 of them through Solidity with 0 mismatches, reason order base64 > too_deep > not_jcs identical in all three, 40 MB and 133 MB inputs refused in under 0.4 s.
+Verify at 93084fd, outside any sandbox:
+```
+$ cd contracts && forge test --match-contract VectorsTest
+Suite result: ok. 20 passed; 0 failed; 0 skipped; finished in 103.53ms (169.95ms CPU time)
+
+Ran 1 test suite in 104.29ms (103.53ms CPU time): 20 tests passed, 0 failed, 0 skipped (20 total tests)
+$ cd contracts && forge test --match-path 'test/adv/*'
+
+Ran 3 test suites in 1.16s (3.49s CPU time): 61 tests passed, 0 failed, 0 skipped (61 total tests)
+$ pnpm --filter @attessa/core test
+ Test Files  9 passed (9)
+      Tests  69 passed (69)
+$ python3 -I scripts/check-vectors-oracle.py
+checks: 487 fails: 0
+$ cd contracts && forge test --match-test test_realFixture --fork-url https://forno.celo-sepolia.celo-testnet.org -vvv
+[PASS] test_realFixture_a_registerReverts_BindingMismatch0() (gas: 28817506)
+[PASS] test_realFixture_b_paddedUnprotectedHeader_sameTbsSameRevert() (gas: 42965196)
+[PASS] test_realFixture_c_validateGas_under16M() (gas: 45904844)
+  validateAttestationWithHints gas (measured)            : 12994642
+  validateAttestationWithHints gas (projected post-Fusaka): 13907842
+  registerSigner gas to BindingMismatch (measured)       : 13104719
+  registerSigner tx gas (projected post-Fusaka, calldata): 14547623
+Suite result: ok. 3 passed; 0 failed; 0 skipped; finished in 6.90s (1.10s CPU time)
+```
+reviewed: pending (Codex r4, with T07)
+
+## T06 + T07 Codex review r4: SHIP - 2026-11-02
+Codex round 4 reviewed 3f0177c in a frozen worktree: no critical, major or minor finding. Round-3's major (no nesting bound for `X-Attested-Proof`) is recorded as fixed by the SPEC §2.5 limit of 32 in TypeScript, Solidity and the Python oracle; round-1's M1 stays fixed. T07's three real-fixture tests are judged to prove what the task line says. Under U8 the sandbox could not spawn `cast` for five T03 tests or resolve Forno for the fork test; the outside-sandbox output is the previous entry.
+Closing lines of the review, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t06-t07-vectors-and-real-fixture-review-r4.md | verdict: implementation-ready | C0 M0 m0

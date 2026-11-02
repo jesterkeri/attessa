@@ -9,8 +9,6 @@ const SECONDS = /^(0|[1-9][0-9]*)$/;
 const PAYER_SIG = /^(0|[1-9][0-9]*)\.(0x[0-9a-f]{130})$/;
 const SIGNATURE = /^0x[0-9a-f]{130}$/;
 const ADDRESS = /^0x[0-9a-f]{40}$/;
-// RFC 4648 standard alphabet with padding.
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export const HEADER = {
   requestId: 'X-Request-Id',
@@ -57,9 +55,29 @@ export function payerSigDigest(requestId: Hex, unixSeconds: number): Hex {
   return hashMessage(payerSigMessage(requestId, unixSeconds));
 }
 
+/** Whether c is in the RFC 4648 standard base64 alphabet `A-Za-z0-9+/`. */
+function isBase64Char(c: number): boolean {
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39) || c === 0x2b || c === 0x2f;
+}
+
+/**
+ * RFC 4648 standard alphabet with padding: whole 4-character groups, the last of which may end in
+ * `=` or `==`. A linear loop rather than a regex, because V8's regex engine overflows its stack on a
+ * repeated group a few megabytes long, and every header length must reach the SPEC §2.5 checks.
+ */
+function isPaddedBase64(v: string): boolean {
+  const n = v.length;
+  if (n % 4 !== 0) return false;
+  let pad = 0;
+  while (pad < n && v.charCodeAt(n - 1 - pad) === 0x3d) pad++;
+  if (pad > 2) return false;
+  for (let i = 0; i < n - pad; i++) if (!isBase64Char(v.charCodeAt(i))) return false;
+  return true;
+}
+
 /** Strict RFC 4648 base64 (standard alphabet, padded, canonical) to bytes, or null. */
 export function decodeBase64Strict(v: string): Uint8Array | null {
-  if (v === '' || !BASE64.test(v)) return null;
+  if (v === '' || !isPaddedBase64(v)) return null;
   const bytes = Buffer.from(v, 'base64');
   // Rejects non-zero padding bits, which Buffer would silently drop.
   if (bytes.toString('base64') !== v) return null;
@@ -78,10 +96,42 @@ export function encodeAttestedProof(a: AttestedProof): string {
   return Buffer.from(json, 'utf8').toString('base64');
 }
 
+/** SPEC §2.5 nesting limit for the decoded `X-Attested-Proof` JSON; the outer object is level 1. */
+export const ATTESTED_PROOF_MAX_DEPTH = 32;
+
+/**
+ * Whether the decoded `X-Attested-Proof` bytes nest deeper than `max`. Each `{` or `[` opens a level
+ * and each `}` or `]` closes one (never below zero); brackets inside strings do not count, where a
+ * string runs from `"` to the next `"` not taken by a `\` escape. Iterative, and run on the bytes
+ * before UTF-8 decoding, parsing or the JCS check, so any input gets the same answer as in the
+ * Solidity and Rust grammars. Every byte it looks at is ASCII, which never occurs inside a
+ * multi-byte UTF-8 sequence.
+ */
+export function nestsDeeperThan(bytes: Uint8Array, max: number): boolean {
+  let depth = 0;
+  let str = false;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (str) {
+      if (c === 0x5c) i++;
+      else if (c === 0x22) str = false;
+    } else if (c === 0x22) {
+      str = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > max) return true;
+    } else if ((c === 0x7d || c === 0x5d) && depth > 0) {
+      depth--;
+    }
+  }
+  return false;
+}
+
 /** Parses `X-Attested-Proof`; throws on any grammar violation, including non-canonical JSON. */
 export function decodeAttestedProof(v: string): AttestedProof {
   const bytes = decodeBase64Strict(v);
   if (!bytes) throw new Error('X-Attested-Proof: not strict base64');
+  // SPEC §2.5 nesting limit, checked before anything recursive (JSON.parse, jcs) sees the text.
+  if (nestsDeeperThan(bytes, ATTESTED_PROOF_MAX_DEPTH)) throw new Error('X-Attested-Proof: too deep');
   // ignoreBOM keeps a leading U+FEFF in the text, so JSON.parse refuses it as serde_json does.
   const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
   const obj: unknown = JSON.parse(text);
