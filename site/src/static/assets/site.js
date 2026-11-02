@@ -385,7 +385,7 @@
   const MESSAGES = {
     notfound: () => message('na', 'search', 'No call found', `
       <p>Nothing on <span data-network-name>${networkName()}</span> matches ${queryChip()}.</p>
-      <p class="muted">If the call was made in the last few seconds, it may still be settling. Check that the network in the footer is the one the call used, or paste the settlement transaction instead. The gateway keeps results by request ID for 24 hours; settlement transactions can be checked any time.</p>`),
+      <p class="muted">If the call was made in the last few seconds, it may still be settling. Check that the network in the footer is the one the call used, or paste the settlement transaction instead. Settlement transactions can be checked any time. Looking a call up by its request ID is planned.</p>`),
     malformed: () => message('fail', 'alert', "That isn't a request ID or a transaction hash", `
       <p>Both start with <code>0x</code> and have 64 hex characters after it (0 to 9, a to f).</p>
       <p class="muted">A request ID is printed when a call is made with Attessa's command-line tool, <code>attessa call</code> (coming: not built yet), and saved in <code>~/.attessa/evidence.jsonl</code>. A settlement transaction is the payment's transaction on Celoscan.</p>`),
