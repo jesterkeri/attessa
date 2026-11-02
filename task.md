@@ -3,9 +3,9 @@
 TASKS.md is the list of what to build. DONE.md is the evidence. This file is who is doing what right now, on which branch, and where it is in the review chain. Updated at every step.
 
 ## Flow for every task
-1. Own branch `feat/tNN-<name>` off `staging` (builder subagents: own worktree too).
+1. Own branch `feat/tNN-<full-description>` (e.g. `feat/t19-x402-payment-gateway`) off `staging` (builder subagents: own worktree too).
 2. Build, run the TASKS.md verify command, paste the real output in DONE.md.
-3. Adversary subagent (Opus) attacks the diff against SPEC. Fix what it proves.
+3. Adversary subagent (Opus) attacks the diff against SPEC. Fix what it proves, and repeat until a round finds nothing on the exact commit Codex will review (fix rounds too).
 4. Refactor subagent (Sonnet) at the end of each gate, before the gate brief.
 5. Codex prompt for Joshua. Iterate to SHIP.
 6. PR into `staging`, CI green. `main` only on Joshua's go, after pushing `rollback/<date>-before-<change>` at the old main.
@@ -15,18 +15,18 @@ TASKS.md is the list of what to build. DONE.md is the evidence. This file is who
 | Task | What | Who | Branch | State |
 |---|---|---|---|---|
 | T01 | kill test, demo stack on Sepolia | Claude | `main` (submodule only) | simulation passed 9/9; waiting on Joshua to broadcast |
-| T02 | scaffold (pnpm, Foundry, Rust) | Claude | `feat/t02-scaffold` 2714b55 | adversary found 2, both fixed; **Codex r1 waiting on Joshua** |
-| T03 | core formats + vectors | builder B2 (Opus), done | `feat/t03-core` e2aeb15 | adversary r1: 2 fixed; r2: no defect; **Codex r1 waiting on Joshua** |
-| T04, T05 | EnclaveRegistry + invariants + mutations | builder B1 (Opus), done | `feat/t05-invariants` 0d9e8bd | adversary: no defect, 6 gap tests kept; **Codex r1 waiting on Joshua** |
-| T13 | enclave app (Rust) | builder B3 (Opus), done | `feat/t13-enclave` ca8a26e | adversary r1: 1 fixed; r2: no defect; 42 tests, fmt, clippy green; **Codex r1 waiting on Joshua** |
-| T08 | Self spike | Claude, done | `feat/t08-self-spike` 11f43e1 | done |
-| T06, T07 | vectors in Solidity, real-fixture fork tests | builder B1 (Opus), done | `feat/t07-real-fixture` 11e54d5 | adversary: no defect; **Codex r1 waiting on Joshua** |
-| T09 | coverage 100% branches, slither 15 triaged | Claude | `feat/t09-coverage` e88b0ba | **Codex r1 waiting on Joshua** |
-| T19a | RPC history depth spike | Claude, done | `feat/t19a-rpc-depth` 6fd2d76 | 400 and 7200 blocks ok on both RPCs |
-| T10 | deploy scripts, simulation only | builder B4 (Opus) | `feat/t10-deploy` | building |
-| T19 | gateway | builder B5 (Opus) | `feat/t19-gateway` | building |
-| T20 | SDK | builder B6 (Opus) | `feat/t20-sdk` | building |
-| rules | every rule in one checklist | scout (Haiku) | n/a | done, see "Rules check" below |
+| T02 | scaffold (pnpm, Foundry, Rust, CI) | Claude | `feat/t02-scaffold` f56513d | adversary r4 found 2 (install probe, workflow scanner): fixed, CI green; adversary r5 running |
+| T03 | core formats + vectors | builder (Opus) | `feat/t03-core` 242249d | adversary r4 (ZWNJ) fixed 187b78e; r5 found opaque-host reason; fix builder running |
+| T04, T05 | EnclaveRegistry + invariants + mutations | builder (Opus), done | `feat/t05-enclave-registry-invariants` 5111483 | **Codex r1 SHIP** |
+| T06, T07 | vectors in Solidity, real-fixture fork tests | builder (Opus) | `feat/t07-nitro-real-fixture` 39db437 | adversary r3 clean; **Codex r2 prompt with Joshua** (codex-t06-solidity-vector-tests-r2.md) |
+| T08 | Self spike | Claude, done | `feat/t08-self-registry-spike` 11f43e1 | done |
+| T09 | coverage 100% branches, slither 15 triaged | Claude | `feat/t09-coverage-and-slither` 3bf543a | Codex r1 SHIP; merge scaffold (symlink guard) then adversary r4 |
+| T10 | deploy scripts, check-deploy | builder (Opus) | `feat/t10-registry-deploy-scripts` 9973bbc | adversary r5-r7 same class (committed tree subverts the in-script guard); Joshua chose a pre-deploy check; fix builder running |
+| T13 | enclave app (Rust) | builder (Opus), done | `feat/t13-attestation-enclave` c70a344 | **Codex r1 SHIP** |
+| T15 | seller-host + CLI enclave/release/endpoint/signer | builder (Opus) | `feat/t15-seller-host` fc952a1 | Codex r1 REVISE (2 major, 1 minor) fixed 2056eff; adversary r3 found port vs CID; fix builder running |
+| T19 | x402 gateway | builder (Opus) | `feat/t19-x402-payment-gateway` 841536b | Codex r1 REVISE (2 minor + serial reconciler major) fixed; adversary r3 running |
+| T19a | RPC history depth spike | Claude, done | `feat/t19a-rpc-history-depth-spike` 6fd2d76 | 400 and 7200 blocks ok on both RPCs |
+| T20 | buyer SDK | builder (Opus) | `feat/t20-buyer-sdk` 9b4290c | lock now SQLite with a write probe; Joshua retired 4 fake-kill tests; adversary r7 running |
 
 ## Builders started 2026-10-29 from `feat/t02-scaffold` (worktrees in `.worktrees/`: the harness hook blocks writes under `.claude/`)
 - B1 contracts: T04 EnclaveRegistry + unit tests, then T05 invariants + mutations
