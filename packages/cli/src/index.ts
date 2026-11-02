@@ -40,7 +40,6 @@ const COMMANDS: Record<string, { opts: Opts; args: number }> = {
     opts: {
       body: { type: 'string' },
       'max-amount': { type: 'string' },
-      'daily-cap': { type: 'string' },
       asset: { type: 'string' },
       new: { type: 'boolean', default: false },
       'no-wait': { type: 'boolean', default: false },
@@ -153,7 +152,6 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
               url: a0,
               body: str(v, 'body'),
               maxAmount: str(v, 'max-amount'),
-              dailyCap: str(v, 'daily-cap'),
               asset: str(v, 'asset'),
               newRequest: v.new === true,
               noWait: v['no-wait'] === true,

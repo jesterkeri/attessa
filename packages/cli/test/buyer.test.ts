@@ -336,10 +336,23 @@ describe('buyer: FLOWS §8 refusals before signing', () => {
   });
 
   it('over the daily cap: names today\'s spend and the cap', async () => {
-    await initialized();
-    expect(await w.call('--daily-cap', '0.03')).toBe(0);
+    w = await buyerWorld();
+    expect(await w.cli('init', '--daily-cap', '0.03')).toBe(0);
+    expect(await w.call()).toBe(0);
     w.err.length = 0;
-    expect(await w.call('--daily-cap', '0.03', '--new')).toBe(1);
+    expect(await w.call('--new')).toBe(1);
+    expect(w.err).toEqual(["Not paying: this would take today's spend to 0.04 USDC; your cap is 0.03.", 'Wait until 00:00 UTC or raise `--daily-cap`.']);
+  });
+
+  it('call has no --daily-cap: one call cannot lift the saved cap (adversary t21 r1)', async () => {
+    w = await buyerWorld();
+    expect(await w.cli('init', '--daily-cap', '0.03')).toBe(0);
+    expect(await w.call()).toBe(0);
+    w.err.length = 0;
+    expect(await w.call('--daily-cap', '100', '--new')).not.toBe(0);
+    expect(w.gw.paid).toHaveLength(1);
+    w.err.length = 0;
+    expect(await w.call('--new')).toBe(1);
     expect(w.err).toEqual(["Not paying: this would take today's spend to 0.04 USDC; your cap is 0.03.", 'Wait until 00:00 UTC or raise `--daily-cap`.']);
   });
 
