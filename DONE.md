@@ -1021,3 +1021,44 @@ exit=0
 adversary: not run yet
 reviewed: pending (adversary, then Codex)
 notes: FLOWS readings, flags SPEC §8 does not give, and two T15 observations are in OPEN-QUESTIONS (From T21). Not built: `release verify` (optional, G6), `call --via buy` (T29). `scripts/check-install-scripts.sh` fails on keys that are all present at the base 32ad820 (the packages' `bin`, sdk `engines`, core `gen:vectors`, seller-host `render-units`, better-sqlite3 integrity); it flags nothing T21 changed.
+
+### T21 adversary r1 fixes - 2026-11-02
+adversary r1 (5c22712, `packages/cli/test/adversary-t21-r1-buyer.test.ts`, 5 failing) fixed in b920198 and 1534d5c:
+- `CHECK_WORDS` is looked up as an own property (`checkWords()`); a `proof_rejected` detail of "constructor", "toString" or "__proto__" gives the fallback words.
+- SDK: a throwing `onProgress` is caught and ignored; outcome, ledger and evidence match the no-handler run (`packages/sdk/test/progress.test.ts`, 4 new tests).
+- `safe()` in `packages/cli/src/copy.ts` escapes C0/C1/DEL as `\xNN` (line separators and bidi controls as `\u{NNNN}`) in every printed sourceRef, gateway detail/code, liveness reason and chain-read origin; printable text, FLOWS' included, is unchanged (`test/safe-text.test.ts`).
+- `evidence export --format csv` prefixes `'` to a cell starting with = + - @ tab or CR; jsonl unchanged.
+- `--daily-cap` removed from `call` (only `init` sets it); over-cap test sets the cap via init, new test shows `call --daily-cap 100` refused and the cap holding; OPEN-QUESTIONS "From T21" updated.
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+      Tests  131 passed (131)
+   Start at  18:01:08
+   Duration  8.58s (transform 1.91s, setup 0ms, collect 17.35s, tests 30.92s, environment 4ms, prepare 2.32s)
+
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  148 passed (148)
+   Start at  18:01:21
+   Duration  31.50s (transform 1.24s, setup 0ms, collect 11.98s, tests 48.13s, environment 3ms, prepare 2.06s)
+```
+
+`pnpm -r typecheck` (exit=0):
+```
+Scope: 5 of 6 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+```
+adversary: r1 tests pass; r2 not run yet
+reviewed: pending (adversary r2, then Codex)
