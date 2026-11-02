@@ -58,52 +58,6 @@ exit 0
 reviewed: pending (adversary, then Codex; verdict appended as a new entry)
 notes: attempt 1 failed (rootDir in the shared tsconfig resolved to the repo root); fixed per package. Rust 1.98.1 pinned; locally it is a hardlink of the installed stable 1.98.1 because the rustup download stalled. esbuild install script is skipped by the pnpm allowlist (only better-sqlite3, keytar may run scripts).
 
-## T02 adversary fix - 2026-10-29
-commit: 1eb99f7
-findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
-verified: ./scripts/check-install-scripts.sh && ./scripts/check-agents-commands.sh && <T02 verify>
-output:
-```
-install refused (exit 1): ok
-PASS install
-PASS build
-PASS test
-PASS lint
-PASS typecheck
-packages/seller-host typecheck: Done
-Warning: lib/nitro-validator: missing from foundry.lock (found 0ea0d12366b4fa44f9e07e4755f2ad36561cb674)
-Nothing to compile
-    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
-0ea0d12
-exit 0
-```
-reviewed: pending (Codex)
-notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
-
-## T19a - 2026-10-30
-commit: this entry (spike, no code)
-verified: the T19a loop from TASKS.md, SEP=https://forno.celo-sepolia.celo-testnet.org MAIN=https://forno.celo.org (read-only cast balance, no writes)
-output:
-```
-https://forno.celo-sepolia.celo-testnet.org -400 ok
-https://forno.celo-sepolia.celo-testnet.org -7200 ok
-https://forno.celo.org -400 ok
-https://forno.celo.org -7200 ok
-```
-result: -400 ok on both, so the gateway inputs value check can read state 400 blocks back on Forno. -7200 ok on both, so the SDK late re-read usually works.
-reviewed: n/a (spike)
-## T08 - 2026-10-30
-commit: (this commit)
-verified: SELF_ID=85; for f in "ownerOf(uint256)(address)" "hasHumanProof(uint256)(bool)" "isProofFresh(uint256)(bool)"; do cast call 0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379 "$f" $SELF_ID --rpc-url $SEP; done
-output:
-```
-0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a
-true
-true
-exit 0
-```
-reviewed: n/a (read-only spike, no code; reproducible by the verify command)
-notes: agent 85 found via the registry's Registered/AgentRegisteredWithHumanProof events (Blockscout API, block 39967457; Forno caps eth_getLogs ranges). Owner 0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a has no code (a human wallet), i.e. linked mode. All three selectors answer at block ~40062906, so linkSelfAgent stays enabled on Sepolia.
 ## T03 - 2026-10-30
 commit: 705d515 (built fd63419 by builder B2, Opus; fixed 705d515)
 verified: pnpm --filter @attessa/core test
@@ -425,6 +379,28 @@ exit=0
 adversary: r1 on 92b8d6c DEFECT (a JSON array was accepted where a struct was expected; fixed 607c63d). r2 on 12ebcca NO DEFECT FOUND; its two regression tests kept as enclave/tests/adv_t13_r2.rs.
 reviewed: pending (Codex)
 notes: runs the T03 vectors from 705d515 (merged from feat/t03-core). Open: frame size vs a large payTo, NSM error after boot, payer-sig hex case (OPEN-QUESTIONS).
+## T02 adversary fix - 2026-10-29
+commit: 1eb99f7
+findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
+verified: ./scripts/check-install-scripts.sh && ./scripts/check-agents-commands.sh && <T02 verify>
+output:
+```
+install refused (exit 1): ok
+PASS install
+PASS build
+PASS test
+PASS lint
+PASS typecheck
+packages/seller-host typecheck: Done
+Warning: lib/nitro-validator: missing from foundry.lock (found 0ea0d12366b4fa44f9e07e4755f2ad36561cb674)
+Nothing to compile
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.04s
+0ea0d12
+exit 0
+```
+reviewed: pending (Codex)
+notes: pnpm 10 control (same probe with pnpm@10.32.1) prints PASS. Not fixed (unproven suspicions, logged in task.md): cross-package typecheck needs a build or project references once packages import each other; tests outside src/ are not typechecked; contracts/foundry.lock untracked.
+
 ## T02 Codex r1 fixes - 2026-10-30
 commit: this entry
 review: .worktrees/review-t02-r1/reviews/t02-review-r1.md (VERDICT: changes required, M2 m1)
@@ -713,3 +689,28 @@ VERDICT: implementation-ready
 ```
 reviewed: reviews/t13-review-r1.md | verdict: implementation-ready | C0 M0 m0
 note: commit 2a2dab8 left git conflict markers in DONE.md (from a shared git stash). The commit after it restores DONE.md to the merge plus this entry.
+## T19a - 2026-10-30
+commit: this entry (spike, no code)
+verified: the T19a loop from TASKS.md, SEP=https://forno.celo-sepolia.celo-testnet.org MAIN=https://forno.celo.org (read-only cast balance, no writes)
+output:
+```
+https://forno.celo-sepolia.celo-testnet.org -400 ok
+https://forno.celo-sepolia.celo-testnet.org -7200 ok
+https://forno.celo.org -400 ok
+https://forno.celo.org -7200 ok
+```
+result: -400 ok on both, so the gateway inputs value check can read state 400 blocks back on Forno. -7200 ok on both, so the SDK late re-read usually works.
+reviewed: n/a (spike)
+## T08 - 2026-10-30
+commit: (this commit)
+verified: SELF_ID=85; for f in "ownerOf(uint256)(address)" "hasHumanProof(uint256)(bool)" "isProofFresh(uint256)(bool)"; do cast call 0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379 "$f" $SELF_ID --rpc-url $SEP; done
+output:
+```
+0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a
+true
+true
+exit 0
+```
+reviewed: n/a (read-only spike, no code; reproducible by the verify command)
+notes: agent 85 found via the registry's Registered/AgentRegisteredWithHumanProof events (Blockscout API, block 39967457; Forno caps eth_getLogs ranges). Owner 0x00E74B33EcF372BE0Ca367389d5a2228D5DF281a has no code (a human wallet), i.e. linked mode. All three selectors answer at block ~40062906, so linkSelfAgent stays enabled on Sepolia.
+Note (2026-11-02): T19a is Spike S8 and T08 is Spike S4. The harness pack check reads the first `[A-Z]+[0-9]+` word of a ticked task line, which for `T19a` is `S8`, so the spike ids are named here.
