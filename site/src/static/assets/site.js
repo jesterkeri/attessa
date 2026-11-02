@@ -283,8 +283,10 @@
   const machine = { s: 'pass', line: () => `AWS attests that this signer runs that build at ${chip('endpointOrigin')}.`, term: `signer ${chip('signerAddress')}, Nitro enclave, valid until ${chip('signerExpiry')}`, link: scan('signer tx') };
   const skipped = { s: 'na', w: 'Skipped', line: 'Not checked: the call stopped at the failed check.' };
   // What a settlement tx shows on Celo alone; the proof checks need the call's proof, which no public route serves yet.
-  const buildChain = { ...build, line: "The endpoint's agent has this build approved on Celo." };
-  const machineChain = { ...machine, line: () => `A signer for that build is registered for ${chip('endpointOrigin')}, with AWS's attestation checked on Celo.` };
+  // A settlement tx names a payer, a pay-to address, an amount and a block. The registry can list the endpoints
+  // that take payment at that address, with their approved builds and signers, but not which one answered.
+  const buildChain = { s: 'na', w: 'On Celo', line: () => `The registry lists approved builds for the endpoint paid at this address, ${chip('endpointOrigin')}. Which build answered this call needs the proof.`, term: `agent ${chip('agentId')}` };
+  const machineChain = { s: 'na', w: 'On Celo', line: "The registry lists the signers registered for that endpoint, each with AWS's attestation checked on Celo. Which one signed this answer needs the proof." };
   const planned = { s: 'na', w: 'Planned', line: "Planned: this check needs the call's signed proof, and no public route serves it yet." };
   const noProof = { s: 'na', line: 'No proof offered, so there is nothing to check.' };
 
@@ -292,8 +294,8 @@
     settled: {
       verdict: 'settled', word: 'Settled on Celo', sub: 'proof checks planned',
       rows: [buildChain, machineChain, planned, planned,
-        { s: 'pass', w: 'Paid', line: () => `Paid ${chip('amount')} ${chip('asset')} to the endpoint's registered pay-to address.`, term: `settled in tx ${chip('settlementTx')}, EIP-3009 authorization`, link: scan('settlement tx') }],
-      verdictLine: "Celo shows the payment settled to a registered endpoint whose build was approved, with a signer registered, when it settled. That isn't a verified call: whether the proof passed, which build answered, for this exact request and these inputs, needs the call's proof, and those checks are planned.",
+        { s: 'pass', w: 'Paid', line: () => `${chip('payer')} paid ${chip('amount')} ${chip('asset')} to ${chip('payTo')}, a registered pay-to address, at block ${chip('settlementBlock')}.`, term: `settled in tx ${chip('settlementTx')}, EIP-3009 authorization`, link: scan('settlement tx') }],
+      verdictLine: "Celo shows this payment settled to an address registered as an endpoint's pay-to, and the registry lists that endpoint's approved builds and signers. That isn't a verified call: whether the proof passed, and which build and signer answered this exact request with these inputs, needs the call's proof, and those checks are planned.",
     },
     tampered: {
       verdict: 'rejected', word: 'Rejected', sub: 'not charged',

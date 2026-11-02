@@ -37,7 +37,7 @@ screenshots and checking layouts).
 Slots used in the pages: `demoServiceUrl`, `callTime`, `endpointOrigin`, `amount`,
 `asset`. The explorer's checklist also uses `requestId`, `releaseId`, `agentId`, `sourceRepo`, `sourceCommit`,
 `signerAddress`, `signerExpiry`, `requestHash`, `responseHash`, `inputsBlock`, `inputsHash`,
-`authorizationNonce`, `settlementTx`, `expiryBlock`, `rpcUrl`.
+`authorizationNonce`, `settlementTx`, `expiryBlock`, `rpcUrl`, `payer`, `payTo`, `settlementBlock`.
 
 ## How it is built
 

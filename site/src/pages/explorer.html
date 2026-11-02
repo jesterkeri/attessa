@@ -8,7 +8,7 @@
       <div>
       <h1 data-split data-intro>Check a<br> settlement</h1>
       <div class="explorer-sub">
-        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">the explorer checks its on-chain part from public Celo data</span>: the payment, the endpoint it paid, and that endpoint's approved builds and signers. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">the explorer checks its on-chain part from public Celo data</span>: the payment, the endpoint registered to the address it paid, and that endpoint's approved builds and signers, though not which of them answered. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
         <form class="recheck" data-explorer-form novalidate role="search">
           <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
           {{i:search}}
