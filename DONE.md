@@ -1129,3 +1129,23 @@ adversary r3 (531b262, `packages/cli/test/adversary-t21-r3.test.ts`, 5 failing) 
 `pnpm -r typecheck` (exit=0) and `pnpm -r lint` (exit=0): every package `Done` (core, gateway, sdk, seller-host, cli).
 adversary: r3 tests pass; r4 not run yet
 reviewed: pending (adversary r4, then Codex)
+
+### T21 adversary r4 fixes - 2026-11-02
+adversary r4 (6f0aa2a, `packages/cli/test/adversary-t21-r4.test.ts`, 6 failing) fixed in 41304da:
+- `status --pending` and `cancel` printed the generic `unexpected` line for the SDK's `rpc_unavailable` and `network_mismatch`. One mapping (`packages/cli/src/commands/buyer.ts`, `sdkError`/`fromSdk`/`viaSdk`, built from the old `stoppedError`) now serves every buyer command: an AttestError goes to its FLOWS §8 row by code, an SDK RpcError to `rpc_unavailable`, and no error message is printed. `run()` (`packages/cli/src/index.ts`) maps any AttestError a command missed before falling back to `unexpected`.
+- `--dry-run` on an input with an open call resumed it (signed the payer message, fetched `/v1/results`, finalized the ledger entry). With `dryRun`, the SDK's V0 and V6 re-check now stop at an open entry with a `would_resume` event: nothing signed, nothing fetched, ledger unchanged. The CLI line for it is marked not in FLOWS ("...Without --dry-run, attessa resumes it instead of paying again.").
+- New tests: `packages/sdk/test/progress.test.ts` (1), `packages/cli/test/buyer.test.ts` (4).
+- The fixer's bash append of this note was refused by the guard-bash test-deletion pattern (a false positive on the note's wording; nothing was deleted). Claude re-ran the verification and wrote the note with the editor.
+
+verify at 41304da (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  20 passed (20)
+cli:       Tests  157 passed (157)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+Not fixed here, for adversary r5 to judge: seller commands (`packages/cli/src/tx.ts`, `signer.ts`) may still turn a raw RpcUnavailable into the `unexpected` line.
+reviewed: pending (adversary r5, then Codex)
