@@ -168,9 +168,22 @@ function lastEvidence(client: AttestClient, requestId: Hex): EvidenceRow | undef
   return client.ledger.readEvidence().filter((r) => r.requestId === requestId).at(-1);
 }
 
+/**
+ * An undecided call whose settlement the chain shows (the SDK stores `settlementTx` only from chain evidence): FLOWS
+ * §8 "interrupted, payment found", machine code `uncertain` -> `get_result`. The permission was used, so it never
+ * "expires unused" and `attessa cancel` can't void it. The rpc-history case keeps its own row.
+ */
+function paymentFound(r: CallResult): boolean {
+  return (r.outcome === 'uncertain' || r.outcome === 'refused') && !!r.settlementTx && r.code !== 'rpc_unavailable';
+}
+
 function jsonResult(r: CallResult): Record<string, unknown> {
   const out: Record<string, unknown> = { outcome: r.outcome, requestId: r.requestId };
-  if (r.code) out.code = r.code;
+  if (paymentFound(r)) {
+    // The human line is FLOWS §8's payment-found row; the machine code and suggestion are that row's.
+    out.code = 'uncertain';
+    out.suggestion = 'get_result';
+  } else if (r.code) out.code = r.code;
   if (r.detail) out.detail = r.detail;
   if (r.check) out.check = r.check;
   if (r.amount !== undefined) out.amount = r.amount.toString();
@@ -292,7 +305,8 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           out(BUY.settlePending(hms(BigInt(e.entry.validBefore!) + 60n), e.tx));
           return;
         case 'waiting': {
-          if (e.entry.state !== 'refused') return;
+          // A refused call whose settlement is known was used: no expiry to wait for, nothing to void.
+          if (e.entry.state !== 'refused' || e.entry.settlementTx) return;
           const vb = BigInt(e.entry.validBefore!);
           out(BUY.confirming(hms(vb), String(vb > e.chainNow ? vb - e.chainNow : 0n)));
           out(BUY.voidHint(e.entry.requestId));
@@ -358,7 +372,11 @@ async function report(
     case 'refused':
     case 'uncertain':
       if (r.code === 'rpc_unavailable' && r.settlementTx) out(BUY.rpcNoHistory);
-      else if (c.paid) out(BUY.answerNotYet);
+      else if (paymentFound(r)) {
+        // After "Too late to cancel: the payment went through" the payment line is already out.
+        if (!c.paid) out(BUY.paymentFound(r.settlementTx!));
+        out(BUY.answerNotYet);
+      } else if (c.paid) out(BUY.answerNotYet);
       else out(BUY.stillOpen(r.requestId, hms(BigInt(entry()?.validBefore ?? '0'))));
       return 1;
     case 'stopped':

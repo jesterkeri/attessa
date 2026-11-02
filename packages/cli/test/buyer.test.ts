@@ -542,6 +542,42 @@ describe('buyer: cancel, status, evidence export', () => {
     });
   });
 
+  it('status --pending on a call the chain shows settled, answer not served yet: FLOWS payment-found row, one next action, matching --json (T21 r13)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending' };
+    w.gw.behavior.pendingPolls = 100_000;
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.transcript.length = 0;
+    expect(await w.cli('status', '--pending', '--network', 'local', '--rpc', 'http://127.0.0.1:1')).toBe(0);
+    const tx = w.pending()[0]!.settlementTx as string;
+    expect(w.transcript).toEqual([
+      `${id}  ${w.host}`,
+      `The payment went through (tx ${tx.slice(0, 6)}…${tx.slice(-2)}). Fetching your answer…`,
+      "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.",
+    ]);
+    w.out.length = 0;
+    expect(await w.cli('status', '--pending', '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--json')).toBe(0);
+    const json = JSON.parse(w.out.at(-1)!) as { pending: Array<Record<string, unknown>> };
+    expect(json.pending[0]).toMatchObject({ outcome: 'uncertain', code: 'uncertain', suggestion: 'get_result', settlementTx: tx });
+  });
+
+  it('attessa cancel on a call the chain shows settled: "Too late to cancel" with the tx, never "voids it now" (T21 r13)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending' };
+    w.gw.behavior.pendingPolls = 100_000;
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    expect(await w.cli('status', '--pending', '--network', 'local', '--rpc', 'http://127.0.0.1:1')).toBe(0);
+    const tx = w.pending()[0]!.settlementTx as string;
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.transcript).toEqual([
+      `Too late to cancel: the payment went through (tx ${tx.slice(0, 6)}…${tx.slice(-2)}). Fetching your answer.`,
+      "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.",
+    ]);
+  });
+
   it('attessa cancel run again on a cancelled call: the same block as the first run, never "(block 0)" (T21 r12)', async () => {
     await initialized();
     w.gw.behavior = { paid: 'refuse' };

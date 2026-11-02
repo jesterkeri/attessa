@@ -345,11 +345,15 @@ export const BUY = {
   wouldResume: (id: string) => `You already have a call in progress for this input (request ${id}). Without --dry-run, attessa resumes it instead of paying again.`,
   // §7 V10 rpc
   rpcNoHistory: "Can't finish checking: your RPC doesn't have that block's data. Retry with --rpc <archive RPC>.",
-  // not in FLOWS: a call left open by --no-wait, or still undecided.
+  // §8 interrupted, payment found: the chain shows the settlement; the answer comes next.
+  paymentFound: (tx: string) => `The payment went through (tx ${short(tx)}). Fetching your answer…`,
+  // not in FLOWS: a call left open by --no-wait, or still undecided, with no settlement on chain. Never used once
+  // a settlement is known (the permission was used; cancel can't void it).
   stillOpen: (id: string, t: string) =>
     `Not confirmed yet: your payment permission expires unused at ${t} UTC unless the gateway used it. attessa status --pending checks it again; attessa cancel ${id} voids it now.`,
   // §8 cancel
-  // not in FLOWS: after "Too late to cancel", when the answer isn't confirmed yet (never "attessa cancel … voids it now").
+  // not in FLOWS: after "Too late to cancel" or "The payment went through", when the answer isn't served yet (the one
+  // next action; never "attessa cancel … voids it now").
   answerNotYet: "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.",
   tooLateToCancel: (tx: string) => `Too late to cancel: the payment went through (tx ${short(tx)}). Fetching your answer.`,
   cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
