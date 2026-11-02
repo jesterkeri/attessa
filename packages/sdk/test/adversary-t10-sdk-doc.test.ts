@@ -12,7 +12,8 @@ import { FakeChain } from './fakes/chain.ts';
  * Adversary pass on the ClientOptions.registry doc (types.ts): "EnclaveRegistry for a chain whose
  * deployments.ts entry has no registry yet (mainnet before T30). Ignored whenever the RPC's chain has a
  * pinned registry, including network 'local' on a fork that keeps a deployed chain's id."
- * ClientOptions: "injection points for tests and for chains with no deployed registry."
+ * ClientOptions (f3dec7f): "for a deployments.ts chain whose entry has no registry yet ... A chain id with no
+ * deployments.ts entry at all (a plain anvil chain, 31337) is refused as network_mismatch whatever is passed here".
  */
 
 const OVERRIDE = '0x5fbdb2315678afecb367f032d93f642f64180aa3';
@@ -50,7 +51,11 @@ describe('sdk: adversary T10 sdk-doc, ClientOptions.registry is used exactly whe
     expect(await resolveWith('local', 42220, OVERRIDE)).toEqual({ registry: OVERRIDE });
   });
 
-  it('local on a plain anvil chain (31337, "a chain with no deployed registry"): options.registry is used', async () => {
-    expect(await resolveWith('local', 31337, OVERRIDE)).toEqual({ registry: OVERRIDE });
+  it('local on a plain anvil chain (31337, no deployments.ts entry): refused as network_mismatch whatever options.registry says', async () => {
+    expect(await resolveWith('local', 31337, OVERRIDE)).toEqual({ refused: 'network_mismatch' });
+  });
+
+  it('celo-sepolia against a 31337 RPC: refused as network_mismatch whatever options.registry says', async () => {
+    expect(await resolveWith('celo-sepolia', 31337, OVERRIDE)).toEqual({ refused: 'network_mismatch' });
   });
 });
