@@ -12,6 +12,13 @@ export interface PinnedAsset {
   version: string;
 }
 
+/** Our instance of base/nitro-validator's production stack (SPEC §3.5, ADR-001). */
+export interface ValidatorStack {
+  p384Verifier: Address;
+  certManager: Address;
+  nitroValidator: Address;
+}
+
 export interface Deployment {
   chainId: number;
   /** x402 v2 CAIP-2 network. */
@@ -20,6 +27,8 @@ export interface Deployment {
   selfRegistry: Address;
   /** EnclaveRegistry. null until T10 (Sepolia) / T30 (mainnet) deploy it. */
   enclaveRegistry: Address | null;
+  /** null until T10 / T30. Must match docs/DEPLOYMENTS.md (`node scripts/check-deploy.mjs`). */
+  validatorStack: ValidatorStack | null;
   assets: Partial<Record<AssetKey, PinnedAsset>>;
 }
 
@@ -30,6 +39,7 @@ export const DEPLOYMENTS: Record<Exclude<Network, 'local'>, Deployment> = {
     identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
     selfRegistry: '0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379',
     enclaveRegistry: null,
+    validatorStack: null,
     assets: {
       usdc: { address: '0x01c5c0122039549ad1493b8220cabedd739bc44e', name: 'USDC', version: '2' },
     },
@@ -40,6 +50,7 @@ export const DEPLOYMENTS: Record<Exclude<Network, 'local'>, Deployment> = {
     identityRegistry: '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
     selfRegistry: '0xaC3DF9ABf80d0F5c020C06B04Cced27763355944',
     enclaveRegistry: null,
+    validatorStack: null,
     assets: {
       usdc: { address: '0xceba9300f2b948710d2653dd7b07f33a8b32118c', name: 'USDC', version: '2' },
       usat: { address: '0xd2ab3c9a02dbbab236bfec45d1d755df4267f771', name: 'Tether America USD', version: '1' },
