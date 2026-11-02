@@ -3,6 +3,9 @@
 # scripts, dependency specs, pnpm-workspace.yaml), then install HEAD with the pinned pnpm
 # (packageManager), a fresh store and no side-effects cache, and fail if any install-time script
 # runs other than a registry copy of the allowlist (better-sqlite3, keytar).
+# Workspace manifests may add only: bin (command names to .js files under the package's dist/),
+# engines with a node range only, and the scripts gen:vectors and render-units, each `node` on a
+# tracked file under the package's scripts/; none of these runs at install.
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
 # snapshot, never inside it, and PATH keeps absolute entries only.
 # Git runs no program the repository configures. In order, git is asked only for:
@@ -146,10 +149,11 @@ import json, os, re, subprocess, sys, yaml
 V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 # The allowlisted packages pnpm may build, as name@version: the integrity the default registry
 # publishes. Adding one to the lockfile means pinning its registry integrity here first.
-PINNED = {}
+# better-sqlite3@13.0.3: pnpm-lock.yaml and `npm view better-sqlite3@13.0.3 dist.integrity` agreed on 2026-11-02.
+PINNED = {"better-sqlite3@13.0.3": "sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ=="}
 blob = lambda p: open(os.path.join(sys.argv[4], p), "rb").read()
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
-bad, reg = [], {}
+bad, reg, later = [], {}, []
 for r in sys.stdin.buffer.read().split(b"\0"):
     if not r: continue
     meta, raw = r.split(b"\t", 1); mode, _, oid = meta.decode().split()
@@ -176,14 +180,29 @@ for r in sys.stdin.buffer.read().split(b"\0"):
             e = m.get("engines", {})
             if set(e) - {"node", "pnpm"} or e.get("pnpm", f">={V}") not in (V, f">={V}"): bad.append(f"{p}: engines must be node and pnpm {V} or >={V} only, got {e!r}")
         else:
-            keys = {"name", "version", "private", "type", "main", "types", "scripts", "dependencies", "devDependencies"}
+            keys = {"name", "version", "private", "type", "main", "types", "scripts", "dependencies", "devDependencies", "bin", "engines"}
+            # pnpm links each bin into the node_modules/.bin of dependents: command names to files
+            # under the dist/ of this package only (no absolute path, no ".", ".." or hidden component).
+            bn = m.get("bin", {})
+            if not isinstance(bn, dict) or any(not re.fullmatch(r"[a-z0-9][a-z0-9-]*", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.[cm]?js", f) for c, f in bn.items()):
+                bad.append(f"{p}: bin must map command names to .js files under dist/, got {bn!r}")
+            e = m.get("engines", {})
+            if not isinstance(e, dict) or set(e) - {"node"} or not isinstance(e.get("node", "0"), str) or not re.fullmatch(r"(>=|\^|~)?\d+(\.\d+){0,2}", e.get("node", "0")):
+                bad.append(f"{p}: engines must be a node range only, got {e!r}")
         extra = set(m) - keys
         if extra: bad.append(f"{p}: keys not allowed: {sorted(extra)}")
         scripts = set(m.get("scripts", {})) - ({"build", "lint", "typecheck", "test"} if p != "package.json" else set())
+        # Two named scripts that never run at install, each only as node on a tracked file of its
+        # own package (checked after the walk, once every blob is listed).
+        for s in scripts & ({"gen:vectors", "render-units"} if p != "package.json" else set()):
+            c = re.fullmatch(r"node (--experimental-strip-types )?(scripts/[A-Za-z0-9_-]+\.(ts|js|mjs))", str(m["scripts"][s]))
+            if c: scripts.discard(s); later.append((p, s, os.path.dirname(p) + "/" + c.group(2)))
         if scripts: bad.append(f"{p}: scripts not allowed: {sorted(scripts)}")
         for k in ("dependencies", "devDependencies"):
             for n, v in m.get(k, {}).items():
                 if not re.fullmatch(r"workspace:[*^~]|[\^~]?\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
+for p, s, f in later:
+    if f not in reg: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
 w = yaml.safe_load(blob("pnpm-workspace.yaml")) if "pnpm-workspace.yaml" in reg else None
