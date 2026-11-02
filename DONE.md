@@ -1105,3 +1105,38 @@ check-migrations rc=0
 check-reviews rc=0
 ```
 reviewed: pending (Codex)
+
+## T10 deploy record Codex r1 fix and doc adversary rounds 1-2 - 2026-11-02
+Codex r1 on 663bd89 (archived, `.worktrees/archive/reviews/t10-deploy-record-and-sdk-pin-review-r1.md`): REVISE, one minor (m1): the `ClientOptions.registry` doc still said the override is required on local forks, which the pin-first fix made false. No runtime finding; the pin fix, the address record and the CI change were confirmed.
+- 08bd164: the doc says the pin wins whenever the RPC's chain has one, a Sepolia fork included.
+- Adversary r1 on 08bd164: one doc defect, "chains with no deployed registry" also read as a plain anvil chain (31337), which the SDK refuses as network_mismatch (correct per SPEC §2.6: no pinned assets either). de31b87 (its test, failing then).
+- f3dec7f: the doc names the deployments.ts chain case and says a chain with no entry is refused.
+- Adversary r2: CLEAN on f3dec7f's wording; 8aae342 restates its third case (31337 refused) and adds celo-sepolia against a 31337 RPC.
+
+verify at 8aae342 (`pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm -r test`, then the harness scripts), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:    × INV-19: the lock holds when holders are killed or stopped inside it > 6 processes x 200 entries with random SIGKILLs and SIGSTOPs: never two inside, no write lost 4652ms
+packages/sdk test: ⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+packages/sdk test:  Test Files  1 failed | 15 passed (16)
+packages/sdk test:       Tests  1 failed | 143 passed (144)
+check-workflows rc=0
+check-migrations rc=0
+check-reviews rc=0
+```
+The CLI suite did not run in that pass (pnpm stops after the first failing package). The INV-19 test is untouched by this change; re-runs, same commit:
+```
+npx vitest run test/ledger.test.ts (3 runs):  Tests  10 passed (10) / 10 passed (10) / 10 passed (10)
+npx vitest run (packages/sdk, 2 runs):  Test Files  16 passed (16)  Tests  144 passed (144) / 144 passed (144)
+npx vitest run (packages/cli):  Test Files  11 passed (11)  Tests  76 passed (76)
+```
+Logged in OPEN-QUESTIONS (INV-19 stress test flaked once under load).
+reviewed: pending (Codex r2)
