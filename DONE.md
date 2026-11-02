@@ -1253,4 +1253,12 @@ scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
 scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
 scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
 ```
-reviewed: pending (adversary, then Codex)
+adversary r1 (6f950c0): no defect. Bins named node, sh, prebuild-install, node-gyp and tsc ran nothing at install (`probe_rc=0`); traversal, absolute, symlink and non-regular bin targets, flagged or chained scripts, root gen:vectors, extra engines keys, JSON5/YAML manifests and a wrong integrity were all refused. Its unproven suspicion, that a bin named node or tsc would shadow that tool in other packages' scripts after install, is closed in 996e559: bin names must be `attest` or `attessa[-name]` (today: attessa, attest, attessa-gateway-server, attessa-seller-host), with three cases added.
+
+verify at 996e559 (`./scripts/check-install-scripts.sh`, then `./scripts/check-install-scripts.allowlist.test.sh`; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+19 cases, rc=0
+```
+reviewed: pending (adversary r2, then Codex)
