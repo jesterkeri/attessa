@@ -968,3 +968,56 @@ exit=0
 adversary: NO DEFECT FOUND. Fixture equals upstream `node tools/nitro_attestation_input.js fixture` at 0ea0d12 byte for byte (4482 bytes, keccak 0x9f0c...0e9f). Padded header is valid CBOR (K=770) through upstream decodeAttestationTbs. 3044 MODEXP calls confirmed by trace; each hits the EIP-7883 500 floor, so +300 per call is exact. Without --fork-url all three SKIP, none pass silently.
 reviewed: pending (Codex)
 notes: first run of (c) failed on a measurement error (cold SLOADs of test storage inside the measured span), fixed by copying to memory first; no threshold changed. Open: gas headroom about 1.45M (OPEN-QUESTIONS). Adversary suspicions, unproven: the validator in the test is NitroParseHarness (a NitroValidator subclass exposing the parser), not the production bytecode; and in (b) user_data has the wrong length, so the test cannot show the registry ignores a binding planted in the unprotected header. T16b covers the positive real-attestation path.
+
+## T21 CLI - 2026-11-02
+commit: af66e32 (builder, Opus; branch feat/t21-cli from 32ad820), entry in the next commit
+built: buyer commands `init`, `call`, `cancel`, `status [<origin>|--agent <id>] [--pending]`, `evidence export` on @attessa/sdk (no payment logic in the CLI); owner commands `agent register|transfer|wallet-sig|set-wallet`, `selflink`, `release deprecate|revoke` / `revoke release`, `revoke signer`, `endpoint retire`; `attessa gateway …` handed to T19's runGatewayCommand. The SDK gained `ClientOptions.onProgress` (the moments the CLI prints a FLOWS §6 line) and a `dry_run` stop before signing. Snapshot tests read FLOWS.md itself and require each §6 sample block to appear contiguous in the CLI transcript (hex placeholders and named slots such as a time of day excepted; a matcher self-test proves a changed word, a dropped line or a reordering fails): J0, J1 (and price above the limit), J2, J2 variant (paid_but_rejected and settled_after_refusal), J1 interrupted (not charged, charged, 202, resume), J3 (seller --help, agent register, enclave build, release approve, endpoint add, enclave start, signer register) and J4 (revoke release) on one chain.
+verified: pnpm --filter @attessa/cli test (plus pnpm -r typecheck, pnpm -r --no-bail test, ./scripts/check-reviews.sh && ./scripts/check-workflows.sh)
+output (file lines and totals verbatim):
+```
+$ pnpm --filter @attessa/cli test
+ ✓ test/flows.test.ts (3 tests) 5ms
+ ✓ test/attestation.test.ts (4 tests) 487ms
+ ✓ test/adversary-t15-r3.test.ts (1 test) 277ms
+ ✓ test/adversary-t15-r4.test.ts (1 test) 728ms
+ ✓ test/review-t15-r1.test.ts (3 tests) 1454ms
+ ✓ test/buyer.test.ts (28 tests) 1554ms
+ ✓ test/enclave.test.ts (8 tests) 1598ms
+ ✓ test/review-t15-r3.test.ts (8 tests) 1619ms
+ ✓ test/review-t15-r4.test.ts (4 tests) 1662ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1949ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 2188ms
+ ✓ test/owner.test.ts (15 tests) 2419ms
+ ✓ test/seller-journeys.test.ts (14 tests) 2967ms
+ ✓ test/signer.test.ts (17 tests) 5812ms
+ Test Files  14 passed (14)
+      Tests  121 passed (121)
+exit=0
+$ pnpm -r typecheck
+packages/core typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck: Done
+exit=0
+$ pnpm -r --no-bail test
+packages/core test:  FAIL  test/adversary-t03-r3.test.ts > adversary: the oracle origin check is not UTS-46 (SPEC §2.1 step 2, INV-18) > oracle exits 0 on a correct U+1F80 vector
+packages/core test:  Test Files  1 failed | 7 passed (8)
+packages/core test:       Tests  1 failed | 67 passed (68)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  15 passed (15)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  14 passed (14)
+packages/cli test:       Tests  121 passed (121)
+exit=1 (only the known core oracle failure, being fixed elsewhere)
+$ ./scripts/check-reviews.sh && ./scripts/check-workflows.sh
+reviews ok
+workflows clean
+exit=0
+```
+adversary: not run yet
+reviewed: pending (adversary, then Codex)
+notes: FLOWS readings, flags SPEC §8 does not give, and two T15 observations are in OPEN-QUESTIONS (From T21). Not built: `release verify` (optional, G6), `call --via buy` (T29). `scripts/check-install-scripts.sh` fails on keys that are all present at the base 32ad820 (the packages' `bin`, sdk `engines`, core `gen:vectors`, seller-host `render-units`, better-sqlite3 integrity); it flags nothing T21 changed.
