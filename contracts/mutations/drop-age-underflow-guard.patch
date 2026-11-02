@@ -1,0 +1,13 @@
+diff --git a/contracts/src/EnclaveRegistry.sol b/contracts/src/EnclaveRegistry.sol
+index 295d2b0..a059407 100644
+--- a/contracts/src/EnclaveRegistry.sol
++++ b/contracts/src/EnclaveRegistry.sol
+@@ -491,7 +491,7 @@ contract EnclaveRegistry is IEnclaveRegistry {
+         // Step 3. The age guard keeps ts in (now, now + MAX_FUTURE_SKEW] from underflowing.
+         uint64 ts = ptrs.timestamp / 1000;
+         if (ts > block.timestamp + MAX_FUTURE_SKEW) revert AttestationFromFuture();
+-        uint256 age = ts > block.timestamp ? 0 : block.timestamp - ts;
++        uint256 age = block.timestamp - ts;
+         if (age > MAX_ATTESTATION_AGE) revert AttestationStale();
+ 
+         // Steps 4 and 5.
