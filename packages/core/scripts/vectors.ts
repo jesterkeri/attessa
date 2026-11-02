@@ -102,6 +102,7 @@ function origins() {
     { name: 'maximum length 267 bytes', input: `https://${host259}/path`, local: false, expected: `https://${host259}` },
     { name: 'local http localhost with port', input: 'http://localhost:8545/', local: true, expected: 'http://localhost:8545' },
     { name: 'local https IPv4 literal', input: 'https://127.0.0.1:8443', local: true, expected: 'https://127.0.0.1:8443' },
+    { name: 'ZWNJ between two dual-joining letters', input: 'https://\u1820\u200C\u1820.com', local: false, expected: 'https://xn--26ea791d.com' },
   ];
   const invalid: { name: string; input: string; local: boolean; reason: string }[] = [
     { name: 'http', input: 'http://example.com', local: false, reason: 'not_https' },
@@ -114,10 +115,23 @@ function origins() {
     { name: 'IPv4 literal in hex form', input: 'https://0x7f.1', local: false, reason: 'ip_literal' },
     { name: 'IPv6 literal', input: 'https://[::1]:8443', local: false, reason: 'ip_literal' },
     { name: 'userinfo', input: 'https://user:pw@example.com', local: false, reason: 'userinfo' },
+    { name: 'userinfo, user only', input: 'https://user@example.com', local: false, reason: 'userinfo' },
+    { name: 'userinfo, password only', input: 'https://:pw@example.com', local: false, reason: 'userinfo' },
     { name: '268 bytes', input: `https://${host259}x`, local: false, reason: 'length' },
     { name: 'not a URL', input: 'example.com', local: false, reason: 'invalid_url' },
+    // SPEC §2.1 parses before it checks the scheme, so a URL WHATWG cannot parse is invalid_url, not not_https.
+    { name: 'non-special scheme, unclosed IPv6 host', input: 'foo://[x', local: false, reason: 'invalid_url' },
+    { name: 'file scheme, space in host', input: 'file://a b/', local: false, reason: 'invalid_url' },
+    // An opaque host gets no UTS-46, so punycode that decodes to a bad ZWNJ still parses.
+    { name: 'non-special scheme, punycode of a bad ZWNJ', input: 'foo://xn--ab-j1t', local: false, reason: 'not_https' },
+    { name: 'https, punycode of a bad ZWNJ', input: 'https://xn--ab-j1t', local: false, reason: 'invalid_url' },
     { name: 'invalid punycode label', input: 'https://xn--a.com', local: false, reason: 'invalid_url' },
     { name: 'zero-width joiner', input: 'https://a‍b.com', local: false, reason: 'invalid_url' },
+    // RFC 5892 A.1 holds for each ZWNJ on its own; a virama-exempt ZWNJ before it does not help (tr46 5.1.1 bug).
+    { name: 'ZWNJ before a non-joining letter, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u200Ca.com', local: false, reason: 'invalid_url' },
+    { name: 'same host as punycode', input: 'https://xn--a-0xd894iba352hba.com', local: false, reason: 'invalid_url' },
+    { name: 'ZWNJ at label end, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u200C.com', local: false, reason: 'invalid_url' },
+    { name: 'two ZWNJ in a row, after a virama-exempt ZWNJ', input: 'https://\u1820\u094D\u200C\u1820\u094D\u200C\u200Ca.com', local: false, reason: 'invalid_url' },
     // UTS-46 CheckBidi (RFC 5893), which WHATWG sets and Node's built-in URL skips.
     { name: 'bidi: label of Arabic-Indic digits', input: 'https://\u0661\u0662.com', local: false, reason: 'invalid_url' },
     { name: 'bidi: same label as punycode', input: 'https://xn--9hbc.com', local: false, reason: 'invalid_url' },
@@ -477,7 +491,7 @@ async function headers() {
 
   // X-Attest-Payer-Sig
   const payerValid = [];
-  for (const [i, t] of [1761700000, 0].entries()) {
+  for (const [i, t] of [1761700000, 0, Number.MAX_SAFE_INTEGER].entries()) {
     const key = testKey(30 + i);
     const requestId = hex32(`payer-rid-${i}`);
     const digest = payerSigDigest(requestId, t);
@@ -490,6 +504,9 @@ async function headers() {
   }
   const goodSig = payerValid[0]!.signature;
   const payerInvalid = [
+    // Above Number.MAX_SAFE_INTEGER: 2^53 parses exactly but is unsafe, 2^53 + 1 rounds to 2^53.
+    { name: 'seconds 2^53', header: `9007199254740992.${goodSig}` },
+    { name: 'seconds 2^53 + 1', header: `9007199254740993.${goodSig}` },
     { name: 'no dot', header: `1761700000${goodSig}` },
     { name: 'leading zero seconds', header: `01761700000.${goodSig}` },
     { name: 'negative seconds', header: `-1.${goodSig}` },
@@ -541,6 +558,7 @@ async function headers() {
     { name: 'uppercase bytes32', header: withProof({ requestId: goodJson.proof.requestId!.toUpperCase().replace('0X', '0x') }), reason: 'field_grammar' },
     { name: 'leading zero integer', header: withProof({ agentId: '01' }), reason: 'field_grammar' },
     { name: 'uint64 overflow', header: withProof({ expiresAt: (MAX_UINT64 + 1n).toString() }), reason: 'field_grammar' },
+    { name: 'uint256 overflow', header: withProof({ agentId: (MAX_UINT256 + 1n).toString() }), reason: 'field_grammar' },
     { name: 'UTF-8 BOM before the JCS bytes', header: Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), Buffer.from(jcs(goodJson), 'utf8')]).toString('base64'), reason: 'not_jcs' },
     { name: 'uppercase signer', header: b64(jcs({ ...goodJson, signer: goodJson.signer.toUpperCase().replace('0X', '0x') })), reason: 'field_grammar' },
     ...depthCases(goodJson),

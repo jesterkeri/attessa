@@ -1,0 +1,6 @@
+# Every file needs Joshua's review. The guard scripts run from the pull request's own checkout, so
+# they are a review aid; this review, required by the main and staging rulesets, is the boundary
+# (OPEN-QUESTIONS.md, T02 Codex r2 M1). A catch-all rather than a list: CI runs code chosen by many
+# files (toolchain selectors such as .nvmrc, rust-toolchain.toml and contracts/FOUNDRY_VERSION,
+# manifests, lockfiles, build config), and a list misses whatever it forgets (T02 Codex r3 M1).
+*  @jesterkeri

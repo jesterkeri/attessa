@@ -2,6 +2,9 @@ import { keccak256, stringToBytes, type Hex } from 'viem';
 // The WHATWG reference implementation. Node's built-in URL skips UTS-46 CheckBidi, which the
 // standard sets (and Rust's url/idna applies), so it accepts hosts such as `xn--9hbc.com`.
 import { URL } from 'whatwg-url';
+import tr46 from 'tr46';
+// tr46 internals at the version whatwg-url pins: the Unicode 16 data its own CheckJoiners uses.
+import regexes from 'tr46/lib/regexes.js';
 
 /** Why `normalizeOrigin` refused an input. Stable strings, used in `vectors/origins.json`. */
 export type OriginErrorReason =
@@ -26,6 +29,20 @@ export const ORIGIN_MAX_BYTES = 267;
 
 // The WHATWG host serializer always writes an IPv4 host in dotted decimal and an IPv6 host in brackets.
 const IPV4 = /^\d{1,3}(\.\d{1,3}){3}$/;
+const SPECIAL = new Set(['http:', 'https:', 'ws:', 'wss:', 'ftp:', 'file:']);
+
+// RFC 5892 A.1 for every ZWNJ on its own. tr46 5.1.1 tests a ZWNJ against a window that a
+// virama-exempt ZWNJ does not close, so an earlier valid ZWNJ can pass a later invalid one.
+function zwnjContextsOk(host: string): boolean {
+  return tr46.toUnicode(host).domain.split('.').every((label) => {
+    const parts = label.split('\u200C');
+    return parts.slice(1).every((after, k) => {
+      const before = parts[k] ?? '';
+      if (regexes.combiningClassVirama.test(Array.from(before).at(-1) ?? '')) return true;
+      return regexes.validZWNJ.test(`${before}\u200C${after}`); // the only ZWNJ in this string
+    });
+  });
+}
 
 /**
  * SPEC §2.1. WHATWG URL parsing, whose host parser applies UTS-46 non-transitional
@@ -40,6 +57,8 @@ export function normalizeOrigin(input: string, opts: { local?: boolean } = {}): 
   } catch {
     throw new OriginError('invalid_url', input);
   }
+  // Only special schemes get domain-to-ASCII; WHATWG leaves an opaque host's punycode alone.
+  if (SPECIAL.has(url.protocol) && !zwnjContextsOk(url.hostname)) throw new OriginError('invalid_url', input);
   const localHttp =
     local && url.protocol === 'http:' && url.hostname === 'localhost' && url.port !== '';
   if (url.protocol !== 'https:' && !localHttp) throw new OriginError('not_https', input);
