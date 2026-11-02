@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "engines": { "node": ">=22.13.0" },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -10,5 +11,9 @@
     "typecheck": "tsc -p . --noEmit",
     "test": "vitest run --passWithNoTests",
     "lint": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "viem": "2.57.13"
   }
 }
