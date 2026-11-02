@@ -17,7 +17,7 @@
     </div>
   </div>
   <div class="wrap readout-wrap">
-    <div class="console" data-console data-intro role="img" aria-label="Example: four checks run before a call is paid. A clean answer is verified and paid; a tampered one is rejected and not charged.">
+    <div class="console" data-console data-intro role="img" aria-label="Example: four checks run before a call is paid. A clean answer is verified and paid; a tampered one is rejected, and not charged once Celo shows its permission expired unused.">
       <p class="con-title" aria-hidden="true"><i class="con-dot"></i>Example call</p>
       <ol class="con-lines" data-con-lines aria-hidden="true"></ol>
     </div>
@@ -66,7 +66,7 @@
           </li>
           <li data-step>
             <h2>Tampered answers never get paid.</h2>
-            <p>If the answer doesn't match what was signed, nothing settles. The permission expires unused and you're not charged.</p>
+            <p>If the answer doesn't match what was signed, the gateway refuses to settle. The permission expires unused, and once Celo shows that, you're not charged.</p>
             <p class="term">response_hash_mismatch, not_charged</p>
           </li>
         </ol>
@@ -132,7 +132,7 @@
             <div><dt>received hash</dt><dd>0x4be1…<span class="x">3a6f</span></dd></div>
           </dl>
           <div class="verdict-row"><span class="v-fail">{{i:fail}}Rejected</span><span class="v-ok">{{i:pass}}Not charged</span></div>
-          <p class="callout-foot">Sample values.</p>
+          <p class="callout-foot">Sample values, after Celo showed the permission expired unused.</p>
         </div>
       </div>
     </div>
@@ -156,7 +156,7 @@
           </li>
           <li class="beat" data-beat>
             <h3>Tampered and refused</h3>
-            <p>The answer doesn't match what the sealed machine signed, so nothing is paid. There is no transaction: the payment permission expires unused, which anyone can read on Celo (<code>authorizationState</code>).</p>
+            <p>The answer doesn't match what the sealed machine signed, so the gateway doesn't settle. There is no transaction: the payment permission expires unused, which anyone can read on Celo (<code>authorizationState</code>).</p>
             {{track:pass pass fail na free}}
             <span class="scan-slot" title="Celoscan link: fills in when live">Check it on Celo <span class="sample-tag">sample</span></span>
           </li>

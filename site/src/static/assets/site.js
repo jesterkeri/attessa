@@ -306,7 +306,7 @@
       rows: [
         { s: 'fail', line: "This build isn't approved by the agent's owner, or it was revoked.", term: `<span class="t">release_not_approved</span> release ${chip('releaseId')} for agent ${chip('agentId')}` },
         skipped, skipped, skipped,
-        { s: 'pass', w: 'Not charged', line: 'Not charged: the call was refused before any payment permission was used.', term: 'no settlement for this request' }],
+        { s: 'pass', w: 'Not charged', line: 'Not charged: Celo shows the payment permission expired unused.', term: 'no settlement for this request' }],
       verdictLine: 'Rejected at "Approved build". The Attessa registry on Celo has no approval for this build, so the call was refused.',
     },
     unattested: {

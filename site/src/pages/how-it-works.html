@@ -88,7 +88,7 @@
         </li>
         <li class="walk-step is-fail" data-walk-step>
           <span class="walk-n" aria-hidden="true">07</span>
-          <div class="walk-copy"><h3>If the proof fails, nothing settles</h3><p>If any check fails (a tampered answer, a revoked build, a wrong signer), the gateway refuses before it settles, so your permission is never used. Attessa shows which check failed, waits for the permission to expire, and confirms on Celo that you were not charged. You can cancel it sooner, on chain, for a little gas.</p></div>
+          <div class="walk-copy"><h3>If the proof fails, nothing settles</h3><p>If any check fails (a tampered answer, a revoked build, a wrong signer), the gateway refuses before it settles, so it shouldn't use your permission. Attessa shows which check failed, waits for the permission to expire, and checks on Celo whether it was used: not charged if it wasn't, or <code>settled_after_refusal</code> if the gateway used it anyway. You can cancel it sooner, on chain, for a little gas.</p></div>
           <figure class="term"><pre><code><span class="ln"><span class="x">→</span> Refused: the answer doesn't match what the sealed machine signed  <span class="m">(response hash differs from the proof)</span></span>
 <span class="ln"><span class="k">→</span> Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…</span>
 <span class="ln"><span class="s">→</span> Not charged: confirmed on Celo, your payment permission expired unused  <span class="m">(block 31,204,245)</span></span></code></pre></figure>

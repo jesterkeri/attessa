@@ -41,7 +41,7 @@
           <li class="beat use" data-beat>
             <h2>Payment-risk checks before sending stablecoins</h2>
             <p>Before an agent sends USDC or USA₮, it asks a service whether the recipient looks risky.</p>
-            <p class="adds"><span class="adds-k">What the proof adds</span>If the answer was changed after the sealed machine signed it, the gateway refuses it before using the agent's payment permission, so the agent neither pays for the altered answer nor acts on it.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>If the answer was changed after the sealed machine signed it, the gateway refuses it without using the agent's payment permission, so the agent doesn't act on it, and Attessa checks on Celo that the permission went unused.</p>
           </li>
           <li class="beat use" data-beat>
             <h2>Agents buying data or decisions</h2>
