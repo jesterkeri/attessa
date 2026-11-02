@@ -1171,3 +1171,29 @@ reviewed: pending (Codex r2)
 ## T10 deploy record, SDK pin and INV-19 oracle: Codex review r2 SHIP - 2026-11-02
 Codex r2 reviewed cd723b0 (`git diff 663bd89 cd723b0`, with `e6777fa..cd723b0` in scope): no critical, major or minor findings. The r1 minor (m1, the `ClientOptions.registry` doc) is closed; the INV-19 `alive()` change, the staging merge and the DONE reorder were judged sound. The r1 review (REVISE, m1) is archived outside the repo.
 reviewed: reviews/t10-deploy-record-and-sdk-pin-review-r2.md | verdict: implementation-ready | C0 M0 m0
+
+## Gateway CI timing fix - 2026-11-02
+Two gateway tests from T19 failed `ci / ts (push)` twice on PR 10 (a docs-only branch): "17th concurrent evaluate → 503 gateway_busy" (only 10 to 12 of 16 calls got 200) and "two concurrent ticks share one pass" (20 s timeout). Reproduced locally with `pnpm -r test` pinned to 2 cores (run 2: 3 of 16 got 200). A probe showed the other calls got 402 `unexpected_verify_error` and 202 `settle_pending`: the harness shortens the gateway's timeouts (settle 400 ms, verify 2 s), and on a starved runner 17 calls through the in-process facilitator overrun them. The gateway answered as SPEC §6.2 says; the tests assumed a fast machine. The ticks test's `holdable` helper counted a re-send before its answer arrived and kept holding after `release()`, so an answer that arrived late was held forever.
+Joshua approved changing only the timing, with every assertion unchanged:
+- `packages/gateway/test/evaluate.test.ts`: the 17-call test runs with production timeouts (`DEFAULT_TIMEOUTS`).
+- `packages/gateway/test/adversary-t19-r2.test.ts`: `release()` stops holding before it releases; the ticks test waits for the 4 sends (`vi.waitFor`, 5 s) instead of a fixed 50 ms.
+
+verify (run by Claude), 2026-11-02: the two files on one core shared with 4 busy loops, three runs; then `taskset -c 0,1 pnpm -r test` twice; then gateway typecheck and lint:
+```
+loaded 1:       Tests  46 passed (46)
+loaded 2:       Tests  46 passed (46)
+loaded 3:       Tests  46 passed (46)
+full2core 1: packages/core test:       Tests  69 passed (69)
+full2core 1: packages/gateway test:       Tests  154 passed (154)
+full2core 1: packages/seller-host test:       Tests  81 passed (81)
+full2core 1: packages/sdk test:       Tests  144 passed (144)
+full2core 1: packages/cli test:       Tests  76 passed (76)
+full2core 2: packages/core test:       Tests  69 passed (69)
+full2core 2: packages/gateway test:       Tests  154 passed (154)
+full2core 2: packages/seller-host test:       Tests  81 passed (81)
+full2core 2: packages/sdk test:       Tests  144 passed (144)
+full2core 2: packages/cli test:       Tests  76 passed (76)
+typecheck=0
+lint=0
+```
+reviewed: pending (adversary, then Codex)
