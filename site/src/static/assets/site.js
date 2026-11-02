@@ -312,7 +312,7 @@
     unattested: {
       verdict: 'unattested', word: 'Unattested', sub: 'no proof',
       rows: [noProof, noProof, noProof, noProof,
-        { s: 'na', w: 'Unprotected', line: () => `Paid ${chip('amount')} ${chip('asset')} through buy, Celo's marketplace of pay-per-call APIs, which takes payment before the service runs. With no proof, Attessa can't protect this payment.`, term: `paid before the call (Mode A), settled in tx ${chip('settlementTx')}`, link: scan('settlement tx') }],
+        { s: 'na', w: 'Unprotected', line: () => `Paid ${chip('amount')} ${chip('asset')} through buy, Celo's marketplace of pay-per-call APIs. Payment protection is none here: buy takes payment before the service runs. That holds whether or not the service offers a proof.`, term: `paid before the call (Mode A), settled in tx ${chip('settlementTx')}`, link: scan('settlement tx') }],
       verdictLine: "No proof offered: this service doesn't say which code produced its answer, so it can't be checked.",
     },
   };
