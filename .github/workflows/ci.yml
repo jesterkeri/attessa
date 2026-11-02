@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
+          # The CLI test parses the real AWS Nitro fixture from the pinned nitro-validator submodule.
+          submodules: recursive
           persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -108,7 +110,7 @@ jobs:
       # changing these two hashes (scripts/check-slither-build.sh --print).
       - run: |
           bash scripts/check-nitro-pin.sh
-          bash scripts/check-slither-build.sh c786f19f6b3447b730790ca955f962fecac6c43cbbbc77a309bcdf7f9d597cbd 13f8341e22c75c4486aaa3d448461acd3be099f47849fd3ed4d689e057fe0ddf
+          bash scripts/check-slither-build.sh 960b054277072cc4f9ba5755ad32ba4d4777f03f760f7f10ab4a7d8bde951c13 13f8341e22c75c4486aaa3d448461acd3be099f47849fd3ed4d689e057fe0ddf
           links=$(find contracts -type l)
           if [ -n "$links" ]; then echo "symlinks under contracts/ are not allowed:"; echo "$links"; exit 1; fi
           rc=0; grep -rn slither-disable contracts || rc=$?
