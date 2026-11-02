@@ -46,6 +46,8 @@ export interface ClientOptions {
   onProgress?: (e: Progress) => void | 'stop';
   /**
    * `--dry-run`: every call ends at `authorizing`, before anything is signed, as if `onProgress` returned `'stop'`.
+   * With an open entry for the same input it ends at V0 instead (`would_resume`): no payer signature, no
+   * `/v1/results` request, and the ledger is left as it was.
    * It does not depend on `onProgress` at all, so a handler that throws (a closed stdout) can't turn a dry run
    * into a payment.
    */
@@ -56,6 +58,11 @@ export interface ClientOptions {
 export type Progress =
   /** V0: an open ledger entry for the same input is being resumed instead of paying again. */
   | { kind: 'resuming'; entry: PendingEntry }
+  /**
+   * V0 under `dryRun`: an open ledger entry for the same input that a real run would resume. A dry run stops here:
+   * resuming signs the payer message and asks the gateway for the result, and a preview signs and sends nothing.
+   */
+  | { kind: 'would_resume'; entry: PendingEntry }
   /** After V7, before V8 signs: everything checked so far. `quoteMs` is the round trip of the 402 that carried the liveness proof. */
   | {
       kind: 'authorizing';

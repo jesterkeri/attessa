@@ -1,6 +1,7 @@
 import { parseArgs } from 'node:util';
+import { AttestError } from '@attessa/sdk';
 import { enclaveBuild, enclaveStart } from './commands/enclave.ts';
-import { call, cancel, evidenceExport, init, readConfig, status } from './commands/buyer.ts';
+import { call, cancel, evidenceExport, fromSdk, init, readConfig, status } from './commands/buyer.ts';
 import { endpointAdd, releaseApprove } from './commands/owner.ts';
 import {
   agentRegister,
@@ -114,6 +115,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
   let json = argv.includes('--json');
   const io = json ? { ...deps.io, out: (l: string) => lines.push(l), data: (f: Record<string, unknown>) => void Object.assign(data, f) } : deps.io;
   const d: Deps = { ...deps, io };
+  let g: Global | undefined;
   try {
     if (positional[0] === 'gateway') {
       // SPEC §8 gateway operator commands are @attessa/gateway's own (T19); they take their flags as given.
@@ -138,7 +140,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
     const cfg = BUYER.has(key) ? readConfig(d) : null;
     const network = flagNetwork ?? cfg?.network ?? 'sepolia';
     if (!['sepolia', 'mainnet', 'local'].includes(network)) throw new CliError('usage', '--network must be sepolia, mainnet or local.');
-    const g: Global = { network, rpc: str(v, 'rpc'), json, yes: v.yes === true, dryRun: v['dry-run'] === true };
+    g = { network, rpc: str(v, 'rpc'), json, yes: v.yes === true, dryRun: v['dry-run'] === true };
     const a0 = args[0];
     switch (key) {
       case 'init':
@@ -227,7 +229,9 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         ? e
         : e instanceof TypeError && (e as { code?: string }).code?.startsWith('ERR_PARSE_ARGS')
           ? new CliError('usage', e.message)
-          : unexpected(e); // never a raw message: it could carry a key, and --json still gets its error object
+          : // An SDK refusal code missed by a command still gets its FLOWS row (an AttestError is raised before anything is
+            // signed); anything else is said without its raw message (it could carry a key), and --json gets its error object.
+            ((g && e instanceof AttestError ? fromSdk(g, e) : null) ?? unexpected(e));
     if (json) {
       deps.io.out(JSON.stringify({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
     } else {

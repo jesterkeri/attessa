@@ -458,3 +458,47 @@ describe('buyer: cancel, status, evidence export', () => {
     expect(w.out[1]).toContain(',verified,');
   });
 });
+
+describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
+  const LOCAL = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
+
+  // `status <origin>` used to turn every failed read into "Can't reach Celo"; a wrong network keeps its own row.
+  it('status <origin> against an RPC on another chain prints the FLOWS wrong-network line', async () => {
+    await initialized();
+    expect(await w.cli('status', 'https://risk.example', '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1')).toBe(1);
+    expect(w.err).toEqual([`Your RPC is on chain ${w.chain.chainId}; this registry is on 42220.`, 'Set `--rpc` for 42220.']);
+  });
+
+  it('status --pending <origin> with a malformed origin is the FLOWS invalid-origin line, not "Unexpected error"', async () => {
+    await initialized();
+    expect(await w.cli('status', 'ftp://risk example', '--pending', ...LOCAL)).toBe(1);
+    expect(w.err).toEqual(['Use just the scheme and host, like https://risk.example (no path, lowercase).']);
+  });
+
+  it('cancel --json against an RPC on another chain: error code network_mismatch', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'network_mismatch' });
+  });
+
+  // A dry run with an open call for the same input says a real run would resume it, shows no price, signs nothing.
+  it('--dry-run with an open call: the would-resume line, then the dry-run line, and no price line', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    const before = JSON.stringify(w.pending());
+    w.transcript.length = 0;
+    expect(await w.call('--dry-run')).toBe(0);
+    expect(w.transcript).toEqual([
+      `Checking ${w.host} before paying`,
+      `You already have a call in progress for this input (request ${id}). Without --dry-run, attessa resumes it instead of paying again.`,
+      '  (dry run: nothing was signed)',
+    ]);
+    expect(JSON.stringify(w.pending())).toBe(before);
+  });
+});

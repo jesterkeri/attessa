@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Progress } from '../src/types.ts';
 import { makeWorld, PRICE, type World } from './fakes/world.ts';
 
@@ -75,6 +75,36 @@ describe('payAndVerify progress events', () => {
     expect(r).toMatchObject({ outcome: 'stopped', code: 'dry_run' });
     expect(w.transferSignatures()).toBe(0);
     expect(w.gw.paid).toHaveLength(0);
+  });
+
+  // Adversary T21 r4: with an open entry for the same input, V0 resume ran before the dry-run stop, so a dry run
+  // signed the payer message, fetched /v1/results and finalized the entry. A dry run now stops at V0.
+  it('dryRun with an open entry for the same input: would_resume, then stopped dry_run; nothing signed, fetched or changed', async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    const first = await w.client.payAndVerify(w.url, { body: w.body });
+    expect(first.outcome).toBe('uncertain');
+    const before = JSON.stringify(w.client.ledger.list());
+    const signsBefore = w.signSpy.mock.calls.length;
+    const messageSpy = vi.spyOn(w.account, 'signMessage');
+    const fetched: string[] = [];
+    const events: Progress[] = [];
+    const client = w.mkClient({
+      dryRun: true,
+      onProgress: (e) => void events.push(e),
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        fetched.push(String(input));
+        return fetch(input, init);
+      }) as typeof fetch,
+    });
+    const r = await client.payAndVerify(w.url, { body: w.body });
+    expect(r).toMatchObject({ outcome: 'stopped', code: 'dry_run' });
+    expect(events.map((e) => e.kind)).toEqual(['would_resume']);
+    expect((events[0] as Extract<Progress, { kind: 'would_resume' }>).entry.requestId).toBe(first.requestId);
+    expect(messageSpy).not.toHaveBeenCalled();
+    expect(w.signSpy.mock.calls.length).toBe(signsBefore);
+    expect(fetched).toEqual([]);
+    expect(JSON.stringify(client.ledger.list())).toBe(before);
   });
 
   it('refused: a refused event with the code, then one waiting event with chain time before validBefore', async () => {

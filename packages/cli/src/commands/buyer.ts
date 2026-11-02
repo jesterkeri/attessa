@@ -3,7 +3,9 @@ import { join, resolve } from 'node:path';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
+  AttestError,
   KeyError,
+  RpcError as SdkRpcError,
   Ledger,
   createAttestClient,
   loadAccount,
@@ -259,6 +261,9 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
         case 'resuming':
           out(BUY.resuming(e.entry.requestId));
           return;
+        case 'would_resume':
+          out(BUY.wouldResume(e.entry.requestId));
+          return;
         case 'authorizing':
           out(BUY.runs(e.endpoint.agentId.toString(), e.releaseId));
           if (e.ownerClaimedSource !== undefined) out(BUY.ownerSays(claimLabel(e.ownerClaimedSource)));
@@ -357,44 +362,14 @@ async function report(
 /** FLOWS §8 rows for a call that stopped before anything was signed. */
 async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: { origin: string; sym: string; asset: AssetKey; dailyCap: bigint }): Promise<CliError> {
   const detail = safe(r.detail ?? ''); // the gateway's or chain's words, never printed raw
-  const nums = (re: RegExp) => re.exec(detail);
   switch (r.code) {
-    case 'endpoint_not_registered':
-      return BUYERR.notRegistered(c.origin);
     case 'endpoint_retired': {
       // The retired record keeps its agent (SPEC §3.4 retireEndpoint).
       const agent = await client.status(c.origin).then((s) => s.agentId?.toString(), () => undefined);
       return BUYERR.endpointRetired(c.origin, agent ?? '<id>');
     }
-    case 'origin_agent_mismatch': {
-      const m = nums(/says agent (\S+), registry says (\S+)$/);
-      return m ? BUYERR.originAgentMismatch(c.origin, m[1]!, m[2]!) : BUYERR.originUnverifiable(c.origin, detail);
-    }
-    case 'rpc_unavailable':
-      return ERR.rpcUnavailable(rpcUrl(g));
-    case 'network_mismatch': {
-      const m = nums(/^RPC is on chain (\d+); \S+ is (\d+)$/);
-      return m ? ERR.networkMismatch(Number(m[1]), Number(m[2])) : new CliError('network_mismatch', `Wrong network: ${detail}. Nothing was signed.`);
-    }
-    case 'quote_unavailable': {
-      const m = nums(/^HTTP (\d+)$/);
-      return BUYERR.quoteUnavailable(c.origin, m ? `HTTP ${m[1]}` : 'no HTTP answer');
-    }
-    case 'quote_malformed':
-      return BUYERR.quoteMalformed(c.origin);
-    case 'gateway_paused':
-      return BUYERR.gatewayPaused(c.origin);
-    case 'bad_request':
-      return BUYERR.badRequest(detail || 'no detail');
-    case 'rate_limited':
-    case 'gateway_busy':
-      return BUYERR.busy(r.code);
-    case 'payto_mismatch': {
-      const m = nums(/^quote payTo (\S+), registry payTo (\S+)$/);
-      return BUYERR.paytoMismatch(m?.[1] ?? 'another address', m?.[2] ?? 'the registered one');
-    }
     case 'over_max_amount': {
-      const m = nums(/^price (\d+), max (\d+)$/);
+      const m = /^price (\d+), max (\d+)$/.exec(detail);
       return BUYERR.overMax(amount(BigInt(m?.[1] ?? '0')), c.sym, amount(BigInt(m?.[2] ?? '0')));
     }
     case 'over_daily_cap': {
@@ -403,12 +378,89 @@ async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: {
       const spent = ev?.asset ? spendToday(client.ledger.list(), ev.asset, Date.now()) : 0n;
       return BUYERR.overDailyCap(amount(spent + price), amount(c.dailyCap));
     }
-    case 'liveness_failed':
-      return BUYERR.livenessFailed(c.origin, detail || 'unknown');
+    default:
+      return sdkError(g, r.code ?? 'stopped', r.detail, c.origin);
+  }
+}
+
+/** The RPC a buyer command used, for the FLOWS rpc_unavailable row. Never throws (it runs while reporting an error). */
+function rpcShown(g: Global): string {
+  return g.rpc ?? (g.network === 'local' ? 'your --rpc' : DEFAULT_RPC[g.network]);
+}
+
+/**
+ * FLOWS §8 row for an SDK refusal code: the one mapping every buyer command shares, for `call`'s stopped results and
+ * for the AttestError or chain RpcError that `cancel`, `status` and `run()` catch. `origin` is absent where no origin
+ * is known; the origin rows then fall back to the generic line. Only the SDK's own fixed details are printed, escaped.
+ */
+export function sdkError(g: Global, code: string, rawDetail: string | undefined, origin?: string): CliError {
+  const detail = safe(rawDetail ?? '');
+  const nums = (re: RegExp) => re.exec(detail);
+  switch (code) {
+    case 'rpc_unavailable':
+      return ERR.rpcUnavailable(rpcShown(g));
+    case 'network_mismatch': {
+      const m = nums(/^RPC is on chain (\d+); \S+ is (\d+)$/);
+      return m ? ERR.networkMismatch(Number(m[1]), Number(m[2])) : new CliError('network_mismatch', `Wrong network: ${detail}. Nothing was signed.`);
+    }
+    case 'rate_limited':
+    case 'gateway_busy':
+      return BUYERR.busy(code);
+    case 'bad_request':
+      return BUYERR.badRequest(detail || 'no detail');
+    case 'payto_mismatch': {
+      const m = nums(/^quote payTo (\S+), registry payTo (\S+)$/);
+      return BUYERR.paytoMismatch(m?.[1] ?? 'another address', m?.[2] ?? 'the registered one');
+    }
     case 'in_progress':
       return BUYERR.inProgress();
-    default:
-      return new CliError(safe(r.code ?? 'stopped'), `Stopped: ${safe(r.code ?? 'unknown')}${detail ? ` (${detail})` : ''}. Nothing was signed.`); // not in FLOWS
+  }
+  if (origin !== undefined) {
+    switch (code) {
+      case 'endpoint_not_registered':
+        return BUYERR.notRegistered(origin);
+      case 'endpoint_retired':
+        return BUYERR.endpointRetired(origin, '<id>');
+      case 'origin_agent_mismatch': {
+        const m = nums(/says agent (\S+), registry says (\S+)$/);
+        return m ? BUYERR.originAgentMismatch(origin, m[1]!, m[2]!) : BUYERR.originUnverifiable(origin, detail);
+      }
+      case 'quote_unavailable': {
+        const m = nums(/^HTTP (\d+)$/);
+        return BUYERR.quoteUnavailable(origin, m ? `HTTP ${m[1]}` : 'no HTTP answer');
+      }
+      case 'quote_malformed':
+        return BUYERR.quoteMalformed(origin);
+      case 'gateway_paused':
+        return BUYERR.gatewayPaused(origin);
+      case 'liveness_failed':
+        return BUYERR.livenessFailed(origin, detail || 'unknown');
+    }
+  }
+  return new CliError(safe(code), `Stopped: ${safe(code)}${detail ? ` (${detail})` : ''}. Nothing was signed.`); // not in FLOWS
+}
+
+/**
+ * An SDK error thrown (not returned) by a client method, as its FLOWS §8 row: AttestError by its code, and a chain
+ * read the SDK couldn't make (RpcError) as rpc_unavailable. Their messages are never printed: an RPC error's text
+ * can carry the node URL's credentials. Anything else is not the SDK's to map: null.
+ */
+export function fromSdk(g: Global, e: unknown, origin?: string, o: { chainReads?: boolean } = {}): CliError | null {
+  if (e instanceof AttestError) return sdkError(g, e.code, e.code === 'rpc_unavailable' ? undefined : e.detail, origin);
+  if (e instanceof SdkRpcError && o.chainReads !== false) return ERR.rpcUnavailable(rpcShown(g));
+  return null;
+}
+
+/**
+ * Runs an SDK client call, turning its thrown SDK errors into their FLOWS rows. `chainReads: false` for a call that
+ * can fail a chain read after it sent something (cancelAuthorization), where the rpc row's "Nothing was signed" could
+ * be untrue: there only an AttestError (raised before anything is sent) is mapped.
+ */
+async function viaSdk<T>(g: Global, f: () => Promise<T>, origin?: string, o: { chainReads?: boolean } = {}): Promise<T> {
+  try {
+    return await f();
+  } catch (e) {
+    throw fromSdk(g, e, origin, o) ?? e;
   }
 }
 
@@ -425,7 +477,7 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   const ctx = (e: PendingEntry) => ({ origin: e.origin, sym: SYMBOL[assetOf(e.asset)], asset: assetOf(e.asset), uncertain: false, outFile: `${id}.json`, dailyCap: 0n });
   if (entry.nonce === null) throw new CliError('nothing_signed', 'Nothing was signed for this request, so there is nothing to cancel.'); // not in FLOWS
   if (['verified', 'not_charged', 'paid_but_rejected', 'settled_after_refusal'].includes(entry.state)) {
-    return report(g, d, client, await client.getResult(id), ctx(entry));
+    return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));
   }
   if (g.dryRun) {
     d.io.out('  (dry run: nothing was sent)');
@@ -433,18 +485,26 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   }
   if (!g.yes && !(await d.io.confirm('cancel'))) return 1;
   try {
-    const tx = await client.cancelAuthorization(id);
+    const tx = await viaSdk(g, () => client.cancelAuthorization(id), entry.origin, { chainReads: false });
     d.io.out(BUY.cancelled(tx));
     d.io.data?.({ requestId: id, outcome: 'not_charged', code: 'cancelled', cancelTx: tx });
     return 0;
   } catch (e) {
     if (!(e instanceof AlreadyUsedError)) throw e;
     d.io.out(BUY.tooLateToCancel(e.tx ?? ''));
-    return report(g, d, client, await client.getResult(id), ctx(entry));
+    return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));
   }
 }
 
 // ---------------------------------------------------------------- status [<origin>] [--pending]
+
+function checkOrigin(g: Global, target: string): void {
+  try {
+    normalizeOrigin(target, { local: g.network === 'local' });
+  } catch {
+    throw ERR.invalidOrigin();
+  }
+}
 
 export async function status(g: Global, d: Deps, o: { target?: string | undefined; pending: boolean; keystore?: string | undefined }): Promise<number> {
   const out = d.io.out;
@@ -452,9 +512,11 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     const w = await wallet(d, o.keystore);
     if (!w) throw BUYERR.noWallet();
     const client = makeClient(g, d, w.account, { limits: NO_LIMITS, asset: 'usdc', wait: false });
-    let results = await client.reconcilePending();
-    if (o.target !== undefined) {
-      const oh = (await client.status(o.target)).originHash;
+    const target = o.target;
+    if (target !== undefined) checkOrigin(g, target);
+    let results = await viaSdk(g, () => client.reconcilePending());
+    if (target !== undefined) {
+      const oh = (await viaSdk(g, () => client.status(target), target)).originHash;
       results = results.filter((r) => client.ledger.get(r.requestId)?.originHash === oh);
     }
     d.io.data?.({ pending: results.map(jsonResult) });
@@ -473,16 +535,14 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
   // doesn't require a wallet"), so an unavailable keychain or a malformed ATTESSA_PRIVATE_KEY can't block it.
   const account = privateKeyToAccount(generatePrivateKey()); // read-only: this client never signs
   const client = makeClient(g, d, account, { limits: NO_LIMITS, asset: 'usdc', wait: false });
-  try {
-    normalizeOrigin(o.target, { local: g.network === 'local' });
-  } catch {
-    throw ERR.invalidOrigin();
-  }
+  const target = o.target;
+  checkOrigin(g, target);
   let s;
   try {
-    s = await client.status(o.target);
-  } catch {
-    throw ERR.rpcUnavailable(rpcUrl(g));
+    s = await client.status(target);
+  } catch (e) {
+    // Every failure of this read is the chain's; an SDK code keeps its own row (a wrong network is not "can't reach").
+    throw fromSdk(g, e, target) ?? ERR.rpcUnavailable(rpcShown(g));
   }
   if (s.endpoint?.status === 'none') throw BUYERR.notRegistered(s.origin!);
   // not in FLOWS: the status lines.
@@ -493,7 +553,10 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     try {
       l = await client.checkLiveness(s.origin!);
     } catch (e) {
-      l = { ok: false, reason: (e as Error).message };
+      // The chain rows stop the command; any other refusal is the reason, by its code only (an error's text can
+      // carry the node URL's credentials).
+      if (e instanceof SdkRpcError || (e instanceof AttestError && (e.code === 'rpc_unavailable' || e.code === 'network_mismatch'))) throw fromSdk(g, e, s.origin);
+      l = { ok: false, reason: e instanceof AttestError ? e.code : 'unexpected' };
     }
     live = { ok: l.ok, ...(l.reason ? { reason: l.reason } : {}), ...(l.signer ? { signer: l.signer } : {}) };
     out(l.ok ? BUY.live(((l.latencyMs ?? 0) / 1000).toFixed(1)) : `It didn't answer a fresh check just now  (liveness: ${safe(l.reason ?? 'unknown')})`);

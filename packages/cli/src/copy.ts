@@ -302,6 +302,8 @@ export const BUY = {
   settlePending: (until: string, tx: string | null) =>
     `Payment sent, confirming (usually under 5 s; checking until ${until} UTC)${tx ? `  (tx ${short(tx)})` : ''}`,
   resuming: (id: string) => `You already have a call in progress for this input (request ${id}). Resuming it instead of paying again.`,
+  // not in FLOWS: J2's resume line, worded for a --dry-run, which resumes nothing.
+  wouldResume: (id: string) => `You already have a call in progress for this input (request ${id}). Without --dry-run, attessa resumes it instead of paying again.`,
   // §7 V10 rpc
   rpcNoHistory: "Can't finish checking: your RPC doesn't have that block's data. Retry with --rpc <archive RPC>.",
   // not in FLOWS: a call left open by --no-wait, or still undecided.

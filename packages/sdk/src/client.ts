@@ -653,6 +653,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       });
       return r;
     };
+    /** `dryRun` with an open entry for this input: say so and stop, leaving that entry untouched. */
+    const wouldResume = (open: PendingEntry): CallResult => {
+      progress({ kind: 'would_resume', entry: open });
+      return stopped('dry_run');
+    };
 
     let n: Net;
     let ep: ResolvedEndpoint;
@@ -667,6 +672,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!req.newRequest) {
         const open = ledger.list().find((e) => e.originHash === oh && e.requestHash === rh && !isTerminal(e));
         if (open) {
+          // A dry run previews; resuming would sign the payer message and fetch the result (FLOWS §9 "stops before signing").
+          if (opts.dryRun === true) return wouldResume(open);
           const resumed = await resume(n, open);
           if (resumed) return resumed;
         }
@@ -760,6 +767,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (got === 'over_daily_cap') return stopped('over_daily_cap');
       if (got === 'request_id_conflict') return stopped('request_id_conflict', 'requestId already in the ledger');
       // V0 again, under the lock: another process opened the same input after our first V0 check.
+      if (opts.dryRun === true) return wouldResume(got.open);
       const resumed = await resume(n, got.open);
       if (resumed) return resumed;
       if (attempt >= 2) return stopped('in_progress', 'the same request kept starting in another process');
