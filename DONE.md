@@ -1225,3 +1225,21 @@ sdk:  Test Files  17 passed (17)
 sdk:       Tests  165 passed (165)
 ```
 reviewed: pending (adversary r9, then Codex)
+
+### T21 adversary r9 fixes - 2026-11-02
+adversary r9 (f932670, `packages/cli/test/adversary-t21-r9.test.ts`, 3 failing): a cancel that reverted while the permission was still unused (a paused token), or raced settlement against an RPC node one block behind, printed "Unexpected error (RpcError)" with no next action; a used permission whose AuthorizationUsed log wasn't returned yet printed "Too late to cancel: the payment went through (tx )" followed by a contradictory "attessa cancel ... voids it now". Fixed in 2616b04:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: one decision, used before the cancel, after its estimate reverts and after a failed receipt. A cancel log means cancelled; a "used" log means paid, with that tx; the token's state flag alone never decides "went through". With no log yet, or still unused after a revert, it re-reads for a few seconds so a lagging node catches up.
+- `packages/cli/src/copy.ts` and `commands/buyer.ts`: `cancelReverted` ("The transaction would revert. Nothing was sent." / "Run attessa status --pending after {t} UTC to confirm whether you were charged.") and `cancelUndecided` ("Your payment permission was already used or cancelled, but Celo doesn't show which yet." / "Run attessa status --pending in a minute to see which."), each with one next action. "Too late to cancel" needs a tx and is never followed by "attessa cancel ... voids it now". The new lines are not in FLOWS; OPEN-QUESTIONS lists them for Joshua.
+- New tests: `packages/cli/test/buyer.test.ts` (cancel rows), `packages/sdk/test/cancel-race.test.ts` (log and lag cases).
+
+verify at 2616b04 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  28 passed (28)
+cli:       Tests  209 passed (209)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  168 passed (168)
+```
+reviewed: pending (adversary r10, then Codex)
