@@ -1,5 +1,5 @@
 <!-- title: Proof explorer | Attessa -->
-<!-- description: Re-check any past Attessa call from public Celo data, with no wallet and no payment. -->
+<!-- description: Re-check any past Attessa call from public Celo data and the proof its gateway publishes, with no wallet and no payment. -->
 <!-- nav: explorer -->
 <!-- body: explorer-page -->
 <div data-explorer>
@@ -8,7 +8,7 @@
       <div>
       <h1 data-split data-intro>Re-check<br> any call</h1>
       <div class="explorer-sub">
-        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's request ID or its settlement transaction, and <span class="key">the explorer runs the buyer's five checks again from public Celo data alone</span>: no wallet, no payment.</p>
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's request ID or its settlement transaction, and <span class="key">the explorer runs the five checks again from public Celo data and the proof the service's gateway publishes for that request ID</span> (never the answer itself): no wallet, no payment.</p>
         <form class="recheck" data-explorer-form novalidate role="search">
           <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
           {{i:search}}
@@ -63,7 +63,7 @@
     <div class="wrap">
       <div class="sec-head">
         <h2 id="recent" data-split>Recent calls</h2>
-        <p class="sec-lede" data-fade>The latest calls, read from Celo events. The rows below are samples until the registry is live.</p>
+        <p class="sec-lede" data-fade>The latest settlements, read from Celo events. A refused call moves no money and leaves no event, so it isn't listed here: paste its request ID above instead. The rows below are samples until the explorer reads Celo.</p>
       </div>
       <table class="feed" data-fade>
         <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Endpoint</th><th scope="col">Outcome</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Checklist</span></th></tr></thead>
@@ -78,23 +78,23 @@
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="rejected">{{i:fail}}Rejected</span></td>
-            <td data-label="Amount"><span class="money">Not charged</span></td>
-            <td><button type="button" class="bracket-link" data-open-state="tampered">Open checklist</button></td>
-          </tr>
-          <tr>
-            <td data-label="Time (UTC)">[[slot:callTime]]</td>
-            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="unattested">{{i:na}}Unattested</span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
             <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
-            <td><button type="button" class="bracket-link" data-open-state="unattested">Open checklist</button></td>
+            <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>
             <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
-            <td data-label="Outcome"><span class="badge" data-verdict="rejected">{{i:fail}}Rejected</span></td>
-            <td data-label="Amount"><span class="money">Not charged</span></td>
-            <td><button type="button" class="bracket-link" data-open-state="unapproved">Open checklist</button></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
+            <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
+            <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
           </tr>
           <tr>
             <td data-label="Time (UTC)">[[slot:callTime]]</td>

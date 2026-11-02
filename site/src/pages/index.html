@@ -34,7 +34,7 @@
   <div class="wrap">
     <div class="statement-block">
       <p class="statement">It's a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.</p>
-      <p class="statement-body" data-fade>A seller runs their service in a sealed machine and approves that exact build on Celo. <span class="key">Your agent pays only when an answer comes back signed by that build</span>, and anyone can re-check the call later from public Celo data.</p>
+      <p class="statement-body" data-fade>A seller runs their service in a sealed machine and approves that exact build on Celo. <span class="key">Your agent pays only when an answer comes back signed by that build</span>, and anyone can re-check the call later from public Celo data and the proof its gateway publishes.</p>
     </div>
   </div>
 </section>
@@ -178,7 +178,7 @@
     <div class="wrap scene-grid explore">
       <div class="scene-copy">
         <h2 id="explore" data-split>Re-check any call. No wallet, no payment.</h2>
-        <p class="sec-lede" data-fade><span class="key">Anyone can check a past call from public Celo data alone,</span> with the same five checks the buyer's agent ran.</p>
+        <p class="sec-lede" data-fade><span class="key">Anyone can check a past call from public Celo data and the proof its gateway publishes for that request ID,</span> with the same five checks the buyer's agent ran.</p>
         <form class="recheck" action="explorer.html" method="get" role="search" data-fade>
           <label class="sr-only" for="q">Request ID or settlement transaction</label>
           {{i:search}}

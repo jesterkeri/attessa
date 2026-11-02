@@ -8,7 +8,7 @@
   <article class="docs-main">
     <span class="mode">Tutorial</span>
     <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
-    <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call from public data. Everything here uses test money.</p>
+    <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
     <div class="doc-note"><p><strong>You need</strong> Node.js 22 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
 
     <ol class="doc-steps">
@@ -72,7 +72,7 @@
       </li>
       <li>
         <h2 id="verify">Re-check it with <code>attessa verify</code></h2>
-        <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again from public Celo data. This needs no wallet and no payment, so anyone can do it.</p>
+        <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again from public Celo data and the proof the service's gateway publishes for that request ID. This needs no wallet and no payment, so anyone can do it.</p>
         <figure class="code" data-copy="commands">
           <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
@@ -82,7 +82,7 @@
     </ol>
 
     <h2 id="next">What you did</h2>
-    <p>You paid a service only after its answer was signed by the build its owner approved, and you re-checked from public Celo data which approved build answered. The link from that build to its source code stays the owner's claim until someone reproduces the build.</p>
+    <p>You paid a service only after its answer was signed by the build its owner approved, and you re-checked, from Celo and the proof the gateway published, which approved build answered. The link from that build to its source code stays the owner's claim until someone reproduces the build.</p>
     <div class="doc-cards">
       <a href="how-to.html#mcp"><strong>Give it to your agent</strong><span>Add the Attessa MCP server.</span></a>
       <a href="explanation.html"><strong>Understand the limits</strong><span>What a proof shows, and what it doesn't.</span></a>
