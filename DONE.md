@@ -346,6 +346,39 @@ result: EnclaveRegistry branch coverage 100% (61/61), done-when is >= 90%. Slith
 adversary: n/a (config and triage doc only; the triage goes to Codex with T06/T07)
 reviewed: pending (Codex)
 notes: slither installed with `uv tool install slither-analyzer` (user space, not a project dependency). Coverage runs invariants at default depth, about 285 s.
+
+## T13 - 2026-10-30
+commit: 12ebcca plus regression tests (built 92b8d6c by builder B3, Opus; fixed 607c63d, 12ebcca)
+verified: cargo test --locked --manifest-path enclave/Cargo.toml (plus cargo fmt --check and cargo clippy -D warnings)
+output:
+```
+$ cargo test --locked --manifest-path enclave/Cargo.toml
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.86s
+     Running unittests src/lib.rs (enclave/target/debug/deps/attessa_enclave-57a590a13d28e182)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running unittests src/main.rs (enclave/target/debug/deps/attessa_enclave-0dec15182e97fb50)
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+     Running tests/adv_t13.rs (enclave/target/debug/deps/adv_t13-0f8ec4ec24ac18af)
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.88s
+     Running tests/adv_t13_r2.rs (enclave/target/debug/deps/adv_t13_r2-bef906bff8f6c4ad)
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+     Running tests/enclave.rs (enclave/target/debug/deps/enclave-b65b32dd7c2684ef)
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.08s
+     Running tests/formats.rs (enclave/target/debug/deps/formats-a3fd35297525a34b)
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+     Running tests/vectors.rs (enclave/target/debug/deps/vectors-19a1e76bb5ba5a03)
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+exit=0
+$ cargo fmt --check --manifest-path enclave/Cargo.toml
+exit=0
+$ cargo clippy --locked --manifest-path enclave/Cargo.toml -- -D warnings
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.06s
+exit=0
+```
+adversary: r1 on 92b8d6c DEFECT (a JSON array was accepted where a struct was expected; fixed 607c63d). r2 on 12ebcca NO DEFECT FOUND; its two regression tests kept as enclave/tests/adv_t13_r2.rs.
+reviewed: pending (Codex)
+notes: runs the T03 vectors from 705d515 (merged from feat/t03-core). Open: frame size vs a large payTo, NSM error after boot, payer-sig hex case (OPEN-QUESTIONS).
 ## T02 adversary fix - 2026-10-29
 commit: 1eb99f7
 findings: (1) AGENTS.md lint failed, no package had a lint script; (2) pnpm 9 ran esbuild postinstall, allowlist only in pnpm-workspace.yaml. Fixed: lint script per package; allowlist moved to package.json pnpm.onlyBuiltDependencies; engines.pnpm >=10.32.1. Probes kept: scripts/check-agents-commands.sh, scripts/check-install-scripts.sh.
@@ -647,3 +680,12 @@ SHIP: the T09 done-when condition and hardened Slither gate are evidenced.
 VERDICT: implementation-ready
 ```
 reviewed: reviews/t09-coverage-and-slither-review-r2.md | verdict: implementation-ready | C0 M0 m0
+## T13 Codex review r1 - 2026-10-30
+Codex reviewed T13 at ca8a26e under REVIEW-PROTOCOL U1 to U9 and found nothing to fix.
+Review file: reviews/t13-review-r1.md. Its closing lines, verbatim:
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/t13-review-r1.md | verdict: implementation-ready | C0 M0 m0
+note: commit 2a2dab8 left git conflict markers in DONE.md (from a shared git stash). The commit after it restores DONE.md to the merge plus this entry.
