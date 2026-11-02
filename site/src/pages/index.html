@@ -145,25 +145,24 @@
     <div class="wrap scene-grid">
       <div class="scene-copy">
         <h2 id="outcomes" data-split>Every call ends one of three ways</h2>
-        <p class="sec-lede" data-fade>These are the three outcomes in the demo. <span class="key">Each one leaves a record on Celo you can check yourself.</span></p>
+        <p class="sec-lede" data-fade>These are the three outcomes in the demo, and where each one's record lives. <span class="key">Two of them you can check on Celo yourself.</span></p>
         <ol class="beats">
           <li class="beat is-on" data-beat>
             <h3>Verified and paid</h3>
-            <p>Every check passes, so the payment goes through.</p>
+            <p>Every check passes, so the payment goes through. Its record is the settlement transaction on Celo.</p>
             {{track:pass pass pass pass paid}}
             <span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">sample</span></span>
           </li>
           <li class="beat" data-beat>
             <h3>Tampered and refused</h3>
-            <p>The answer doesn't match what the sealed machine signed, so nothing is paid.</p>
+            <p>The answer doesn't match what the sealed machine signed, so nothing is paid. There is no transaction: the payment permission expires unused, which anyone can read on Celo (<code>authorizationState</code>).</p>
             {{track:pass pass fail na free}}
-            <span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">sample</span></span>
+            <span class="scan-slot" title="Celoscan link: fills in when live">Check it on Celo <span class="sample-tag">sample</span></span>
           </li>
           <li class="beat" data-beat>
             <h3>Unapproved build</h3>
-            <p>The machine runs a build the seller never approved on Celo, so the call is refused.</p>
+            <p>The machine runs a build the seller never approved on Celo, so the registry refuses to register its key and it can't sell a single call. The demo shows this on a local copy of Celo, so it leaves no record on Celo.</p>
             {{track:fail na na na free}}
-            <span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">sample</span></span>
           </li>
         </ol>
         <div class="rail rail-3" data-scene-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i></div>
