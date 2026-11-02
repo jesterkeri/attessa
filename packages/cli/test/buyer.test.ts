@@ -179,6 +179,19 @@ describe('buyer: attessa init (FLOWS §6 J0)', () => {
       'Set ATTESSA_PRIVATE_KEY or pass --keystore <file> (password in ATTESSA_KEYSTORE_PASSWORD).',
     ]);
   });
+
+  // SPEC §7 "Never printed": a --keystore file that isn't a keystore may hold a bare key, so the line names only
+  // the path and a fixed reason, never the parser's message (which quotes the file).
+  it('--keystore with a file that is not a keystore: a fixed line naming the path, nothing of the file', async () => {
+    w = await buyerWorld();
+    const key = generatePrivateKey();
+    writeFileSync(join(w.home, 'key.txt'), `${key.slice(2)}\n`);
+    w.env.ATTESSA_KEYSTORE_PASSWORD = 'pw';
+    expect(await w.cli('init', '--keystore', 'key.txt')).toBe(1);
+    expect(w.err[0]).toBe("Can't load the wallet from key.txt: not a V3 keystore.");
+    expect(w.transcript.join('\n')).not.toMatch(new RegExp(key.slice(2, 8), 'i'));
+    expect(w.keychain.store.size).toBe(0);
+  });
 });
 
 describe('buyer: attessa call, verified (FLOWS §6 J1)', () => {
