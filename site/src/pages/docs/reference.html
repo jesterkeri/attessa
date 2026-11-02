@@ -8,43 +8,47 @@
   <article class="docs-main">
     <span class="mode">Reference</span>
     <h1>Reference</h1>
-    <p>Lookup tables. Commands, tools and options as they ship; refusal codes as the SDK and gateway return them.</p>
+    <p>Lookup tables: the commands, tools and options in the spec, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.</p>
 
     <h2 id="cli">CLI commands</h2>
+    <p>Rows marked <span class="muted">Coming</span> are in the spec but not built yet. Rows marked <span class="muted">Optional</span> may not ship.</p>
     <h3 id="cli-buyer">Buyer</h3>
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
-        <tr><td><code>attessa init</code></td><td>Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>.</td></tr>
-        <tr><td><code>attessa call &lt;url&gt;</code></td><td>Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. <code>--body</code>, <code>--max-amount</code>, <code>--dry-run</code> (stops before signing), <code>--json</code>, <code>--new</code>.</td></tr>
-        <tr><td><code>attessa call --via buy &lt;url&gt;</code></td><td>Buys through buy and records what came back. No payment protection. <code>--accept-unprotected</code> skips the prompt for agents.</td></tr>
-        <tr><td><code>attessa verify &lt;requestId&gt;</code></td><td>Re-checks a past call from public Celo data. No wallet, no payment.</td></tr>
-        <tr><td><code>attessa cancel &lt;id&gt;</code></td><td>Voids an unused payment permission on chain, for a little gas.</td></tr>
-        <tr><td><code>attessa status</code></td><td>Spend today against your cap, pending permissions, recent verdicts. <code>--pending</code>, <code>--agent &lt;id&gt;</code>, or an origin.</td></tr>
-        <tr><td><code>attessa evidence export</code></td><td>Exports your call records.</td></tr>
+        <tr><td><code>attessa init</code></td><td><span class="muted">Coming.</span> Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>.</td></tr>
+        <tr><td><code>attessa call &lt;url&gt;</code></td><td><span class="muted">Coming.</span> Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. <code>--body</code>, <code>--max-amount</code>, <code>--asset usdc|usat</code>, <code>--new</code>, <code>--no-wait</code>, <code>--dry-run</code> (stops before signing), <code>--json</code>.</td></tr>
+        <tr><td><code>attessa call --via buy &lt;url&gt;</code></td><td><span class="muted">Optional, not built yet.</span> Buys through buy and records what came back. No payment protection. <code>--accept-unprotected</code> skips the prompt for agents.</td></tr>
+        <tr><td><code>attessa verify &lt;requestId&gt;</code></td><td><span class="muted">Coming.</span> Re-checks a past call, by request ID or settlement transaction, from public Celo data and the proof its gateway publishes. No wallet, no payment.</td></tr>
+        <tr><td><code>attessa cancel &lt;requestId&gt;</code></td><td><span class="muted">Coming.</span> Voids an unused payment permission on chain, for a little gas.</td></tr>
+        <tr><td><code>attessa status</code></td><td><span class="muted">Coming.</span> Spend today against your cap, pending permissions, recent verdicts. <code>--pending</code>, <code>--agent &lt;id&gt;</code>, or an origin.</td></tr>
+        <tr><td><code>attessa evidence export</code></td><td><span class="muted">Coming.</span> Exports your call records.</td></tr>
+        <tr><td><code>attessa release verify</code></td><td><span class="muted">Optional, not built yet.</span> Rebuilds a release from the source you name and compares its measurements.</td></tr>
       </tbody>
     </table></div>
     <h3 id="cli-seller">Seller</h3>
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
-        <tr><td><code>attessa agent register</code></td><td>Creates your agent's ERC-8004 identity from this wallet.</td></tr>
+        <tr><td><code>attessa agent register</code></td><td><span class="muted">Coming.</span> Creates your agent's ERC-8004 identity from this wallet.</td></tr>
+        <tr><td><code>attessa agent transfer</code>, <code>wallet-sig</code>, <code>set-wallet</code></td><td><span class="muted">Coming.</span> Moves your agent to a cold owner wallet, then sets the agent wallet from it.</td></tr>
         <tr><td><code>attessa enclave build</code></td><td>Builds the sealed machine image and writes its measurements. Refuses a dirty tree.</td></tr>
         <tr><td><code>attessa release approve</code></td><td>Approves a build for your agent, with the source you claim it came from.</td></tr>
-        <tr><td><code>attessa release verify</code></td><td>Reproduces a build and compares its measurements.</td></tr>
+        <tr><td><code>attessa release deprecate</code></td><td><span class="muted">Coming.</span> Marks an approved build deprecated. It can be approved again later.</td></tr>
+        <tr><td><code>attessa release revoke</code></td><td><span class="muted">Coming.</span> Permanently revokes a build. Its signers stop working within 60 s.</td></tr>
         <tr><td><code>attessa endpoint add</code></td><td>Registers the origin buyers call and the address they pay.</td></tr>
+        <tr><td><code>attessa endpoint retire</code></td><td><span class="muted">Coming.</span> Stops selling at an origin.</td></tr>
         <tr><td><code>attessa enclave start</code></td><td>Starts the sealed machine and writes AWS's attestation to <code>att.bin</code>. <code>attessa signer register --fresh</code> gets a new one.</td></tr>
         <tr><td><code>attessa signer register</code></td><td>Registers the machine's key on Celo. <code>--fresh</code>, <code>--dry-run</code> (estimates gas).</td></tr>
         <tr><td><code>attessa signer renew</code></td><td>Renews a running signer without a restart.</td></tr>
-        <tr><td><code>attessa release revoke</code></td><td>Permanently revokes a build. Its signers stop working within 60 s.</td></tr>
-        <tr><td><code>attessa revoke signer &lt;addr&gt;</code></td><td>Permanently revokes a signer. Takes effect within 60 s.</td></tr>
-        <tr><td><code>attessa selflink</code></td><td>Links a Self Agent ID to your agent. Informational only.</td></tr>
-        <tr><td><code>attessa gateway pause</code></td><td>Stops new paid calls at your gateway.</td></tr>
+        <tr><td><code>attessa revoke signer &lt;addr&gt;</code></td><td><span class="muted">Coming.</span> Permanently revokes a signer. Takes effect within 60 s.</td></tr>
+        <tr><td><code>attessa selflink</code></td><td><span class="muted">Coming.</span> Links a Self Agent ID to your agent. Informational only.</td></tr>
+        <tr><td><code>attessa gateway pause|resume|status|export</code></td><td><span class="muted">Coming.</span> Stops and restarts new paid calls at your gateway, shows its state, and exports its records.</td></tr>
       </tbody>
     </table></div>
 
     <h2 id="tools">Agent tools</h2>
-    <p>The MCP server exposes nine tools. Errors come back as an enum code with a suggestion.</p>
+    <p><span class="muted">Coming.</span> The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.</p>
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th><th scope="col">Side effect</th></tr></thead>
       <tbody>
