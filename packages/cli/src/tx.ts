@@ -92,15 +92,19 @@ export function decodeRevert(e: unknown): Revert | null {
 
 export type Simulation = { ok: true; gas: bigint } | { ok: false; revert: Revert | null; message: string };
 
-/** `eth_call` then `eth_estimateGas`, from `from`, at latest. Never sends anything. */
+/**
+ * `eth_call` then `eth_estimateGas`, from `from`, at latest. Never sends anything. Both are chain reads with
+ * `rpcRow`'s mapping, so a dropped connection or a non-revert error reply (a rate limit, an internal error) is the
+ * rpc_unavailable row; only a revert comes back as `ok: false`. `message` is the node's reply text: it is never
+ * printed (`revertToError` prints only names and reasons decoded from the ABI).
+ */
 export async function simulate(c: Chain, from: Address, step: Step): Promise<Simulation> {
   const tx = { from, to: step.to, data: step.data };
   try {
-    await c.rpc.request('eth_call', [tx, 'latest']);
-    const gas = BigInt((await c.rpc.request('eth_estimateGas', [tx])) as string);
+    await chainRead(c, () => c.rpc.request('eth_call', [tx, 'latest']));
+    const gas = BigInt((await chainRead(c, () => c.rpc.request('eth_estimateGas', [tx]))) as string);
     return { ok: true, gas };
   } catch (e) {
-    if (e instanceof RpcUnavailable) throw ERR.rpcUnavailable(c.url);
     if (e instanceof RpcError) return { ok: false, revert: decodeRevert(e), message: e.message };
     throw e;
   }
@@ -213,7 +217,16 @@ export async function planOrSend(
  * Once a transaction is signed, the rpc row's "Nothing was signed" is untrue, and FLOWS §8 has no row for a seller
  * transaction whose outcome a dropped RPC hides. A dropped read after that point is said as a dropped receipt poll
  * is (`send` maps nothing after signing): the unexpected-error line for RpcUnavailable. // not in FLOWS
+ * Any other line that closes with "Nothing was sent." or "Nothing was signed." (a later step's simulated revert)
+ * is untrue for the command too, and FLOWS §6 J3 and §8 have no line for a partly done seller flow, so that closing
+ * sentence is dropped and the rest is kept. // not in FLOWS
  */
 function afterSigning(e: unknown): unknown {
-  return e instanceof CliError && e.code === 'rpc_unavailable' ? unexpected(new RpcUnavailable('after signing')) : e;
+  if (!(e instanceof CliError)) return e;
+  if (e.code === 'rpc_unavailable') return unexpected(new RpcUnavailable('after signing'));
+  const kept = e.message.replace(NOTHING_DONE, '');
+  return kept === e.message ? e : new CliError(e.code, kept, e.next);
 }
+
+/** The closing clause that is only true while nothing of the command has been signed. */
+const NOTHING_DONE = / Nothing was (?:sent|signed)\.$/;
