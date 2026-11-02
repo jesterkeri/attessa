@@ -84,7 +84,7 @@ function updateStory(p) {
     const state = tampered ? tamperStates[i] : i < ticks ? 'pass' : 'wait';
     row.dataset.state = state;
     const word = row.querySelector('[data-word]');
-    if (word) word.textContent = { pass: i === 4 && tampered ? 'Not charged' : 'Passed', fail: 'Failed', na: 'Skipped', wait: 'Checking' }[state];
+    if (word) word.textContent = { pass: i === 4 && tampered ? 'Expired unused' : 'Passed', fail: 'Failed', na: 'Skipped', wait: 'Checking' }[state];
   });
   if (hudVerdict) hudVerdict.textContent = tampered ? 'Rejected' : ticks >= 5 ? 'Verified' : 'Checking';
 }
