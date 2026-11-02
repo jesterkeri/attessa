@@ -70,7 +70,10 @@ check "render-units on an untracked file" "FAIL $H: script render-units must run
 # An executable (100755) script file is still a tracked regular file; node runs it either way.
 n=$((n + 1)); git reset -q --hard HEAD && git clean -qfdx
 chmod +x packages/core/scripts/gen-vectors.ts && git -c user.name=t -c user.email=t@x commit -qam "executable gen-vectors"
-if "$src/scripts/check-install-scripts.sh" 2>&1 | grep -q '^FAIL [^:]*:'; then echo "FAIL: gen:vectors on a tracked executable file refused"; rc=1; else echo "ok: gen:vectors on a tracked executable file accepted"; fi
+# Accepted means the whole probe passed: exit 0 and its ok line, not merely no "FAIL path:" line.
+out=$("$src/scripts/check-install-scripts.sh" 2>&1); st=$?
+if [ $st -eq 0 ] && grep -q 'install ran no non-allowlisted install script: ok' <<<"$out"; then echo "ok: gen:vectors on a tracked executable file accepted"
+else echo "FAIL: gen:vectors on a tracked executable file refused (probe exit $st)"; echo "${out##*$'\n'}"; rc=1; fi
 git reset -q --hard HEAD~1
 check "wrong better-sqlite3 integrity" "FAIL pnpm-lock.yaml: better-sqlite3@13.0.3: allowlisted package without its pinned registry integrity" \
   sed -i 's#integrity: sha512-RbOBxmLBG8uvFUc15X9#integrity: sha512-AbOBxmLBG8uvFUc15X9#' pnpm-lock.yaml
