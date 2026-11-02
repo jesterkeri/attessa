@@ -89,3 +89,28 @@ describe('payAndVerify progress events', () => {
     expect(w.transferSignatures()).toBe(1);
   });
 });
+
+describe('payAndVerify with a throwing progress handler', () => {
+  it.each(['authorizing', 'refused', 'waiting'] as const)('a handler that throws on %s changes nothing: same outcome, ledger and evidence as with no handler', async (kind) => {
+    const { r, kinds } = await run(
+      (w) => (w.gw.behavior = { paid: 'refuse' }),
+      (e) => {
+        if (e.kind === kind) throw new TypeError('handler bug');
+      },
+    );
+    expect(r.outcome).toBe('not_charged');
+    expect(kinds).toEqual(['authorizing', 'refused', 'waiting']);
+    expect(w.transferSignatures()).toBe(1);
+    const ledger = w.mkClient().ledger;
+    expect(ledger.list().map((e) => [e.state, e.code])).toEqual([['not_charged', 'proof_rejected{response_hash_mismatch}']]);
+    expect(ledger.readEvidence().map((e) => e.outcome)).toEqual(['refused', 'not_charged']);
+  });
+
+  it('the same refused call with no handler leaves the same ledger and evidence', async () => {
+    w = await makeWorld();
+    w.gw.behavior = { paid: 'refuse' };
+    expect((await w.client.payAndVerify(w.url, { body: w.body })).outcome).toBe('not_charged');
+    expect(w.client.ledger.list().map((e) => [e.state, e.code])).toEqual([['not_charged', 'proof_rejected{response_hash_mismatch}']]);
+    expect(w.client.ledger.readEvidence().map((e) => e.outcome)).toEqual(['refused', 'not_charged']);
+  });
+});

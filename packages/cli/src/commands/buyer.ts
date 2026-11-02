@@ -20,7 +20,7 @@ import {
 import type { Hex, LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { DEFAULT_RPC, type Deps, type Global, type NetworkFlag } from '../context.ts';
-import { BUY, BUYERR, CHECK_WORDS, CliError, DECIMALS, ERR, amount, blockNo, hms, host, signedRefusal } from '../copy.ts';
+import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, safe, signedRefusal } from '../copy.ts';
 
 /** Buyer commands (SPEC §8): `init`, `call`, `cancel`, `status [<origin>] [--pending]`, `evidence export`. All payment logic is the SDK's. */
 
@@ -81,13 +81,13 @@ function parseAsset(v: string | undefined): AssetKey {
 }
 
 /** Per-call limit: `--max-amount` (raises or lowers it for this call, FLOWS J1), else init's; daily cap likewise, else 1.00. */
-function limitsFor(cfg: BuyerConfig | null, o: { maxAmount?: string | undefined; dailyCap?: string | undefined }, asset: AssetKey): Record<AssetKey, Limits> {
+function limitsFor(cfg: BuyerConfig | null, o: { maxAmount?: string | undefined }, asset: AssetKey): Record<AssetKey, Limits> {
   const saved = cfg?.limits?.[asset];
   const per = o.maxAmount ?? saved?.maxAmountPerCall;
   if (per === undefined) throw BUYERR.maxAmountRequired();
   const l: Limits = {
     maxAmountPerCall: parseAmount(per, '--max-amount'),
-    dailyCap: parseAmount(o.dailyCap ?? saved?.dailyCap ?? DEFAULT_LIMITS.dailyCap, '--daily-cap'),
+    dailyCap: parseAmount(saved?.dailyCap ?? DEFAULT_LIMITS.dailyCap, '--daily-cap'), // only `init` sets it: a per-call flag would let one call lift the cap
   };
   const none: Limits = { maxAmountPerCall: 0n, dailyCap: 0n };
   return { usdc: asset === 'usdc' ? l : none, usat: asset === 'usat' ? l : none };
@@ -147,7 +147,7 @@ function makeClient(
 /** FLOWS J1 shows the owner's claim as `github.com/acme/risk @ a1b2c3d`. */
 function claimLabel(ref: string): string {
   const m = /^(?:https:\/\/)?(github\.com\/[^/\s@]+\/[^/\s@]+?)(?:\/(?:commit|tree)\/|@)([0-9a-f]{7,40})\/?$/i.exec(ref);
-  return m ? `${m[1]} @ ${m[2]!.slice(0, 7)}` : ref;
+  return m ? `${m[1]} @ ${m[2]!.slice(0, 7)}` : safe(ref);
 }
 
 function lastEvidence(client: AttestClient, requestId: Hex): EvidenceRow | undefined {
@@ -218,7 +218,6 @@ export interface CallOpts {
   url?: string | undefined;
   body?: string | undefined;
   maxAmount?: string | undefined;
-  dailyCap?: string | undefined;
   asset?: string | undefined;
   newRequest: boolean;
   noWait: boolean;
@@ -262,7 +261,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           return g.dryRun ? 'stop' : undefined;
         case 'refused':
           if (e.code === 'proof_rejected') {
-            const [words, term] = CHECK_WORDS[e.detail ?? ''] ?? [`the proof failed a check (${e.detail ?? 'unnamed'})`, 'proof_rejected'];
+            const [words, term] = checkWords(e.detail) ?? [`the proof failed a check (${safe(e.detail ?? 'unnamed')})`, 'proof_rejected'];
             out(BUY.refusedCheck(words, term));
           } else {
             out(signedRefusal(e.code, e.detail));
@@ -350,7 +349,7 @@ async function report(
 
 /** FLOWS §8 rows for a call that stopped before anything was signed. */
 async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: { origin: string; sym: string; asset: AssetKey; dailyCap: bigint }): Promise<CliError> {
-  const detail = r.detail ?? '';
+  const detail = safe(r.detail ?? ''); // the gateway's or chain's words, never printed raw
   const nums = (re: RegExp) => re.exec(detail);
   switch (r.code) {
     case 'endpoint_not_registered':
@@ -402,7 +401,7 @@ async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: {
     case 'in_progress':
       return BUYERR.inProgress();
     default:
-      return new CliError(r.code ?? 'stopped', `Stopped: ${r.code ?? 'unknown'}${detail ? ` (${detail})` : ''}. Nothing was signed.`); // not in FLOWS
+      return new CliError(safe(r.code ?? 'stopped'), `Stopped: ${safe(r.code ?? 'unknown')}${detail ? ` (${detail})` : ''}. Nothing was signed.`); // not in FLOWS
   }
 }
 
@@ -490,7 +489,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       l = { ok: false, reason: (e as Error).message };
     }
     live = { ok: l.ok, ...(l.reason ? { reason: l.reason } : {}), ...(l.signer ? { signer: l.signer } : {}) };
-    out(l.ok ? BUY.live(((l.latencyMs ?? 0) / 1000).toFixed(1)) : `It didn't answer a fresh check just now  (liveness: ${l.reason})`);
+    out(l.ok ? BUY.live(((l.latencyMs ?? 0) / 1000).toFixed(1)) : `It didn't answer a fresh check just now  (liveness: ${safe(l.reason ?? 'unknown')})`);
   }
   out(`${s.pending.length} call${s.pending.length === 1 ? '' : 's'} in progress with it on this computer.`);
   d.io.data?.({
@@ -510,8 +509,10 @@ const EVIDENCE_COLUMNS: (keyof EvidenceRow)[] = [
   'ownerClaimedSource', 'selfVerifiedOwner', 'requestHash', 'responseHash', 'inputsHash', 'inputsBlock', 'inputsChecked', 'via',
 ];
 
+/** RFC 4180 quoting, and OWASP's CSV-injection rule: a cell starting with = + - @ tab or CR gets a leading `'`. */
 function csvCell(v: unknown): string {
-  const s = v === null || v === undefined ? '' : String(v);
+  const raw = v === null || v === undefined ? '' : String(v);
+  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

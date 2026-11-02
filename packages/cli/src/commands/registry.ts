@@ -11,7 +11,7 @@ import {
 } from 'viem';
 import { AGENT_WALLET_SET_TYPES, ENDPOINT_STATUS, IDENTITY_ABI, REGISTRY_ABI, REGISTRY_EVENTS, RELEASE_STATUS, SIGNER_STATUS } from '../abi.ts';
 import { connect, type Chain, type Deps, type Global } from '../context.ts';
-import { CliError, ERR, OWN, OWNERR, celo, host, short, sourceLabel, utcShort } from '../copy.ts';
+import { CliError, ERR, OWN, OWNERR, celo, host, safe, short, sourceLabel, utcShort } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Revert, type Step } from '../tx.ts';
 import { ownerOf, parseAgent } from './owner.ts';
@@ -281,7 +281,7 @@ export async function releaseStatus(g: Global, deps: Deps, o: { id?: string | un
       const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [ev.args.signer as Address]);
       if (SIGNER_STATUS[s.status as number] === 'Active' && (s.expiresAt as bigint) > now) live.push(s.originHash as Hex);
     }
-    const hosts = [...new Set(await Promise.all([...new Set(live)].map(async (oh) => host((await originOf(c, oh)) ?? short(oh)))))];
+    const hosts = [...new Set(await Promise.all([...new Set(live)].map(async (oh) => safe(host((await originOf(c, oh)) ?? short(oh))))))];
     prompt = () => OWN.revokeReleasePrompt(src, live.length, hosts);
   } else {
     prompt = () => OWN.deprecatePrompt(src);
@@ -396,7 +396,7 @@ export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | u
   out(`Agent ${agent}`);
   if (releases.length === 0) out('No releases yet. Approve one with `attessa release approve`.');
   for (const r of releases) out(`  Release ${short(r.releaseId)}: ${r.status}, owner says ${sourceLabel(r.sourceRef)}`);
-  for (const e of endpoints) out(`  Endpoint ${e.origin}: ${e.status}, pays ${e.payTo}, operator ${e.operator}`);
+  for (const e of endpoints) out(`  Endpoint ${safe(e.origin)}: ${e.status}, pays ${e.payTo}, operator ${e.operator}`);
   for (const s of signers) out(`  Signer ${short(s.signer)}: ${s.status}, release ${short(s.releaseId)}, valid until ${utcShort(BigInt(s.expiresAt))}`);
   const active = signers.filter((s) => s.status === 'Active');
   deps.io.data?.({ agentId: agent, releases, endpoints, signers, signer: active.at(-1) ?? signers.at(-1) ?? null });

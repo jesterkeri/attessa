@@ -52,6 +52,7 @@ import type {
   LivenessResult,
   Outcome,
   PendingEntry,
+  Progress,
   ProofCheck,
   ResolvedEndpoint,
   StatusReport,
@@ -115,7 +116,15 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   const httpTimeout = opts.httpTimeoutMs ?? 60_000;
   const receiptWaitMs = opts.receiptWaitMs ?? 10_000;
   const waitForExpiry = cfg.waitForExpiry ?? true;
-  const progress = opts.onProgress ?? (() => undefined);
+  // A caller's handler only observes the call: if it throws, the payment flow carries on as if it were absent
+  // (after signing, the ledger, evidence and the wait for "not charged" must not depend on it).
+  const progress = (e: Progress): void | 'stop' => {
+    try {
+      return opts.onProgress?.(e);
+    } catch {
+      return undefined;
+    }
+  };
   const ledger = new Ledger(cfg.dataDir, now);
   const payer = lc(cfg.account.address);
   const transport: Transport =

@@ -25,6 +25,24 @@ export function utcShort(sec: bigint | number): string {
   return `${mon} ${d.getUTCDate()} ${hh}:${mm} UTC`;
 }
 
+/**
+ * Seller- or chain-supplied text (an on-chain sourceRef, a gateway's `detail`) rendered for a terminal: C0 and C1
+ * controls and DEL become `\xNN`, and line/paragraph separators and bidi controls become `\u{NNNN}`, so a `\r`, an
+ * ANSI escape or a direction override can't overwrite or hide the text around it, e.g. "(not checked by attessa)"
+ * (KNOWN-LIMITS L20). Printable text, FLOWS' included, comes back unchanged.
+ */
+export function safe(text: string): string {
+  return text.replace(/[\x00-\x1f\x7f-\x9f\u2028\u2029\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (ch) => {
+    const n = ch.charCodeAt(0);
+    return n <= 0xff ? `\\x${n.toString(16).padStart(2, '0')}` : `\\u{${n.toString(16)}}`;
+  });
+}
+
+/** Own-property lookup, so a `detail` of "constructor" or "__proto__" isn't found on Object.prototype. */
+export function checkWords(detail: string | undefined): [string, string] | undefined {
+  return detail !== undefined && Object.hasOwn(CHECK_WORDS, detail) ? CHECK_WORDS[detail] : undefined;
+}
+
 /** `https://risk.example` → `risk.example`. */
 export function host(origin: string): string {
   return origin.replace(/^https?:\/\//, '');
@@ -33,7 +51,7 @@ export function host(origin: string): string {
 /** `https://github.com/acme/risk/commit/a1b2c3d…` → `acme/risk @ a1b2c3d`; anything else as given. */
 export function sourceLabel(sourceRef: string): string {
   const m = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/(?:commit|tree)\/([0-9a-f]{7,40})\/?$/i.exec(sourceRef);
-  return m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : sourceRef;
+  return m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : safe(sourceRef);
 }
 
 export const COPY = {
@@ -280,8 +298,10 @@ export const BUY = {
 } as const;
 
 /** FLOWS §8 rows for refusals after signing: "{what happened} {tail}". */
-export function signedRefusal(code: string, detail: string | undefined): string {
+export function signedRefusal(rawCode: string, rawDetail: string | undefined): string {
   const t = SIGNED_TAIL;
+  const code = safe(rawCode);
+  const detail = rawDetail === undefined ? undefined : safe(rawDetail);
   switch (code) {
     case 'execution_timeout':
       return `The service didn't respond in 20 s. ${t}`;
@@ -326,7 +346,7 @@ export const BUYERR = {
     new CliError('over_daily_cap', `Not paying: this would take today's spend to ${s} USDC; your cap is ${c}.`, 'Wait until 00:00 UTC or raise `--daily-cap`.'),
   livenessFailed: (origin: string, reason: string) =>
     new CliError(
-      `liveness_failed{${reason}}`,
+      `liveness_failed{${safe(reason)}}`,
       `Not paying: the sealed machine for ${origin} didn't answer a fresh check, so it may be down or this may not be the real address  (liveness).`,
       `\`attessa status ${origin}\` shows when it last answered.`,
     ),
@@ -353,11 +373,11 @@ export const BUYERR = {
   originUnverifiable: (origin: string, detail: string) =>
     new CliError(
       'origin_agent_mismatch',
-      `Not paying: ${origin} doesn't publish the identity the registry has for it (${detail}). Nothing was signed.`,
+      `Not paying: ${origin} doesn't publish the identity the registry has for it (${safe(detail)}). Nothing was signed.`,
       "Don't retry. Report it to where you found the link.",
     ),
   gatewayPaused: (origin: string) => new CliError('gateway_paused', "The service can't take payments right now. Nothing was signed.", `\`attessa status ${origin}\`.`),
-  badRequest: (detail: string) => new CliError('bad_request', `The service can't read this input: ${detail}. Nothing was signed.`, 'Fix the input and call again.'),
+  badRequest: (detail: string) => new CliError('bad_request', `The service can't read this input: ${safe(detail)}. Nothing was signed.`, 'Fix the input and call again.'),
   busy: (code: string) => new CliError(code, 'The service is busy. Nothing was signed.', 'Try again in a few seconds.'), // FLOWS: "Try again in {n} s."; the SDK doesn't return Retry-After
   nothingToExport: () => new CliError('nothing_to_export', "No calls recorded yet, so there's nothing to export.", 'Make one with `attessa call`.'),
   resultNotFound: (id: string) => new CliError('result_not_found', `No stored result for request ${id}.`, 'Check `attessa status --pending`.'),
