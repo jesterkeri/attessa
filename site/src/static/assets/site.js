@@ -190,7 +190,7 @@
   };
   const icon = n => `<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">${ICON[n]}</svg>`;
   const copySvg = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><rect x="5" y="5" width="8.5" height="8.5" rx="1.5"/><path d="M3 10.5V3.5A1 1 0 0 1 4 2.5h6.5"/></svg>';
-  const VERDICT_ICON = { verified: 'pass', rejected: 'fail', unattested: 'na', wait: 'wait', idle: 'search' };
+  const VERDICT_ICON = { verified: 'pass', settled: 'pass', rejected: 'fail', unattested: 'na', wait: 'wait', idle: 'search' };
 
   const paintSeal = (seal, states, verdict, word, sub = '') => {
     $$('.seg', seal).forEach((seg, i) => { seg.dataset.state = states[i] ?? 'idle'; });
@@ -289,11 +289,11 @@
   const noProof = { s: 'na', line: 'No proof offered, so there is nothing to check.' };
 
   const STATES = {
-    verified: {
-      verdict: 'verified', word: 'Verified on chain', sub: 'and paid',
+    settled: {
+      verdict: 'settled', word: 'Settled on Celo', sub: 'proof checks planned',
       rows: [buildChain, machineChain, planned, planned,
         { s: 'pass', w: 'Paid', line: () => `Paid ${chip('amount')} ${chip('asset')} to the endpoint's registered pay-to address.`, term: `settled in tx ${chip('settlementTx')}, EIP-3009 authorization`, link: scan('settlement tx') }],
-      verdictLine: "The on-chain part checks out: the call paid a registered endpoint whose build was approved, with a signer registered, when it settled. Which build answered, for this exact request and these inputs, needs the call's proof: planned.",
+      verdictLine: "Celo shows the payment settled to a registered endpoint whose build was approved, with a signer registered, when it settled. That isn't a verified call: whether the proof passed, which build answered, for this exact request and these inputs, needs the call's proof, and those checks are planned.",
     },
     tampered: {
       verdict: 'rejected', word: 'Rejected', sub: 'not charged',
@@ -330,6 +330,7 @@
   const queryChip = () => (lastQuery ? hashChip(lastQuery) : chip('requestId'));
   const resolve = v => (typeof v === 'function' ? v() : v);
   // The particle seal beside the result (scene.js) follows this: verified, rejected, unattested, wait or idle.
+  // A settled result (Celo only, no proof) has no seal of its own, so the particles stay dust.
   const grid = $('.result-grid', explorer);
   const setVerdict = v => { if (grid) grid.dataset.verdict = v; };
 
@@ -409,7 +410,7 @@
   function run({ focus = true } = {}) {
     show('loading');
     const outcome = preview.value;
-    const target = ['loading', 'malformed'].includes(outcome) ? 'verified' : outcome;
+    const target = ['loading', 'malformed'].includes(outcome) ? 'settled' : outcome;
     if (outcome === 'loading') return;
     timer = setTimeout(() => show(target, { focus }), reducedMotion.matches ? 300 : 1100);
   }
