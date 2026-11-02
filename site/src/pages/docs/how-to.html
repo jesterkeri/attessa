@@ -1,0 +1,85 @@
+<!-- title: How-tos | Attessa -->
+<!-- description: Run a seller, revoke a build or a signer, use Attessa from an MCP agent, and use it with buy. -->
+<!-- nav: docs -->
+<!-- doc: howto -->
+<!-- body: docs-page -->
+<div class="wrap docs">
+  {{> docs-nav}}
+  <article class="docs-main">
+    <span class="mode">How-tos</span>
+    <h1>How-tos</h1>
+    <p>Short recipes for one job each. They assume you've done the <a href="tutorial.html">tutorial</a> or know the basics.</p>
+
+    <h2 id="run-a-seller">Run a seller</h2>
+    <p>Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends.</p>
+    <ol>
+      <li>Register your agent's public identity (ERC-8004).</li>
+      <li>On your AWS host, build the sealed machine image from the commit you'll publish.</li>
+      <li>Approve that build on Celo.</li>
+      <li>Add the endpoint buyers will call and the address they'll pay.</li>
+      <li>Start the sealed machine.</li>
+      <li>Register its signer, within 30 minutes of starting it.</li>
+    </ol>
+    <figure class="code" data-copy="commands">
+      <figcaption><span>Seller commands</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+      <pre><code><span class="p">$ </span><span class="c">attessa agent register --name "Acme risk check"</span>
+<span class="p">$ </span><span class="c">attessa enclave build</span>
+<span class="p">$ </span><span class="c">attessa release approve --agent 412 --from-build build/measurements.json --source https://github.com/acme/risk/commit/a1b2c3d</span>
+<span class="p">$ </span><span class="c">attessa endpoint add --agent 412 --origin https://risk.example --pay-to 0xGATE…01</span>
+<span class="p">$ </span><span class="c">attessa enclave start --agent 412 --origin https://risk.example</span>
+<span class="p">$ </span><span class="c">attessa signer register --agent 412 --attestation att.bin</span></code></pre>
+    </figure>
+    <div class="doc-note">
+      <p><strong>Use an enclave-enabled instance.</strong> For example c6g.xlarge with <code>--enclave-options Enabled=true</code>. Debug mode isn't accepted: AWS doesn't sign for it.</p>
+    </div>
+    <p>A signer is valid until its expiry or until the machine restarts. Renew a running one with <code>attessa signer renew</code>. After a restart, the machine has a new key, so run <code>attessa enclave start</code> and <code>attessa signer register</code> again.</p>
+    <h3 id="seller-fixes">If registration is refused</h3>
+    <ul>
+      <li><strong>The report is too old.</strong> Celo accepts reports up to 30 minutes old. Run <code>attessa signer register --fresh</code> on the same machine; no restart needed.</li>
+      <li><strong>Wrong build.</strong> The machine runs a build your agent hasn't approved. Approve it with <code>attessa release approve</code>, or start the approved build.</li>
+      <li><strong>Debug mode.</strong> Start the machine without <code>--debug-mode</code>.</li>
+    </ul>
+
+    <h2 id="revoke">Revoke a build or a signer</h2>
+    <p>Revoking a build stops buyers paying for answers from it. Its live signers stop working within 60 seconds, and your endpoint refuses calls until you approve and register another build. <strong>Revoking is permanent.</strong></p>
+    <figure class="code" data-copy="commands">
+      <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+      <pre><code><span class="p">$ </span><span class="c">attessa revoke release &lt;releaseId&gt;</span>
+<span class="p">$ </span><span class="c">attessa revoke signer &lt;signerAddress&gt;</span></code></pre>
+    </figure>
+    <p>Run these from the agent owner's wallet. <code>attessa status --agent &lt;id&gt;</code> lists your releases, endpoints and signers with their states.</p>
+
+    <h2 id="mcp">Use Attessa from an MCP-capable agent</h2>
+    <p>The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.</p>
+    <figure class="code">
+      <figcaption><span>MCP client config</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+      <pre><code>{
+  <span class="k">"mcpServers"</span>: {
+    <span class="k">"attessa"</span>: {
+      <span class="k">"command"</span>: <span class="c">"npx"</span>,
+      <span class="k">"args"</span>: [<span class="c">"-y"</span>, <span class="c">"@attessa/mcp"</span>]
+    }
+  }
+}</code></pre>
+    </figure>
+    <p>Two tools have side effects, and say so in their descriptions: <code>pay_and_verify</code> signs a payment within your bounds, and <code>cancel_authorization</code> sends a transaction. The full list is in the <a href="reference.html#tools">reference</a>.</p>
+
+    <h2 id="buy">Use it with buy</h2>
+    <p>buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.</p>
+    <figure class="code">
+      <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+      <pre><code><span class="p">$ </span><span class="c">attessa call --via buy https://&lt;buy-capability&gt;</span>
+<span class="k">→</span> Price: 0.005 USDC. buy (usebuy.ai, Celo's pay-per-call API marketplace) takes payment before the service runs, so this call isn't protected by the check: you pay even if the answer fails it.  [pay/cancel]
+<span class="k">→</span> Paid 0.005 USDC through buy  <span class="m">(tx 0x…)</span>
+<span class="k">→</span> No proof offered: this service doesn't say which code produced its answer, so it can't be checked  <span class="m">(unattested)</span>
+  Answer saved. Record: ~/.attessa/evidence.jsonl</code></pre>
+    </figure>
+    <div class="doc-note is-fail"><p><strong>No payment protection in this mode.</strong> buy has no refunds. If a service fails after payment, your record has the transaction to show buy.</p></div>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#run-a-seller">Run a seller</a></li>
+    <li><a href="#revoke">Revoke a build or a signer</a></li>
+    <li><a href="#mcp">Use it from an MCP agent</a></li>
+    <li><a href="#buy">Use it with buy</a></li>
+  </ol></nav>
+</div>

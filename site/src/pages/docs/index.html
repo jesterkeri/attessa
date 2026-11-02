@@ -1,0 +1,37 @@
+<!-- title: Docs | Attessa -->
+<!-- description: Attessa developer docs: a tutorial, how-tos, reference and explanation. -->
+<!-- nav: docs -->
+<!-- doc: index -->
+<!-- body: docs-page -->
+<div class="wrap docs">
+  {{> docs-nav}}
+  <article class="docs-main">
+    <h1>Attessa docs</h1>
+    <p>Attessa is a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with. The docs come in four kinds. Pick the one that matches what you need right now.</p>
+    <div class="doc-cards">
+      <a href="tutorial.html"><strong>Tutorial</strong><span>Make your first pay-if-verified call on Celo Sepolia, in about 10 minutes.</span></a>
+      <a href="how-to.html"><strong>How-tos</strong><span>Run a seller, revoke a build, use Attessa from an MCP agent or with buy.</span></a>
+      <a href="reference.html"><strong>Reference</strong><span>CLI commands, the nine agent tools, SDK options and every refusal code.</span></a>
+      <a href="explanation.html"><strong>Explanation</strong><span>What a proof shows and doesn't, the threat model, and known limits.</span></a>
+    </div>
+    <h2 id="words">Words used in these docs</h2>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th scope="col">Word</th><th scope="col">Meaning</th></tr></thead>
+        <tbody>
+          <tr><td>Attested</td><td>The answer carries a proof.</td></tr>
+          <tr><td>Verified</td><td>A check passed against the registry on Celo.</td></tr>
+          <tr><td>Unattested</td><td>No proof was offered, so there is nothing to check.</td></tr>
+          <tr><td>Rejected</td><td>A named check failed.</td></tr>
+          <tr><td>Approved build</td><td>A build the agent's owner approved on Celo. In the contracts and SDK it's a <em>release</em>, identified by the measurements PCR0 to PCR2.</td></tr>
+          <tr><td>Sealed machine</td><td>An AWS Nitro enclave: its running code is measured, and the operator can't log in or change it.</td></tr>
+          <tr><td>Signer</td><td>The key a sealed machine makes when it starts, registered on Celo with AWS's attestation.</td></tr>
+          <tr><td>Proof</td><td>An EIP-712 signature by the signer that binds a request, its answer, the inputs and the payment to the approved build.</td></tr>
+          <tr><td>Pay, settle</td><td>Pay is the plain word. Settle is the technical step: the gateway takes the payment on chain.</td></tr>
+          <tr><td>Cancel</td><td>Void an unused payment permission on chain before it expires.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol><li><a href="#words">Words used in these docs</a></li></ol></nav>
+</div>

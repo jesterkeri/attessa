@@ -1,0 +1,4 @@
+Contact: {securityContact}
+Expires: {securityTxtExpires}
+Preferred-Languages: en
+Canonical: {siteOrigin}/.well-known/security.txt

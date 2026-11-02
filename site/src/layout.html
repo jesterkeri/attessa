@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="{{root}}assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js');try{if(localStorage.getItem('attessa-network')==='mainnet')document.documentElement.dataset.network='mainnet'}catch(e){}</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,300..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://unpkg.com/@phosphor-icons/web@2.1.1/src/regular/style.css">
+<link rel="stylesheet" href="{{root}}assets/site.css">
+<script src="{{root}}assets/site.js" defer></script>
+</head>
+<body class="{{bodyClass}}">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="{{root}}index.html" aria-label="Attessa home">{{logo}}<span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="{{root}}how-it-works.html"{{cur:how}} data-scramble>How it works</a>
+      <a href="{{root}}explorer.html"{{cur:explorer}} data-scramble>Explorer</a>
+      <a href="{{root}}use-cases.html"{{cur:uses}} data-scramble>Use cases</a>
+      <a href="{{root}}docs/index.html"{{cur:docs}} data-scramble>Docs</a>
+      <a href="{{root}}security.html"{{cur:security}} data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="{{root}}explorer.html">Verify a call</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="{{root}}how-it-works.html" style="--i:0">How it works</a>
+    <a href="{{root}}explorer.html" style="--i:1">Proof explorer</a>
+    <a href="{{root}}use-cases.html" style="--i:2">Use cases</a>
+    <a href="{{root}}docs/index.html" style="--i:3">Docs</a>
+    <a href="{{root}}security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="{{root}}explorer.html" style="--i:5">Verify a call{{arrow}}</a>
+</div>
+<main id="main" tabindex="-1">
+{{content}}
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="{{root}}docs/index.html">Docs</a>
+      <a href="{{root}}explorer.html">Explorer</a>
+      <a href="{{root}}security.html">Security</a>
+      <a href="{{root}}privacy.html">Privacy</a>
+      <a href="{{root}}terms.html">Terms</a>
+      <a href="{{root}}.well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label><input type="radio" name="network" value="mainnet"> Celo mainnet</label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="{{root}}assets/motion.js"></script>
+<script type="importmap">{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }</script>
+<script type="module" src="{{root}}assets/scene.js"></script>
+</body>
+</html>

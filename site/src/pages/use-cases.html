@@ -1,0 +1,83 @@
+<!-- title: Use cases | Attessa -->
+<!-- description: Where paying only for attested answers matters: DeFi risk checks, yield and route recommendations, payment-risk checks, and agents buying data. -->
+<!-- nav: uses -->
+<!-- body: uses-page -->
+<section class="hero page-hero">
+  <div class="wrap hero-inner page-head">
+    <div>
+      <h1 data-split data-intro>Where a proof<br> changes what<br> you pay for</h1>
+      <div class="hero-sub">
+        <p class="lede" data-intro>Attessa fits any paid API whose answer an agent acts on. The seller's service runs in a sealed machine that signs every answer. <span class="key">The agent signs a payment permission that moves no money by itself, and the gateway uses it only after the answer's signature checks out against the build the seller approved on Celo.</span> These are the four uses we built it around.</p>
+      </div>
+    </div>
+    <nav class="page-index" aria-label="On this page" data-intro>
+      <p class="label">The four uses</p>
+      <a href="#uses" data-beat-jump="0">DeFi risk checks</a>
+      <a href="#uses" data-beat-jump="1">Yield or route recommendations</a>
+      <a href="#uses" data-beat-jump="2">Payment-risk checks</a>
+      <a href="#uses" data-beat-jump="3">Agents buying data</a>
+      <a href="#who">Who it's for</a>
+    </nav>
+  </div>
+</section>
+
+<!-- Pinned scene: one use case at a time. The particles form an object for each beside the text and
+     burst back into dust between them. scene.js reads the progress. -->
+<section class="scene-sec uses-sec" id="uses" data-scene-sec="uses" style="--len: 5.2" aria-label="Four uses">
+  <div class="scene-sticky">
+    <div class="wrap scene-grid">
+      <div class="scene-copy">
+        <ol class="beats uses">
+          <li class="beat use is-on" data-beat>
+            <h2>DeFi risk checks before lending</h2>
+            <p>A lending agent asks a risk service to score a borrower's address before it lends.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>The score came from the risk model the seller approved, run on Celo data read at a stated block, and not from different code the operator swapped in.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Yield or route recommendations</h2>
+            <p>An agent asks which pool or route to use for a deposit or a swap.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>Each recommendation is tied to the approved build and the block it read, so the logic behind it is the build the seller approved, and anyone can re-check the call later in the proof explorer.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Payment-risk checks before sending stablecoins</h2>
+            <p>Before an agent sends USDC or USA₮, it asks a service whether the recipient looks risky.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>If the answer was changed after the sealed machine signed it, the gateway refuses it before using the agent's payment permission, so the agent neither pays for the altered answer nor acts on it.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Agents buying data or decisions</h2>
+            <p>Any agent that pays per call for a computed answer.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>The agent's rule becomes "pay only for answers that carry a valid proof", inside a per-call limit and a daily cap it can't exceed. The one exception is buying through buy, Celo's marketplace of pay-per-call APIs, which takes payment before the service runs: there Attessa can only check each answer afterwards, and it warns you about a service whose answers fail.</p>
+          </li>
+        </ol>
+        <div class="rail rail-4" data-scene-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+      </div>
+      <div class="scene-slot" data-slot aria-hidden="true"></div>
+    </div>
+  </div>
+</section>
+
+<section class="uses-note" aria-label="What a proof shows">
+  <div class="wrap">
+    <p class="uses-note-text" data-fade>A proof shows which approved build produced an answer. It doesn't show the answer is correct: a bad answer is a rules problem you can read in the source. <a href="docs/explanation.html">What it proves, and what it doesn't</a>.</p>
+  </div>
+</section>
+
+<section class="who" aria-labelledby="who">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="who" data-split>Who it's for</h2>
+    </div>
+    <dl class="cast-list who-list" data-fade>
+      <div><dt>Buyer agents and their developers</dt><dd>One SDK call or one CLI command. Spending stays inside a limit per call and a cap per day.</dd></div>
+      <div><dt>Sellers of paid APIs</dt><dd>Run your service in a sealed machine, approve the build on Celo, and buyers can check every answer you sell.</dd></div>
+      <div><dt>Marketplaces like buy</dt><dd>buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before calling the API today; Attessa's gateway can check first.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="next-sec" aria-label="Where to go next">
+  <div class="wrap next-links">
+    <a class="next-link" href="how-it-works.html"><span class="next-k">Step by step, both sides</span><span class="next-t">How it works</span>{{arrow}}</a>
+    <a class="next-link" href="explorer.html"><span class="next-k">Re-check a call</span><span class="next-t">Open the explorer</span>{{arrow}}</a>
+  </div>
+</section>

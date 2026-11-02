@@ -1,0 +1,51 @@
+<!-- title: What a proof shows | Attessa -->
+<!-- description: What attested execution provenance proves and doesn't, the threat model in plain words, and the known limits. -->
+<!-- nav: docs -->
+<!-- doc: explanation -->
+<!-- body: docs-page -->
+<div class="wrap docs">
+  {{> docs-nav}}
+  <article class="docs-main">
+    <span class="mode">Explanation</span>
+    <h1>What a proof shows, and what it doesn't</h1>
+    <p>Attessa gives you <strong>attested execution provenance</strong>: a signed record of which approved build produced an answer, for which request, with which inputs, and whether the payment for it settled. That is a narrower claim than "the answer is right". This page explains where the line sits.</p>
+
+    <h2 id="proves">The claim, in full</h2>
+    {{> proves}}
+
+    <h2 id="threats">The threat model, in plain words</h2>
+    <p>Who could cheat, and what stops them.</p>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th scope="col">If someone tries to</th><th scope="col">What happens</th></tr></thead>
+      <tbody>
+        <tr><td>Swap in different code</td><td>The sealed machine's measurements no longer match the approved build, so its key can't be registered and its proofs are rejected.</td></tr>
+        <tr><td>Edit an answer after signing</td><td>The answer's hash no longer matches the proof. The call is rejected and nothing settles.</td></tr>
+        <tr><td>Pose as a registered service</td><td>The buyer only pays the address registered for that origin, and checks the agent it claims to be. A mismatch stops the call before anything is signed.</td></tr>
+        <tr><td>Keep selling from a revoked build</td><td>Gateways and SDKs stop accepting its signers within 60 seconds.</td></tr>
+        <tr><td>Take the money despite a refusal</td><td>This is possible for a dishonest gateway, and can't be reversed on chain. The buyer's record proves the payment and the failed check, so it can be reported.</td></tr>
+        <tr><td>Feed the buyer false chain data</td><td>A malicious RPC can lie, as it can to any app. Choose the RPC you use.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="limits">Known limits</h2>
+    <p>These are accepted for now, written down so nobody has to discover them.</p>
+    <ul>
+      <li><strong>The demo gateway is run by the seller.</strong> So paying through it doesn't protect you from a dishonest seller. Your protection is the short payment window, cancel, the registered pay-to address, your own re-check, and the on-chain "not charged" confirmation.</li>
+      <li><strong>Paying through buy has no payment protection.</strong> buy settles before it calls the service; Attessa can only check afterwards.</li>
+      <li><strong>A proof shows which code ran, not that the service is available.</strong> An operator can withhold, delay or reorder answers.</li>
+      <li><strong>Request bodies are visible to the gateway.</strong> Today's requests are public chain addresses.</li>
+      <li><strong>The source link is the owner's claim.</strong> It stays "owner says" until the build is reproduced.</li>
+      <li><strong>Checks answer "valid now".</strong> Whether a build was approved at the time of an old call is rebuilt from Celo events off chain.</li>
+      <li><strong>Every restart costs a registration.</strong> The signing key never leaves the machine, so a restart makes a new one.</li>
+      <li><strong>USA₮ settles on mainnet only.</strong> Test payments on Celo Sepolia use USDC.</li>
+      <li><strong>Confirming "not charged" takes time.</strong> Up to about two minutes after a refusal, or cancel sooner for a little gas.</li>
+      <li><strong>The ERC-8004 identity registry is upgradeable.</strong> Whoever holds its keys could change who owns an agent. Attessa's own registry is immutable and can't be more trustworthy than that.</li>
+    </ul>
+    <p>The full list, with when each one will be revisited, is in <a href="https://github.com/jesterkeri/attessa/blob/main/KNOWN-LIMITS.md">KNOWN-LIMITS.md on GitHub</a>.</p>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#proves">The claim, in full</a></li>
+    <li><a href="#threats">Threat model</a></li>
+    <li><a href="#limits">Known limits</a></li>
+  </ol></nav>
+</div>

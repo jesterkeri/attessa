@@ -1,0 +1,110 @@
+<!-- title: Proof explorer | Attessa -->
+<!-- description: Re-check any past Attessa call from public Celo data, with no wallet and no payment. -->
+<!-- nav: explorer -->
+<!-- body: explorer-page -->
+<div data-explorer>
+  <section class="hero page-hero explorer-hero">
+    <div class="wrap hero-inner page-head">
+      <div>
+      <h1 data-split data-intro>Re-check<br> any call</h1>
+      <div class="explorer-sub">
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's request ID or its settlement transaction, and <span class="key">the explorer runs the buyer's five checks again from public Celo data alone</span>: no wallet, no payment.</p>
+        <form class="recheck" data-explorer-form novalidate role="search">
+          <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
+          {{i:search}}
+          <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Request ID or settlement tx" aria-describedby="q-help q-error">
+          <button class="bracket-link" type="submit">Check</button>
+        </form>
+        <p class="field-help" id="q-help">0x and 64 hex characters. Checks against <span data-network-name>Celo Sepolia</span>; change the network in the footer.</p>
+        <p class="field-error" id="q-error" data-field-error hidden>{{i:alert}}<span data-field-error-text></span></p>
+      </div>
+      </div>
+      <div class="page-index" data-intro>
+        <p class="label">The five checks it runs</p>
+        <ol>
+          <li>Approved build<span>registry</span></li>
+          <li>Sealed machine<span>AWS attestation</span></li>
+          <li>This exact request and answer<span>signed hashes</span></li>
+          <li>Real Celo data<span>block read</span></li>
+          <li>Payment<span>settlement</span></li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <section class="explorer-results" aria-label="Result">
+    <div class="wrap">
+      <div class="preview-bar">
+        <p><span class="preview-k">UI preview</span>Nothing is read from Celo yet, so results show sample slots. Pick a state to see each one.</p>
+        <label class="sr-only" for="preview">Preview state</label>
+        <select id="preview" data-preview>
+          <option value="verified">Verified</option>
+          <option value="tampered">Rejected: tampered answer</option>
+          <option value="unapproved">Rejected: unapproved build</option>
+          <option value="unattested">Unattested</option>
+          <option value="loading">Loading</option>
+          <option value="notfound">Not found</option>
+          <option value="malformed">Malformed ID</option>
+          <option value="rpc">Celo unreachable</option>
+        </select>
+      </div>
+      <!-- The particles form the seal in the slot beside the checklist: a lime check when verified, red and
+           breaking when rejected, grey with no mark when unattested. scene.js reads data-verdict. -->
+      <div class="result-grid" data-scene-sec="explorer" data-verdict="idle">
+        <div class="scene-slot" data-slot aria-hidden="true"></div>
+        <div class="result" data-result aria-live="polite">
+          <noscript><p class="muted">The explorer needs JavaScript to read Celo. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>.</p></noscript>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feed-sec" aria-labelledby="recent">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="recent" data-split>Recent calls</h2>
+        <p class="sec-lede" data-fade>The latest calls, read from Celo events. The rows below are samples until the registry is live.</p>
+      </div>
+      <table class="feed" data-fade>
+        <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Endpoint</th><th scope="col">Outcome</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Checklist</span></th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
+            <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="rejected">{{i:fail}}Rejected</span></td>
+            <td data-label="Amount"><span class="money">Not charged</span></td>
+            <td><button type="button" class="bracket-link" data-open-state="tampered">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="unattested">{{i:na}}Unattested</span></td>
+            <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
+            <td><button type="button" class="bracket-link" data-open-state="unattested">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="rejected">{{i:fail}}Rejected</span></td>
+            <td data-label="Amount"><span class="money">Not charged</span></td>
+            <td><button type="button" class="bracket-link" data-open-state="unapproved">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)">[[slot:callTime]]</td>
+            <td data-label="Endpoint">[[slot:endpointOrigin]]</td>
+            <td data-label="Outcome"><span class="badge" data-verdict="verified">{{i:pass}}Verified</span></td>
+            <td data-label="Amount">[[slot:amount]] [[slot:asset]]</td>
+            <td><button type="button" class="bracket-link" data-open-state="verified">Open checklist</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
