@@ -33,7 +33,7 @@
         <tr><td><code>attessa release approve</code></td><td>Approves a build for your agent, with the source you claim it came from.</td></tr>
         <tr><td><code>attessa release verify</code></td><td>Reproduces a build and compares its measurements.</td></tr>
         <tr><td><code>attessa endpoint add</code></td><td>Registers the origin buyers call and the address they pay.</td></tr>
-        <tr><td><code>attessa enclave start</code></td><td>Starts the sealed machine and writes AWS's attestation to <code>att.bin</code>. <code>--fresh</code> gets a new one.</td></tr>
+        <tr><td><code>attessa enclave start</code></td><td>Starts the sealed machine and writes AWS's attestation to <code>att.bin</code>. <code>attessa signer register --fresh</code> gets a new one.</td></tr>
         <tr><td><code>attessa signer register</code></td><td>Registers the machine's key on Celo. <code>--fresh</code>, <code>--dry-run</code> (estimates gas).</td></tr>
         <tr><td><code>attessa signer renew</code></td><td>Renews a running signer without a restart.</td></tr>
         <tr><td><code>attessa revoke release|signer</code></td><td>Permanently revokes a build or a signer. Takes effect within 60 s.</td></tr>
