@@ -154,12 +154,13 @@ V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 PINNED = {"better-sqlite3@13.0.3": "sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ=="}
 blob = lambda p: open(os.path.join(sys.argv[4], p), "rb").read()
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
-bad, reg, later = [], {}, []
+bad, reg, later, files = [], {}, [], set()
 for r in sys.stdin.buffer.read().split(b"\0"):
     if not r: continue
     meta, raw = r.split(b"\t", 1); mode, _, oid = meta.decode().split()
     p = os.fsdecode(raw); parts = p.split("/"); b = parts[-1].lower()
     if mode == "100644": reg[p] = oid
+    if mode in ("100644", "100755"): files.add(p)  # a script that node runs may be executable
     # A tracked node_modules is read at install (bins, .modules.yaml, the virtual store).
     if "node_modules" in parts: bad.append(f"{p}: not allowed (tracked node_modules)")
     # Symlinks would make the install read a path other than the blob checked here.
@@ -203,7 +204,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
             for n, v in m.get(k, {}).items():
                 if not re.fullmatch(r"workspace:[*^~]|[\^~]?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
 for p, s, f in later:
-    if f not in reg: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
+    if f not in files: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
 w = yaml.safe_load(blob("pnpm-workspace.yaml")) if "pnpm-workspace.yaml" in reg else None

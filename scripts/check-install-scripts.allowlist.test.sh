@@ -4,7 +4,7 @@
 # Scratch copy of HEAD; each case changes one thing, and the probe must report exactly that one
 # FAIL line. A case that also printed any of HEAD's own manifests or the lockfile would mean HEAD
 # itself is refused, so every case also proves HEAD passes the static stage. Every case fails
-# before the install, so this runs no pnpm; the full probe on HEAD is ./scripts/check-install-scripts.sh.
+# before the install except the executable-file case, which runs the full probe once (take the heavy lock).
 set -u
 src="$(cd "$(dirname "$0")/.." && pwd)"
 R=$(mktemp -d /tmp/attessa-install-allowlist.XXXX); trap 'rm -rf "$R"' EXIT
@@ -67,6 +67,11 @@ FAIL package.json: scripts not allowed: ['gen:vectors']" \
 H=packages/seller-host/package.json
 check "render-units on an untracked file" "FAIL $H: script render-units must run a tracked regular file of its package, not packages/seller-host/scripts/missing.ts" \
   set_json $H 'm["scripts"]["render-units"] = "node --experimental-strip-types scripts/missing.ts"'
+# An executable (100755) script file is still a tracked regular file; node runs it either way.
+n=$((n + 1)); git reset -q --hard HEAD && git clean -qfdx
+chmod +x packages/core/scripts/gen-vectors.ts && git -c user.name=t -c user.email=t@x commit -qam "executable gen-vectors"
+if "$src/scripts/check-install-scripts.sh" 2>&1 | grep -q '^FAIL [^:]*:'; then echo "FAIL: gen:vectors on a tracked executable file refused"; rc=1; else echo "ok: gen:vectors on a tracked executable file accepted"; fi
+git reset -q --hard HEAD~1
 check "wrong better-sqlite3 integrity" "FAIL pnpm-lock.yaml: better-sqlite3@13.0.3: allowlisted package without its pinned registry integrity" \
   sed -i 's#integrity: sha512-RbOBxmLBG8uvFUc15X9#integrity: sha512-AbOBxmLBG8uvFUc15X9#' pnpm-lock.yaml
 echo "$n cases, rc=$rc"
