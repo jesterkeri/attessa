@@ -305,7 +305,7 @@
       verdict: 'rejected', word: 'Rejected', sub: 'not charged',
       rows: [
         { s: 'fail', line: "The agent's owner withdrew this build's approval (revoked or deprecated it) before the gateway checked the proof.", term: `<span class="t">release_not_approved</span> release ${chip('releaseId')} for agent ${chip('agentId')}` },
-        skipped, skipped, skipped,
+        machine, skipped, skipped,
         { s: 'pass', w: 'Not charged', line: 'Not charged: Celo shows the payment permission expired unused.', term: 'no settlement for this request' }],
       verdictLine: 'Rejected at "Approved build". The approval was withdrawn on Celo during the call, so the gateway refused it. A build that was never approved can\'t register a signer, so a buyer stops before signing anything.',
     },
