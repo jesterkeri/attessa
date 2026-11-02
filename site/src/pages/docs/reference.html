@@ -101,7 +101,8 @@
         <tr><td><code>execution_timeout</code></td><td>The service didn't respond in 20 s.</td><td>Retry with a new request.</td></tr>
         <tr><td><code>enclave_unavailable</code></td><td>The service is offline.</td><td>Retry later.</td></tr>
         <tr><td><code>gateway_paused</code></td><td>The service can't take payments right now.</td><td>Retry later.</td></tr>
-        <tr><td><code>gateway_busy</code>, <code>rate_limited</code></td><td>The service is busy. Nothing was signed.</td><td>Try again shortly.</td></tr>
+        <tr><td><code>gateway_busy</code></td><td>The service is busy. Nothing was signed.</td><td>Try again shortly.</td></tr>
+        <tr><td><code>rate_limited</code></td><td>Too many of your paid calls to this service ended without settling in the last hour. Your payment permission was signed, but this call was refused before it ran, and you are not charged.</td><td>Try again after the time the service gives.</td></tr>
         <tr><td><code>settle_pending</code></td><td>Payment sent and confirming, usually under 5 s.</td><td>None: the CLI keeps checking.</td></tr>
         <tr><td><code>settle_failed</code></td><td>The payment didn't go through, so the answer was withheld.</td><td>Retry with a new request.</td></tr>
         <tr><td><code>uncertain</code></td><td>The connection dropped after you signed. Attessa checks Celo for up to 2 minutes.</td><td>None: it resolves to paid or not charged.</td></tr>
