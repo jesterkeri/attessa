@@ -12,7 +12,7 @@
         <form class="recheck" data-explorer-form novalidate role="search">
           <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
           {{i:search}}
-          <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Request ID or settlement tx" aria-describedby="q-help q-error">
+          <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Settlement tx" aria-describedby="q-help q-error">
           <button class="bracket-link" type="submit">Check</button>
         </form>
         <p class="field-help" id="q-help">0x and 64 hex characters. Checks against <span data-network-name>Celo Sepolia</span>. Celo mainnet comes after launch.</p>
@@ -28,6 +28,7 @@
           <li>Real Celo data<span>block read, planned</span></li>
           <li>Payment<span>settlement</span></li>
         </ol>
+        <p class="muted">Today it runs the payment check. The other four are planned.</p>
       </div>
     </div>
   </section>
