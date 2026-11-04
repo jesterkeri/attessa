@@ -10,7 +10,7 @@
     <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
     <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
     <div class="doc-note"><p><span class="muted">Coming.</span> <strong>The buyer commands aren't built yet.</strong> <code>attessa init</code>, <code>attessa call</code> and <code>attessa verify</code> are coming; until then, this tutorial shows what they will do.</p></div>
-    <div class="doc-note"><p><strong>You need</strong> Node.js 22 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
+    <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
 
     <ol class="doc-steps">
       <li>
@@ -49,7 +49,7 @@
       </li>
       <li>
         <h2 id="call">Make a call with <code>attessa call</code></h2>
-        <p>Point it at an attested service and give it the request body. Attessa checks the seller, shows the price, and asks you to sign a payment permission. Money only moves if the answer's proof checks out.</p>
+        <p>Point it at an attested service and give it the request body. Attessa checks the seller, shows the price, and signs a payment permission within your limits. Money only moves if the answer's proof checks out.</p>
         <p>The demo service is a payment check: send it the address you're about to pay and it answers allow, review or deny, with reasons. Its address is [[slot:demoServiceUrl]] once it's live. Save this as <code>tx.json</code> (any name works), with the address you want checked in <code>payTo</code>, in lowercase:</p>
         <figure class="code">
           <figcaption><span>tx.json</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
