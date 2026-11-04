@@ -310,6 +310,9 @@ export const BUY = {
   // written; the one saved when it arrived stays.
   alreadyVerified: (p: string, sym: string, tx: string, record: string) =>
     `Already done: you were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out. It was saved when it arrived. Record: ${record}`,
+  // not in FLOWS: the same, when --out couldn't be written and the answer was kept beside the record instead.
+  alreadyVerifiedKept: (p: string, sym: string, tx: string, kept: string, record: string) =>
+    `Already done: you were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out. It is in ${kept}. Record: ${record}`,
   // SPEC §7 V10
   inputsNotChecked: "  inputs not re-checked (your RPC doesn't keep state that old)",
   dryRun: '  (dry run: nothing was signed)', // not in FLOWS (T15's "(dry run: nothing was sent)" for a call)
@@ -394,6 +397,20 @@ export function signedRefusal(rawCode: string, rawDetail: string | undefined): s
 }
 
 export const BUYERR = {
+  // not in FLOWS: a verified, paid answer that --out couldn't take. The entry is terminal, so it is kept beside the record.
+  answerNotWritten: (file: string, p: string, sym: string, tx: string, kept: string) =>
+    new CliError(
+      'answer_not_written',
+      `Couldn't write the answer to ${file}. You were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out; it is saved in ${kept}.`,
+      `Copy ${kept} to where you want it.`,
+    ),
+  // not in FLOWS: neither --out nor the data folder took it.
+  answerNotKept: (file: string, p: string, sym: string, tx: string, dir: string) =>
+    new CliError(
+      'answer_not_written',
+      `Couldn't write the answer to ${file} or to ${dir}. You were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out, but it wasn't saved.`,
+      `Make ${dir} writable before your next call; attessa won't fetch this answer again.`,
+    ),
   notRegistered: (origin: string) =>
     new CliError('endpoint_not_registered', `${origin} isn't registered as an attested endpoint.`, 'Pay it without protection using `attessa call --via buy`, or ask the seller to register.'),
   paytoMismatch: (x: string, y: string) =>

@@ -352,11 +352,24 @@ async function report(
       // An answer is written only when one came with this result. A stored outcome reported again (getResult on a
       // terminal entry never re-fetches; SPEC §7 never re-pays) has none, and the file saved when it arrived is the
       // buyer's only copy: never overwrite it with nothing.
+      const kept = join(dataDir(d), `${r.requestId}.json`);
+      const tx = r.settlementTx ?? entry()?.settlementTx ?? 'unknown';
       if (!r.response || r.response.length === 0) {
-        out(BUY.alreadyVerified(p, c.sym, r.settlementTx ?? entry()?.settlementTx ?? 'unknown', record));
+        out(d.exists(kept) ? BUY.alreadyVerifiedKept(p, c.sym, tx, display(d, kept), record) : BUY.alreadyVerified(p, c.sym, tx, record));
         return 0;
       }
-      d.writeFile(resolve(d.cwd, c.outFile), r.response);
+      // The entry is already `verified` (terminal; getResult never re-fetches it), so this is the only copy: if --out
+      // can't be written, keep the answer beside the record instead of losing it.
+      try {
+        d.writeFile(resolve(d.cwd, c.outFile), r.response);
+      } catch {
+        try {
+          d.writeFile(kept, r.response);
+        } catch {
+          throw BUYERR.answerNotKept(c.outFile, p, c.sym, tx, display(d, dataDir(d)));
+        }
+        throw BUYERR.answerNotWritten(c.outFile, p, c.sym, tx, display(d, kept));
+      }
       if (c.uncertain) out(BUY.chargedChecksOut(p, c.sym, r.settlementTx!));
       else out(BUY.paid(p, c.sym, blockNo(lastEvidence(client, r.requestId)?.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       if (r.inputsChecked === false) out(BUY.inputsNotChecked);
