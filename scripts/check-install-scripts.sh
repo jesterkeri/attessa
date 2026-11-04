@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Refuse any install config outside an explicit allow-list (pnpmfiles, .npmrc, manifest keys,
 # scripts, dependency specs, pnpm-workspace.yaml), then install HEAD with the pinned pnpm
 # (packageManager), a fresh store and no side-effects cache, and fail if any install-time script
@@ -28,7 +28,7 @@ set -u
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
 pnpm_version=10.32.1
 # PATH keeps only absolute entries outside the checked folder, found with builtins alone (no
-# command is looked up on PATH before this): an entry such as $PWD/node_modules/.bin would
+# command is looked up on PATH before this; the interpreter is /bin/bash itself, not env's lookup): an entry such as $PWD/node_modules/.bin would
 # otherwise resolve git, python3 or node from files the tree under test ships.
 root=$(pwd -P); keep=
 IFS=: read -ra entries <<<"$PATH"
@@ -39,6 +39,8 @@ for e in "${entries[@]}"; do
   keep=${keep:+$keep:}$e
 done
 PATH=$keep
+# mktemp's folder must be absolute: the probe later cds into the snapshot and removes $tmp.
+[[ ${TMPDIR:-/tmp} == /* ]] || unset TMPDIR
 # The checked folder is the one this is run from, where the developer runs pnpm install, and it
 # must be the repository root. Git is never left to choose it: GIT_* variables are dropped, git's
 # own toplevel (which core.worktree or a .git file can move) must be this same folder, and every
