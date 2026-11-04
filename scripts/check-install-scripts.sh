@@ -5,13 +5,13 @@
 # runs other than a registry copy of the allowlist (better-sqlite3, keytar).
 # Workspace manifests may add only: bin (attest or attessa[-name] commands, so no bin shadows a
 # tool such as node or tsc in other packages' scripts, to .js files under the package's dist/),
-# engines with a node semver range only (ASCII digits or x/*, at most major.minor.patch, the
+# engines with a node semver range only (ASCII digits with no leading zero, or x/X/*, at most major.minor.patch, the
 # operators < <= > >= = ^ ~, hyphen ranges and ||), and the scripts gen:vectors and render-units,
 # each `node` (optionally --experimental-strip-types) on a tracked .ts, .js, .mjs or .cjs file under
 # the package's scripts/; none of these runs at install. Each manifest is a UTF-8 JSON object with
 # no byte-order mark, and its scripts and dependency maps are objects.
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
-# snapshot, never inside it, and PATH keeps absolute entries only.
+# snapshot, never inside it, and PATH keeps only absolute entries outside the checked folder.
 # Git runs no program the repository configures. In order, git is asked only for:
 #   1. rev-parse --show-toplevel and --git-common-dir: path resolution from config, no objects.
 #   2. config --includes --list: parses config files and runs nothing. The repository is refused
@@ -27,13 +27,23 @@ set -u
 # The one pnpm the probe runs. packageManager must name exactly this: pnpm 10 would otherwise switch
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
 pnpm_version=10.32.1
-PATH=$(printf %s "$PATH" | tr ':' '\n' | grep '^/' | paste -sd:)
+# PATH keeps only absolute entries outside the checked folder, found with builtins alone (no
+# command is looked up on PATH before this): an entry such as $PWD/node_modules/.bin would
+# otherwise resolve git, python3 or node from files the tree under test ships.
+root=$(pwd -P); keep=
+IFS=: read -ra entries <<<"$PATH"
+for e in "${entries[@]}"; do
+  [[ $e == /* ]] || continue
+  r=$(cd -- "$e" 2>/dev/null && pwd -P) || continue
+  [[ $r/ == "$root"/* ]] && continue
+  keep=${keep:+$keep:}$e
+done
+PATH=$keep
 # The checked folder is the one this is run from, where the developer runs pnpm install, and it
 # must be the repository root. Git is never left to choose it: GIT_* variables are dropped, git's
 # own toplevel (which core.worktree or a .git file can move) must be this same folder, and every
 # later git call names --git-dir and --work-tree explicitly.
 unset $(compgen -e | grep '^GIT_')
-root=$(pwd -P)
 # Only here does git choose the folder itself (-C, no --work-tree): its answer must be this one.
 top=$(git -C "$root" rev-parse --show-toplevel 2>/dev/null) && top=$(realpath -e "$top" 2>/dev/null)
 [ -e "$root/.git" ] && [ "$top" = "$root" ] \
@@ -156,8 +166,8 @@ V, ALLOW = sys.argv[2], ("better-sqlite3", "keytar")
 # better-sqlite3@13.0.3: pnpm-lock.yaml and `npm view better-sqlite3@13.0.3 dist.integrity` agreed on 2026-11-02.
 PINNED = {"better-sqlite3@13.0.3": "sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ=="}
 # A node semver range: comparator sets joined by ||, each a hyphen range or space-separated comparators.
-_V = r"v?([0-9]+|[xX*])(\.([0-9]+|[xX*])){0,2}"
-_SET = rf"{_V} - {_V}|(<=|>=|<|>|=|\^|~)?{_V}( +(<=|>=|<|>|=|\^|~)?{_V})*"
+_V = r"(0|[1-9][0-9]*|[xX*])(\.(0|[1-9][0-9]*|[xX*])){0,2}"
+_SET = rf"{_V} - {_V}|((<=|>=|<|>|=|\^|~) *)?{_V}( +((<=|>=|<|>|=|\^|~) *)?{_V})*"
 NODE_RANGE = rf"({_SET})( *\|\| *({_SET}))*"
 blob = lambda p: open(os.path.join(sys.argv[4], p), "rb").read()
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
