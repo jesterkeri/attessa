@@ -1423,4 +1423,21 @@ cli:       Tests  235 passed (235)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r21, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r21 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r21 fixes - 2026-11-04
+adversary r21 (37e1296, `packages/cli/test/adversary-t21-r21.test.ts`, failing): two open calls both answered in one `attessa status --pending` run from a working folder that no longer exists; the first call's `answer_not_written` stopped the loop, and the second call, already `verified` (terminal, never re-fetched), had its answer written nowhere and nothing printed (SPEC §7 getResult never re-pays; SPEC §9 every outcome reported). Fixed in e418018:
+- `packages/cli/src/commands/buyer.ts`: `status --pending` catches a call's CliError from `report()`, prints its message and next action under that call, goes on to the rest, lists them in `--json` `errors`, and exits 1.
+- Same file: `attessa call` refuses an `--out` that resolves inside the data folder before signing (the adversary's unproven lead that `--out ~/.attessa/pending.jsonl` would overwrite the ledger). New test in `packages/cli/test/buyer.test.ts`. Both lines are `// not in FLOWS`, in OPEN-QUESTIONS.md. No existing assertion changed.
+
+verify at e418018 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  40 passed (40)
+cli:       Tests  237 passed (237)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r22, then Codex; Codex to judge the r17 call above)
