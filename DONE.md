@@ -1307,4 +1307,7 @@ ok: gen:vectors on a tracked executable file accepted
 gaps_rc=0
 10 ok lines, 0 FAIL
 ```
-reviewed: pending (adversary r6, then Codex)
+Correction to the r5 note above (adversary r6): the 8 surviving mutants were run against the allow-list test's 20 static cases, not the full-probe executable case, so "passed all 21 cases" should read "passed all 20 static cases"; and the archive at .worktrees/archive/adversary/install-r5/mut/ holds 16 of the 23 mutants (m02 to m08 are not there), so those 7 can't be re-checked from it.
+
+adversary r6 (aa2b635): no defect. In all 10 gaps-test cases the matched `FAIL <manifest>:` line is the check the case targets, not the integrity line; the gaps test catches each of the 8 surviving mutants with that mutant's own case; the executable precondition sets rc=1 when chmod or the commit fails; the allow-list test passes 21 cases; scripts as a list or string, a null bin, `__proto__`, BOM or UTF-16 manifests, nested script paths and gitlink or directory targets are all refused. Its scripts are archived at .worktrees/archive/adversary/install-r6/.
+reviewed: pending (Codex)
