@@ -125,6 +125,25 @@ export function unexpected(e: unknown): CliError {
   return new CliError('unexpected', `Unexpected error (${name}${code}). Its message isn't printed, because it could contain a key.`);
 }
 
+const SQLITE_DISK: Record<number, string> = { 8: 'SQLITE_READONLY', 10: 'SQLITE_IOERR', 13: 'SQLITE_FULL', 14: 'SQLITE_CANTOPEN' };
+const DISK_CODES = new Set(['ENOSPC', 'EDQUOT', 'EFBIG', 'EACCES', 'EPERM', 'EROFS', 'EIO', ...Object.values(SQLITE_DISK)]);
+
+/**
+ * A buyer command's file write that failed mid-call (full disk, permissions): the pending ledger may hold a signed or
+ * paid call, so the one next action is the command that finishes it. // not in FLOWS
+ */
+export function diskError(e: unknown, dir: string): CliError | null {
+  const err = e as { code?: unknown; errcode?: unknown } | null;
+  // node:sqlite (the ledger's lock file) reports SQLite's own result code; its low byte is the primary code.
+  const code = err?.code === 'ERR_SQLITE_ERROR' && typeof err.errcode === 'number' ? SQLITE_DISK[err.errcode & 0xff] : err?.code;
+  if (typeof code !== 'string' || !DISK_CODES.has(code)) return null;
+  return new CliError(
+    'disk_write_failed',
+    `Couldn't write a file attessa keeps on this computer (${code}).`,
+    `Free up space in ${dir}, or make it writable, then run \`attessa status --pending\` to finish any call in progress.`,
+  );
+}
+
 export const ERR = {
   // §6 J3 repair paths
   attestationStale: (min: number) =>

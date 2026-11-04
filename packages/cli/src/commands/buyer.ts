@@ -114,7 +114,7 @@ function wasSaved(d: Deps, requestId: string): boolean {
   }
 }
 
-function display(d: Deps, p: string): string {
+export function display(d: Deps, p: string): string {
   const h = d.home ?? homedir();
   return p === h || p.startsWith(`${h}/`) ? `~${p.slice(h.length)}` : p;
 }

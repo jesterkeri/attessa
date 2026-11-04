@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { AttestError } from '@attessa/sdk';
 import { enclaveBuild, enclaveStart } from './commands/enclave.ts';
-import { call, cancel, evidenceExport, fromSdk, init, readConfig, readConfigForInit, status } from './commands/buyer.ts';
+import { call, cancel, dataDir, display, evidenceExport, fromSdk, init, readConfig, readConfigForInit, status } from './commands/buyer.ts';
 import { endpointAdd, releaseApprove } from './commands/owner.ts';
 import {
   agentRegister,
@@ -16,7 +16,7 @@ import {
 } from './commands/registry.ts';
 import { signerRegister, signerRenew } from './commands/signer.ts';
 import type { Deps, Global, NetworkFlag } from './context.ts';
-import { COPY, CliError, unexpected } from './copy.ts';
+import { COPY, CliError, diskError, unexpected } from './copy.ts';
 
 export * from './context.ts';
 export * from './copy.ts';
@@ -231,7 +231,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
           ? new CliError('usage', e.message)
           : // An SDK refusal code missed by a command still gets its FLOWS row (an AttestError is raised before anything is
             // signed); anything else is said without its raw message (it could carry a key), and --json gets its error object.
-            ((g && e instanceof AttestError ? fromSdk(g, e) : null) ?? unexpected(e));
+            ((g && e instanceof AttestError ? fromSdk(g, e) : null) ?? (BUYER.has(key) ? diskError(e, display(deps, dataDir(deps))) : null) ?? unexpected(e));
     if (json) {
       deps.io.out(JSON.stringify({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
     } else {

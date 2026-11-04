@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, linkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, linkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { originHash } from '@attessa/core';
@@ -218,6 +218,20 @@ describe('buyer: attessa call, verified (FLOWS §6 J1)', () => {
       'Answer saved to result.json.',
       "Couldn't add this call to your record at ~/.attessa/evidence.jsonl.",
       'Free up space in ~/.attessa, or make it writable, before your next call.',
+    ]);
+  });
+
+  it('the data folder refuses writes: one row naming it, whose next action finishes any call in progress (T21 r30)', async () => {
+    await initialized();
+    chmodSync(join(w.home, '.attessa'), 0o500);
+    try {
+      expect(await w.call()).toBe(1);
+    } finally {
+      chmodSync(join(w.home, '.attessa'), 0o700);
+    }
+    expect(w.transcript.slice(-2)).toEqual([
+      "Couldn't write a file attessa keeps on this computer (SQLITE_CANTOPEN).",
+      'Free up space in ~/.attessa, or make it writable, then run `attessa status --pending` to finish any call in progress.',
     ]);
   });
 
