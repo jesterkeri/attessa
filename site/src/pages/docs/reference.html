@@ -131,6 +131,12 @@
         <tr><td><code>not_owner</code> R</td><td>Seller: only the agent's owner can do this.</td><td>Run it from the owner wallet.</td></tr>
         <tr><td><code>not_operator</code> R</td><td>Seller: this address isn't the operator for the origin.</td><td>Run it from the operator wallet.</td></tr>
         <tr><td><code>origin_taken</code> R</td><td>Seller: the origin is registered to another agent.</td><td>Use another origin, or ask that owner to retire it.</td></tr>
+        <tr><td><code>invalid_origin</code> R</td><td>Seller: the origin isn't just a scheme and host.</td><td>Use just the scheme and host, like https://risk.example (no path, lowercase).</td></tr>
+        <tr><td><code>invalid_pcr</code> R</td><td>Seller: the build measurements file can't be read. It should be the JSON that <code>nitro-cli build-enclave</code> prints.</td><td>Pass the file nitro-cli wrote.</td></tr>
+        <tr><td><code>release_exists</code> R</td><td>Seller: this build is already approved for the agent.</td><td>None: <code>attessa status</code> shows it.</td></tr>
+        <tr><td><code>endpoint_inactive</code> R</td><td>Seller: the origin isn't an active endpoint for the agent.</td><td>Add it with <code>attessa endpoint add</code>.</td></tr>
+        <tr><td><code>signer_not_active</code>, <code>signer_mismatch</code>, <code>release_mismatch</code> R</td><td>Seller: <code>attessa signer renew</code> refused, for example because the signer already expired or the report is from a different key.</td><td>Expired: restart with <code>attessa enclave start</code>, then <code>attessa signer register</code>. Otherwise: run <code>attessa signer renew</code> on the machine that holds this key.</td></tr>
+        <tr><td><code>self_link_invalid</code> R</td><td>Seller: the Self Agent ID must be held by this wallet (Self's linked mode) and have a current human proof.</td><td>Check it in the Self app, then run <code>attessa selflink</code> again.</td></tr>
         <tr><td><code>nsm_unavailable</code></td><td>Seller: the machine couldn't get a signed report from AWS.</td><td>Use an instance with enclaves enabled.</td></tr>
       </tbody>
     </table></div>
