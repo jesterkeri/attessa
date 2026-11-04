@@ -578,6 +578,44 @@ describe('buyer: cancel, status, evidence export', () => {
     ]);
   });
 
+  it('attessa cancel on a refused call that settled anyway, no answer held: settled_after_refusal warning, ledger closed (T21 r14)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse_but_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    const tx = w.pending()[0]!.settlementTx as string;
+    const t = `${tx.slice(0, 6)}…${tx.slice(-2)}`;
+    const warning = [
+      `Warning: the service refused this call, but your payment permission was used anyway: 0.02 USDC (tx ${t}). This is the gateway's fault.`,
+      `  Your record (~/.attessa/evidence.jsonl, entry ${id}) proves the payment and the refusal. Report the gateway to the marketplace that listed it.`,
+    ];
+    expect(w.transcript).toEqual([`Too late to cancel: the payment went through (tx ${t}). Fetching your answer.`, ...warning]);
+    expect(w.pending()[0]).toMatchObject({ state: 'settled_after_refusal', settlementTx: tx });
+    expect(w.evidence().at(-1)).toMatchObject({ outcome: 'settled_after_refusal', settlementTx: tx });
+    // Decided: run again, the stored outcome, its one warning; --json says the same, never uncertain -> get_result.
+    w.transcript.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes')).toBe(1);
+    expect(w.transcript).toEqual(warning);
+    w.out.length = 0;
+    expect(await w.cli('status', '--pending', '--network', 'local', '--rpc', 'http://127.0.0.1:1')).toBe(0);
+    expect(w.out.join('\n')).not.toContain(id);
+  });
+
+  it('attessa cancel --json on a refused call that settled anyway, no answer held: outcome settled_after_refusal, no get_result (T21 r14)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'refuse_but_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    const json = JSON.parse(w.out.at(-1)!) as Record<string, unknown>;
+    expect(json).toMatchObject({ outcome: 'settled_after_refusal', settlementTx: w.pending()[0]!.settlementTx });
+    expect(json.suggestion).toBeUndefined();
+    expect(json.code).not.toBe('uncertain');
+  });
+
   it('attessa cancel run again on a cancelled call: the same block as the first run, never "(block 0)" (T21 r12)', async () => {
     await initialized();
     w.gw.behavior = { paid: 'refuse' };

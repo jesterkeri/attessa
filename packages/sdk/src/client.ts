@@ -599,13 +599,23 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       }
       await sleep(POLL_MS);
     }
+    return settledEnd(entry, settlement.tx, meta, noResult);
+  }
+
+  /**
+   * The end of the settled path once the result fetch gave no result: `noResult` is the gateway's own
+   * `result_not_found`. A refused call ends settled_after_refusal, an uncertain one paid_but_rejected{missing_proof}
+   * (SPEC §7); without that answer either keeps its state with the settlement recorded. getResult ends here too, so
+   * a fetch that finds nothing for a settled call decides the same way as reconcilePending.
+   */
+  function settledEnd(entry: PendingEntry, tx: Hash, meta: CallMeta, noResult: boolean): CallResult {
     if (entry.state === 'refused') {
-      const f: Partial<CallResult> = { settlementTx: settlement.tx };
+      const f: Partial<CallResult> = { settlementTx: tx };
       if (entry.code) f.code = parseCode(entry.code);
       return finish(entry, noResult ? 'settled_after_refusal' : 'refused', meta, f);
     }
-    if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: settlement.tx });
-    return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: settlement.tx });
+    if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: tx });
+    return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: tx });
   }
 
   /**
@@ -1048,6 +1058,9 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (f.kind === 'result') {
         return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, {});
       }
+      // The gateway holds no result, and the chain showed the settlement (the SDK stores `settlementTx` only from
+      // chain evidence): decided, exactly as reconcilePending's settled path decides it.
+      if (f.kind === 'none' && entry.settlementTx) return settledEnd(entry, entry.settlementTx, {}, true);
       const r = current(entry, {});
       r.code = f.kind === 'pending' ? 'settle_pending' : f.kind === 'none' ? 'result_not_found' : 'rpc_unavailable';
       return r;

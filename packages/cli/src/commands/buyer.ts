@@ -171,10 +171,17 @@ function lastEvidence(client: AttestClient, requestId: Hex): EvidenceRow | undef
 /**
  * An undecided call whose settlement the chain shows (the SDK stores `settlementTx` only from chain evidence): FLOWS
  * §8 "interrupted, payment found", machine code `uncertain` -> `get_result`. The permission was used, so it never
- * "expires unused" and `attessa cancel` can't void it. The rpc-history case keeps its own row.
+ * "expires unused" and `attessa cancel` can't void it. The rpc-history case keeps its own row. Only while an answer
+ * may still come: the gateway's `result_not_found` for a settled call is decided by the SDK (settled_after_refusal or
+ * paid_but_rejected{missing_proof}), never "fetching your answer".
  */
 function paymentFound(r: CallResult): boolean {
-  return (r.outcome === 'uncertain' || r.outcome === 'refused') && !!r.settlementTx && r.code !== 'rpc_unavailable';
+  return (
+    (r.outcome === 'uncertain' || r.outcome === 'refused') &&
+    !!r.settlementTx &&
+    r.code !== 'rpc_unavailable' &&
+    r.code !== 'result_not_found'
+  );
 }
 
 function jsonResult(r: CallResult): Record<string, unknown> {
