@@ -298,7 +298,7 @@
       verdictLine: "Celo shows this payment settled: who paid, to which address, how much, and in which block. That isn't a verified call, and an address alone doesn't tell which endpoint, build or signer answered. Whether the proof passed, and who answered this exact request with these inputs, needs the call's proof, and those checks are planned.",
     },
     tampered: {
-      verdict: 'rejected', word: 'Rejected', sub: 'not charged',
+      verdict: 'rejected', word: 'Rejected', sub: 'not charged', ref: 'sdk',
       rows: [build, machine,
         { s: 'fail', line: "The answer doesn't match what the sealed machine signed.", term: '<span class="t">response_hash_mismatch</span> the response hash differs from the proof' },
         skipped,
@@ -306,7 +306,7 @@
       verdictLine: 'Rejected at "This exact request and answer". Nothing was settled and the buyer was not charged.',
     },
     unapproved: {
-      verdict: 'rejected', word: 'Rejected', sub: 'not charged',
+      verdict: 'rejected', word: 'Rejected', sub: 'not charged', ref: 'sdk',
       rows: [
         { s: 'fail', line: "The agent's owner withdrew this build's approval (revoked or deprecated it) after the gateway's signer check and before its proof check.", term: `<span class="t">release_not_approved</span> release ${chip('releaseId')} for agent ${chip('agentId')}` },
         machine, skipped, skipped,
@@ -336,9 +336,15 @@
   const grid = $('.result-grid', explorer);
   const setVerdict = v => { if (grid) grid.dataset.verdict = v; };
 
-  const head = (title, extra = '') => `
+  // What a result is headed by. A call that settled has a settlement tx; a call that was never settled has none,
+  // so its sample is headed as what the buyer's SDK shows.
+  const REF = {
+    tx: () => `Settlement tx ${queryChip()}`,
+    sdk: () => "Sample of what the buyer's SDK shows. No settlement tx: this call never settled",
+  };
+  const head = (title, extra, ref) => `
     <div class="proof-head"><h2 tabindex="-1" data-result-heading>${title}</h2>
-      <p class="proof-meta"><span>Settlement tx ${queryChip()}</span><span>on <span data-network-name>${networkName()}</span></span>${extra}</p></div>`;
+      <p class="proof-meta"><span>${ref}</span><span>on <span data-network-name>${networkName()}</span></span>${extra || ''}</p></div>`;
 
   function renderChecklist(key) {
     const st = STATES[key];
@@ -355,7 +361,7 @@
       </li>`).join('');
     result.innerHTML = `
       <div class="proof">
-        ${head('Sample checklist', `<span class="badge" data-verdict="${st.verdict}">${icon(VERDICT_ICON[st.verdict])}${st.word}</span>`)}
+        ${head('Sample checklist', `<span class="badge" data-verdict="${st.verdict}">${icon(VERDICT_ICON[st.verdict])}${st.word}</span>`, REF[st.ref || 'tx']())}
         <ol class="checklist">${rows}
           <li class="check is-verdict" data-status="${st.verdict}">
             <span class="badge" data-verdict="${st.verdict}">${icon(VERDICT_ICON[st.verdict])}${st.word}</span>
@@ -371,7 +377,7 @@
     result.setAttribute('aria-busy', 'true');
     result.innerHTML = `
       <div class="proof">
-        ${head('Checking against the registry')}
+        ${head('Checking against the registry', '', REF.tx())}
         <ol class="checklist">${NAMES.map(n => `
           <li class="check" data-status="wait"><span class="status" data-status="wait">${icon('wait')}Checking</span>
             <div><p class="check-name">${n}</p><p class="check-line muted">Reading public Celo data…</p></div></li>`).join('')}
