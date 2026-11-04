@@ -278,8 +278,12 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-event
 .story-copy { position: relative; z-index: 1; }
 .story-sticky > .wrap { position: relative; height: 100%; display: grid; align-content: center; padding-top: var(--nav-h); }
 .story-steps { position: relative; min-height: 350px; }
-.story-steps li { position: absolute; inset: 0 0 auto 0; opacity: 0; transform: translateY(16px); filter: blur(4px); transition: opacity 420ms var(--ease-out), transform 620ms var(--ease-out), filter 420ms var(--ease-out); }
-.story-steps li.is-on { opacity: 1; transform: none; filter: none; }
+/* Steps stack and hide only once scene.js runs (is-live): without it, or if its CDN import fails, all read in order. */
+[data-story].is-live .story-steps li { position: absolute; inset: 0 0 auto 0; opacity: 0; transform: translateY(16px); filter: blur(4px); transition: opacity 420ms var(--ease-out), transform 620ms var(--ease-out), filter 420ms var(--ease-out); }
+[data-story].is-live .story-steps li.is-on { opacity: 1; transform: none; filter: none; }
+[data-story]:not(.is-live) { height: auto; }
+[data-story]:not(.is-live) .story-sticky { position: relative; height: auto; overflow: visible; padding: 48px 0; }
+[data-story]:not(.is-live) .story-steps li + li { margin-top: 48px; }
 .story-steps h2 { max-width: 12ch; font-size: clamp(2.3rem, 1rem + 3.2vw, 4.2rem); }
 .story-steps p { margin-top: 20px; color: var(--text-2); max-width: 30em; font-size: 1.05rem; }
 .term { font: 400 12px/1.5 var(--mono) !important; color: var(--text-3) !important; letter-spacing: 0.04em; }
@@ -675,8 +679,8 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 .walk-n { font: 780 clamp(3rem, 1.4rem + 4vw, 6rem)/0.9 var(--display); font-stretch: 64%; color: var(--bg); -webkit-text-stroke: 2px var(--text-3); paint-order: stroke fill; transition: color 400ms var(--ease-out), -webkit-text-stroke-color 400ms var(--ease-out); }
 .walk-copy h3 { font: 780 clamp(1.6rem, 1rem + 1.5vw, 2.5rem)/0.95 var(--display); font-stretch: 64%; text-transform: uppercase; letter-spacing: 0; }
 .walk-copy p { margin-top: 16px; color: var(--text-2); max-width: 34em; }
-.walk-copy, .walk-step .term { opacity: 0.3; transition: opacity 500ms var(--ease-out); }
-.walk-step.is-on .walk-copy, .walk-step.is-on .term { opacity: 1; }
+[data-walk].is-live .walk-copy, [data-walk].is-live .walk-step .term { opacity: 0.3; transition: opacity 500ms var(--ease-out); }
+[data-walk].is-live .walk-step.is-on .walk-copy, [data-walk].is-live .walk-step.is-on .term { opacity: 1; }
 .walk-step.is-on .walk-n { color: var(--text); -webkit-text-stroke-color: var(--text); }
 .walk-step.is-fail.is-on .walk-n { color: var(--fail); -webkit-text-stroke-color: var(--fail); }
 .walk-note { margin-top: 28px; font-size: 0.85rem; color: var(--text-3); }
@@ -695,7 +699,7 @@ figure.term { margin: 0; border: 1px solid var(--line-2); background: rgba(7, 7,
 }
 @media (max-width: 900px) {
   .walk-step { grid-template-columns: minmax(0, 1fr); min-height: 0; gap: 16px; padding: 36px 0; }
-  .walk-copy, .walk-step .term { opacity: 1; }
+  [data-walk].is-live .walk-copy, [data-walk].is-live .walk-step .term { opacity: 1; }
 }
 
 /* The three on-chain records: dashed cards, the approved release outlined in lime, links that flow. */

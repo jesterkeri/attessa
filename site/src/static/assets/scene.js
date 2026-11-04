@@ -41,6 +41,7 @@ const pinnedProgress = el => {
 
 // --- Story DOM: steps, rail, callouts, checklist ---
 const steps = story ? [...story.querySelectorAll('[data-step]')] : [];
+story?.classList.add('is-live'); // site.css hides the steps it isn't showing only from here on
 const callouts = story ? [...story.querySelectorAll('[data-callout]')] : [];
 const railBars = story ? [...story.querySelectorAll('[data-rail] b')] : [];
 const hud = story?.querySelector('[data-hud]');

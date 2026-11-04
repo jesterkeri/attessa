@@ -150,6 +150,7 @@
     return { list, steps, on: -1 };
   });
   if (walks.length) {
+    walks.forEach(w => w.list.classList.add('is-live')); // site.css dims the unlit steps only from here on
     let queued = false;
     const update = () => {
       queued = false;
