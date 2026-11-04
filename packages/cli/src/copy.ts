@@ -133,6 +133,12 @@ const DISK_CODES = new Set(['ENOSPC', 'EDQUOT', 'EFBIG', 'EACCES', 'EPERM', 'ERO
  * paid call, so the one next action is the command that finishes it. // not in FLOWS
  */
 export function diskError(e: unknown, dir: string): CliError | null {
+  // The SDK's ledger wraps SQLite's error and keeps it as `cause`: look one level down too.
+  const cause = (e as { cause?: unknown } | null)?.cause;
+  if (cause && cause !== e) {
+    const inner = diskError(cause, dir);
+    if (inner) return inner;
+  }
   const err = e as { code?: unknown; errcode?: unknown } | null;
   // node:sqlite (the ledger's lock file) reports SQLite's own result code; its low byte is the primary code.
   const code = err?.code === 'ERR_SQLITE_ERROR' && typeof err.errcode === 'number' ? SQLITE_DISK[err.errcode & 0xff] : err?.code;
