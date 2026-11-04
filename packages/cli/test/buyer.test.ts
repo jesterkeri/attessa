@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, linkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { originHash } from '@attessa/core';
@@ -246,6 +246,17 @@ describe('buyer: attessa call, verified (FLOWS §6 J1)', () => {
     symlinkSync(join(w.home, '.attessa'), join(w.home, 'records'));
     expect(await w.call('--out', 'records/pending.jsonl')).toBe(1);
     expect(w.err[0]).toBe("--out can't be inside ~/.attessa, which holds your records. Choose another file.");
+    expect(w.gw.paid).toHaveLength(0);
+  });
+
+  it('--out as a dangling symlink or a hard link into the data folder is refused too (T21 r23)', async () => {
+    await initialized();
+    symlinkSync(join(w.home, '.attessa', 'not-yet.json'), join(w.home, 'dangling.json'));
+    expect(await w.call('--out', 'dangling.json')).toBe(1);
+    expect(w.err.at(-1)).toBe("--out can't be inside ~/.attessa, which holds your records. Choose another file.");
+    linkSync(join(w.home, '.attessa', 'config.json'), join(w.home, 'hard.json'));
+    expect(await w.call('--out', 'hard.json')).toBe(1);
+    expect(w.err.at(-1)).toBe("--out can't be inside ~/.attessa, which holds your records. Choose another file.");
     expect(w.gw.paid).toHaveLength(0);
   });
 

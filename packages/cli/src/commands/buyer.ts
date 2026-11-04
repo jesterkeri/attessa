@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { realpathSync } from 'node:fs';
+import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
@@ -63,6 +63,34 @@ function realDir(p: string): string {
     return realpathSync(p);
   } catch {
     return p;
+  }
+}
+
+/**
+ * Whether writing `file` would land in `dir` (already real): through its folder, a symlink (dangling too, one hop) or
+ * a hard link to a file there. writeFile follows links, so the path as typed isn't enough.
+ */
+function intoDataDir(file: string, dir: string): boolean {
+  let t = file;
+  try {
+    if (lstatSync(t).isSymbolicLink()) t = resolve(dirname(t), readlinkSync(t));
+  } catch {
+    // doesn't exist yet: the path as given
+  }
+  const real = existsSync(t) ? realDir(t) : join(realDir(dirname(t)), basename(t));
+  if (real === dir || real.startsWith(`${dir}/`)) return true;
+  try {
+    const st = statSync(file);
+    return readdirSync(dir).some((f) => {
+      try {
+        const o = statSync(join(dir, f));
+        return o.ino === st.ino && o.dev === st.dev;
+      } catch {
+        return false;
+      }
+    });
+  } catch {
+    return false;
   }
 }
 
@@ -280,10 +308,8 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   }
   const asset = parseAsset(o.asset);
   // The data folder holds the ledger, evidence and config; an answer written over one of them would destroy it.
-  if (o.out !== undefined) {
-    const dir = realDir(resolve(dataDir(d)));
-    const target = join(realDir(dirname(resolve(d.cwd, o.out))), basename(o.out));
-    if (target === dir || target.startsWith(`${dir}/`)) throw ERR.usage(`--out can't be inside ${display(d, dir)}, which holds your records. Choose another file.`); // not in FLOWS
+  if (o.out !== undefined && intoDataDir(resolve(d.cwd, o.out), realDir(resolve(dataDir(d))))) {
+    throw ERR.usage(`--out can't be inside ${display(d, realDir(resolve(dataDir(d))))}, which holds your records. Choose another file.`); // not in FLOWS
   }
   const body = /^\s*[[{]/.test(o.body) ? o.body : readBody(d, o.body);
   const limits = limitsFor(cfg, o, asset);
