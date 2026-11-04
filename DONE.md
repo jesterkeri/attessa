@@ -1656,4 +1656,23 @@ cli:       Tests  262 passed (262)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r34, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r34 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r34 fixes - 2026-11-04
+adversary r34 (01c040b, `packages/cli/test/adversary-t21-r34.test.ts`, failing): with two live signers on two approved releases of one origin, liveness answered by signer A (release R1) and the paid answer proven by signer B (release R2), the call ended `verified` with an evidence row pairing `releaseId` R2 with R1's `ownerClaimedSource` (SPEC.md:640, :700), and `attessa call` printed R1 above "The answer came from that approved build" (FLOWS J1). No money at risk: B is an approved, active signer. Fixed in 6c3e698:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): when the proof's release differs from the liveness release, the owner claim recorded is looked up for the proof's release (and dropped if it has none), not carried over.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: the release shown at "Runs agent ..." is carried to the report; when the proof's release differs, the paid line reads "Paid {p} {sym}. The answer came from another approved build of this agent (release {r}), for this request, using Celo data from block {b}  (settled: tx {tx}, signer {s})" (marked not in FLOWS).
+- OPEN-QUESTIONS.md: the entry, with the open question whether V10 should instead require the proving signer to equal the liveness signer (`expectedSigner` is stored but never compared).
+No existing assertion changed.
+
+verify at 6c3e698 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  53 passed (53)
+cli:       Tests  264 passed (264)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r35, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
