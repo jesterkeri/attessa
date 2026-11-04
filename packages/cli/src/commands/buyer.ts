@@ -528,7 +528,7 @@ export function sdkError(g: Global, code: string, rawDetail: string | undefined,
       return ERR.rpcUnavailable(rpcShown(g));
     case 'network_mismatch': {
       const m = nums(/^RPC is on chain (\d+); \S+ is (\d+)$/);
-      return m ? ERR.networkMismatch(Number(m[1]), Number(m[2])) : new CliError('network_mismatch', `Wrong network: ${detail}. Nothing was signed.`);
+      return m ? ERR.networkMismatch(Number(m[1]), Number(m[2])) : new CliError('network_mismatch', `Wrong network: ${detail}. Nothing was signed.`, 'Check `--network` and `--asset`, then retry.'); // not in FLOWS
     }
     case 'rate_limited':
     case 'gateway_busy':
