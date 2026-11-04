@@ -405,13 +405,16 @@ function readBody(d: Deps, file: string): Uint8Array {
 }
 
 /** The end state of a call, in FLOWS §6 words. Exit 0 only for `verified` (and a dry run). */
-async function report(
-  g: Global,
-  d: Deps,
-  client: AttestClient,
-  r: CallResult,
-  c: { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint; paid?: boolean },
-): Promise<number> {
+type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint; paid?: boolean };
+
+/** A result whose evidence row couldn't be written (SDK `evidenceNotWritten`) is reported as usual, then the missing record is its one next action. */
+async function report(g: Global, d: Deps, client: AttestClient, r: CallResult, c: ReportCtx): Promise<number> {
+  const code = await reportOutcome(g, d, client, r, c);
+  if (r.evidenceNotWritten) throw BUYERR.recordNotWritten(display(d, client.ledger.evidencePath), display(d, dataDir(d)));
+  return code;
+}
+
+async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallResult, c: ReportCtx): Promise<number> {
   const out = d.io.out;
   d.io.data?.(jsonResult(r));
   const p = amount(r.amount ?? 0n);
@@ -450,11 +453,7 @@ async function report(
       if (c.uncertain) out(BUY.chargedChecksOut(p, c.sym, r.settlementTx!));
       else out(BUY.paid(p, c.sym, blockNo(r.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       if (r.inputsChecked === false) out(BUY.inputsNotChecked);
-      if (r.evidenceNotWritten) {
-        out(BUY.savedNoRecord(c.outFile));
-        throw BUYERR.recordNotWritten(record, display(d, dataDir(d)));
-      }
-      out(BUY.saved(c.outFile, record));
+      out(r.evidenceNotWritten ? BUY.savedNoRecord(c.outFile) : BUY.saved(c.outFile, record));
       return 0;
     }
     case 'not_charged': {
@@ -465,10 +464,10 @@ async function report(
       return 1;
     }
     case 'paid_but_rejected':
-      for (const l of BUY.paidButRejected(p, c.sym, r.settlementTx ?? '', record, r.requestId)) out(l);
+      for (const l of BUY.paidButRejected(p, c.sym, r.settlementTx ?? '', r.evidenceNotWritten ? null : record, r.requestId)) out(l);
       return 1;
     case 'settled_after_refusal':
-      for (const l of BUY.settledAfterRefusal(p, c.sym, r.settlementTx ?? '', record, r.requestId)) out(l);
+      for (const l of BUY.settledAfterRefusal(p, c.sym, r.settlementTx ?? '', r.evidenceNotWritten ? null : record, r.requestId)) out(l);
       return 1;
     case 'refused':
     case 'uncertain':

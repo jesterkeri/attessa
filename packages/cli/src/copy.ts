@@ -333,15 +333,16 @@ export const BUY = {
   notChargedNoBlock: 'Not charged: confirmed on Celo, your payment permission expired unused.',
   notChargedCancelledNoBlock: 'Not charged: confirmed on Celo, your payment permission was cancelled.',
   // §6 J2 variant
-  paidButRejected: (p: string, sym: string, tx: string, record: string, id: string) => [
+  // record null: the evidence row couldn't be written (not in FLOWS), so no line cites it.
+  paidButRejected: (p: string, sym: string, tx: string, record: string | null, id: string) => [
     `Warning: you were charged ${p} ${sym} (tx ${short(tx)}) but the answer didn't check out  (paid_but_rejected)`,
     "  Payments made this way can't be reversed on chain. Only the gateway operator can send the money back.",
-    `  Your record (${record}, entry ${id}) proves the payment and the failed check.`,
+    ...(record ? [`  Your record (${record}, entry ${id}) proves the payment and the failed check.`] : []),
     '  Report the gateway to the marketplace that listed it (for buy: github.com/celo-org/buy-skill/issues).',
   ],
-  settledAfterRefusal: (p: string, sym: string, tx: string, record: string, id: string) => [
+  settledAfterRefusal: (p: string, sym: string, tx: string, record: string | null, id: string) => [
     `Warning: the service refused this call, but your payment permission was used anyway: ${p} ${sym} (tx ${short(tx)}). This is the gateway's fault.`,
-    `  Your record (${record}, entry ${id}) proves the payment and the refusal. Report the gateway to the marketplace that listed it.`,
+    `  ${record ? `Your record (${record}, entry ${id}) proves the payment and the refusal. ` : ''}Report the gateway to the marketplace that listed it.`,
   ],
   // §6 J1 interrupted
   lost: 'Lost the connection after you signed. Checking whether you were charged…  (up to 2 minutes)',

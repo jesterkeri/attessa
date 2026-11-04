@@ -361,7 +361,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       inputsChecked: r.inputsChecked ?? null,
       via: 'gateway',
     };
-    ledger.appendEvidence(row);
+    appendOrMark(row, r);
+  }
+
+  /** SPEC §9: every outcome is in evidence. A failed append (full disk, permissions) must not throw away a decided call. */
+  function appendOrMark(row: EvidenceRow, r: CallResult): void {
+    try {
+      ledger.appendEvidence(row);
+    } catch {
+      r.evidenceNotWritten = true;
+    }
   }
 
   function baseResult(entry: PendingEntry, outcome: Outcome, meta: CallMeta = {}): CallResult {
@@ -411,13 +420,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     }
     const r: CallResult = { ...baseResult(e, outcome, meta), ...fields };
     if (ev.inputsBlock !== undefined) r.inputsBlock = ev.inputsBlock;
-    try {
-      evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
-    } catch {
-      // The entry is already terminal and getResult never re-fetches it: return the result (a paid answer included)
-      // rather than lose it, and say the record is missing.
-      r.evidenceNotWritten = true;
-    }
+    evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
     return r;
   }
 
@@ -758,8 +761,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (err.detail) r.detail = err.detail;
       progress(err.detail ? { kind: 'refused', entry: e, code, detail: err.detail } : { kind: 'refused', entry: e, code });
       if (!waitForExpiry) return finish(e, 'refused', meta, r);
-      evidence(e, { ...baseResult(e, 'refused', meta), ...r });
-      return finalize(n, e, meta, true);
+      const refusedRow: CallResult = { ...baseResult(e, 'refused', meta), ...r };
+      evidence(e, refusedRow);
+      const out = await finalize(n, e, meta, true);
+      if (refusedRow.evidenceNotWritten) out.evidenceNotWritten = true;
+      return out;
     }
     // A proxy 502, an HTML page, a missing body: not a refusal (INV-23).
     return afterUnknown(n, entry, meta);
@@ -833,12 +839,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const stopped = (code: CallCode, detail?: string): CallResult => {
       const r: CallResult = { outcome: 'stopped', code, requestId };
       if (detail) r.detail = detail;
-      ledger.appendEvidence({
+      appendOrMark({
         v: '1', ts: String(Math.floor(now() / 1000)), requestId, origin: known.origin ?? url, agentId: known.agentId?.toString() ?? null,
         outcome: 'stopped', code, check: null, amount: known.amount?.toString() ?? null, asset: known.asset ?? null,
         payTo: known.payTo ?? null, settlementTx: null, signer: null, releaseId: null, ownerClaimedSource: null, selfVerifiedOwner: null,
         requestHash: known.requestHash ?? null, responseHash: null, inputsHash: null, inputsBlock: null, inputsChecked: null, via: 'gateway',
-      });
+      }, r);
       return r;
     };
     /**
