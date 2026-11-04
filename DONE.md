@@ -1331,4 +1331,22 @@ cli:       Tests  228 passed (228)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  179 passed (179)
 ```
-reviewed: pending (adversary r15, then Codex)
+reviewed: pending (adversary r15 found a defect; see below)
+
+### T21 adversary r15 fixes - 2026-11-04
+adversary r15 (822e357, `packages/cli/test/adversary-t21-r15.test.ts`, failing): with the buyer's RPC lagging the gateway's clock by more than 300 s, the `X-Attest-Payer-Sig` stamp was stale, the gateway answered 404 `result_not_found` (SPEC §2.5), and `getResult` ended a settled call `paid_but_rejected` and lost the answer the gateway still held (SPEC §7: getResult never re-pays, the held answer must stay fetchable). Fixed in 4d5dfc1:
+- `packages/sdk/src/client.ts`: `fetchResult` counts a 404 as "no result" only when the gateway's HTTP Date shows the chain-time stamp was well inside the 300 s window (270 s). Otherwise it signs again at the gateway's Date and asks once more; a 404 it still cannot tell from a stale signature is `unsure`, which `getResult` and the settled path of `reconcilePending` treat as undecided.
+- `packages/sdk/test/fakes/gateway.ts`: the fake gateway sends its own clock as Date. New tests in `packages/sdk/test/settled-no-result.test.ts`; no existing assertion changed. No new copy.
+- `OPEN-QUESTIONS.md`: whether trusting the gateway's Date for the re-sign is acceptable.
+
+verify at 4d5dfc1 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  35 passed (35)
+cli:       Tests  229 passed (229)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  182 passed (182)
+```
+reviewed: pending (adversary r16, then Codex)
