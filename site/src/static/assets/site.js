@@ -377,14 +377,16 @@
     result.setAttribute('aria-busy', 'true');
     result.innerHTML = `
       <div class="proof">
-        ${head('Checking against the registry', '', REF.tx())}
-        <ol class="checklist">${NAMES.map(n => `
+        ${head('Checking the payment on Celo', '', REF.tx())}
+        <ol class="checklist">${NAMES.map((n, i) => (i === NAMES.length - 1 ? `
           <li class="check" data-status="wait"><span class="status" data-status="wait">${icon('wait')}Checking</span>
-            <div><p class="check-name">${n}</p><p class="check-line muted">Reading public Celo data…</p></div></li>`).join('')}
+            <div><p class="check-name">${n}</p><p class="check-line muted">Reading the settlement from public Celo data…</p></div></li>` : `
+          <li class="check" data-status="na"><span class="status" data-status="na">${icon('na')}Planned</span>
+            <div><p class="check-name">${n}</p><p class="check-line muted">${planned.line}</p></div></li>`)).join('')}
         </ol>
       </div>`;
     setVerdict('wait');
-    announce('Checking the call against the registry');
+    announce('Checking the payment on Celo');
   }
 
   const message = (tone, ic, title, body) => {
