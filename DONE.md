@@ -1564,4 +1564,23 @@ cli:       Tests  250 passed (250)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r29, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r29 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r29 fixes - 2026-11-04
+adversary r29 (d39f20b, `packages/cli/test/adversary-t21-r29.test.ts`, two failing tests): (1) `attessa cancel` that lands while evidence.jsonl can't be appended: `finish()` marked a result that `cancelAuthorization` discarded (it returns only the tx hash), so the CLI printed only "Cancelled (tx …)." and exited 0 with no row recorded (SPEC §9). (2) Over the daily cap with the record unwritable, the line read the price back from the row that failed to write: "today's spend to 0.00 USDC" (FLOWS §8 over_daily_cap). Fixed in b12a23a:
+- `packages/sdk/src/client.ts`, `index.ts`: a landed cancel whose row wasn't written throws `CancelNotRecordedError` (with the tx); a `stopped` result carries `amount` and `asset`.
+- `packages/cli/src/commands/buyer.ts`: `cancel` prints "Cancelled (tx {h})." then ends `record_not_written`; over_daily_cap uses the result's amount and asset; the now unused `lastEvidence` is removed.
+- OPEN-QUESTIONS.md: the new error class and result fields.
+No existing assertion changed. No new copy.
+
+verify at b12a23a (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  48 passed (48)
+cli:       Tests  252 passed (252)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r30, then Codex; Codex to judge the r17 call above)
