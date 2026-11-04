@@ -78,7 +78,7 @@
         </li>
         <li class="walk-step" data-walk-step>
           <span class="walk-n" aria-hidden="true">05</span>
-          <div class="walk-copy"><h3>The proof is checked twice, then you pay</h3><p>The sealed machine computes the answer from Celo data at a stated block and signs a proof that binds this request, this answer, those inputs and this payment to the approved build. The gateway checks it against the registry and only then settles. Attessa on your side, the CLI or the SDK, checks the same proof again on its own.</p></div>
+          <div class="walk-copy"><h3>The gateway checks the proof, then you pay</h3><p>The sealed machine computes the answer from Celo data at a stated block and signs a proof that binds this request, this answer, those inputs and this payment to the approved build. The gateway checks it against the registry and only then settles. Attessa on your side, the CLI or the SDK, checks the same proof again on its own once the payment has settled, and records a failure as paid but rejected.</p></div>
           <figure class="term"><pre><code><span class="ln"><span class="s">→</span> Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118  <span class="m">(settled: tx 0xabc…, signer 0x7f3b…22)</span></span></code></pre></figure>
         </li>
         <li class="walk-step" data-walk-step>
