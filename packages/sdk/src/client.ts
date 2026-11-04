@@ -241,7 +241,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           throw new AttestError('network_mismatch', `RPC is on chain ${chainId}; ${cfg.network} is ${deployment.chainId}`);
       }
       const registry = opts.registry ?? deployment.enclaveRegistry;
-      if (!registry) throw new Error(`no EnclaveRegistry is deployed for chain ${chainId}; pass options.registry`);
+      if (!registry) throw new AttestError('no_registry', `no EnclaveRegistry is deployed for chain ${chainId}; pass options.registry`);
       return { chain: new Chain(transport, lc(registry)), chainId, deployment, registry: lc(registry), x402Network: deployment.x402Network };
     })();
     return netPromise;

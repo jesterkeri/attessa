@@ -96,7 +96,7 @@ export type Outcome =
   | 'uncertain';
 
 /** Codes the SDK adds to SPEC §10's: `in_progress` reuse, and the V7 detail. */
-export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run';
+export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run' | 'no_registry';
 
 export interface CallResult {
   outcome: Outcome;

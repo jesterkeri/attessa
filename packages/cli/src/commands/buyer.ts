@@ -541,6 +541,8 @@ export function sdkError(g: Global, code: string, rawDetail: string | undefined,
     }
     case 'in_progress':
       return BUYERR.inProgress();
+    case 'no_registry':
+      return ERR.noRegistry(g.network);
   }
   if (origin !== undefined) {
     switch (code) {
