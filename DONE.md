@@ -1349,4 +1349,21 @@ cli:       Tests  229 passed (229)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  182 passed (182)
 ```
-reviewed: pending (adversary r16, then Codex)
+reviewed: pending (adversary r16 found a defect; see below)
+
+### T21 adversary r16 fixes - 2026-11-04
+adversary r16 (e859bcf, `packages/cli/test/adversary-t21-r16.test.ts`, failing): an honest gateway whose clock and Date ran 280 s ahead of the buyer's chain time accepted both payer-signature stamps (SPEC §2.5, within 300 s), and its 404 `result_not_found` was genuine, yet `fetchResult` called it `unsure` (280 > 300 - 30), so a refused call that settled stayed `refused` with no `settled_after_refusal` row (SPEC §7). Fixed in 8fde1e7:
+- `packages/sdk/src/client.ts`: `fetchResult` re-signs once at the midpoint of chain time and the gateway's Date when they are within 2 x 270 s, so the stamp is inside the window by either clock; a 404 to it is "no result" when the new Date still agrees. Further apart, or with no Date, it stays `unsure`. The stamp is never more than 270 s from chain time, whatever Date the gateway sends.
+- New tests in `packages/sdk/test/settled-no-result.test.ts`: Date 400 s ahead ends `settled_after_refusal`; Date 600 s ahead stays `refused`. No existing assertion changed. No new copy.
+
+verify at 8fde1e7 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  36 passed (36)
+cli:       Tests  230 passed (230)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r17, then Codex)
