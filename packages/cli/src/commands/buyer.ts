@@ -342,7 +342,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   if (!w) throw BUYERR.noWallet();
   const out = d.io.out;
   const sym = SYMBOL[asset];
-  const seen = { uncertain: false };
+  const seen: { uncertain: boolean; release?: string } = { uncertain: false };
   out(BUY.checking(host(origin)));
   const client = makeClient(g, d, w.account, {
     limits,
@@ -358,6 +358,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           return;
         case 'authorizing':
           out(BUY.runs(e.endpoint.agentId.toString(), e.releaseId));
+          seen.release = e.releaseId;
           if (e.ownerClaimedSource !== undefined) out(BUY.ownerSays(claimLabel(e.ownerClaimedSource)));
           out(BUY.live((e.quoteMs / 1000).toFixed(1)));
           out(BUY.price(amount(e.amount), sym, amount(e.maxAmount)));
@@ -390,7 +391,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
     },
   });
   const r = await client.payAndVerify(o.url, { body, asset, newRequest: o.newRequest });
-  return report(g, d, client, r, { origin, sym, asset, uncertain: seen.uncertain, outFile: o.out ?? 'result.json', dailyCap: limits[asset].dailyCap });
+  return report(g, d, client, r, { origin, sym, asset, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[asset].dailyCap });
 }
 
 function readBody(d: Deps, file: string): Uint8Array {
@@ -402,7 +403,7 @@ function readBody(d: Deps, file: string): Uint8Array {
 }
 
 /** The end state of a call, in FLOWS §6 words. Exit 0 only for `verified` (and a dry run). */
-type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; outFile: string; dailyCap: bigint; paid?: boolean };
+type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; shownRelease?: string | undefined; outFile: string; dailyCap: bigint; paid?: boolean };
 
 /** A result whose evidence row couldn't be written (SDK `evidenceNotWritten`) is reported as usual, then the missing record is its one next action. */
 async function report(g: Global, d: Deps, client: AttestClient, r: CallResult, c: ReportCtx): Promise<number> {
@@ -448,6 +449,8 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
         throw BUYERR.answerNotWritten(c.outFile, p, c.sym, tx, display(d, kept));
       }
       if (c.uncertain) out(BUY.chargedChecksOut(p, c.sym, r.settlementTx!));
+      else if (r.proof && c.shownRelease !== undefined && r.proof.releaseId !== c.shownRelease)
+        out(BUY.paidOtherBuild(p, c.sym, r.proof.releaseId, blockNo(r.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       else out(BUY.paid(p, c.sym, blockNo(r.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       if (r.inputsChecked === false) out(BUY.inputsNotChecked);
       out(r.evidenceNotWritten ? BUY.savedNoRecord(c.outFile) : BUY.saved(c.outFile, record));

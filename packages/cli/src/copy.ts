@@ -328,6 +328,9 @@ export const BUY = {
   live: (sec: string) => `It's up and answering for this address right now  (liveness check, ${sec} s)`,
   price: (p: string, sym: string, limit: string) => `Price: ${p} ${sym} (your limit per call: ${limit}), paid to the address registered for this service.`,
   sign: "  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  (EIP-3009 authorization)",
+  // not in FLOWS: another live signer of the endpoint answered, on another approved release than the one shown above.
+  paidOtherBuild: (p: string, sym: string, release: string, block: string, tx: string, signer: string) =>
+    `Paid ${p} ${sym}. The answer came from another approved build of this agent (release ${short(release)}), for this request, using Celo data from block ${block}  (settled: tx ${short(tx)}, signer ${short(signer)})`,
   paid: (p: string, sym: string, block: string, tx: string, signer: string) =>
     `Paid ${p} ${sym}. The answer came from that approved build, for this request, using Celo data from block ${block}  (settled: tx ${short(tx)}, signer ${short(signer)})`,
   saved: (file: string, record: string) => `Answer saved to ${file}. Record: ${record}`,

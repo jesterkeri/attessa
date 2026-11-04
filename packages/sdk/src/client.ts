@@ -560,9 +560,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!(e instanceof RpcError)) throw e;
       return finish(entry, 'uncertain', meta, { code: 'rpc_unavailable', settlementTx: settlement.tx });
     }
+    // The owner claim recorded is the proving release's: another live signer may answer on another approved release.
+    const { ownerClaimedSource: shown, ...rest } = meta;
     const source =
-      meta.ownerClaimedSource ?? (v.proof ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : undefined);
-    const m: CallMeta = { ...meta, ...(source !== undefined ? { ownerClaimedSource: source } : {}) };
+      v.proof && v.proof.releaseId !== meta.releaseId ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : (shown ?? (v.proof ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : undefined));
+    const m: CallMeta = { ...rest, ...(source !== undefined ? { ownerClaimedSource: source } : {}) };
     if (v.ok) {
       return finish(
         entry,
