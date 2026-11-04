@@ -1,5 +1,6 @@
 import { homedir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { realpathSync } from 'node:fs';
+import { basename, dirname, join, resolve } from 'node:path';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
   AlreadyUsedError,
@@ -56,6 +57,15 @@ export function dataDir(d: Deps): string {
 }
 
 /** `/home/x/.attessa/evidence.jsonl` → `~/.attessa/evidence.jsonl`. */
+/** `p` with symlinks resolved, so a link into the data folder is seen as inside it; `p` itself when it doesn't exist yet. */
+function realDir(p: string): string {
+  try {
+    return realpathSync(p);
+  } catch {
+    return p;
+  }
+}
+
 function display(d: Deps, p: string): string {
   const h = d.home ?? homedir();
   return p === h || p.startsWith(`${h}/`) ? `~${p.slice(h.length)}` : p;
@@ -271,8 +281,8 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   const asset = parseAsset(o.asset);
   // The data folder holds the ledger, evidence and config; an answer written over one of them would destroy it.
   if (o.out !== undefined) {
-    const target = resolve(d.cwd, o.out);
-    const dir = resolve(dataDir(d));
+    const dir = realDir(resolve(dataDir(d)));
+    const target = join(realDir(dirname(resolve(d.cwd, o.out))), basename(o.out));
     if (target === dir || target.startsWith(`${dir}/`)) throw ERR.usage(`--out can't be inside ${display(d, dir)}, which holds your records. Choose another file.`); // not in FLOWS
   }
   const body = /^\s*[[{]/.test(o.body) ? o.body : readBody(d, o.body);
@@ -586,11 +596,13 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     const client = makeClient(g, d, w.account, { limits: NO_LIMITS, asset: 'usdc', wait: false });
     const target = o.target;
     if (target !== undefined) checkOrigin(g, target);
-    let results = await viaSdk(g, () => client.reconcilePending());
-    if (target !== undefined) {
-      const oh = (await viaSdk(g, () => client.status(target), target)).originHash;
-      results = results.filter((r) => client.ledger.get(r.requestId)?.originHash === oh);
-    }
+    // reconcilePending decides every open call (SPEC §7), and a decided call is never fetched again, so every call it
+    // decides is reported and its answer written, the asked-about service's first. Each row names its service.
+    if (target !== undefined) await viaSdk(g, () => client.status(target), target);
+    const oh = target === undefined ? undefined : normalizeOrigin(target, { local: g.network === 'local' });
+    const decided = await viaSdk(g, () => client.reconcilePending());
+    const mine = (r: CallResult) => oh === undefined || client.ledger.get(r.requestId)?.origin === oh;
+    const results = [...decided.filter(mine), ...decided.filter((r) => !mine(r))];
     d.io.data?.({ pending: results.map(jsonResult) });
     // Each call's --json row is in `pending`; report() must not merge one call's fields into the top level.
     const { data: _rowData, ...rowIo } = d.io;
