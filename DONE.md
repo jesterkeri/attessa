@@ -1490,4 +1490,22 @@ cli:       Tests  244 passed (244)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r25, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r25 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r25 fixes - 2026-11-04
+adversary r25 (3db7169, `packages/cli/test/adversary-t21-r25.test.ts`, failing): a truncated `~/.attessa/config.json` (a kill or a full disk during `init`'s write) made every buyer command print "{path} isn't valid JSON. Run attessa init again.", and `attessa init` failed with the same line, so the row's one next action could never work (FLOWS §8/§9). Fixed in 983d9e6:
+- `packages/cli/src/commands/buyer.ts`, `packages/cli/src/index.ts`: `init` reads the config through `readConfigForInit`, which treats an unparseable file as absent, and writes a fresh one; every other command still refuses with the bad-JSON row.
+- Same file: run from inside the data folder, `status --pending` / `cancel` write `<requestId>.json`, which is the kept file itself; that write is allowed instead of being reported as failed (the adversary's unproven lead; no test).
+No existing assertion changed. No new copy.
+
+verify at 983d9e6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  44 passed (44)
+cli:       Tests  245 passed (245)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r26, then Codex; Codex to judge the r17 call above)
