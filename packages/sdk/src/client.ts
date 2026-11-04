@@ -130,6 +130,16 @@ export class CancelUndecidedError extends Error {
  * Thrown by `cancelAuthorization` when the cancel transaction was sent and the node answers, but has no receipt for it
  * within `receiptWaitMs`: not mined yet. It may still land.
  */
+/** The cancel landed and the call is `not_charged`, but its evidence row couldn't be written (full disk, permissions). */
+export class CancelNotRecordedError extends Error {
+  readonly tx: Hash;
+  constructor(tx: Hash) {
+    super(`the cancel ${tx} landed but its evidence row wasn't written`);
+    this.name = 'CancelNotRecordedError';
+    this.tx = tx;
+  }
+}
+
 export class CancelUnconfirmedError extends Error {
   readonly tx: Hash;
   constructor(tx: Hash) {
@@ -839,6 +849,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const stopped = (code: CallCode, detail?: string): CallResult => {
       const r: CallResult = { outcome: 'stopped', code, requestId };
       if (detail) r.detail = detail;
+      if (known.amount !== undefined) r.amount = known.amount;
+      if (known.asset) r.asset = known.asset;
       appendOrMark({
         v: '1', ts: String(Math.floor(now() / 1000)), requestId, origin: known.origin ?? url, agentId: known.agentId?.toString() ?? null,
         outcome: 'stopped', code, check: null, amount: known.amount?.toString() ?? null, asset: known.asset ?? null,
@@ -1163,7 +1175,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           if (settlement && ledger.get(entry.requestId)) ledger.update(entry.requestId, { settlementTx: settlement.tx });
           throw new AlreadyUsedError(d.used);
         }
-        finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: d.block });
+        if (finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: d.block }).evidenceNotWritten) throw new CancelNotRecordedError(d.canceled);
         return d.canceled;
       };
       const before = await decide(false);
@@ -1206,11 +1218,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           if (after === 'open') throw new CancelRevertedError(vb, hash);
           return await ended(after);
         }
-        finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
+        if (finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber }).evidenceNotWritten) throw new CancelNotRecordedError(hash);
         return hash;
       } catch (e) {
         if (
           e instanceof AlreadyUsedError ||
+          e instanceof CancelNotRecordedError ||
           e instanceof CancelRevertedError ||
           e instanceof CancelUndecidedError ||
           e instanceof CancelUnconfirmedError ||

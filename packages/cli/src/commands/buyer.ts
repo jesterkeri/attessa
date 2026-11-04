@@ -7,6 +7,7 @@ import {
   AttestError,
   CancelInterruptedError,
   CancelRevertedError,
+  CancelNotRecordedError,
   CancelUnconfirmedError,
   CancelUndecidedError,
   InsufficientGasFundsError,
@@ -228,10 +229,6 @@ function makeClient(
 function claimLabel(ref: string): string {
   const m = /^(?:https:\/\/)?(github\.com\/[^/\s@]+\/[^/\s@]+?)(?:\/(?:commit|tree)\/|@)([0-9a-f]{7,40})\/?$/i.exec(ref);
   return safe(m ? `${m[1]} @ ${m[2]!.slice(0, 7)}` : ref);
-}
-
-function lastEvidence(client: AttestClient, requestId: Hex): EvidenceRow | undefined {
-  return client.ledger.readEvidence().filter((r) => r.requestId === requestId).at(-1);
 }
 
 /**
@@ -504,10 +501,9 @@ async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: {
       return BUYERR.overMax(amount(BigInt(m?.[1] ?? '0')), c.sym, amount(BigInt(m?.[2] ?? '0')));
     }
     case 'over_daily_cap': {
-      const ev = lastEvidence(client, r.requestId);
-      const price = BigInt(ev?.amount ?? '0');
-      const spent = ev?.asset ? spendToday(client.ledger.list(), ev.asset, Date.now()) : 0n;
-      return BUYERR.overDailyCap(amount(spent + price), amount(c.dailyCap));
+      // From the result, not the evidence row: that row may be the one that couldn't be written.
+      const spent = r.asset ? spendToday(client.ledger.list(), r.asset, Date.now()) : 0n;
+      return BUYERR.overDailyCap(amount(spent + (r.amount ?? 0n)), amount(c.dailyCap));
     }
     default:
       return sdkError(g, r.code ?? 'stopped', r.detail, c.origin);
@@ -628,6 +624,11 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
     if (e instanceof CancelRevertedError) throw BUYERR.cancelReverted(hms(e.validBefore), e.tx);
     if (e instanceof CancelUnconfirmedError) throw BUYERR.cancelUnconfirmed(e.tx);
+    if (e instanceof CancelNotRecordedError) {
+      d.io.out(BUY.cancelled(e.tx));
+      d.io.data?.({ requestId: id, outcome: 'not_charged', code: 'cancelled', cancelTx: e.tx });
+      throw BUYERR.recordNotWritten(display(d, client.ledger.evidencePath), display(d, dataDir(d)));
+    }
     if (e instanceof CancelInterruptedError) {
       // Signed, maybe sent: never the rpc row's "Nothing was signed"; with the cancel tx once it may land.
       throw e.tx
