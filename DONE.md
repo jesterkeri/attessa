@@ -1295,4 +1295,16 @@ ok: gen:vectors on a tracked executable file accepted
 r4_rc=0
 ok: the accepting case does not count a refused probe as accepted
 ```
-reviewed: pending (adversary r5, then Codex)
+adversary r5 (2eb7a4a): no defect. Of 23 one-line guard mutants, 13 were caught and 2 are equivalent (the guard crashes and still refuses); 8 (m01 bin not .js, m10 engines with 4+ parts, m12 any node option, m13 script outside scripts/, m14 any extension, m15 another package's file, m16 a gitlink, m23 Unicode digits in dependency versions) passed all 21 cases. Its gap test is added unchanged as `scripts/check-install-scripts.allowlist-gaps.test.sh` in ac9bd19, and the executable-file case now asserts its commit recorded mode 100755. Mutants and scripts archived at .worktrees/archive/adversary/install-r5/.
+
+verify at ac9bd19 (guard, allow-list test, gap test; run by Claude under the heavy lock), 2026-11-04:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+gaps_rc=0
+10 ok lines, 0 FAIL
+```
+reviewed: pending (adversary r6, then Codex)
