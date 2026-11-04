@@ -1619,4 +1619,22 @@ cli:       Tests  256 passed (256)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r32, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r32 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r32 fixes - 2026-11-04
+adversary r32 (86b3385, `packages/cli/test/adversary-t21-r32.test.ts`, failing): `sdkError` gave a next action to `network_mismatch` only for the RPC chain-id detail. `attessa call --asset usat` on Celo Sepolia ("usat is not offered on chain 11142220") and a quote naming another network ("network eip155:42220") ended "Wrong network: {detail}. Nothing was signed." with no next action (FLOWS:832 "Every error row has one next action"). Nothing was signed in either case. Fixed in fc37da4:
+- `packages/cli/src/commands/buyer.ts`: that row's next action is "Check `--network` and `--asset`, then retry." (marked not in FLOWS).
+- OPEN-QUESTIONS.md: an entry for the row, for design to approve or replace.
+No existing assertion changed.
+
+verify at fc37da4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  51 passed (51)
+cli:       Tests  258 passed (258)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r33, then Codex; Codex to judge the r17 call above)
