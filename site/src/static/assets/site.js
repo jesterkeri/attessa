@@ -288,7 +288,7 @@
   const buildChain = { s: 'na', w: 'Planned', line: "Planned: which endpoint and build answered needs the call's proof. A settlement names only a pay-to address, and many endpoints can share one, including ones a stranger added, so the address alone doesn't tell you." };
   const machineChain = { s: 'na', w: 'Planned', line: "Planned: which signer signed this answer needs the call's proof. The pay-to address doesn't identify it." };
   const planned = { s: 'na', w: 'Planned', line: "Planned: this check needs the call's signed proof, and no public route serves it yet." };
-  const noProof = { s: 'na', line: "The buyer's SDK got no proof with the answer, so there is nothing to check. Celo can't show this: it has only the payment." };
+  const noProof = { s: 'na', line: "Once buying through buy is built (<code>attessa call --via buy</code>, optional, not built yet), the buyer's SDK would get no proof with the answer, so there is nothing to check. Celo can't show this: it has only the payment." };
 
   const STATES = {
     settled: {
@@ -317,7 +317,7 @@
       verdict: 'unattested', word: 'Unattested', sub: 'no proof', ref: 'sdkTx',
       rows: [noProof, noProof, noProof, noProof,
         { s: 'na', w: 'Unprotected', line: () => `Paid ${chip('amount')} ${chip('asset')} through buy, Celo's marketplace of pay-per-call APIs. Payment protection is none here: buy takes payment before the service runs. That holds whether or not the service offers a proof.`, term: `paid before the call (Mode A), settled in tx ${chip('settlementTx')}`, link: scan('settlement tx') }],
-      verdictLine: "The buyer's SDK saw no proof offered: this service doesn't say which code produced its answer, so it can't be checked. A settlement tx shows only the payment, not whether a proof came with the answer.",
+      verdictLine: "No proof offered: this service doesn't say which code produced its answer, so it can't be checked",
     },
   };
 
@@ -341,7 +341,7 @@
   const REF = {
     tx: () => `Settlement tx ${queryChip()}`,
     sdk: () => "Sample of what the buyer's SDK shows. No settlement tx: this call never settled",
-    sdkTx: () => `Sample of what the buyer's SDK shows, for settlement tx ${queryChip()}`,
+    sdkTx: () => `<span class="muted">Optional, not built yet:</span> a sample of what the buyer's SDK would show for a purchase through buy, settlement tx ${queryChip()}`,
   };
   const head = (title, extra, ref) => `
     <div class="proof-head"><h2 tabindex="-1" data-result-heading>${title}</h2>
