@@ -65,9 +65,9 @@
             <p class="term">x402 quote, EIP-3009 permission</p>
           </li>
           <li data-step>
-            <h2>The gateway won't settle a tampered answer.</h2>
-            <p>If the answer doesn't match what was signed, the gateway refuses to settle. The permission expires unused, and once Celo shows that, you're not charged.</p>
-            <p class="term">response_hash_mismatch, not_charged</p>
+            <h2>A tampered answer is caught.</h2>
+            <p>If the answer doesn't match what was signed, an honest gateway refuses to settle: the permission expires unused, and once Celo shows that, you're not charged. If the gateway itself changed it and settled anyway, you're charged, and the SDK reports it as paid but rejected, with a record that proves it.</p>
+            <p class="term">response_hash_mismatch, not_charged, paid_but_rejected</p>
           </li>
         </ol>
         <div class="rail" data-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
