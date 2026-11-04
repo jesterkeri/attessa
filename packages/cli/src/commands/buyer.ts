@@ -573,6 +573,9 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       results = results.filter((r) => client.ledger.get(r.requestId)?.originHash === oh);
     }
     d.io.data?.({ pending: results.map(jsonResult) });
+    // Each call's --json row is in `pending`; report() must not merge one call's fields into the top level.
+    const { data: _rowData, ...rowIo } = d.io;
+    const rowDeps: Deps = { ...d, io: rowIo };
     if (results.length === 0) out(BUY.noPending);
     for (const r of results) {
       const e = client.ledger.get(r.requestId);
@@ -580,7 +583,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       const c = { origin: e?.origin ?? '', sym: SYMBOL[asset], asset, uncertain: false, outFile: `${r.requestId}.json`, dailyCap: 0n };
       out(`${r.requestId}  ${host(c.origin)}`); // not in FLOWS
       if (r.outcome === 'stopped') continue;
-      await report(g, d, client, r, c);
+      await report(g, rowDeps, client, r, c);
     }
     return 0;
   }
