@@ -1366,4 +1366,11 @@ cli:       Tests  230 passed (230)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r17, then Codex)
+reviewed: pending (adversary r17 finding judged out of model; see below)
+
+### T21 adversary r17 - 2026-11-04 (no code change)
+adversary r17 on 33e2332 reported one failing test, archived unchanged at `.worktrees/archive/adversary/t21-r17/adversary-t21-r17.test.ts` (not added to the branch): a fake gateway whose HTTP Date runs 150 s behind the clock it judges `X-Attest-Payer-Sig` by, with the buyer's RPC 500 s behind, rejects the midpoint stamp as stale, and the SDK ends a refused call `settled_after_refusal` while the gateway holds an answer. Not fixed, because:
+- the gateway judges the stamp and sends its Date from one clock (`packages/gateway/src/gateway.ts:110` `now`, `:225` the §2.5 check; Date is Node's from the same system clock), so an honest gateway cannot produce it;
+- a gateway that sends a false Date can as well withhold the answer outright, which SPEC.md:57 allows ("can withhold, delay, reorder, deny") and SPEC §7 records as `settled_after_refusal`; THREAT-MODEL TB4 accepts withholding (L4). No clock rule can tell a stale stamp from a missing result when the gateway's clock is outside both clocks the SDK can see.
+The adversary's other attacks all failed: honest gateway at lag 0, 269, 270, 271, 299, 300, 301, 539 and 540 (a genuine 404 decides, a held answer verifies), 541 stays undecided (outside §2.5), midpoint rounding at the boundaries, and the 16 earlier `adversary-t21-r*` files (43 tests) pass.
+reviewed: pending (adversary r18, then Codex; Codex to judge the r17 call above)
