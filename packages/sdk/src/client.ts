@@ -68,6 +68,17 @@ export const EXPIRY_MARGIN = 5n;
 /** V9: 202 polling ends at validBefore + 60. */
 export const POLL_UNTIL = 60n;
 export const POLL_MS = 3000;
+/** SPEC §2.5: the gateway accepts `X-Attest-Payer-Sig` within 300 s of its own clock. */
+const PAYER_SIG_WINDOW_S = 300;
+/** Slack for the HTTP Date's one-second resolution and the request's time in flight. */
+const PAYER_SIG_MARGIN_S = 30;
+
+/** The gateway's clock from its HTTP Date header, in unix seconds, or null when it sent none that parses. */
+function gatewayTime(res: Response): number | null {
+  const d = res.headers.get('date');
+  const ms = d ? Date.parse(d) : NaN;
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
 /** V0: how long to wait for another process's `reserved` entry to become `signed`. */
 export const RESERVED_WAIT_MS = 30_000;
 
@@ -551,30 +562,46 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     | { kind: 'result'; response: Uint8Array; proofHeader: string | null; paymentResponse: string | null }
     | { kind: 'pending' }
     | { kind: 'none'; status: number }
+    | { kind: 'unsure' }
     | { kind: 'error' };
 
-  /** `GET /v1/results/:requestId` with `X-Attest-Payer-Sig` over chain time. */
+  /**
+   * `GET /v1/results/:requestId` with `X-Attest-Payer-Sig`. The gateway accepts the signature within
+   * PAYER_SIG_WINDOW_S of its own clock (SPEC §2.5) and answers a stale one with the same 404
+   * `result_not_found` as a missing result. So the first stamp is chain time, and a 404 counts as "no result"
+   * (`none`) only when the gateway's HTTP Date shows that stamp was well inside the window. Otherwise the request is
+   * signed again at the gateway's Date and sent once more, for the answer; a 404 to that one, or one with no Date, is
+   * `unsure`, which decides nothing (a later getResult can still fetch and verify the answer).
+   */
   async function fetchResult(n: Net, entry: PendingEntry): Promise<Fetched> {
     try {
-      const ts = Number((await n.chain.latest()).timestamp);
-      const sig = await cfg.account.signMessage({ message: payerSigMessage(entry.requestId, ts) });
-      const res = await httpRequest(`${entry.origin}/v1/results/${entry.requestId}`, {
-        method: 'GET',
-        headers: { [HEADER.payerSig]: `${ts}.${sig}` },
-      });
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (res.status === 200)
-        return {
-          kind: 'result',
-          response: bytes,
-          proofHeader: res.headers.get(HEADER.attestedProof),
-          paymentResponse: res.headers.get(HEADER.paymentResponse),
-        };
-      if (res.status === 202) return { kind: 'pending' };
-      // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
-      const err = parseErrorBody(new TextDecoder().decode(bytes));
-      if (res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId) return { kind: 'none', status: res.status };
-      return { kind: 'error' };
+      let ts = Number((await n.chain.latest()).timestamp);
+      for (let attempt = 0; ; attempt++) {
+        const sig = await cfg.account.signMessage({ message: payerSigMessage(entry.requestId, ts) });
+        const res = await httpRequest(`${entry.origin}/v1/results/${entry.requestId}`, {
+          method: 'GET',
+          headers: { [HEADER.payerSig]: `${ts}.${sig}` },
+        });
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (res.status === 200)
+          return {
+            kind: 'result',
+            response: bytes,
+            proofHeader: res.headers.get(HEADER.attestedProof),
+            paymentResponse: res.headers.get(HEADER.paymentResponse),
+          };
+        if (res.status === 202) return { kind: 'pending' };
+        // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
+        const err = parseErrorBody(new TextDecoder().decode(bytes));
+        if (!(res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId)) return { kind: 'error' };
+        // Decisive only when two clocks agree: the chain time we signed at and the gateway's Date. A 404 to the
+        // re-signed request can't rule out a gateway judging by another clock than the Date it sends.
+        if (attempt > 0) return { kind: 'unsure' };
+        const gwTime = gatewayTime(res);
+        if (gwTime === null) return { kind: 'unsure' };
+        if (Math.abs(gwTime - ts) <= PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S) return { kind: 'none', status: res.status };
+        ts = gwTime;
+      }
     } catch {
       return { kind: 'error' };
     }
@@ -584,7 +611,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * The authorization was used on chain (`settlement`). First call getResult (INV-23): a result
    * that passes V10 → verified, one that fails → paid_but_rejected, none → settled_after_refusal
    * for a refused call or paid_but_rejected{missing_proof} for an uncertain one. "None" is the
-   * gateway's `result_not_found`: while /v1/results is unreachable a refused or uncertain call keeps
+   * gateway's `result_not_found` to a signature it accepted (fetchResult): while /v1/results is
+   * unreachable, or its 404 can't be told from a stale signature, a refused or uncertain call keeps
    * its state (settlement recorded), so getResult / reconcilePending can still verify it (INV-13).
    */
   async function settledPath(n: Net, entry: PendingEntry, settlement: Settlement, meta: CallMeta): Promise<CallResult> {
@@ -1062,7 +1090,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       // chain evidence): decided, exactly as reconcilePending's settled path decides it.
       if (f.kind === 'none' && entry.settlementTx) return settledEnd(entry, entry.settlementTx, {}, true);
       const r = current(entry, {});
-      r.code = f.kind === 'pending' ? 'settle_pending' : f.kind === 'none' ? 'result_not_found' : 'rpc_unavailable';
+      // `unsure`: a 404 the SDK can't tell from a stale signature. Nothing is decided, and no code claims otherwise.
+      if (f.kind !== 'unsure') r.code = f.kind === 'pending' ? 'settle_pending' : f.kind === 'none' ? 'result_not_found' : 'rpc_unavailable';
       return r;
     },
 

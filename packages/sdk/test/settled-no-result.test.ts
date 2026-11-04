@@ -65,3 +65,50 @@ describe('getResult on a settled call the gateway holds no answer for', () => {
     expect(entries(w.dataDir)[0].state).toBe('refused');
   });
 });
+
+// T21 r15. The gateway answers a payer signature more than 300 s from its clock with the same 404 result_not_found
+// (SPEC §2.5). The first stamp is the RPC's chain time; through a lagging RPC the SDK signs again at the gateway's
+// HTTP Date, and a 404 it can't tell from a stale signature decides nothing.
+describe('payer signature through an RPC 6 minutes behind', () => {
+  it('reconcilePending on an uncertain call whose answer the gateway holds: verified, never missing_proof', async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'drop_after_settle' };
+    const r0 = await w.client.payAndVerify(w.url, { body: w.body });
+    expect(r0.outcome).toBe('uncertain');
+    w.chain.advance(600);
+    w.chain.headLag = 360;
+    const out = await w.client.reconcilePending();
+    expect(out.map((r) => r.outcome)).toEqual(['verified']);
+    expect(entries(w.dataDir)[0].state).toBe('verified');
+  });
+
+  it("reconcilePending's settled path on a refused call whose answer the gateway holds: verified, never settled_after_refusal", async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'refuse_with_result' };
+    const r0 = await w.client.payAndVerify(w.url, { body: w.body });
+    expect(r0.outcome).toBe('refused');
+    w.chain.advance(600);
+    w.chain.headLag = 360;
+    const out = await w.client.reconcilePending();
+    expect(out.map((r) => r.outcome)).toEqual(['verified']);
+    expect(evidence(w.dataDir).map((x) => x.outcome)).not.toContain('settled_after_refusal');
+  });
+
+  it("a 404 whose gateway Date can't confirm the signature was fresh decides nothing; the answer verifies later", async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'drop_after_settle' };
+    const r0 = await w.client.payAndVerify(w.url, { body: w.body });
+    const err = await w.client.cancelAuthorization(r0.requestId).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AlreadyUsedError);
+    w.chain.advance(600);
+    w.chain.headLag = 360;
+    w.gw.behavior = { paid: 'drop_after_settle', dateOffset: 3600 };
+    const r1 = await w.client.getResult(r0.requestId);
+    expect(r1.outcome).toBe('uncertain');
+    expect(r1.code).toBeUndefined();
+    expect(entries(w.dataDir)[0].state).toBe('uncertain');
+    expect(evidence(w.dataDir).map((x) => x.outcome)).not.toContain('paid_but_rejected');
+    w.chain.headLag = 0;
+    expect((await w.client.getResult(r0.requestId)).outcome).toBe('verified');
+  });
+});

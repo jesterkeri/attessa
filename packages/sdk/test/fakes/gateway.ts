@@ -69,6 +69,8 @@ export interface Behavior {
   refuseWith?: { status: number; error: string; detail?: string; requestId?: string };
   /** Seconds the settlement lands after the request (chain time advances). */
   settleDelay?: number;
+  /** Seconds the HTTP Date header is off from the clock the gateway judges payer signatures by (a misconfigured proxy). */
+  dateOffset?: number;
   /** /v1/results answers 404 even for settled calls. */
   noResults?: boolean;
   /** For `paid: 'pending'`: how many /v1/results polls answer 202 before the result is served. Default 1. */
@@ -108,6 +110,8 @@ export class FakeGateway {
     this.payTo = lc(opts.payTo);
     this.enclave = opts.enclave;
     this.server = createServer((req, res) => {
+      // A gateway's HTTP Date is its own clock, the one it judges `X-Attest-Payer-Sig` by (here, chain time).
+      res.setHeader('date', new Date((Number(this.chain.head.timestamp) + (this.behavior.dateOffset ?? 0)) * 1000).toUTCString());
       this.handle(req, res).catch((e) => {
         res.statusCode = 500;
         res.end(String(e));
