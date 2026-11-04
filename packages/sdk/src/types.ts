@@ -118,6 +118,10 @@ export interface CallResult {
   inputsChecked?: boolean;
   /** Block whose timestamp was past validBefore + 5 when `not_charged` was confirmed. */
   confirmedAtBlock?: bigint;
+  /** The evidence row couldn't be written (full disk, permissions). The outcome stands; the ledger entry is already decided. */
+  evidenceNotWritten?: true;
+  /** V10: the block the inputs were read at, on a verified result. */
+  inputsBlock?: bigint;
 }
 
 export interface ResolvedEndpoint {

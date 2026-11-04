@@ -306,6 +306,8 @@ export const BUY = {
   paid: (p: string, sym: string, block: string, tx: string, signer: string) =>
     `Paid ${p} ${sym}. The answer came from that approved build, for this request, using Celo data from block ${block}  (settled: tx ${short(tx)}, signer ${short(signer)})`,
   saved: (file: string, record: string) => `Answer saved to ${file}. Record: ${record}`,
+  // not in FLOWS: the answer is saved but the evidence row couldn't be written (recordNotWritten follows).
+  savedNoRecord: (file: string) => `Answer saved to ${file}.`,
   // not in FLOWS: a stored `verified` outcome reported again (a second `cancel`): no answer comes with it, so none is
   // written; the one saved when it arrived stays.
   alreadyVerified: (p: string, sym: string, tx: string, record: string) =>
@@ -401,6 +403,9 @@ export function signedRefusal(rawCode: string, rawDetail: string | undefined): s
 }
 
 export const BUYERR = {
+  // not in FLOWS: the evidence append failed (full disk, permissions); the outcome above stands.
+  recordNotWritten: (record: string, dir: string) =>
+    new CliError('record_not_written', `Couldn't add this call to your record at ${record}.`, `Free up space in ${dir}, or make it writable, before your next call.`),
   // not in FLOWS: a verified, paid answer that --out couldn't take. The entry is terminal, so it is kept beside the record.
   answerNotWritten: (file: string, p: string, sym: string, tx: string, kept: string) =>
     new CliError(

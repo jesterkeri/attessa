@@ -448,8 +448,12 @@ async function report(
         throw BUYERR.answerNotWritten(c.outFile, p, c.sym, tx, display(d, kept));
       }
       if (c.uncertain) out(BUY.chargedChecksOut(p, c.sym, r.settlementTx!));
-      else out(BUY.paid(p, c.sym, blockNo(lastEvidence(client, r.requestId)?.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
+      else out(BUY.paid(p, c.sym, blockNo(r.inputsBlock ?? '0'), r.settlementTx!, r.signer!));
       if (r.inputsChecked === false) out(BUY.inputsNotChecked);
+      if (r.evidenceNotWritten) {
+        out(BUY.savedNoRecord(c.outFile));
+        throw BUYERR.recordNotWritten(record, display(d, dataDir(d)));
+      }
       out(BUY.saved(c.outFile, record));
       return 0;
     }

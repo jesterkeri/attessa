@@ -409,8 +409,15 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       // Another process decided this call first (V12): report its outcome, not this one's.
       if (e.state !== ledgerState) return current(e, meta);
     }
-    const r = { ...baseResult(e, outcome, meta), ...fields };
-    evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
+    const r: CallResult = { ...baseResult(e, outcome, meta), ...fields };
+    if (ev.inputsBlock !== undefined) r.inputsBlock = ev.inputsBlock;
+    try {
+      evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
+    } catch {
+      // The entry is already terminal and getResult never re-fetches it: return the result (a paid answer included)
+      // rather than lose it, and say the record is missing.
+      r.evidenceNotWritten = true;
+    }
     return r;
   }
 

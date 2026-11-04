@@ -209,6 +209,18 @@ describe('buyer: attessa call, verified (FLOWS §6 J1)', () => {
     expect(w.transcript.join('\n')).toContain(`using Celo data from block ${BigInt(ev[0]!.inputsBlock as string).toLocaleString('en-US')}  (settled: tx `);
   });
 
+  it('the evidence append fails: the answer is still saved, and the missing record is the one next action (T21 r27)', async () => {
+    await initialized();
+    symlinkSync('/dev/full', join(w.home, '.attessa', 'evidence.jsonl'));
+    expect(await w.call()).toBe(1);
+    expect(readFileSync(join(w.home, 'result.json'), 'utf8')).toContain('"verdict":"allow"');
+    expect(w.transcript.slice(-3)).toEqual([
+      'Answer saved to result.json.',
+      "Couldn't add this call to your record at ~/.attessa/evidence.jsonl.",
+      'Free up space in ~/.attessa, or make it writable, before your next call.',
+    ]);
+  });
+
   it('price above the limit: the J1 refusal line, nothing signed', async () => {
     await initialized();
     w.gw.price = '250000';
