@@ -1313,4 +1313,22 @@ cli:       Tests  225 passed (225)
 sdk:  Test Files  17 passed (17)
 sdk:       Tests  176 passed (176)
 ```
-reviewed: pending (adversary r14, then Codex)
+reviewed: pending (adversary r14 found a defect; see below)
+
+### T21 adversary r14 fixes - 2026-11-04
+adversary r14 (f98186b, `packages/cli/test/adversary-t21-r14.test.ts`, failing): a refused call that settled anyway, with the gateway answering `result_not_found`, made `attessa cancel` print "Fetching your answer." and "attessa status --pending checks again and fetches it." instead of the `settled_after_refusal` warning (SPEC §7 "no result and the call was refused → `settled_after_refusal`"; FLOWS §8 row with next action `report_gateway`). Fixed in 66c4929:
+- `packages/sdk/src/client.ts`: the end of `settledPath` is one shared `settledEnd`, which `getResult` now calls too. Refused ends `settled_after_refusal`, uncertain ends `paid_but_rejected{missing_proof}`; the ledger closes, evidence is written, spend counts.
+- `packages/cli/src/commands/buyer.ts`: `paymentFound()` excludes `result_not_found`; `cancel` prints the FLOWS warning and `--json` says `settled_after_refusal`.
+- New tests: `packages/sdk/test/settled-no-result.test.ts` (3) and 2 in `packages/cli/test/buyer.test.ts`; no existing assertion changed. No new copy.
+
+verify at 66c4929 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  34 passed (34)
+cli:       Tests  228 passed (228)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  179 passed (179)
+```
+reviewed: pending (adversary r15, then Codex)
