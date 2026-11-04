@@ -1,7 +1,7 @@
 import { parseArgs } from 'node:util';
 import { AttestError } from '@attessa/sdk';
 import { enclaveBuild, enclaveStart } from './commands/enclave.ts';
-import { call, cancel, evidenceExport, fromSdk, init, readConfig, status } from './commands/buyer.ts';
+import { call, cancel, evidenceExport, fromSdk, init, readConfig, readConfigForInit, status } from './commands/buyer.ts';
 import { endpointAdd, releaseApprove } from './commands/owner.ts';
 import {
   agentRegister,
@@ -137,7 +137,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
     const v = values as Values;
     json = v.json === true;
     const flagNetwork = str(v, 'network') as NetworkFlag | undefined;
-    const cfg = BUYER.has(key) ? readConfig(d) : null;
+    const cfg = key === 'init' ? readConfigForInit(d) : BUYER.has(key) ? readConfig(d) : null;
     const network = flagNetwork ?? cfg?.network ?? 'sepolia';
     if (!['sepolia', 'mainnet', 'local'].includes(network)) throw new CliError('usage', '--network must be sepolia, mainnet or local.');
     g = { network, rpc: str(v, 'rpc'), json, yes: v.yes === true, dryRun: v['dry-run'] === true };

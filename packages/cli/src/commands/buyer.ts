@@ -133,6 +133,15 @@ export function readConfig(d: Deps): BuyerConfig | null {
   }
 }
 
+/** `readConfig` for `attessa init`, which replaces a config it can't parse: the bad-JSON row sends the buyer here. */
+export function readConfigForInit(d: Deps): BuyerConfig | null {
+  try {
+    return readConfig(d);
+  } catch {
+    return null;
+  }
+}
+
 export function parseAmount(v: string, flag: string): bigint {
   const m = /^(\d+)(?:\.(\d{1,6}))?$/.exec(v);
   if (!m) throw ERR.usage(`${flag} must be an amount in USDC, like 0.05.`);
@@ -270,7 +279,7 @@ export async function init(
 ): Promise<number> {
   const out = d.io.out;
   const dir = dataDir(d);
-  const cfg = readConfig(d) ?? {};
+  const cfg = readConfigForInit(d) ?? {};
   const limits = { ...DEFAULT_LIMITS, ...cfg.limits?.usdc };
   if (o.maxAmount !== undefined) {
     parseAmount(o.maxAmount, '--max-amount');
@@ -425,7 +434,8 @@ async function report(
       // answer file can't be written, or would land on the records, keep the answer beside the record instead.
       try {
         const file = resolve(d.cwd, c.outFile);
-        if (intoDataDir(file, realDir(resolve(dataDir(d))))) throw new Error('into the data folder');
+        // Run from inside the data folder, `<requestId>.json` is the kept file itself: that one is allowed.
+        if (file !== resolve(kept) && intoDataDir(file, realDir(resolve(dataDir(d))))) throw new Error('into the data folder');
         d.writeFile(file, r.response);
         markSaved(d, r.requestId);
       } catch {
