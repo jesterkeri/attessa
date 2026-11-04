@@ -1601,4 +1601,22 @@ cli:       Tests  254 passed (254)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r31, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r31 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r31 fixes - 2026-11-04
+adversary r31 (9691d5c, `packages/cli/test/adversary-t21-r31.test.ts`, failing): with a read-only `~/.attessa` that already holds the ledger lock file, SQLite reports SQLITE_READONLY_DIRECTORY, which the SDK's ledger wraps in its own error with the SQLite error as `cause`; `diskError` read only the outer error, so the command still ended "Unexpected error". Fixed in 9aaff7d:
+- `packages/cli/src/copy.ts`: `diskError` checks the wrapped `cause` one level down first, and maps SQLite's extended result codes by their low byte (READONLY_DIRECTORY is READONLY).
+- OPEN-QUESTIONS.md: the disk_write_failed entry says so.
+No existing assertion changed.
+
+verify at 9aaff7d (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  50 passed (50)
+cli:       Tests  256 passed (256)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r32, then Codex; Codex to judge the r17 call above)
