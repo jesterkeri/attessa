@@ -5,7 +5,7 @@
       <li data-at="0.04">{{i:yes}}<span><strong>Which approved build answered</strong>, for this request, with these inputs.</span></li>
       <li data-at="0.1">{{i:yes}}<span><strong>That it ran in a sealed machine</strong>, attested by AWS, with its key registered on Celo.</span></li>
       <li data-at="0.16">{{i:yes}}<span><strong>Which Celo data it used</strong>, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.</span></li>
-      <li data-at="0.22">{{i:yes}}<span><strong>Whether you paid</strong>, or your payment permission expired unused. Anyone can read this on Celo, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.</span></li>
+      <li data-at="0.22">{{i:yes}}<span><strong>Which payment it answers for.</strong> The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.</span></li>
     </ul>
   </div>
   <div data-side="right">
