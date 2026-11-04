@@ -560,16 +560,18 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!(e instanceof RpcError)) throw e;
       return finish(entry, 'uncertain', meta, { code: 'rpc_unavailable', settlementTx: settlement.tx });
     }
-    // The owner claim recorded is the proving release's: another live signer may answer on another approved release.
-    const { ownerClaimedSource: shown, ...rest } = meta;
     const source =
-      v.proof && v.proof.releaseId !== meta.releaseId ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : (shown ?? (v.proof ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : undefined));
-    const m: CallMeta = { ...rest, ...(source !== undefined ? { ownerClaimedSource: source } : {}) };
+      meta.ownerClaimedSource ?? (v.proof ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : undefined);
+    const m: CallMeta = { ...meta, ...(source !== undefined ? { ownerClaimedSource: source } : {}) };
     if (v.ok) {
+      // A verified row names the proving release, so its owner claim is that release's: another live signer may
+      // answer on another approved release than the one liveness showed. A rejected row keeps meta's release and claim.
+      const { ownerClaimedSource: _shown, ...rest } = meta;
+      const own = v.proof.releaseId === meta.releaseId ? source : await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId);
       return finish(
         entry,
         'verified',
-        { ...m, signer: v.signer, releaseId: v.proof.releaseId },
+        { ...rest, ...(own !== undefined ? { ownerClaimedSource: own } : {}), signer: v.signer, releaseId: v.proof.releaseId },
         { settlementTx: settlement.tx, response, proof: v.proof, signer: v.signer, inputsChecked: v.inputsChecked },
         { responseHash: v.responseHash, inputsHash: v.inputsHash, inputsBlock: v.inputsBlock },
       );

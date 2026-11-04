@@ -391,7 +391,9 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
     },
   });
   const r = await client.payAndVerify(o.url, { body, asset, newRequest: o.newRequest });
-  return report(g, d, client, r, { origin, sym, asset, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[asset].dailyCap });
+  // A resumed call (V0) may be in another asset than this run's --asset: report the one the entry paid in.
+  const paid = r.asset ? assetOf(r.asset) : asset;
+  return report(g, d, client, r, { origin, sym: SYMBOL[paid], asset: paid, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[paid].dailyCap });
 }
 
 function readBody(d: Deps, file: string): Uint8Array {
