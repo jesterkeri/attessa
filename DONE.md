@@ -1675,4 +1675,22 @@ cli:       Tests  264 passed (264)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r35, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
+reviewed: pending (adversary r35 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r35 fixes - 2026-11-04
+adversary r35 (e31bb39, `packages/cli/test/adversary-t21-r35.test.ts`, failing): an interrupted `--asset usat` call re-run without `--asset` resumed the USA₮ entry (V0, one payment, evidence `asset` the USA₮ token) but printed "Paid 0.02 USDC": `call` took the symbol from this run's flag (FLOWS J1 "Paid {p} {sym}"). Mainnet or a mainnet fork only (Sepolia pins no USA₮). Fixed in 66890ae:
+- `packages/cli/src/commands/buyer.ts`: `call` reports in the asset of the result (`assetOf(r.asset)`), symbol and daily cap both, as `cancel` and `status --pending` already did.
+- `packages/sdk/src/client.ts`: r35 also noted (unproven) that the r34 change could pair a `paid_but_rejected` row's liveness `releaseId` with the proof release's owner claim. Now only a `verified` row (whose `releaseId` is the proof's) takes the proof release's claim; a rejected row keeps the claim that matches its own `releaseId`, as before r34.
+No existing assertion changed.
+
+verify at 66890ae (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  54 passed (54)
+cli:       Tests  265 passed (265)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r36, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
