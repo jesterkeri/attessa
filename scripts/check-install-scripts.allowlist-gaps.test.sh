@@ -2,7 +2,8 @@
 # Install allow-list adversary r5: checks in the workspace-manifest allowance that no case of
 # scripts/check-install-scripts.allowlist.test.sh exercises. Each case below is something the
 # header forbids and the guard at 2eb7a4a refuses; each one is also accepted by a one-line mutant
-# of the guard that the allow-list test's 21 cases all pass against (named per case).
+# of the guard that the allow-list test's 20 static cases all pass against (named per case; the
+# executable full-probe case was not run against these mutants).
 # Each case also breaks the better-sqlite3 integrity, so the probe stops at the static stage and
 # runs no pnpm. Usage: $0 <repo root at the commit under test> [guard to run, default its own].
 set -u

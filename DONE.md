@@ -1336,4 +1336,9 @@ gaps_rc=0
 Correction to the r5 note above (adversary r6): the 8 surviving mutants were run against the allow-list test's 20 static cases, not the full-probe executable case, so "passed all 21 cases" should read "passed all 20 static cases"; and the archive at .worktrees/archive/adversary/install-r5/mut/ holds 16 of the 23 mutants (m02 to m08 are not there), so those 7 can't be re-checked from it.
 
 adversary r6 (aa2b635): no defect. In all 10 gaps-test cases the matched `FAIL <manifest>:` line is the check the case targets, not the integrity line; the gaps test catches each of the 8 surviving mutants with that mutant's own case; the executable precondition sets rc=1 when chmod or the commit fails; the allow-list test passes 21 cases; scripts as a list or string, a null bin, `__proto__`, BOM or UTF-16 manifests, nested script paths and gitlink or directory targets are all refused. Its scripts are archived at .worktrees/archive/adversary/install-r6/.
-reviewed: pending (Codex)
+reviewed: Codex r1 REVISE (three false evidence claims, no code finding); corrected below; pending Codex r2
+
+Codex r1 corrections (DONE.md is append-only, so the earlier lines stand and these replace them):
+- The bin rule at 724d652 above ("command names (`[a-z0-9][a-z0-9-]*`)") overstates it. `scripts/check-install-scripts.sh:189` admits only `attest`, `attessa` and `attessa-<part>[-<part>…]` with lowercase ASCII letters and digits (`re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)")`); `node`, `tsc`, `sh`, `npx` or `tool` fail.
+- "the probe must print exactly that one FAIL line" should read "the probe must print the case's expected FAIL line(s)": the root-manifest case (`scripts/check-install-scripts.allowlist.test.sh:64`) expects two.
+- `scripts/check-install-scripts.allowlist-gaps.test.sh`'s header said the surviving mutants pass "the allow-list test's 21 cases"; it now says the 20 static cases, as the adversary r6 correction above records.
