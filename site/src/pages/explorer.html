@@ -1,5 +1,5 @@
 <!-- title: Proof explorer | Attessa -->
-<!-- description: Check the on-chain part of any past Attessa call from public Celo data, with no wallet and no payment. -->
+<!-- description: A preview of the explorer that, when live, checks the on-chain part of any past Attessa call from public Celo data, with no wallet and no payment. -->
 <!-- nav: explorer -->
 <!-- body: explorer-page -->
 <div data-explorer>
@@ -8,14 +8,14 @@
       <div>
       <h1 data-split data-intro>Check a<br> settlement</h1>
       <div class="explorer-sub">
-        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">the explorer checks its on-chain part from public Celo data</span>: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">when live, the explorer checks its on-chain part from public Celo data</span>: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
         <form class="recheck" data-explorer-form novalidate role="search">
           <label class="sr-only" for="q">Paste a settlement transaction</label>
           {{i:search}}
           <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Settlement tx" aria-describedby="q-help q-error">
           <button class="bracket-link" type="submit">Check</button>
         </form>
-        <p class="field-help" id="q-help">0x and 64 hex characters. Checks against <span data-network-name>Celo Sepolia</span>. Celo mainnet comes after launch.</p>
+        <p class="field-help" id="q-help">0x and 64 hex characters. When live, it checks against <span data-network-name>Celo Sepolia</span>. Celo mainnet comes after launch.</p>
         <p class="field-error" id="q-error" data-field-error hidden>{{i:alert}}<span data-field-error-text></span></p>
       </div>
       </div>
@@ -54,7 +54,7 @@
       <div class="result-grid" data-scene-sec="explorer" data-verdict="idle">
         <div class="scene-slot" data-slot aria-hidden="true"></div>
         <div class="result" data-result aria-live="polite">
-          <noscript><p class="muted">The explorer needs JavaScript to read Celo. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>. <span class="muted">Coming.</span> It isn't built yet.</p></noscript>
+          <noscript><p class="muted">This preview needs JavaScript. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>. <span class="muted">Coming.</span> It isn't built yet.</p></noscript>
         </div>
       </div>
     </div>
@@ -64,7 +64,7 @@
     <div class="wrap">
       <div class="sec-head">
         <h2 id="recent" data-split>Recent calls</h2>
-        <p class="sec-lede" data-fade>The latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: <code>attessa status</code> shows your recent verdicts (<span class="muted">Coming</span>). <span class="muted">Planned:</span> looking it up here by its request ID. The rows below are samples until the explorer reads Celo.</p>
+        <p class="sec-lede" data-fade>When live, it lists the latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: <code>attessa status</code> shows your recent verdicts (<span class="muted">Coming</span>). <span class="muted">Planned:</span> looking it up here by its request ID. The rows below are samples until the explorer reads Celo.</p>
       </div>
       <table class="feed" data-fade>
         <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Paid to</th><th scope="col">Outcome</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Checklist</span></th></tr></thead>

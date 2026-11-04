@@ -381,7 +381,7 @@
         ${head('Checking the payment on Celo', '', REF.tx())}
         <ol class="checklist">${NAMES.map((n, i) => (i === NAMES.length - 1 ? `
           <li class="check" data-status="wait"><span class="status" data-status="wait">${icon('wait')}Checking</span>
-            <div><p class="check-name">${n}</p><p class="check-line muted">Reading the settlement from public Celo data…</p></div></li>` : `
+            <div><p class="check-name">${n}</p><p class="check-line muted">When live, this reads the settlement from public Celo data.</p></div></li>` : `
           <li class="check" data-status="na"><span class="status" data-status="na">${icon('na')}Planned</span>
             <div><p class="check-name">${n}</p><p class="check-line muted">${planned.line}</p></div></li>`)).join('')}
         </ol>
@@ -398,7 +398,7 @@
 
   const MESSAGES = {
     notfound: () => message('na', 'search', 'No call found', `
-      <p>Nothing on <span data-network-name>${networkName()}</span> matches ${queryChip()}.</p>
+      <p>Sample state: nothing on <span data-network-name>${networkName()}</span> matches ${queryChip()}.</p>
       <p class="muted">If the call was made in the last few seconds, its transaction may not be in a block yet. Check that the network in the footer is the one the call used. Looking a call up by its request ID is planned.</p>`),
     malformed: () => message('fail', 'alert', "That isn't a transaction hash", `
       <p>A settlement transaction starts with <code>0x</code> and has 64 hex characters after it (0 to 9, a to f).</p>
