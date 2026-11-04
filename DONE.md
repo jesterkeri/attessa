@@ -1546,4 +1546,22 @@ cli:       Tests  248 passed (248)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r28, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r28 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r28 fixes - 2026-11-04
+adversary r28 (66edc94, `packages/cli/test/adversary-t21-r28.test.ts`, two failing tests): the r27 guard covered only `finish()`. (1) A `paid_but_rejected` call whose evidence row wasn't written still printed "Your record (…) proves the payment and the failed check." (SPEC §9 11a). (2) An honest 503 `enclave_unavailable` after signing wrote its refusal row outside `finish()`; the failed append ended "Unexpected error (Error, ENOSPC)" with no next action and left the call `refused` instead of `not_charged` (SPEC §9 7a). Fixed in a1d2b2c:
+- `packages/sdk/src/client.ts`: every evidence write (`evidence()`, the refusal row before waiting for expiry, resume, `stopped()`) goes through `appendOrMark`, which sets `evidenceNotWritten` instead of throwing; the refusal row's mark is carried to the final result.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: `report()` prints any outcome as usual, then ends `record_not_written` when the row is missing; `paid_but_rejected` and `settled_after_refusal` drop the "Your record … proves" clause then. Limits in OPEN-QUESTIONS.md (two next actions on those two rows; a `stopped` result doesn't mention the missing record).
+No existing assertion changed.
+
+verify at a1d2b2c (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  47 passed (47)
+cli:       Tests  250 passed (250)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r29, then Codex; Codex to judge the r17 call above)
