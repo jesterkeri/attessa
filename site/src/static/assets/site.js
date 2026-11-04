@@ -288,7 +288,7 @@
   const buildChain = { s: 'na', w: 'Planned', line: "Planned: which endpoint and build answered needs the call's proof. A settlement names only a pay-to address, and many endpoints can share one, including ones a stranger added, so the address alone doesn't tell you." };
   const machineChain = { s: 'na', w: 'Planned', line: "Planned: which signer signed this answer needs the call's proof. The pay-to address doesn't identify it." };
   const planned = { s: 'na', w: 'Planned', line: "Planned: this check needs the call's signed proof, and no public route serves it yet." };
-  const noProof = { s: 'na', line: 'No proof offered, so there is nothing to check.' };
+  const noProof = { s: 'na', line: "The buyer's SDK got no proof with the answer, so there is nothing to check. Celo can't show this: it has only the payment." };
 
   const STATES = {
     settled: {
@@ -314,10 +314,10 @@
       verdictLine: 'Rejected at "Approved build". The approval was withdrawn on Celo between the gateway\'s signer check and its proof check, so the proof check refused the call. A build that was never approved can\'t register a signer, so a buyer stops before signing anything.',
     },
     unattested: {
-      verdict: 'unattested', word: 'Unattested', sub: 'no proof',
+      verdict: 'unattested', word: 'Unattested', sub: 'no proof', ref: 'sdkTx',
       rows: [noProof, noProof, noProof, noProof,
         { s: 'na', w: 'Unprotected', line: () => `Paid ${chip('amount')} ${chip('asset')} through buy, Celo's marketplace of pay-per-call APIs. Payment protection is none here: buy takes payment before the service runs. That holds whether or not the service offers a proof.`, term: `paid before the call (Mode A), settled in tx ${chip('settlementTx')}`, link: scan('settlement tx') }],
-      verdictLine: "No proof offered: this service doesn't say which code produced its answer, so it can't be checked.",
+      verdictLine: "The buyer's SDK saw no proof offered: this service doesn't say which code produced its answer, so it can't be checked. A settlement tx shows only the payment, not whether a proof came with the answer.",
     },
   };
 
@@ -341,6 +341,7 @@
   const REF = {
     tx: () => `Settlement tx ${queryChip()}`,
     sdk: () => "Sample of what the buyer's SDK shows. No settlement tx: this call never settled",
+    sdkTx: () => `Sample of what the buyer's SDK shows, for settlement tx ${queryChip()}`,
   };
   const head = (title, extra, ref) => `
     <div class="proof-head"><h2 tabindex="-1" data-result-heading>${title}</h2>
