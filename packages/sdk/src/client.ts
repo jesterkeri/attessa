@@ -569,13 +569,17 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * `GET /v1/results/:requestId` with `X-Attest-Payer-Sig`. The gateway accepts the signature within
    * PAYER_SIG_WINDOW_S of its own clock (SPEC §2.5) and answers a stale one with the same 404
    * `result_not_found` as a missing result. So the first stamp is chain time, and a 404 counts as "no result"
-   * (`none`) only when the gateway's HTTP Date shows that stamp was well inside the window. Otherwise the request is
-   * signed again at the gateway's Date and sent once more, for the answer; a 404 to that one, or one with no Date, is
-   * `unsure`, which decides nothing (a later getResult can still fetch and verify the answer).
+   * (`none`) only when the gateway's HTTP Date shows that stamp was well inside the window. Otherwise, if the two
+   * clocks are within twice that, the request is signed again at their midpoint, which is inside the window by
+   * either clock, and sent once more; a 404 to it is `none` when the new Date still agrees. Anything else (no Date,
+   * clocks further apart, a Date that moved) is `unsure`, which decides nothing (a later getResult can still fetch
+   * and verify the answer). The stamp never strays more than the window from chain time, whatever Date says.
    */
   async function fetchResult(n: Net, entry: PendingEntry): Promise<Fetched> {
     try {
-      let ts = Number((await n.chain.latest()).timestamp);
+      const chainTs = Number((await n.chain.latest()).timestamp);
+      const ok = PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S;
+      let ts = chainTs;
       for (let attempt = 0; ; attempt++) {
         const sig = await cfg.account.signMessage({ message: payerSigMessage(entry.requestId, ts) });
         const res = await httpRequest(`${entry.origin}/v1/results/${entry.requestId}`, {
@@ -594,13 +598,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
         const err = parseErrorBody(new TextDecoder().decode(bytes));
         if (!(res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId)) return { kind: 'error' };
-        // Decisive only when two clocks agree: the chain time we signed at and the gateway's Date. A 404 to the
-        // re-signed request can't rule out a gateway judging by another clock than the Date it sends.
-        if (attempt > 0) return { kind: 'unsure' };
+        // Decisive only when the stamp is inside the window by both clocks: chain time and the gateway's Date.
         const gwTime = gatewayTime(res);
         if (gwTime === null) return { kind: 'unsure' };
-        if (Math.abs(gwTime - ts) <= PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S) return { kind: 'none', status: res.status };
-        ts = gwTime;
+        if (Math.abs(gwTime - ts) <= ok && Math.abs(chainTs - ts) <= ok) return { kind: 'none', status: res.status };
+        if (attempt > 0 || Math.abs(gwTime - chainTs) > 2 * ok) return { kind: 'unsure' };
+        ts = Math.floor((chainTs + gwTime) / 2);
       }
     } catch {
       return { kind: 'error' };

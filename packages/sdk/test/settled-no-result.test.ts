@@ -112,3 +112,32 @@ describe('payer signature through an RPC 6 minutes behind', () => {
     expect((await w.client.getResult(r0.requestId)).outcome).toBe('verified');
   });
 });
+
+// T21 r16. Clocks up to 2 x (300 - 30) s apart: the re-signed stamp sits at their midpoint, inside the §2.5 window by
+// either clock, so a genuine 404 decides; further apart, nothing is decided.
+describe('payer signature when chain time and the gateway Date disagree', () => {
+  it('Date 400 s ahead of the clock the gateway judges by: a refused call that settled ends settled_after_refusal', async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'refuse_but_settle' };
+    const r0 = await w.client.payAndVerify(w.url, { body: w.body });
+    const err = await w.client.cancelAuthorization(r0.requestId).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AlreadyUsedError);
+    w.gw.behavior = { paid: 'refuse_but_settle', dateOffset: 400 };
+    const r1 = await w.client.getResult(r0.requestId);
+    expect(r1.outcome).toBe('settled_after_refusal');
+    expect(entries(w.dataDir)[0].state).toBe('settled_after_refusal');
+  });
+
+  it('Date 600 s ahead: more than the midpoint can bridge, so the refused call stays undecided', async () => {
+    w = await makeWorld({ waitForExpiry: false });
+    w.gw.behavior = { paid: 'refuse_but_settle' };
+    const r0 = await w.client.payAndVerify(w.url, { body: w.body });
+    const err = await w.client.cancelAuthorization(r0.requestId).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(AlreadyUsedError);
+    w.gw.behavior = { paid: 'refuse_but_settle', dateOffset: 600 };
+    const r1 = await w.client.getResult(r0.requestId);
+    expect(r1.outcome).toBe('refused');
+    expect(entries(w.dataDir)[0].state).toBe('refused');
+    expect(evidence(w.dataDir).map((x) => x.outcome)).not.toContain('settled_after_refusal');
+  });
+});
