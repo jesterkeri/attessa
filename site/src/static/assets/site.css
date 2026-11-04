@@ -292,6 +292,8 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-event
 .rail b { position: absolute; inset: 0; background: var(--text); transform: scaleX(0); transform-origin: left; }
 
 .hud { margin-top: 34px; width: min(100%, 400px); border-radius: var(--r-card); padding: 14px 18px 6px; opacity: 0; transform: translateY(10px); transition: opacity 320ms var(--ease-out), transform 420ms var(--ease-out); }
+/* Only scene.js drives the checklist: until it runs, nobody sees it, so screen readers shouldn't hear it either. */
+:root:not(.scene-live) .hud { display: none; }
 .hud.is-on { opacity: 1; transform: none; }
 .hud-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .hud-head .label { margin: 0; white-space: nowrap; }
@@ -668,6 +670,8 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 .view-switch [role="tab"] { padding: 6px 0; border: 0; background: none; cursor: pointer; font: 780 clamp(2.2rem, 1rem + 3.4vw, 4.4rem)/0.95 var(--display); font-stretch: 64%; text-transform: uppercase; color: var(--bg); -webkit-text-stroke: 2px var(--text-3); paint-order: stroke fill; transition: color 200ms ease, -webkit-text-stroke-color 200ms ease; }
 .view-switch [role="tab"][aria-selected="true"] { color: var(--text); -webkit-text-stroke-color: var(--text); }
 @media (hover: hover) and (pointer: fine) { .view-switch [role="tab"]:hover { -webkit-text-stroke-color: var(--text); } }
+/* Without JavaScript both panels show in order (site.js hides the unselected one), so the tabs do nothing: hide them. */
+.no-js .view-switch { display: none; }
 .view-switch [role="tab"]:focus-visible { outline-offset: 8px; }
 .walk { position: relative; padding: clamp(80px, 12vh, 140px) 0; }
 @media (max-width: 719px) { .walk { padding-top: 28px; } }
