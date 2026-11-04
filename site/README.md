@@ -34,8 +34,8 @@ screenshots and checking layouts).
 - **Privacy and Terms** are marked Draft; the legal wording is still to be written.
 - **`/.well-known/security.txt`** has placeholder fields.
 
-Slots used in the pages: `demoServiceUrl`, `callTime`, `endpointOrigin`, `amount`,
-`asset`. The explorer's checklist also uses `requestId`, `releaseId`, `agentId`, `sourceRepo`, `sourceCommit`,
+Slots used in the pages: `demoServiceUrl`, `callTime`, `payTo`, `amount`,
+`asset`. The explorer's checklist also uses `endpointOrigin`, `releaseId`, `agentId`, `sourceRepo`, `sourceCommit`,
 `signerAddress`, `signerExpiry`, `requestHash`, `responseHash`, `inputsBlock`, `inputsHash`,
 `authorizationNonce`, `settlementTx`, `expiryBlock`, `rpcUrl`, `payer`, `payTo`, `settlementBlock`.
 

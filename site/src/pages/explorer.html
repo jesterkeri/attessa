@@ -10,7 +10,7 @@
       <div class="explorer-sub">
         <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">the explorer checks its on-chain part from public Celo data</span>: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
         <form class="recheck" data-explorer-form novalidate role="search">
-          <label class="sr-only" for="q">Paste a request ID or a settlement transaction</label>
+          <label class="sr-only" for="q">Paste a settlement transaction</label>
           {{i:search}}
           <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Settlement tx" aria-describedby="q-help q-error">
           <button class="bracket-link" type="submit">Check</button>

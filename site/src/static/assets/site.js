@@ -329,7 +329,7 @@
   let lastQuery = null;
   let timer = null;
 
-  const queryChip = () => (lastQuery ? hashChip(lastQuery) : chip('requestId'));
+  const queryChip = () => (lastQuery ? hashChip(lastQuery) : chip('settlementTx'));
   const resolve = v => (typeof v === 'function' ? v() : v);
   // The particle seal beside the result (scene.js) follows this: verified, rejected, unattested, wait or idle.
   // A settled result (Celo only, no proof) has no seal of its own, so the particles stay dust.
@@ -338,7 +338,7 @@
 
   const head = (title, extra = '') => `
     <div class="proof-head"><h2 tabindex="-1" data-result-heading>${title}</h2>
-      <p class="proof-meta"><span>Call ${queryChip()}</span><span>on <span data-network-name>${networkName()}</span></span>${extra}</p></div>`;
+      <p class="proof-meta"><span>Settlement tx ${queryChip()}</span><span>on <span data-network-name>${networkName()}</span></span>${extra}</p></div>`;
 
   function renderChecklist(key) {
     const st = STATES[key];
@@ -390,10 +390,10 @@
   const MESSAGES = {
     notfound: () => message('na', 'search', 'No call found', `
       <p>Nothing on <span data-network-name>${networkName()}</span> matches ${queryChip()}.</p>
-      <p class="muted">If the call was made in the last few seconds, it may still be settling. Check that the network in the footer is the one the call used, or paste the settlement transaction instead. Settlement transactions can be checked any time. Looking a call up by its request ID is planned.</p>`),
-    malformed: () => message('fail', 'alert', "That isn't a request ID or a transaction hash", `
-      <p>Both start with <code>0x</code> and have 64 hex characters after it (0 to 9, a to f).</p>
-      <p class="muted">A request ID is printed when a call is made with Attessa's command-line tool, <code>attessa call</code> (coming: not built yet), and saved in <code>~/.attessa/evidence.jsonl</code>. A settlement transaction is the payment's transaction on Celoscan.</p>`),
+      <p class="muted">If the call was made in the last few seconds, its transaction may not be in a block yet. Check that the network in the footer is the one the call used. Looking a call up by its request ID is planned.</p>`),
+    malformed: () => message('fail', 'alert', "That isn't a transaction hash", `
+      <p>A settlement transaction starts with <code>0x</code> and has 64 hex characters after it (0 to 9, a to f).</p>
+      <p class="muted">It is the payment's transaction on Celoscan. Looking a call up by its request ID is planned.</p>`),
     rpc: () => message('wait', 'plug', "Can't reach Celo right now", `
       <p>The explorer couldn't read <span data-network-name>${networkName()}</span> from its connection to the network (${chip('rpcUrl')}). Nothing was checked, and nothing about the call itself has changed. Try again in a moment.</p>
       <p><button type="button" class="bracket-link" data-retry>Retry</button></p>`),
@@ -424,8 +424,8 @@
       input.setAttribute('aria-invalid', 'true');
       fieldError.hidden = false;
       $('[data-field-error-text]', fieldError).textContent = v
-        ? "That isn't a request ID or a transaction hash. Both are 0x followed by 64 hex characters."
-        : 'Paste a request ID or a settlement transaction first.';
+        ? "That isn't a transaction hash. A settlement transaction is 0x followed by 64 hex characters."
+        : 'Paste a settlement transaction first.';
       lastQuery = null;
       show('malformed');
       input.focus();
