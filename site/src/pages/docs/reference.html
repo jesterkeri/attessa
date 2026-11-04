@@ -94,8 +94,8 @@
         <tr><td><code>proof_rejected</code> R</td><td>A check in the proof failed. The reason names it: <code>response_hash_mismatch</code>, <code>request_mismatch</code>, <code>inputs_hash_mismatch</code>, <code>signer_not_active</code>, <code>release_not_approved</code>, <code>proof_expired</code> and others.</td><td>Wait for your permission to expire, or cancel it now.</td></tr>
         <tr><td><code>payto_mismatch</code> R</td><td>The service asked to be paid somewhere other than its registered address. It may be an impostor.</td><td>Don't retry. Report it where you found the link.</td></tr>
         <tr><td><code>origin_agent_mismatch</code></td><td>The service claims to be a different agent than the registry says.</td><td>Don't retry. Report it.</td></tr>
-        <tr><td><code>over_max_amount</code> R</td><td>The price is above your limit per call.</td><td>Raise <code>--max-amount</code> if that's fine.</td></tr>
-        <tr><td><code>over_daily_cap</code> R</td><td>This call would take today's spend past your cap.</td><td>Wait until 00:00 UTC or raise <code>--daily-cap</code>.</td></tr>
+        <tr><td><code>over_max_amount</code> R</td><td>The price is above your limit per call.</td><td><span class="muted">Coming:</span> raise <code>--max-amount</code> if that's fine.</td></tr>
+        <tr><td><code>over_daily_cap</code> R</td><td>This call would take today's spend past your cap.</td><td>Wait until 00:00 UTC. <span class="muted">Coming:</span> raise <code>--daily-cap</code>.</td></tr>
         <tr><td><code>endpoint_not_registered</code></td><td>The origin isn't an attested endpoint.</td><td>Ask the seller to register. <span class="muted">Optional, not built yet:</span> pay without protection with <code>--via buy</code>.</td></tr>
         <tr><td><code>endpoint_retired</code></td><td>The owner stopped selling at this origin. Nothing was signed.</td><td><span class="muted">Coming:</span> <code>attessa status --agent &lt;id&gt;</code> lists current endpoints.</td></tr>
         <tr><td><code>liveness_failed</code></td><td>The sealed machine didn't answer a fresh check.</td><td>Retry later. <span class="muted">Coming:</span> <code>attessa status &lt;origin&gt;</code> shows when it last answered.</td></tr>
@@ -114,7 +114,7 @@
         <tr><td><code>paid_but_rejected</code></td><td>You paid, but the answer didn't check out. On-chain payments can't be reversed.</td><td>Report the gateway to the marketplace, with your record.</td></tr>
         <tr><td><code>settled_after_refusal</code></td><td>The service refused, but your permission was used anyway. The gateway is at fault.</td><td>Report the gateway, with your record.</td></tr>
         <tr><td><code>already_used</code></td><td>Too late to cancel: the payment went through.</td><td>None: Attessa fetches your answer.</td></tr>
-        <tr><td><code>payment_reused</code>, <code>request_id_conflict</code></td><td>This request ID or permission was already used for a different call.</td><td>Call again with <code>--new</code>.</td></tr>
+        <tr><td><code>payment_reused</code>, <code>request_id_conflict</code></td><td>This request ID or permission was already used for a different call.</td><td><span class="muted">Coming:</span> call again with <code>--new</code>.</td></tr>
         <tr><td><code>in_progress</code></td><td>This call is already running.</td><td>None: it checks again in 2 s.</td></tr>
         <tr><td><code>result_not_found</code></td><td>No stored result for this request ID. Results expire after 24 hours.</td><td><span class="muted">Coming:</span> <code>attessa status --pending</code>.</td></tr>
         <tr><td><code>bad_request</code></td><td>The service can't read this input.</td><td>Fix the input and call again.</td></tr>

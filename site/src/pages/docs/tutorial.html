@@ -17,12 +17,12 @@
         <h2 id="install">Install</h2>
         <figure class="code" data-copy="commands">
           <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-          <pre><code><span class="p">$ </span><span class="c">git clone https://github.com/jesterkeri/attessa</span>
+          <pre><code><span class="p">$ </span><span class="c">git clone https://github.com/jesterkeri/attessa -b staging</span>
 <span class="p">$ </span><span class="c">cd attessa</span>
 <span class="p">$ </span><span class="c">pnpm install --frozen-lockfile &amp;&amp; pnpm -r build</span>
 <span class="p">$ </span><span class="c">cd packages/cli &amp;&amp; pnpm link --global</span></code></pre>
         </figure>
-        <p>Attessa isn't on npm. This builds it from source and puts <code>attessa</code> on your PATH. If pnpm says there is no global bin directory, run <code>pnpm setup</code>, open a new terminal, and run the last line again.</p>
+        <p>Attessa isn't on npm. Until launch the code is on the <code>staging</code> branch. This builds it from source and puts <code>attessa</code> on your PATH. If pnpm says there is no global bin directory, run <code>pnpm setup</code>, open a new terminal, and run the last line again.</p>
       </li>
       <li>
         <h2 id="init">Set up with <code>attessa init</code></h2>
