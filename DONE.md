@@ -1637,4 +1637,23 @@ cli:       Tests  258 passed (258)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r33, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r33 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r33 fixes - 2026-11-04
+adversary r33 (dca65cd, `packages/cli/test/adversary-t21-r33.test.ts`, failing): both pinned deployments have `enclaveRegistry: null`, and with `ATTESSA_REGISTRY` unset the SDK's `net()` threw a plain Error. `attessa call` and `status --pending` ended "Unexpected error (Error)." with no next action (FLOWS:832), and `status <origin>` printed "Can't reach Celo at {rpc}." about an RPC that had answered (FLOWS:787). Nothing was signed. Fixed in f8bbbd6:
+- `packages/sdk/src/types.ts`, `client.ts`: the SDK throws `AttestError('no_registry', ...)`; `CallCode` gains `no_registry`.
+- `packages/cli/src/commands/buyer.ts`: `sdkError` maps `no_registry` to the seller commands' existing row: "No EnclaveRegistry address is known for {network}." / "Set ATTESSA_REGISTRY to the registry address."
+- OPEN-QUESTIONS.md: an entry for the row on buyer commands.
+No existing assertion changed. Not fixed, unproven (mainnet only, no USA₮ on Sepolia): r33 suspects a resumed USA₮ call reports the `--asset` flag's symbol instead of the entry's.
+
+verify at f8bbbd6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  52 passed (52)
+cli:       Tests  262 passed (262)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r34, then Codex; Codex to judge the r17 call above)
