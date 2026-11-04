@@ -2,7 +2,8 @@
 # The static allow-list accepts the workspace manifests' bin, engines and the gen:vectors and
 # render-units scripts, and better-sqlite3@13.0.3 at its pinned integrity, and nothing next to them.
 # Scratch copy of HEAD; each case changes one thing, and the probe must report the case's expected
-# FAIL line(s) (two for the root-manifest case, one for every other). A case that also printed any of HEAD's own manifests or the lockfile would mean HEAD
+# FAIL line(s) (two for the root-manifest case, none for the executable-file case, one for every
+# other). A case that also printed any of HEAD's own manifests or the lockfile would mean HEAD
 # itself is refused, so every case also proves HEAD passes the static stage. Every case fails
 # before the install except the executable-file case, which runs the full probe once (take the heavy lock).
 set -u

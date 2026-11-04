@@ -186,7 +186,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
             # pnpm links each bin into the node_modules/.bin of dependents: command names to files
             # under the dist/ of this package only (no absolute path, no ".", ".." or hidden component).
             bn = m.get("bin", {})
-            if not isinstance(bn, dict) or any(not re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.[cm]?js", f) for c, f in bn.items()):
+            if not isinstance(bn, dict) or any(not re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)", c) or not isinstance(f, str) or not re.fullmatch(r"dist(/[A-Za-z0-9_][A-Za-z0-9_.-]*)+\.js", f) for c, f in bn.items()):
                 bad.append(f"{p}: bin must map command names to .js files under dist/, got {bn!r}")
             e = m.get("engines", {})
             if not isinstance(e, dict) or set(e) - {"node"} or not isinstance(e.get("node", "0"), str) or not re.fullmatch(r"(>=|\^|~)?[0-9]+(\.[0-9]+){0,2}", e.get("node", "0")):
