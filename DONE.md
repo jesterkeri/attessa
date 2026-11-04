@@ -1527,4 +1527,23 @@ cli:       Tests  246 passed (246)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r27, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r27 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r27 fixes - 2026-11-04
+adversary r27 (4e68e2c, `packages/cli/test/adversary-t21-r27.test.ts`, failing): the SDK's `finish()` makes the ledger entry terminal and then appends the evidence row; when that append failed (ENOSPC on evidence.jsonl), `payAndVerify` threw, so the paid, verified answer was in no result, the CLI printed "Unexpected error (Error, ENOSPC)" with no next action, and no later run could fetch it (getResult never re-fetches a terminal entry; SPEC §7 V12, §9). Fixed in c011165:
+- `packages/sdk/src/client.ts`, `types.ts`: a failed evidence append no longer throws away the decided result; it comes back with `evidenceNotWritten: true`. `CallResult.inputsBlock` carries the inputs block, so the CLI no longer re-reads evidence for the "Paid" line.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: a verified result with no evidence row saves the answer as usual, prints "Answer saved to {file}." and ends `record_not_written` (exit 1): "Couldn't add this call to your record at {record}." / "Free up space in {dir}, or make it writable, before your next call." (not in FLOWS; OPEN-QUESTIONS.md).
+- `packages/cli/test/buyer.test.ts`: those lines, with the answer in result.json.
+No existing assertion changed.
+
+verify at c011165 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  46 passed (46)
+cli:       Tests  248 passed (248)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r28, then Codex; Codex to judge the r17 call above)
