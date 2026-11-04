@@ -1473,4 +1473,21 @@ cli:       Tests  241 passed (241)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r24, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r24 found defects; see below; Codex to judge the r17 call above)
+
+### T21 adversary r24 fixes - 2026-11-04
+adversary r24 (54e0e53, `packages/cli/test/adversary-t21-r24.test.ts`, 3 failing): (1) without `--out`, a `./result.json` symlinked to `~/.attessa/evidence.jsonl` took the paid answer over the evidence log (the guard ran only for an explicit `--out`; SPEC §9); (2) a process stopped after the ledger recorded `verified` but before the answer was written left no copy, yet a later `cancel <id>` said "It was saved when it arrived"; (3) the same false line after "it wasn't saved". Fixed in 0f0788e:
+- `packages/cli/src/commands/buyer.ts`: `call` checks the default `result.json` before signing; `report()` checks every answer file (also `<requestId>.json` from `status --pending` and `cancel`) and keeps the answer beside the record if it would land in the data folder. Each answer the CLI writes is recorded in `<dataDir>/saved.txt`; a re-report says "It was saved when it arrived" only with that record, else the new `alreadyVerifiedNotSaved` line.
+- `packages/cli/src/copy.ts`: `alreadyVerifiedNotSaved`, `// not in FLOWS`, in OPEN-QUESTIONS.md. No existing assertion changed.
+
+verify at 0f0788e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  43 passed (43)
+cli:       Tests  244 passed (244)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r25, then Codex; Codex to judge the r17 call above)
