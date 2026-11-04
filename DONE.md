@@ -1390,4 +1390,21 @@ cli:       Tests  231 passed (231)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r19, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r19 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r19 fixes - 2026-11-04
+adversary r19 (f820109, `packages/cli/test/adversary-t21-r19.test.ts`, failing): `attessa call ... --out no-such-dir/result.json` against an honest gateway paid, verified and recorded the call `verified` (terminal), then the `--out` write threw: "Unexpected error" with no next action, `--json` an `unexpected` error merged with the verified result, the paid answer in no file, and a later `cancel <id>` said "It was saved when it arrived" (FLOWS §9 one next action per error row; SPEC §8 --json). Fixed in 3b254be:
+- `packages/cli/src/commands/buyer.ts` (`report()`, verified): a failed `--out` write keeps the answer in `<dataDir>/<requestId>.json` and throws `answer_not_written` with one next action; a later report of the stored outcome names that file when it exists. If the data folder refuses it too, a second `answer_not_written` line says it wasn't saved.
+- `packages/cli/src/copy.ts`: `alreadyVerifiedKept`, `BUYERR.answerNotWritten`, `BUYERR.answerNotKept`, all `// not in FLOWS`, listed in OPEN-QUESTIONS.md. No existing assertion changed. The both-writes-fail line has no test.
+
+verify at 3b254be (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  38 passed (38)
+cli:       Tests  234 passed (234)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r20, then Codex; Codex to judge the r17 call above)
