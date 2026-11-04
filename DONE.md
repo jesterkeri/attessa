@@ -1456,4 +1456,21 @@ cli:       Tests  239 passed (239)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r23, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r23 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r23 fixes - 2026-11-04
+adversary r23 (aa0b9f2, `packages/cli/test/adversary-t21-r23.test.ts`, failing): `--out answer.json` where answer.json is a symlink to `~/.attessa/evidence.jsonl` passed the data-folder guard (it resolved only the folder of `--out`), the call was paid, and the answer replaced every evidence row (SPEC §9; the guard's own purpose). It also hunted the whole "SDK makes a call terminal, then the CLI loses its answer or line" family (reconcilePending throwing partway, resume, cancel and getResult re-reporting, --json row merge, evidence export) and found nothing else. Fixed in b05d359:
+- `packages/cli/src/commands/buyer.ts`: `intoDataDir()` follows a symlink at `--out` itself (dangling too, one hop), compares the real path with the data folder, and refuses a hard link to any file in it (same device and inode).
+- New test in `packages/cli/test/buyer.test.ts` for a dangling symlink and a hard link. No existing assertion changed. No new copy.
+
+verify at b05d359 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  42 passed (42)
+cli:       Tests  241 passed (241)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r24, then Codex; Codex to judge the r17 call above)
