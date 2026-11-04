@@ -14,6 +14,8 @@
 import * as THREE from 'three';
 
 const root = document.documentElement;
+// site.css hides what this module drives only from here on: a failed CDN import leaves all of it readable.
+root.classList.add('scene-live');
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Dev aid: ?settle snaps every eased value to its target, to check a scroll position's final frame.
 const SETTLE = new URLSearchParams(location.search).has('settle');

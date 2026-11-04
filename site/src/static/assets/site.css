@@ -458,9 +458,9 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
   .orbit { grid-template-columns: minmax(0, 1fr); }
   .spec [data-at] { opacity: 1; transform: none; }
 }
-/* Without JavaScript nothing drives the scenes, so show every outcome and limit. */
-.no-js .beat { grid-area: auto; opacity: 1; transform: none; filter: none; margin-bottom: 36px; }
-.no-js .beat .seg, .no-js .beat .nd, .no-js .beat .end-pill, .no-js .spec [data-at] { opacity: 1; filter: none; transform: none; }
+/* Until scene.js runs (no JavaScript, or its three.js import failed) nothing drives the scenes, so show every outcome and limit. */
+:root:not(.scene-live) .beat { grid-area: auto; opacity: 1; transform: none; filter: none; margin-bottom: 36px; }
+:root:not(.scene-live) .beat .seg, :root:not(.scene-live) .beat .nd, :root:not(.scene-live) .beat .end-pill, :root:not(.scene-live) .spec [data-at] { opacity: 1; filter: none; transform: none; }
 
 .cmd { display: inline-flex; align-items: center; gap: 14px; font: 400 0.92rem var(--mono); color: var(--text); }
 .cmd .p { color: var(--text-3); margin-right: 6px; }
@@ -557,7 +557,7 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
   .proves-sec .proves > div:last-child { grid-column: auto; }
   .proves-sec .claims li[data-at] { opacity: 1; transform: none; filter: none; }
 }
-.no-js .proves-sec .claims li[data-at] { opacity: 1; transform: none; filter: none; }
+:root:not(.scene-live) .proves-sec .claims li[data-at] { opacity: 1; transform: none; filter: none; }
 /* Short screens (iPad landscape, 768px laptops): the two lists must fit inside the pinned screen */
 @media (min-width: 720px) and (max-height: 860px) {
   .proves-sec h2 { font-size: clamp(2.2rem, 1rem + 3vw, 3.8rem); }
