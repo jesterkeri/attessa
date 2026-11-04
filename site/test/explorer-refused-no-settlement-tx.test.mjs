@@ -53,7 +53,7 @@ test('a sample that never settled is not headed by a settlement transaction', ()
 });
 
 test('the loading state does not show the four planned checks as running', () => {
-  assert.match(explorer, /Today it runs the payment check\. The other four are planned\./, 'precondition: explorer.html index moved');
+  assert.match(explorer, /When live, it runs the payment check\. The other four are planned\./, 'precondition: explorer.html index moved');
   const loading = js.match(/function renderLoading\(\) \{([\s\S]*?)\n  \}/)?.[1] ?? '';
   assert.ok(loading, 'precondition: renderLoading moved; re-point this test');
   const allFiveChecking = /\$\{NAMES\.map\(/.test(loading) && /Checking/.test(loading) && !/planned/i.test(loading);
