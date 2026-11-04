@@ -18,7 +18,7 @@
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">If someone tries to</th><th scope="col">What happens</th></tr></thead>
       <tbody>
-        <tr><td>Swap in different code</td><td>The sealed machine's measurements no longer match the approved build, so its key can't be registered and its proofs are rejected.</td></tr>
+        <tr><td>Swap in different code</td><td>Unless the agent's owner approves the new build, the sealed machine's measurements match no approved build, so its key can't be registered and its proofs are rejected. The owner can approve any build, including a bad one: the proof then names that build, and the link to its source stays the owner's claim.</td></tr>
         <tr><td>Edit an answer after signing</td><td>The answer's hash no longer matches the proof. If the edit happens before the gateway, the gateway refuses it and nothing settles. If the gateway itself makes the edit, it can still settle: you are charged, and the SDK reports <code>paid_but_rejected</code> with a record that proves it.</td></tr>
         <tr><td>Pose as a registered service</td><td>The buyer only pays the address registered for that origin, and checks the agent it claims to be. A mismatch stops the call before anything is signed.</td></tr>
         <tr><td>Keep selling from a revoked build</td><td>Gateways and SDKs stop accepting its signers within 60 seconds.</td></tr>
