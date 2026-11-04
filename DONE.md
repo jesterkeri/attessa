@@ -1508,4 +1508,23 @@ cli:       Tests  245 passed (245)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r26, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r26 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r26 fixes - 2026-11-04
+adversary r26 (0a5760f, `packages/cli/test/adversary-t21-r26.test.ts`, failing): an `evidence.jsonl` whose last row was cut short (a full disk or a killed append) made `Ledger.readEvidence` throw a SyntaxError. `status --pending` had already marked every open call `verified` (terminal, never fetched again), and `report()` reads evidence after writing each answer, so the first answer was written, the run ended "Unexpected error" with no next action, and every later paid, verified answer was written nowhere (SPEC §9; FLOWS §8 one next action). Fixed in e24e0e2:
+- `packages/sdk/src/ledger.ts`: `readEvidence` skips a line that doesn't parse instead of failing the whole read; `appendEvidence` starts on a fresh line when the file doesn't end in a newline, so the row after a cut-short one stays whole.
+- `packages/sdk/test/ledger.test.ts`: a cut-short row is skipped and the next append reads back whole.
+- OPEN-QUESTIONS.md: the adversary's unproven lead (USA₮ limits have no `init` flag; a bad `dailyCap` in config.json names a `--daily-cap` flag `call` doesn't take), mainnet only.
+No existing assertion changed. No new copy.
+
+verify at e24e0e2 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  45 passed (45)
+cli:       Tests  246 passed (246)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r27, then Codex; Codex to judge the r17 call above)
