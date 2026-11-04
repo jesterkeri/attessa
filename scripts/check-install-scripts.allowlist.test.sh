@@ -70,6 +70,7 @@ check "render-units on an untracked file" "FAIL $H: script render-units must run
 # An executable (100755) script file is still a tracked regular file; node runs it either way.
 n=$((n + 1)); git reset -q --hard HEAD && git clean -qfdx
 chmod +x packages/core/scripts/gen-vectors.ts && git -c user.name=t -c user.email=t@x commit -qam "executable gen-vectors"
+[ "$(git ls-files -s packages/core/scripts/gen-vectors.ts | cut -d' ' -f1)" = 100755 ] || { echo "FAIL: precondition, gen-vectors.ts not committed as 100755"; rc=1; }
 # Accepted means the whole probe passed: exit 0 and its ok line, not merely no "FAIL path:" line.
 out=$("$src/scripts/check-install-scripts.sh" 2>&1); st=$?
 if [ $st -eq 0 ] && grep -q 'install ran no non-allowlisted install script: ok' <<<"$out"; then echo "ok: gen:vectors on a tracked executable file accepted"
