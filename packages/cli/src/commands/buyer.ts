@@ -269,6 +269,12 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
     throw ERR.usage('attessa call needs the service URL, like https://risk.example/v1/evaluate.');
   }
   const asset = parseAsset(o.asset);
+  // The data folder holds the ledger, evidence and config; an answer written over one of them would destroy it.
+  if (o.out !== undefined) {
+    const target = resolve(d.cwd, o.out);
+    const dir = resolve(dataDir(d));
+    if (target === dir || target.startsWith(`${dir}/`)) throw ERR.usage(`--out can't be inside ${display(d, dir)}, which holds your records. Choose another file.`); // not in FLOWS
+  }
   const body = /^\s*[[{]/.test(o.body) ? o.body : readBody(d, o.body);
   const limits = limitsFor(cfg, o, asset);
   const w = await wallet(d, o.keystore);
@@ -590,15 +596,26 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     const { data: _rowData, ...rowIo } = d.io;
     const rowDeps: Deps = { ...d, io: rowIo };
     if (results.length === 0) out(BUY.noPending);
+    const errors: Array<{ requestId: string; error: string; message: string; next: string | null }> = [];
     for (const r of results) {
       const e = client.ledger.get(r.requestId);
       const asset = assetOf(e?.asset ?? '');
       const c = { origin: e?.origin ?? '', sym: SYMBOL[asset], asset, uncertain: false, outFile: `${r.requestId}.json`, dailyCap: 0n };
       out(`${r.requestId}  ${host(c.origin)}`); // not in FLOWS
       if (r.outcome === 'stopped') continue;
-      await report(g, rowDeps, client, r, c);
+      // Every call here is already decided in the ledger, so one call's error (an answer --out can't take) must not
+      // stop the rest from being reported and their answers written: say it under that call and go on.
+      try {
+        await report(g, rowDeps, client, r, c);
+      } catch (err) {
+        if (!(err instanceof CliError)) throw err;
+        d.io.err(err.message);
+        if (err.next) d.io.err(err.next);
+        errors.push({ requestId: r.requestId, error: err.code, message: err.message, next: err.next });
+      }
     }
-    return 0;
+    if (errors.length > 0) d.io.data?.({ errors });
+    return errors.length > 0 ? 1 : 0;
   }
   // `status <origin>`: the registry entry and a fresh liveness check. A read never loads the wallet (FLOWS: "Reading
   // doesn't require a wallet"), so an unavailable keychain or a malformed ATTESSA_PRIVATE_KEY can't block it.

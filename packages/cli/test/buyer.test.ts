@@ -233,6 +233,14 @@ describe('buyer: attessa call, verified (FLOWS §6 J1)', () => {
     expect(w.pending()).toEqual([]);
   });
 
+  it('--out inside the data folder is refused before signing, and the ledger is left whole (T21 r21)', async () => {
+    await initialized();
+    expect(await w.call('--out', '.attessa/pending.jsonl')).toBe(1);
+    expect(w.err[0]).toBe("--out can't be inside ~/.attessa, which holds your records. Choose another file.");
+    expect(w.gw.paid).toHaveLength(0);
+    expect(w.pending()).toEqual([]);
+  });
+
   it('--json: one JSON object with the outcome and the settlement tx (T22)', async () => {
     await initialized();
     expect(await w.call('--json')).toBe(0);
