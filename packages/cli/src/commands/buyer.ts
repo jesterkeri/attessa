@@ -1,5 +1,5 @@
 import { homedir } from 'node:os';
-import { existsSync, lstatSync, readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs';
+import { appendFileSync, existsSync, lstatSync, readFileSync, readdirSync, readlinkSync, realpathSync, statSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
 import {
@@ -89,6 +89,25 @@ function intoDataDir(file: string, dir: string): boolean {
         return false;
       }
     });
+  } catch {
+    return false;
+  }
+}
+
+/** `<dataDir>/saved.txt`: one requestId per line whose answer the CLI wrote to a file, so "it was saved" is said only when true. */
+function savedPath(d: Deps): string {
+  return join(dataDir(d), 'saved.txt');
+}
+function markSaved(d: Deps, requestId: string): void {
+  try {
+    appendFileSync(savedPath(d), `${requestId.toLowerCase()}\n`);
+  } catch {
+    // shortcut: a lost marker only makes a later report say "no saved copy", never the reverse.
+  }
+}
+function wasSaved(d: Deps, requestId: string): boolean {
+  try {
+    return readFileSync(savedPath(d), 'utf8').split('\n').includes(requestId.toLowerCase());
   } catch {
     return false;
   }
@@ -308,7 +327,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   }
   const asset = parseAsset(o.asset);
   // The data folder holds the ledger, evidence and config; an answer written over one of them would destroy it.
-  if (o.out !== undefined && intoDataDir(resolve(d.cwd, o.out), realDir(resolve(dataDir(d))))) {
+  if (intoDataDir(resolve(d.cwd, o.out ?? 'result.json'), realDir(resolve(dataDir(d))))) {
     throw ERR.usage(`--out can't be inside ${display(d, realDir(resolve(dataDir(d))))}, which holds your records. Choose another file.`); // not in FLOWS
   }
   const body = /^\s*[[{]/.test(o.body) ? o.body : readBody(d, o.body);
@@ -397,16 +416,22 @@ async function report(
       const kept = join(dataDir(d), `${r.requestId}.json`);
       const tx = r.settlementTx ?? entry()?.settlementTx ?? 'unknown';
       if (!r.response || r.response.length === 0) {
-        out(d.exists(kept) ? BUY.alreadyVerifiedKept(p, c.sym, tx, display(d, kept), record) : BUY.alreadyVerified(p, c.sym, tx, record));
+        if (d.exists(kept)) out(BUY.alreadyVerifiedKept(p, c.sym, tx, display(d, kept), record));
+        else if (wasSaved(d, r.requestId)) out(BUY.alreadyVerified(p, c.sym, tx, record));
+        else out(BUY.alreadyVerifiedNotSaved(p, c.sym, tx, record));
         return 0;
       }
-      // The entry is already `verified` (terminal; getResult never re-fetches it), so this is the only copy: if --out
-      // can't be written, keep the answer beside the record instead of losing it.
+      // The entry is already `verified` (terminal; getResult never re-fetches it), so this is the only copy: if the
+      // answer file can't be written, or would land on the records, keep the answer beside the record instead.
       try {
-        d.writeFile(resolve(d.cwd, c.outFile), r.response);
+        const file = resolve(d.cwd, c.outFile);
+        if (intoDataDir(file, realDir(resolve(dataDir(d))))) throw new Error('into the data folder');
+        d.writeFile(file, r.response);
+        markSaved(d, r.requestId);
       } catch {
         try {
           d.writeFile(kept, r.response);
+          markSaved(d, r.requestId);
         } catch {
           throw BUYERR.answerNotKept(c.outFile, p, c.sym, tx, display(d, dataDir(d)));
         }

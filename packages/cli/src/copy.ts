@@ -313,6 +313,10 @@ export const BUY = {
   // not in FLOWS: the same, when --out couldn't be written and the answer was kept beside the record instead.
   alreadyVerifiedKept: (p: string, sym: string, tx: string, kept: string, record: string) =>
     `Already done: you were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out. It is in ${kept}. Record: ${record}`,
+  // not in FLOWS: the same, when this computer has no record that the answer was ever written to a file (the process
+  // stopped before it was, or no folder took it).
+  alreadyVerifiedNotSaved: (p: string, sym: string, tx: string, record: string) =>
+    `Already done: you were charged ${p} ${sym} (tx ${short(tx)}) and the answer checked out, but no saved copy of it is on this computer. Record: ${record}`,
   // SPEC §7 V10
   inputsNotChecked: "  inputs not re-checked (your RPC doesn't keep state that old)",
   dryRun: '  (dry run: nothing was signed)', // not in FLOWS (T15's "(dry run: nothing was sent)" for a call)
