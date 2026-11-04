@@ -834,10 +834,13 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       });
       return r;
     };
-    /** `dryRun` with an open entry for this input: say so and stop, leaving that entry untouched. */
+    /**
+     * `dryRun` with an open entry for this input: say so and stop, leaving that entry untouched. The result names the
+     * open call, and no evidence row is written under its id (that call's outcome isn't decided yet).
+     */
     const wouldResume = (open: PendingEntry): CallResult => {
       progress({ kind: 'would_resume', entry: open });
-      return stopped('dry_run');
+      return { outcome: 'stopped', code: 'dry_run', requestId: open.requestId };
     };
 
     let n: Net;
