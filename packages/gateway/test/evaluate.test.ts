@@ -2,6 +2,7 @@ import { derivedRequestId } from '@attessa/core';
 import { generatePrivateKey } from 'viem/accounts';
 import { hexToBigInt, numberToHex, slice, type Hex } from 'viem';
 import { afterEach, describe, expect, it } from 'vitest';
+import { DEFAULT_TIMEOUTS } from '../src/config.ts';
 import { makeHarness, randNonce, randRequestId, type Harness } from './fakes/harness.ts';
 
 let h: Harness;
@@ -369,7 +370,8 @@ describe('rate limits and in-flight cap (SPEC §6.1)', () => {
   });
 
   it('17th concurrent evaluate → 503 gateway_busy', async () => {
-    h = await makeHarness();
+    // production timeouts: the harness's 400 ms settle and 2 s verify run out on a 2-core CI runner with 17 calls in flight
+    h = await makeHarness({ config: { timeouts: DEFAULT_TIMEOUTS } });
     h.seller.tamper = { delayMs: 250 };
     const pays = [];
     for (let i = 0; i < 17; i++) pays.push(await h.pay());
