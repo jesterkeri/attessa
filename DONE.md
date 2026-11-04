@@ -1583,4 +1583,22 @@ cli:       Tests  252 passed (252)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r30, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r30 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r30 fixes - 2026-11-04
+adversary r30 (5e11609, `packages/cli/test/adversary-t21-r30.test.ts`, failing): the disk filling after an honest gateway settled made `settleAndVerify`'s first ledger write throw ENOSPC; `attessa call` ended "Unexpected error (Error, ENOSPC)" with no next action after a charge (FLOWS:832 "Every error row has one next action"). The entry stays `signed`, so `status --pending` can finish it. Fixed in 888c75e:
+- `packages/cli/src/copy.ts`, `index.ts`, `commands/buyer.ts`: a buyer command's Node or SQLite disk-write error (list in OPEN-QUESTIONS.md) ends `disk_write_failed`: "Couldn't write a file attessa keeps on this computer ({code})." / "Free up space in {dir}, or make it writable, then run `attessa status --pending` to finish any call in progress." A read-only data folder fails first at the ledger's SQLite lock (SQLITE_CANTOPEN), so SQLite's codes are included.
+- `packages/cli/test/buyer.test.ts`: the two lines for a read-only `~/.attessa`.
+No existing assertion changed.
+
+verify at 888c75e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  49 passed (49)
+cli:       Tests  254 passed (254)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r31, then Codex; Codex to judge the r17 call above)
