@@ -19,7 +19,7 @@
       <thead><tr><th scope="col">If someone tries to</th><th scope="col">What happens</th></tr></thead>
       <tbody>
         <tr><td>Swap in different code</td><td>The sealed machine's measurements no longer match the approved build, so its key can't be registered and its proofs are rejected.</td></tr>
-        <tr><td>Edit an answer after signing</td><td>The answer's hash no longer matches the proof. The call is rejected and nothing settles.</td></tr>
+        <tr><td>Edit an answer after signing</td><td>The answer's hash no longer matches the proof. If the edit happens before the gateway, the gateway refuses it and nothing settles. If the gateway itself makes the edit, it can still settle: you are charged, and the SDK reports <code>paid_but_rejected</code> with a record that proves it.</td></tr>
         <tr><td>Pose as a registered service</td><td>The buyer only pays the address registered for that origin, and checks the agent it claims to be. A mismatch stops the call before anything is signed.</td></tr>
         <tr><td>Keep selling from a revoked build</td><td>Gateways and SDKs stop accepting its signers within 60 seconds.</td></tr>
         <tr><td>Take the money despite a refusal</td><td>This is possible for a dishonest gateway, and can't be reversed on chain. The buyer's record proves the payment and the failed check, so it can be reported.</td></tr>
