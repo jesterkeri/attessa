@@ -1369,4 +1369,33 @@ probe exit 1: FAIL: repo install config is outside the allow-list
 ok: refused
 r9full_rc=0
 ```
-reviewed: pending (adversary r10, then Codex r2)
+reviewed: pending (adversary r10 found a defect; see below; then Codex r2)
+
+adversary r10 (a55742d, `scripts/adversary-install-r10/path-inside-tree.test.sh`, failing before the fix): the header said "Nothing is resolved from the tree under test", but PATH kept every absolute entry, so an entry inside the checkout (such as the `$PWD/node_modules/.bin` that direnv's `layout node` adds) let the tree's own `git` run at `rev-parse --show-toplevel`, before any check. The PATH filter itself also ran `tr`, `grep` and `paste` through the unfiltered PATH. Fixed in 237d5c0:
+- `scripts/check-install-scripts.sh`: PATH keeps only absolute entries whose `cd -P` target lies outside the checked folder, computed with bash builtins alone before any command is looked up; the header says so.
+- r10's unproven note on the node range grammar: it no longer accepts leading zeros or a `v` prefix, and accepts a space after an operator (`>= 22`), as node-semver does; the header says "ASCII digits with no leading zero, or x/X/*".
+No existing assertion changed.
+
+checks at 237d5c0 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r11, then Codex r2)
