@@ -1344,3 +1344,29 @@ Codex r1 corrections (DONE.md is append-only, so the earlier lines stand and the
 - `scripts/check-install-scripts.allowlist-gaps.test.sh`'s header said the surviving mutants pass "the allow-list test's 21 cases"; it now says the 20 static cases, as the adversary r6 correction above records.
 
 adversary r7 (b4097ab): no guard defect; one false comment and two narrow descriptions. `scripts/check-install-scripts.allowlist.test.sh:4-5` still said "exactly that one FAIL line"; it now says the case's expected FAIL line(s), two for the root-manifest case. The bin targets above say ".js files": the rule at `scripts/check-install-scripts.sh:189` also admitted `.cjs` and `.mjs` under dist/ (adversary r8: now `.js` only, as the guard's header and its error line say; every workspace bin is `dist/*.js`). The engines rule above says "`>=`, `^` or `~`": the operator is optional, so a bare version such as `22` also passes. None of these admitted shapes runs a script at install (r7 checked).
+
+adversary r9 (366ee41, `scripts/adversary-install-r9/`, failing before the fix): two fail-closed defects, no admitted install script. (1) The guard refused what its header allowed: script files in a sub-folder of scripts/, with a dot in the name or a `.cjs` extension, and node ranges such as `>22.12.0`, `>=22.13.0 <25` and `22.x`; and the gaps test's header called `node scripts/gen.sh` forbidden by the header, which named no extension. (2) A false evidence claim in the adversary r6 note above: a manifest with `"scripts": ["test"]` or `""`, and one saved with a UTF-8 BOM, passed (the whole probe exited 0 with both). Fixed in 6f4f999:
+- `scripts/check-install-scripts.sh` header: engines are a node semver range (ASCII digits or x/*, at most major.minor.patch, `<` `<=` `>` `>=` `=` `^` `~`, hyphen ranges, `||`); the two scripts run `node` on a tracked `.ts`, `.js`, `.mjs` or `.cjs` file under the package's scripts/ (sub-folders allowed, no hidden or `..` component); each manifest is a UTF-8 JSON object with no BOM, with object `scripts`, `dependencies` and `devDependencies`. The code now matches each of these.
+- Correction to the adversary r6 note above: before 6f4f999, scripts as a list or string and a BOM manifest were accepted, not refused; "nested script paths are refused" is no longer true, since the header now allows them. The adversary r7 note's engines description is superseded by the grammar above.
+No existing assertion changed.
+
+checks at 6f4f999 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r10, then Codex r2)
