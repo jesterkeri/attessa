@@ -1373,4 +1373,21 @@ adversary r17 on 33e2332 reported one failing test, archived unchanged at `.work
 - the gateway judges the stamp and sends its Date from one clock (`packages/gateway/src/gateway.ts:110` `now`, `:225` the §2.5 check; Date is Node's from the same system clock), so an honest gateway cannot produce it;
 - a gateway that sends a false Date can as well withhold the answer outright, which SPEC.md:57 allows ("can withhold, delay, reorder, deny") and SPEC §7 records as `settled_after_refusal`; THREAT-MODEL TB4 accepts withholding (L4). No clock rule can tell a stale stamp from a missing result when the gateway's clock is outside both clocks the SDK can see.
 The adversary's other attacks all failed: honest gateway at lag 0, 269, 270, 271, 299, 300, 301, 539 and 540 (a genuine 404 decides, a held answer verifies), 541 stays undecided (outside §2.5), midpoint rounding at the boundaries, and the 16 earlier `adversary-t21-r*` files (43 tests) pass.
-reviewed: pending (adversary r18, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r18 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r18 fixes - 2026-11-04
+adversary r18 (ab5f86b, `packages/cli/test/adversary-t21-r18.test.ts`, failing): with two pending calls (A settled, its answer still 202; B behind an HTML 502, nothing settled), `attessa status --pending --json` put B's `requestId` at the top level beside A's `settlementTx` and `suggestion: "get_result"`, because `report()` wrote each call's `jsonResult` through `io.data`, which `--json` merges into one object (FLOWS §7 resolve from chain state, never by guessing; FLOWS §8 one next action per row). The `pending[]` rows were right. Fixed in 1311843:
+- `packages/cli/src/commands/buyer.ts`: `status --pending` passes `report()` an `io` without `data`; each call's row is only in `pending`. Human output is unchanged. No existing assertion changed. No new copy.
+- `OPEN-QUESTIONS.md`: the r15 clock entry now describes the r16 midpoint and the r17 judgement; a new item for `pollResults` polling with no wall-clock bound while every RPC read fails (reported by r18 as unproven; predates T21; not changed).
+
+verify at 1311843 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  37 passed (37)
+cli:       Tests  231 passed (231)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r19, then Codex; Codex to judge the r17 call above)
