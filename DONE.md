@@ -1440,4 +1440,20 @@ cli:       Tests  237 passed (237)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r22, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r22 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r22 fixes - 2026-11-04
+adversary r22 (dbd983e, `packages/cli/test/adversary-t21-r22.test.ts`, failing): with open calls to two services whose answers were both released, `attessa status <A> --pending` let `reconcilePending` decide both calls `verified` (terminal, never re-fetched; SPEC §7) and then reported only A's, so B's paid, verified answer was written nowhere, and a later `status --pending` could not recover it. Fixed in 72dc5d4:
+- `packages/cli/src/commands/buyer.ts`: `status [<origin>] --pending` reports every call the run decides, the asked-about service's first; each row already names its host. The `--out` data-folder guard resolves symlinks (the adversary's unproven lead), with a new test in `packages/cli/test/buyer.test.ts`. The scope question is in OPEN-QUESTIONS.md. No existing assertion changed. No new copy.
+
+verify at 72dc5d4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  41 passed (41)
+cli:       Tests  239 passed (239)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r23, then Codex; Codex to judge the r17 call above)
