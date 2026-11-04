@@ -1407,4 +1407,20 @@ cli:       Tests  234 passed (234)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  184 passed (184)
 ```
-reviewed: pending (adversary r20, then Codex; Codex to judge the r17 call above)
+reviewed: pending (adversary r20 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r20 fixes - 2026-11-04
+adversary r20 (12313a1, `packages/cli/test/adversary-t21-r20.test.ts`, failing): with an open call for the same input, `attessa call --dry-run --json` printed the open call's id in its human line but a fresh random `requestId` in the JSON, one no ledger entry has, and wrote a stray `stopped` evidence row under it (SPEC §8 `--json`; an agent running `attessa cancel <requestId>` would be told the request is unknown). Fixed in 5838be3:
+- `packages/sdk/src/client.ts`: `wouldResume` returns `stopped` / `dry_run` with the open call's `requestId` and writes no evidence row. No existing assertion changed. No new copy.
+
+verify at 5838be3 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  39 passed (39)
+cli:       Tests  235 passed (235)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r21, then Codex; Codex to judge the r17 call above)
