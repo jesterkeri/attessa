@@ -163,7 +163,8 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-event
 }
 @keyframes fade-in { from { opacity: 0; } }
 @keyframes rise { from { opacity: 0; transform: translateY(18px); } }
-@media (max-width: 1020px) {
+/* 1020.98px, not 1020px: scaled displays have fractional widths, and none may fall between this and site.js's (min-width: 1021px). */
+@media (max-width: 1020.98px) {
   .nav-links, .net-chip, .nav-cta { display: none; }
   .icon-btn { display: inline-grid; }
 }

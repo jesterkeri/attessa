@@ -50,7 +50,7 @@
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && root.classList.contains('menu-open')) { setMenu(false); menuBtn.focus(); }
   });
-  // Same breakpoint as site.css, where the menu button shows at max-width 1020px.
+  // Same breakpoint as site.css, where the menu button shows at max-width 1020.98px (no fractional width between).
   matchMedia('(min-width: 1021px)').addEventListener('change', e => { if (e.matches) setMenu(false); });
 
   // Entrances: elements fade up once as they enter the viewport.
