@@ -1285,3 +1285,15 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe,
 build=0
 ```
 reviewed: pending (adversary r52, then Codex)
+
+### Site adversary r52 (failing test 536a259, fix a011230) - 2026-11-05
+Finding: r51 made the docs code blocks tab stops, but a focused `<pre>` drew the site ring 3px outside itself (site.css:52) inside `.docs-main .code { overflow: hidden }` with no padding, so its left, right and bottom sides were clipped and only a 1px line in the caption bar was left: obscured focus on 10 tab stops (how-to x4, tutorial x5, reference payAndVerify), at every width.
+Fix (site.css): `.docs-main .code pre:focus-visible { outline-offset: -3px; }`, the same inside ring r50 gave the pinned boxes.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r52's prering probe, docs/how-to.html, cdnfail, 390x844: each of the 4 focused blocks now changes 846 to 1114 px inside its box and none outside, outline "solid 1px, off -3px"; before the fix: top 347 px, right 0, bottom 0, left 1):
+```
+# tests 170
+# pass 170
+# fail 0
+build=0
+```
+reviewed: pending (adversary r53, then Codex)
