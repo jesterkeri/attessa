@@ -1711,4 +1711,22 @@ cli:       Tests  266 passed (266)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r37, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
+reviewed: pending (adversary r37 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r37 fixes - 2026-11-05
+adversary r37 (eaaa597, `packages/cli/test/adversary-t21-r37.test.ts`, failing): the r36 change set the entry to `uncertain` before the no-settlement wait even when it was `refused`. A refused call resumed into that wait, settled during it with no result left at the gateway, ended `paid_but_rejected{missing_proof}`, where SPEC.md:635 says "no result and the call was `refused` → `settled_after_refusal`". Fixed in 545c7b2:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): a `refused` entry stays `refused` into the wait; other entries go `uncertain` as in r36.
+- `packages/cli/src/commands/buyer.ts`: r37 also noted (unproven) that the r36 wait printed nothing for about two minutes (FLOWS:825 "No silent waits"): the `waiting` progress now prints the confirming line and its next action for an `uncertain` call that hasn't printed "Lost the connection…". OPEN-QUESTIONS.md entry for that copy, and for `finalize`'s unbounded RPC retry, not changed.
+No existing assertion changed.
+
+verify at 545c7b2 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05. The first full run of this code ended `cli: Tests 15 failed | 252 passed (267)`, with no failure detail kept; a CLI-only rerun under the lock right after passed 267, and this second full run passed:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  56 passed (56)
+cli:       Tests  267 passed (267)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r38, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
