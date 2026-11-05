@@ -690,6 +690,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   async function finalize(n: Net, entry: PendingEntry, meta: CallMeta, wait: boolean): Promise<CallResult> {
     const vb = BigInt(entry.validBefore!);
     let lagging = 0;
+    // Past expiry the chain read the permission used (or cancelled) with no log yet: it can't expire unused.
+    let usedNoLog = false;
     let chainNow: bigint | undefined;
     let announced = false;
     for (;;) {
@@ -709,13 +711,14 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
           if (!used) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
           // Used, but no matching log yet: the log index lags. Ask again.
+          usedNoLog = true;
           if (++lagging > 20) return { ...current(entry, meta), authorizationUsed: true };
         }
       } catch (e) {
         if (!(e instanceof RpcError)) throw e;
         if (!wait) return current(entry, meta, 'rpc_unavailable');
       }
-      if (!wait) return current(entry, meta);
+      if (!wait) return usedNoLog ? { ...current(entry, meta), authorizationUsed: true } : current(entry, meta);
       if (!announced && chainNow !== undefined) {
         announced = true;
         progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow });
