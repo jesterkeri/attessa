@@ -2447,3 +2447,24 @@ packages/cli test:  Test Files  80 passed (80)
 packages/cli test:       Tests  317 passed (317)
 ```
 reviewed: pending (adversary r61, then Codex)
+
+### T21 adversary r61 (failing test 0202c88, fix 8b4fe47) - 2026-11-05
+Finding: `attessa gateway pause --network=mainnet` paused the Sepolia gateway, printed "Gateway paused: ..." and exited 0 while mainnet kept taking calls (`resume`, `status` and `export` alike): the gateway pass-through hands argv as given to `runGatewayCommand`, whose `flag()` matched only `--network mainnet`, so the `=` spelling that every other command accepts through parseArgs fell back to sepolia (SPEC.md:653, :688).
+Fix: packages/gateway/src/cli.ts `flag()` reads `--name=value` as well as `--name value`, and a flag with no value is '' so `--network` alone is refused ("--network must be mainnet or sepolia") instead of defaulting.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/cli test:  Test Files  81 passed (81)
+packages/cli test:       Tests  319 passed (319)
+```
+reviewed: pending (adversary r62, then Codex)
