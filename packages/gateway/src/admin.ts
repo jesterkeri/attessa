@@ -60,6 +60,13 @@ function exportRow(r: CallRow): Record<(typeof EXPORT_COLUMNS)[number], string> 
   };
 }
 
+/** The export rows as objects (the SPEC §6.4 columns), for `attessa gateway export --json`. */
+export function exportRecords(db: CallStore, since: string): Array<Record<(typeof EXPORT_COLUMNS)[number], string>> {
+  const ms = Date.parse(since);
+  if (Number.isNaN(ms)) throw new Error(`--since: not a date: ${since}`);
+  return db.since(Math.floor(ms / 1000)).map(exportRow);
+}
+
 /** SPEC §6.4 export. `since` is an ISO date (`2026-11-01`) or date-time. */
 export function exportRows(db: CallStore, since: string, format: 'csv' | 'jsonl'): string {
   const ms = Date.parse(since);

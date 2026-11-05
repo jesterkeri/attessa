@@ -30,7 +30,7 @@ describe('owner key above the curve order: the fixed reason, text mode', () => {
     const key = `0x${'f'.repeat(64)}`;
     w.env.ATTESSA_PRIVATE_KEY = key;
     expect(await w.cli('endpoint', 'retire', '--origin', 'https://risk.example', ...NET)).toBe(1);
-    expect(w.err).toEqual(["Can't load the wallet from ATTESSA_PRIVATE_KEY: not a valid private key."]);
+    expect(w.err).toEqual(["Can't load the wallet from ATTESSA_PRIVATE_KEY: not a valid private key.", 'Set ATTESSA_PRIVATE_KEY to a 0x-prefixed 32-byte hex key, or pass --keystore <file>.']);
     const printed = [...w.out, ...w.err].join('\n');
     expect(printed).not.toContain(BigInt(key).toString());
     expect(printed).not.toContain(key.slice(2));
@@ -53,7 +53,10 @@ describe('an unexpected error never prints its message', () => {
   it('text: exit 1 and a fixed line naming only the class and code', async () => {
     const { w, deps } = failing();
     expect(await run(['status', '--agent', '412', ...NET], deps)).toBe(1);
-    expect(w.err).toEqual(["Unexpected error (Error, ESOMETHING). Its message isn't printed, because it could contain a key."]);
+    expect(w.err).toEqual([
+      "Unexpected error (Error, ESOMETHING). Its message isn't printed, because it could contain a key.",
+      'Run the command again; if it fails the same way, report it at github.com/jesterkeri/attessa/issues with this line.',
+    ]);
   });
 
   it('--json: exit 1 and the {ok:false} object, without the message', async () => {

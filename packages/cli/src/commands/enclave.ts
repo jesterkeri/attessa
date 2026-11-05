@@ -39,7 +39,7 @@ export async function enclaveBuild(_g: Global, deps: Deps, o: { name?: string })
   requireHost(deps);
   const kaniko = deps.env.ATTESSA_KANIKO_IMAGE;
   if (!kaniko || !/@sha256:[0-9a-f]{64}$/.test(kaniko)) {
-    throw new CliError('kaniko_unpinned', 'ATTESSA_KANIKO_IMAGE must name the kaniko executor image pinned by digest (…@sha256:<64 hex>).', null);
+    throw new CliError('kaniko_unpinned', 'ATTESSA_KANIKO_IMAGE must name the kaniko executor image pinned by digest (…@sha256:<64 hex>).', 'Set ATTESSA_KANIKO_IMAGE to the executor image with its @sha256 digest, then run `attessa enclave build` again.');
   }
   // SPEC §4.5: refuse a dirty tree, so the PCRs belong to a commit.
   if ((await git(deps, ['status', '--porcelain'])) !== '') {
@@ -51,7 +51,7 @@ export async function enclaveBuild(_g: Global, deps: Deps, o: { name?: string })
   const name = o.name ?? repo.split('/').pop()!;
   if (!/^[a-z0-9][a-z0-9-]{0,62}$/.test(name)) throw ERR.usage('--name must be lowercase letters, digits and dashes.');
   const dockerfile = join(deps.cwd, 'enclave', 'Dockerfile');
-  if (!deps.exists(dockerfile)) throw new CliError('no_dockerfile', `No enclave/Dockerfile in ${deps.cwd}.`, null);
+  if (!deps.exists(dockerfile)) throw new CliError('no_dockerfile', `No enclave/Dockerfile in ${deps.cwd}.`, 'Run `attessa enclave build` from the repository root, the folder that holds enclave/Dockerfile.');
   const tag = `attessa/${name}:${sha.slice(0, 12)}`;
   const env = { SOURCE_DATE_EPOCH: epoch };
   const steps: Array<[string, string[]]> = [
@@ -69,7 +69,7 @@ export async function enclaveBuild(_g: Global, deps: Deps, o: { name?: string })
   let measurements = '';
   for (const [cmd, args] of steps) {
     const r = await deps.runner.run(cmd, args, { cwd: deps.cwd, env });
-    if (r.code !== 0) throw new CliError('build_failed', `${cmd} ${args[0]} failed (exit ${r.code}): ${r.stderr.trim().split('\n').at(-1) ?? ''}`, null);
+    if (r.code !== 0) throw new CliError('build_failed', `${cmd} ${args[0]} failed (exit ${r.code}): ${r.stderr.trim().split('\n').at(-1) ?? ''}`, 'Fix what that line names, then run `attessa enclave build` again.');
     if (cmd === 'nitro-cli') measurements = r.stdout;
   }
   let parsed: { Measurements?: Record<string, string> };
@@ -130,7 +130,7 @@ export async function enclaveStart(g: Global, deps: Deps, o: StartOptions): Prom
   const run = await deps.runner.run('nitro-cli', [
     'run-enclave', '--eif-path', eif, '--cpu-count', ENCLAVE_CPU, '--memory', ENCLAVE_MEMORY_MIB, '--enclave-cid', String(layout.cid),
   ]);
-  if (run.code !== 0) throw new CliError('enclave_start_failed', `nitro-cli run-enclave failed (exit ${run.code}): ${run.stderr.trim().split('\n').at(-1) ?? ''}`, null);
+  if (run.code !== 0) throw new CliError('enclave_start_failed', `nitro-cli run-enclave failed (exit ${run.code}): ${run.stderr.trim().split('\n').at(-1) ?? ''}`, 'Check `nitro-cli describe-enclaves` and the enclave allocator, then run `attessa enclave start` again.');
   deps.io.out(COPY.starting(eif));
 
   const client = new EnclaveClient(deps.enclave(port));

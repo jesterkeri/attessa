@@ -107,14 +107,44 @@ export const COPY = {
 } as const;
 
 /** One refusal or error: what happened, then the one next action (FLOWS §8 columns), and its machine code. */
+/**
+ * An RPC URL as it may be printed: scheme, host and port only. Provider keys ride in the userinfo, the path
+ * (`/v3/<key>`), the query or the fragment, so none of those is ever shown. Anything that isn't a URL is shown as
+ * "your RPC", except the fixed label "your --rpc".
+ */
+export function rpcShownSafe(rpc: string): string {
+  if (rpc === 'your --rpc') return rpc;
+  try {
+    const u = new URL(rpc);
+    return /^(https?|wss?):$/.test(u.protocol) && u.host ? `${u.protocol}//${u.host}` : 'your RPC';
+  } catch {
+    return 'your RPC';
+  }
+}
+
+/** The next action an error gets when its row names none (FLOWS.md:832: every error row has one). */
+const FALLBACK_NEXT: Record<string, string> = {
+  usage: 'Run `attessa seller --help` for the commands and their flags.',
+  reverted: 'Check the arguments and the wallet with `attessa status --agent <id>`, then run it again.',
+  bad_key: 'Set ATTESSA_PRIVATE_KEY to a 0x-prefixed 32-byte hex key, or pass --keystore <file>.',
+  invalid_pcr: 'Fetch a fresh report with `attessa signer register --fresh`.',
+  unexpected: 'Run the command again; if it fails the same way, report it at github.com/jesterkeri/attessa/issues with this line.',
+};
+const LAST_NEXT = 'Run `attessa seller --help` for the commands and their flags.';
+
 export class CliError extends Error {
   readonly code: string;
   readonly next: string | null;
-  constructor(code: string, message: string, next: string | null = null) {
+  /** The FLOWS line already says its next action (FLOWS §6 J1/J3, §8 "(the example is the action)"): `next` names it for
+   * --json, and text mode doesn't print it a second time. */
+  readonly inline: boolean;
+  constructor(code: string, message: string, next: string | null = null, inline = false) {
     super(message);
     this.name = 'CliError';
     this.code = code;
-    this.next = next;
+    // Never null: a row without its own next action takes the code's fallback (FLOWS.md:832).
+    this.next = next ?? FALLBACK_NEXT[code] ?? LAST_NEXT;
+    this.inline = inline;
   }
 }
 
@@ -164,14 +194,23 @@ export const ERR = {
     new CliError(
       'attestation_stale',
       `Not registered: the machine's report is ${min} minutes old and Celo accepts 30. Run \`attessa signer register --fresh\` to get a new report from the same machine (no restart).`,
+      'Run `attessa signer register --fresh` (same machine, no restart).',
+      true,
     ),
   wrongBuild: (agent: string, rid: string) =>
     new CliError(
       'release_not_approved',
       `Not registered: this machine runs a build agent ${agent} hasn't approved (release ${short(rid)}). Approve it with \`attessa release approve\`, or start the approved build.`,
+      'Approve it with `attessa release approve`, or start the approved build.',
+      true,
     ),
   debugMode: () =>
-    new CliError('debug_pcrs', "Not registered: the machine was started in debug mode, which AWS doesn't sign for. Start it without --debug-mode."),
+    new CliError(
+      'debug_pcrs',
+      "Not registered: the machine was started in debug mode, which AWS doesn't sign for. Start it without --debug-mode.",
+      'Restart without --debug-mode.',
+      true,
+    ),
   // §8
   bindingMismatch: (what: string, field: string) =>
     new CliError(`binding_mismatch{${field}}`, `Not registered: the attestation was made for ${what}.`, 'Re-attest with the right agent and origin in the config.'),
@@ -191,7 +230,7 @@ export const ERR = {
     new CliError('origin_taken', `${origin} is already registered to agent ${b}.`, `Use a different origin or ask agent ${b}'s owner to retire it.`),
   networkMismatch: (x: number, y: number) =>
     new CliError('network_mismatch', `Your RPC is on chain ${x}; this registry is on ${y}.`, `Set \`--rpc\` for ${y}.`),
-  rpcUnavailable: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpc}. Nothing was signed.`, 'Retry or set another `--rpc`.'),
+  rpcUnavailable: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpcShownSafe(rpc)}. Nothing was signed.`, 'Retry or set another `--rpc`.'),
   /**
    * A transaction was signed and may have been broadcast, then the RPC dropped (the broadcast's reply, or the
    * receipt poll): it may still land, so never "Nothing was sent". The full hash, so it can be looked up.
@@ -199,14 +238,16 @@ export const ERR = {
    */
   sentUnconfirmed: (what: string, hash: string, next: string) =>
     new CliError('tx_unconfirmed', `Lost the connection to Celo after sending ${what} (tx ${hash}); it may still land.`, next),
-  invalidOrigin: () => new CliError('invalid_origin', 'Use just the scheme and host, like https://risk.example (no path, lowercase).'),
+  invalidOrigin: () =>
+    new CliError('invalid_origin', 'Use just the scheme and host, like https://risk.example (no path, lowercase).', 'Use just the scheme and host, like https://risk.example.', true),
   invalidBuildFile: (file: string) =>
     new CliError(
       'invalid_pcr',
       `Couldn't read the build measurements in ${file}. It should be the JSON that \`nitro-cli build-enclave\` prints.`,
       'Pass the file nitro-cli wrote.',
     ),
-  releaseExists: (agent: string, rid: string) => new CliError('release_exists', `This build is already approved for agent ${agent} (release ${short(rid)}).`),
+  releaseExists: (agent: string, rid: string) =>
+    new CliError('release_exists', `This build is already approved for agent ${agent} (release ${short(rid)}).`, `Nothing to do; \`attessa status --agent ${agent}\` shows it.`, true),
   endpointInactive: (origin: string, agent: string) =>
     new CliError('endpoint_inactive', `Not registered: ${origin} isn't an active endpoint for agent ${agent}.`, 'Add it with `attessa endpoint add`.'),
   notOperator: (address: string, origin: string) =>
@@ -326,7 +367,7 @@ export const BUY = {
   initIntro: 'attessa checks which build a service runs before you pay it, and only pays if the answer checks out.',
   networkSepolia: 'Network: Celo Sepolia (test money). Use --network mainnet for real payments.',
   networkMainnet: 'Network: Celo mainnet (real money).', // not in FLOWS
-  networkLocal: (rpc: string) => `Network: local chain at ${rpc}.`, // not in FLOWS
+  networkLocal: (rpc: string) => `Network: local chain at ${rpcShownSafe(rpc)}.`, // not in FLOWS
   walletCreated: (a: string) => `Wallet: none found. Created one for this computer: ${a} (key stored in your OS keychain, never printed)`,
   walletFound: (a: string, from: string) => `Wallet: ${a} (key from ${from}, never printed)`, // not in FLOWS
   fundSepolia: 'Fund it: CELO for gas at faucet.celo.org/celo-sepolia, test USDC at faucet.circle.com (choose Celo Sepolia)',
@@ -485,7 +526,7 @@ export const BUYERR = {
     ),
   // §6 J1 "Price above the limit" (§8's row has shorter words; the dialog's are used).
   overMax: (p: string, sym: string, m: string) =>
-    new CliError('over_max_amount', `Not paying: the price is ${p} ${sym} and your limit per call is ${m}. Pass --max-amount ${p} if that's fine. Nothing was signed.`),
+    new CliError('over_max_amount', `Not paying: the price is ${p} ${sym} and your limit per call is ${m}. Pass --max-amount ${p} if that's fine. Nothing was signed.`, `Raise --max-amount to ${p} if that's fine.`, true),
   overDailyCap: (s: string, c: string) =>
     new CliError('over_daily_cap', `Not paying: this would take today's spend to ${s} USDC; your cap is ${c}.`, 'Wait until 00:00 UTC or raise `--daily-cap`.'),
   livenessFailed: (origin: string, reason: string) =>
@@ -544,7 +585,7 @@ export const BUYERR = {
   cancelUnconfirmed: (tx: string) =>
     new CliError('tx_unconfirmed', `The cancel was sent (tx ${tx}) but isn't confirmed yet.`, 'Run `attessa status --pending` to see whether it landed.'),
   /** The RPC dropped after the cancel permission was signed, before its transaction was sent. // not in FLOWS: the rpc row's tail for it. */
-  cancelNotSent: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpc}. Nothing was sent.`, 'Retry or set another `--rpc`.'),
+  cancelNotSent: (rpc: string) => new CliError('rpc_unavailable', `Can't reach Celo at ${rpcShownSafe(rpc)}. Nothing was sent.`, 'Retry or set another `--rpc`.'),
   /** The token's one flag reads "used or cancelled" but neither log has appeared yet. // not in FLOWS */
   cancelUndecided: () =>
     new CliError('uncertain', "Your payment permission was already used or cancelled, but Celo doesn't show which yet.", 'Run attessa status --pending in a minute to see which.'),

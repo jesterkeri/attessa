@@ -54,7 +54,7 @@ export async function fetchAttestation(deps: Deps, url: string): Promise<Buffer>
     if (json?.error === 'enclave_unavailable' || json?.error === 'not_configured') {
       throw new CliError('enclave_unavailable', `The seller-host at ${url} has no running, configured enclave (${String(json.error)}).`, 'Run `attessa enclave start` first.');
     }
-    throw new CliError('seller_host_error', `The seller-host at ${url} answered HTTP ${res.status}.`, null);
+    throw new CliError('seller_host_error', `The seller-host at ${url} answered HTTP ${res.status}.`, 'Check that seller-host is running on this machine, then run the command again.');
   }
   return Buffer.from(json.attestation, 'base64');
 }

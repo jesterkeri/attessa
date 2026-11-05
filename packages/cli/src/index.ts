@@ -241,7 +241,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
       deps.io.out(jsonOut({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
     } else {
       io.err(err.message);
-      if (err.next) io.err(err.next);
+      if (err.next && !err.inline) io.err(err.next);
     }
     return 1;
   }

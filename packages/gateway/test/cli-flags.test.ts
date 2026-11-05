@@ -115,3 +115,26 @@ describe('attessa gateway resume --dry-run (SPEC §6.6)', () => {
     expect(h.db.isPaused()).toBe(true);
   });
 });
+
+describe('attessa gateway export --json (Codex T21 r1 Major 2)', () => {
+  it('is one {ok, rows} object with one object per row, whatever --format says; usage refusals carry a next action', async () => {
+    const { run, out, err } = await rig();
+    h.fac.apiKey = null; // the harness gateway's own facilitator client carries no key
+    await h.call(await h.pay());
+    const since = new Date(0).toISOString();
+    expect(await run('export', '--since', since, '--format', 'jsonl')).toBe(0);
+    const plain = out.splice(0).join('').split('\n').filter(Boolean).map((l) => JSON.parse(l));
+    expect(plain.map((r) => r.state)).toEqual(['delivered']);
+    for (const format of ['csv', 'jsonl']) {
+      expect(await run('export', '--json', '--since', since, '--format', format)).toBe(0);
+      expect({ format, n: out.length }).toEqual({ format, n: 1 });
+      const o = JSON.parse(out.pop()!);
+      expect(Object.keys(o)).toEqual(['ok', 'rows']);
+      expect(o).toEqual({ ok: true, rows: plain });
+    }
+    expect(await run('export', '--json')).toBe(2);
+    expect(JSON.parse(out.pop()!)).toMatchObject({ ok: false, error: 'usage', next: 'Next: run it again in the form the usage line shows.' });
+    expect(await run('bogus')).toBe(2);
+    expect(err.join('')).toContain('Next: run it again in the form the usage line shows.');
+  });
+});

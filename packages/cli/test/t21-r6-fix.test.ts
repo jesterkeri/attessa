@@ -41,21 +41,21 @@ describe('a simulated revert prints no free text from the node', () => {
     failAt('eth_estimateGas', () => new RpcError(3, 'execution reverted: NODE-REPLY-TEXT', '0x'));
     expect(await w.cli(...argv)).toBe(1);
     expect(w.chain.sent).toHaveLength(0);
-    expect(w.err).toEqual(['The transaction would revert. Nothing was sent.']);
+    expect(w.err).toEqual(['The transaction would revert. Nothing was sent.', 'Check the arguments and the wallet with `attessa status --agent <id>`, then run it again.']);
   });
 
   it('a -32000 "execution reverted" reply is still a revert, not the rpc row', async () => {
     const argv = revokeSignerSetup();
     failAt('eth_estimateGas', () => new RpcError(-32000, 'execution reverted NODE-REPLY-TEXT', undefined));
     expect(await w.cli(...argv)).toBe(1);
-    expect(w.err).toEqual(['The transaction would revert. Nothing was sent.']);
+    expect(w.err).toEqual(['The transaction would revert. Nothing was sent.', 'Check the arguments and the wallet with `attessa status --agent <id>`, then run it again.']);
   });
 
   it('an undecodable revert keeps only its name', async () => {
     const argv = revokeSignerSetup();
     failAt('eth_estimateGas', () => new RpcError(3, 'execution reverted NODE-REPLY-TEXT', '0xdeadbeef'));
     expect(await w.cli(...argv)).toBe(1);
-    expect(w.err).toEqual(['The transaction would revert (unknown). Nothing was sent.']);
+    expect(w.err).toEqual(['The transaction would revert (unknown). Nothing was sent.', 'Check the arguments and the wallet with `attessa status --agent <id>`, then run it again.']);
   });
 
   it('an Error(string) reason decoded from the ABI is printed, escaped', async () => {
@@ -63,7 +63,7 @@ describe('a simulated revert prints no free text from the node', () => {
     const data = encodeErrorResult({ abi: [{ type: 'error', name: 'Error', inputs: [{ type: 'string', name: 'reason' }] }], errorName: 'Error', args: ['paused\x1b[2J'] });
     failAt('eth_estimateGas', () => new RpcError(3, 'execution reverted NODE-REPLY-TEXT', data));
     expect(await w.cli(...argv)).toBe(1);
-    expect(w.err).toEqual(['The transaction would revert: paused\\x1b[2J. Nothing was sent.']);
+    expect(w.err).toEqual(['The transaction would revert: paused\\x1b[2J. Nothing was sent.', 'Check the arguments and the wallet with `attessa status --agent <id>`, then run it again.']);
   });
 });
 

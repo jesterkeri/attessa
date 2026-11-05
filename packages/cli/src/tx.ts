@@ -240,7 +240,7 @@ export async function planOrSend(
 function afterSigning(e: unknown): unknown {
   if (!(e instanceof CliError)) return e;
   const kept = e.message.replace(NOTHING_DONE, '');
-  return kept === e.message ? e : new CliError(e.code, kept, e.next);
+  return kept === e.message ? e : new CliError(e.code, kept, e.next, e.inline);
 }
 
 /** The closing clause that is only true while nothing of the command has been signed. */

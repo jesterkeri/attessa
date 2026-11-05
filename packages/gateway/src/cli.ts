@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util';
 import { loadConfig } from './config.ts';
 import { CallStore } from './db.ts';
 import { HttpFacilitator } from './facilitator.ts';
-import { exportRows, pause, resume, resumeCheck, status } from './admin.ts';
+import { exportRecords, exportRows, pause, resume, resumeCheck, status } from './admin.ts';
 
 /** Default config path per network on the host (SPEC §5 table: one gateway per network). */
 export function defaultConfigPath(network: string): string {
@@ -16,7 +16,7 @@ const USAGE = 'usage: attessa gateway pause|resume|status|export [--network main
  *
  * The SPEC §8 global flags are accepted: `--yes` and `--rpc` change nothing (these commands never ask and never read
  * a chain), and under `--json` every outcome is one JSON object on stdout (`ok`, and `message`/`next` or the status),
- * as the rest of the CLI prints it. `export` still writes its rows in `--format`, which is already machine-readable.
+ * as the rest of the CLI prints it; `export --json` is `{ok, rows}` with one object per row (the `--format` columns).
  */
 export async function runGatewayCommand(
   args: string[],
@@ -30,8 +30,9 @@ export async function runGatewayCommand(
     return code;
   };
   const say = (message: string): number => (json ? done(0, { message }) : (out(`${message}\n`), 0));
-  const fail = (code: number, error: string, message: string, next?: string): number =>
-    json ? done(code, { error, message, ...(next ? { next } : {}) }) : (err(`${message}\n${next ? `${next}\n` : ''}`), code);
+  // Every refusal names one next action (FLOWS.md:832); a usage refusal's is the usage line's own form.
+  const fail = (code: number, error: string, message: string, next = 'Next: run it again in the form the usage line shows.'): number =>
+    json ? done(code, { error, message, next }) : (err(`${message}\n${next}\n`), code);
 
   // Read as the rest of the CLI reads flags (node:util parseArgs): `--x v` or `--x=v`, the last one wins, and an
   // unknown flag is refused rather than ignored.
@@ -109,6 +110,7 @@ export async function runGatewayCommand(
         out(`${JSON.stringify(status(db))}\n`);
         return 0;
       default:
+        if (json) return done(0, { rows: exportRecords(db, v.since!) });
         out(exportRows(db, v.since!, (v.format ?? 'csv') as 'csv' | 'jsonl'));
         return 0;
     }

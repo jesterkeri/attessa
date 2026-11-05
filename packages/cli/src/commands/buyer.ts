@@ -335,7 +335,8 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   const asset = parseAsset(o.asset);
   // The data folder holds the ledger, evidence and config; an answer written over one of them would destroy it.
   if (intoDataDir(resolve(d.cwd, o.out ?? 'result.json'), realDir(resolve(dataDir(d))))) {
-    throw ERR.usage(`--out can't be inside ${display(d, realDir(resolve(dataDir(d))))}, which holds your records. Choose another file.`); // not in FLOWS
+    // not in FLOWS; the line ends with its own next action
+    throw new CliError('usage', `--out can't be inside ${display(d, realDir(resolve(dataDir(d))))}, which holds your records. Choose another file.`, 'Choose another file for --out.', true);
   }
   const body = /^\s*[[{]/.test(o.body) ? o.body : readBody(d, o.body);
   const limits = limitsFor(cfg, o, asset);
@@ -751,7 +752,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       } catch (err) {
         if (!(err instanceof CliError)) throw err;
         d.io.err(err.message);
-        if (err.next) d.io.err(err.next);
+        if (err.next && !err.inline) d.io.err(err.next);
         errors.push({ requestId: r.requestId, error: err.code, message: err.message, next: err.next });
       }
     }

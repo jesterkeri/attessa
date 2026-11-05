@@ -2521,3 +2521,25 @@ verify (gateway tests touched by r63/r64; the full `pnpm -r test` run was cut of
       Tests  13 passed (13)
 ```
 reviewed: pending (Codex r1)
+
+### T21 Codex r1 fixes - 2026-11-05
+Codex r1 (reviews/t21-cli-review-r1.md, on 0861286): REVISE, 3 major. (1) An RPC URL was printed verbatim, provider keys included: every line naming the RPC now shows scheme://host[:port] only. (2) `attessa gateway export --json` wrote raw CSV/JSONL: it is now one `{ok, rows}` object. (3) Errors without a next action: each named row has its own; `CliError` falls back by code and never has `next` null; rows whose FLOWS line already holds the action are marked inline (printed once, `next` set for --json). Tests: packages/cli/test/codex-t21-r1.test.ts (5), packages/gateway/test/cli-flags.test.ts (+1); six existing tests that pinned output without a next action now expect it.
+Codex's own full run failed on its side (core failed, cli suites timed out); the same commands on 0861286 on this machine, idle: core 69, seller-host 81, gateway 163, sdk 191, cli 326 passed, exit 0.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  84 passed (84)
+packages/cli test:       Tests  331 passed (331)
+test=0
+```
+reviewed: pending (Codex r2)
