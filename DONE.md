@@ -2570,7 +2570,7 @@ test=0
 ```
 reviewed: pending (Codex r3)
 
-### T21b MCP server - 2026-11-06
+### T21b MCP server - 2026-11-05
 
 Built `packages/mcp` (@attessa/mcp): a stdio MCP server on `@modelcontextprotocol/sdk` 1.32.2 (exact, no install scripts) with the 9 FLOWS agent tools: `resolve_endpoint`, `check_liveness`, `quote`, `pay_and_verify`, `verify_proof`, `get_result`, `list_pending`, `cancel_authorization`, `status`. Each has a JSON input schema and description; `pay_and_verify` and `cancel_authorization` say SIDE EFFECT (signs and spends / sends a transaction). Tools drive the CLI `run()` with `--json` (so the SDK bounds, key loading, FLOWS §6/§8 strings and credential-safe errors are the CLI's), `verify_proof` is offline, `get_result`/`list_pending` read the ledger. maxAmount may lower the saved per-call limit, never raise it; dailyCap is the CLI's; keys only from ATTESSA_PRIVATE_KEY / ATTESSA_KEYSTORE / keychain; every result is scrubbed of configured secrets and URL userinfo. 17 vitest tests, including an in-process MCP client that lists exactly 9 tools and runs `verify_proof` on the recorded Sepolia vector (vectors/headers.json), bounds refusals and no-key-in-output. Design choices not in FLOWS are in OPEN-QUESTIONS.md.
 
@@ -2593,3 +2593,9 @@ FAIL pnpm-lock.yaml: better-sqlite3@13.0.3: allowlisted package without its pinn
 FAIL: repo install config is outside the allow-list
 ```
 reviewed: pending (Codex r1)
+Note on `./scripts/check-install-scripts.sh` (exit 1 above): the base commit d4567fc fails with the same 7 FAIL lines (bin/engines/gen:vectors/render-units and the unpinned better-sqlite3 integrity), fixed by the open branch fix/install-allowlist, not by this task. That branch's guard (9909372) run on this commit, under the lock:
+```
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+```
+So @modelcontextprotocol/sdk 1.32.2 and its new transitive packages pass the allow-list. Not covered by tests yet: a successful `cancel_authorization`, and `get_result`/`status` on an open call (left for Codex r1).
