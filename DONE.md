@@ -1507,3 +1507,26 @@ ok: refused
 r9full_rc=0
 ```
 reviewed: pending (adversary r15, then Codex r2)
+
+### Install allow-list adversary r15 - 2026-11-05
+adversary r15 on af856ef: a pnpm-workspace.yaml with two `<<` merge keys (`<<: {ignoreScripts: false}` then a flow mapping holding a plain `ignoreScripts: true` line) passed the guard, since PyYAML lets the later merge win, while pnpm 10.32.1's @zkochan/js-yaml lets the earlier win; offline, pnpm ran a root postinstall with it, and the full guard run ended "ok". Its lead, the same split in pnpm-lock.yaml, holds too (merge keys, anchors, aliases and tags all passed).
+Tests 5022ffb: `scripts/adversary-install-r15/yaml-merge.test.sh` (the adversary's) and `scripts/adversary-install-r15/lock-merge.test.sh` (merge key, anchor and alias, tag in the lockfile), all failing before the fix. Fix 3928332: the guard scans both YAML files' tokens and refuses anchors, aliases, tags, directives and `<<` keys (pnpm never writes them), and pnpm-workspace.yaml, past its comment lines, must be one exact text (replacing the r14 one-line check).
+
+verify at 3928332 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r16, then Codex r2)
