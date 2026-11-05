@@ -277,12 +277,19 @@ export async function releaseStatus(g: Global, deps: Deps, o: { id?: string | un
     // Live signers of this build and the origins they serve (J4's "Its 1 live signer … risk.example refuses calls").
     const now = (await head(c)).timestamp;
     const live: Hex[] = [];
-    for (const ev of await events(c, 'SignerRegistered', { agentId, releaseId: rid })) {
+    // A Deprecated release has no live signers to stop (FLOWS §7: Deprecated-for-new-calls makes them Inert).
+    for (const ev of status === 'Approved' ? await events(c, 'SignerRegistered', { agentId, releaseId: rid }) : []) {
       const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [ev.args.signer as Address]);
       if (SIGNER_STATUS[s.status as number] !== 'Active' || (s.expiresAt as bigint) <= now) continue;
-      // A signer on a retired endpoint (or one with another operator now) is already Inert (FLOWS §7): not live.
+      // A signer on a retired endpoint, one with another operator now, or one another agent holds is already Inert
+      // (FLOWS §7; checkSigner's AGENT_MISMATCH and OPERATOR_MISMATCH, SPEC §3.4): not live.
       const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [s.originHash as Hex]);
-      if (ENDPOINT_STATUS[e.status as number] === 'Active' && (e.operator as string).toLowerCase() === (s.operator as string).toLowerCase()) live.push(s.originHash as Hex);
+      if (
+        ENDPOINT_STATUS[e.status as number] === 'Active' &&
+        (e.agentId as bigint) === agentId &&
+        (e.operator as string).toLowerCase() === (s.operator as string).toLowerCase()
+      )
+        live.push(s.originHash as Hex);
     }
     const hosts = [...new Set(await Promise.all([...new Set(live)].map(async (oh) => safe(host((await originOf(c, oh)) ?? short(oh))))))];
     prompt = () => OWN.revokeReleasePrompt(src, live.length, hosts);
