@@ -95,7 +95,16 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
       null,
       2,
     )}\n`;
-  deps.writeFile(file, doc([]));
+  // FLOWS:846 "Preview replaces undo": a dry run or a cancel leaves the file as it was. Without a key the
+  // register is signed elsewhere, so the unregistered file is written now, unless it already names an agent.
+  const registered = (): boolean => {
+    try {
+      return deps.exists(file) && ((JSON.parse(deps.readFile(file).toString()) as { registrations?: unknown[] }).registrations?.length ?? 0) > 0;
+    } catch {
+      return false;
+    }
+  };
+  if (!c.account && !g.dryRun && !registered()) deps.writeFile(file, doc([]));
   const from = (c.account?.address.toLowerCase() as Address | undefined) ?? ZERO;
   const step: Step = { label: 'register', to: identity, data: encodeFunctionData({ abi: IDENTITY_ABI, functionName: 'register', args: [o.uri] }) };
   return write(c, g, deps, {
