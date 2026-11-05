@@ -1608,3 +1608,31 @@ ok: refused
 probe-rc=0
 ```
 reviewed: pending (adversary r19, then Codex r2)
+
+### Install allow-list adversary r19 - 2026-11-05
+adversary r19 on 5f583c0: PyYAML (YAML 1.1) reads an unquoted lockfile key `null` or `~` as None, while pnpm 10.32.1 reads it as the string "null". With `"null": "workspace:*"` in packages/cli/package.json and `null: {specifier: workspace:*, version: link:../../vendor/null}` in the lockfile, the r18 rule compared `proj.get(<not a project>)` (None) with the name (None) and accepted the link; pnpm linked node_modules/null to vendor/null (the adversary ran it), and the `~` case to a folder outside the repository.
+Test 77bdbab: `scripts/adversary-install-r19/importer-null-name.test.sh` (the adversary's), failing before the fix. Fix c9aba0f: every mapping key in pnpm-lock.yaml must be a string, and only a workspace project with a string name can be a link target.
+
+verify at c9aba0f (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r20, then Codex r2)
