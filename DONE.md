@@ -2133,3 +2133,21 @@ packages/cli test:  Test Files  65 passed (65)
 packages/cli test:       Tests  282 passed (282)
 ```
 reviewed: pending (adversary r46, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r46 fixes - 2026-11-05
+adversary r46 (1f577e0, test `packages/cli/test/adversary-t21-r46.test.ts`, failing first): the `revoke release` (J4) prompt still counted as live a signer of a Deprecated release, and a signer whose origin another agent now holds, while `status --agent` showed both `Inert` (FLOWS.md:698, :706; checkSigner AGENT_MISMATCH and RELEASE_NOT_APPROVED, SPEC.md:288, :290). Fixed in 247ddfe (packages/cli/src/commands/registry.ts): no live signers unless the release is Approved, and a live signer's endpoint must belong to this agent. Its unproven lead, the deprecate prompt's "You can approve it again later" with no CLI path to re-approve, is in OPEN-QUESTIONS.md for design. Round 45's CSV suspicion was dropped by r46 (an export of the evidence record, not terminal text).
+No existing assertion changed. CI on c6c0a4a (r45): `ci` success, `harness` success.
+
+verify at 247ddfe (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  66 passed (66)
+packages/cli test:       Tests  284 passed (284)
+```
+reviewed: pending (adversary r47, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
