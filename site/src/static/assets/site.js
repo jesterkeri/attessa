@@ -42,6 +42,8 @@
     // The menu covers the page: keep Tab out of what's under it while it's open.
     $$('.skip, main, footer').forEach(el => { el.inert = open; });
     if (open) $('a', menu)?.focus();
+    // Closed with focus inside (a new-tab link, the window growing past 1020px): give it back to something visible.
+    else if (menu.contains(document.activeElement)) (menuBtn.offsetParent ? menuBtn : $('main')).focus();
   };
   menuBtn?.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
   menu?.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
