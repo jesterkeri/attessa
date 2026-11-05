@@ -2112,3 +2112,24 @@ packages/cli test:  Test Files  64 passed (64)
 packages/cli test:       Tests  278 passed (278)
 ```
 reviewed: pending (adversary r45, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r45 fixes - 2026-11-05
+adversary r45 (6f6ee3c, test `packages/cli/test/adversary-t21-r45.test.ts`, failing first):
+1. `attessa status --agent` listed a signer whose release was revoked or whose endpoint was retired as `Active`, and `--json` `.signer` picked it (FLOWS §7 signer statechart: "Active --> Inert … Checks evaluate signer AND release AND endpoint").
+2. `invalid_transition` and `signer_not_active` ended with no next action (FLOWS.md:832); `self_disabled` had the same gap.
+Fixed in 50e4126: `status --agent` derives `Inert` for an active, unexpired signer whose release isn't Approved or whose endpoint isn't Active or has another operator (packages/cli/src/commands/registry.ts); the `revoke release` prompt no longer counts such signers as live; the three rows get a next action (packages/cli/src/copy.ts; OPEN-QUESTIONS.md entry, not in FLOWS).
+No existing assertion changed. CI on 9782b3f (r44): `ci` success, `harness` success.
+
+verify at 50e4126 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  65 passed (65)
+packages/cli test:       Tests  282 passed (282)
+```
+reviewed: pending (adversary r46, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
