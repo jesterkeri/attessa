@@ -1,3 +1,4 @@
+import { parseArgs } from 'node:util';
 import { loadConfig } from './config.ts';
 import { CallStore } from './db.ts';
 import { HttpFacilitator } from './facilitator.ts';
@@ -8,14 +9,7 @@ export function defaultConfigPath(network: string): string {
   return `/etc/attessa/gateway-${network}.config.json`;
 }
 
-/** `--name value` or `--name=value`, as parseArgs reads the rest of the CLI; a flag with no value is '' so it is refused, not defaulted. */
-function flag(args: string[], name: string): string | undefined {
-  const eq = args.find((a) => a.startsWith(`${name}=`));
-  if (eq !== undefined) return eq.slice(name.length + 1);
-  const i = args.indexOf(name);
-  return i >= 0 ? (args[i + 1] ?? '') : undefined;
-}
-
+const USAGE = 'usage: attessa gateway pause|resume|status|export [--network mainnet|sepolia] [--config <path>] [--dry-run]';
 /**
  * `attessa gateway pause|resume|status|export [--network mainnet|sepolia] [--config <path>]`.
  * Returns the exit code; writes to the given streams. The API key is read from env `FACILITATOR_API_KEY` only.
@@ -25,13 +19,43 @@ export async function runGatewayCommand(
   out: (s: string) => void = (s) => process.stdout.write(s),
   err: (s: string) => void = (s) => process.stderr.write(s),
 ): Promise<number> {
-  const [cmd, ...rest] = args;
-  const network = flag(rest, '--network') ?? 'sepolia';
+  // Read as the rest of the CLI reads flags (node:util parseArgs): `--x v` or `--x=v`, the last one wins, and an
+  // unknown flag is refused rather than ignored.
+  let v: { network?: string; config?: string; since?: string; format?: string; 'dry-run'?: boolean };
+  let pos: string[];
+  try {
+    ({ values: v, positionals: pos } = parseArgs({
+      args,
+      allowPositionals: true,
+      options: { network: { type: 'string' }, config: { type: 'string' }, since: { type: 'string' }, format: { type: 'string' }, 'dry-run': { type: 'boolean' } },
+    }));
+  } catch (e) {
+    err(`${(e as Error).message}\n${USAGE}\n`);
+    return 2;
+  }
+  const [cmd, ...extra] = pos;
+  if (extra.length > 0) {
+    err(`${USAGE}\n`);
+    return 2;
+  }
+  const network = v.network ?? 'sepolia';
   if (network !== 'mainnet' && network !== 'sepolia') {
     err('--network must be mainnet or sepolia\n');
     return 2;
   }
-  const cfg = loadConfig(flag(rest, '--config') ?? defaultConfigPath(network));
+  const path = v.config ?? defaultConfigPath(network);
+  let cfg: ReturnType<typeof loadConfig>;
+  try {
+    cfg = loadConfig(path);
+  } catch (e) {
+    // Only the error code: the file's text is not echoed.
+    err(`Can't read the ${network} gateway config at ${path} (${(e as { code?: string }).code ?? 'invalid'}).\nNext: check the file on this host, or pass --config <path>.\n`);
+    return 1;
+  }
+  if (v['dry-run'] && (cmd === 'pause' || cmd === 'resume')) {
+    out(`Would ${cmd} the ${network} gateway (${path}). Dry run: nothing was changed.\n`);
+    return 0;
+  }
   const db = new CallStore(cfg.dbPath);
   try {
     switch (cmd) {
@@ -48,17 +72,21 @@ export async function runGatewayCommand(
         out(`${JSON.stringify(status(db))}\n`);
         return 0;
       case 'export': {
-        const since = flag(rest, '--since');
-        const format = flag(rest, '--format') ?? 'csv';
+        const since = v.since;
+        const format = v.format ?? 'csv';
         if (!since || (format !== 'csv' && format !== 'jsonl')) {
           err('usage: attessa gateway export --since <date> --format csv|jsonl\n');
+          return 2;
+        }
+        if (Number.isNaN(Date.parse(since))) {
+          err(`--since must be a date, like 2026-11-01, not ${JSON.stringify(since)}.\nNext: attessa gateway export --since 2026-11-01 --format ${format}\n`);
           return 2;
         }
         out(exportRows(db, since, format));
         return 0;
       }
       default:
-        err('usage: attessa gateway pause|resume|status|export [--network mainnet|sepolia] [--config <path>]\n');
+        err(`${USAGE}\n`);
         return 2;
     }
   } finally {
