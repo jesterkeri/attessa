@@ -39,6 +39,8 @@
     menuBtn.setAttribute('aria-label', open ? 'Close menu' : 'Open menu');
     menu.hidden = !open;
     root.classList.toggle('menu-open', open);
+    // The menu covers the page: keep Tab out of what's under it while it's open.
+    $$('.skip, main, footer').forEach(el => { el.inert = open; });
     if (open) $('a', menu)?.focus();
   };
   menuBtn?.addEventListener('click', () => setMenu(menuBtn.getAttribute('aria-expanded') !== 'true'));
