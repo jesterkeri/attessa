@@ -123,7 +123,10 @@
         }
       });
     });
-    select(tabs.find(t => t.getAttribute('aria-selected') === 'true') ?? tabs[0]);
+    // A link to a panel (#panel-seller) opens that panel's tab, also on reload or Back.
+    const fromHash = () => tabs.find(t => `#${t.getAttribute('aria-controls')}` === location.hash);
+    select(fromHash() ?? tabs.find(t => t.getAttribute('aria-selected') === 'true') ?? tabs[0]);
+    addEventListener('hashchange', () => { const t = fromHash(); if (t) select(t); });
   });
 
   // Header index links: one picks a side on How it works, another jumps to one beat of a pinned scene.

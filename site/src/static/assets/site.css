@@ -342,6 +342,9 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 .scene-sec { position: relative; height: calc(var(--len, 2) * 100vh); }
 .scene-sticky { position: sticky; top: 0; height: 100svh; display: flex; align-items: center; overflow: hidden; }
 .scene-sticky > .wrap { padding-top: var(--nav-h); }
+/* Until scene.js runs the beats stack, so the pinned one-screen box would clip them: unpin it, as the story does. */
+:root:not(.scene-live) .scene-sec { height: auto; }
+:root:not(.scene-live) .scene-sticky { position: relative; height: auto; overflow: visible; padding: 96px 0; }
 .scene-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); align-items: center; gap: 40px clamp(32px, 5vw, 80px); }
 .scene-copy { position: relative; z-index: 1; }
 .scene-copy h2 { max-width: 14ch; }
