@@ -1730,3 +1730,20 @@ sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
 reviewed: pending (adversary r38, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r38 fixes - 2026-11-05
+adversary r38 (010f59a, test `packages/cli/test/adversary-t21-r38.test.ts`, failing first): a re-run that resumed a `signed` call (its first run died after signing) got the gateway's 404 `result_not_found` and waited up to two minutes in `finalize` for the expiry check with no line printed between "Resuming it instead of paying again." and "Not charged: …" (FLOWS:825 "No silent waits"). Fixed in 34d5faf:
+- `packages/cli/src/commands/buyer.ts` (`waiting` progress): the confirming line and its next action print for every wait except a call whose settlement is known and an `uncertain` call that already printed "Lost the connection…". So a resumed `signed` or `settle_pending` call gets it too. The OPEN-QUESTIONS.md entry for that copy now names this case.
+No existing assertion changed.
+
+verify at 34d5faf (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  57 passed (57)
+cli:       Tests  268 passed (268)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r39, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
