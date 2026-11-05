@@ -721,7 +721,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!wait) return usedNoLog ? { ...current(entry, meta), authorizationUsed: true } : current(entry, meta);
       if (!announced && chainNow !== undefined) {
         announced = true;
-        progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow });
+        progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow, ...(usedNoLog ? { used: true as const } : {}) });
       }
       await sleep(POLL_MS);
     }

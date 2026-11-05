@@ -87,7 +87,8 @@ export type Progress =
   /** V9: 202 `settle_pending`; `tx` from `PAYMENT-RESPONSE` when the gateway knows it. */
   | { kind: 'settle_pending'; entry: PendingEntry; tx: Hash | null }
   /** Refused or uncertain → final: about to wait for the chain, with the chain time it read. Once per call. */
-  | { kind: 'waiting'; entry: PendingEntry; chainNow: bigint };
+  /** `used`: past expiry the chain already reads the permission used (or cancelled); only its log is awaited. */
+  | { kind: 'waiting'; entry: PendingEntry; chainNow: bigint; used?: true };
 
 /** SPEC §7. */
 export type Outcome =

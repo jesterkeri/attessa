@@ -381,6 +381,11 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           out(BUY.settlePending(hms(BigInt(e.entry.validBefore!) + 60n), e.tx));
           return;
         case 'waiting': {
+          // Already used or cancelled on chain: it can't expire unused and cancel can't void it.
+          if (e.used) {
+            out(BUY.usedWaiting);
+            return;
+          }
           // A call whose settlement is known was used: no expiry to wait for, nothing to void. An uncertain call that
           // printed "Lost the connection…" already said it is checking. Every other wait (refused; uncertain after an
           // answer with no settlement; a resumed signed or settle_pending call) gets this line, so none is silent

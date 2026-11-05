@@ -353,6 +353,8 @@ export const BUY = {
   // §6 J2
   refusedCheck: (words: string, term: string) => `Refused: ${words}  (${term})`,
   confirming: (t: string, n: string) => `Confirming you weren't charged: your payment permission expires unused at ${t} UTC (in ${n} s). Waiting…`,
+  // not in FLOWS: the wait for the log of a permission the chain already reads used or cancelled.
+  usedWaiting: "Your payment permission was already used or cancelled; waiting for Celo to show which…  (up to a minute)",
   voidHint: (id: string) =>
     `  To void it right now instead: attessa cancel ${id}  (on-chain cancel, ~0.0004 CELO gas). Ctrl-C stops waiting; attessa status --pending checks later.`,
   notCharged: (block: string) => `Not charged: confirmed on Celo, your payment permission expired unused  (block ${block})`,
