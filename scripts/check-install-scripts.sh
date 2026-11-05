@@ -286,6 +286,9 @@ for k, v in (L.get("packages") or {}).items():
 proj = {}
 for p in reg:
     if re.fullmatch(r"packages/[^/]+/package\.json", p):
+        # the pnpm packages/* glob skips dot folders and ignores bower_components (node_modules is refused above)
+        if re.fullmatch(r"packages/(\.[^/]*|bower_components)/package\.json", p):
+            bad.append(f"{p}: pnpm does not list this folder as a workspace project"); continue
         try: nm = json.loads(blob(p).decode("utf-8")).get("name")
         except (ValueError, AttributeError): nm = None
         if isinstance(nm, str) and re.fullmatch(NAME, nm): proj[os.path.dirname(p)] = nm
