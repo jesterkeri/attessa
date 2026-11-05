@@ -2235,3 +2235,24 @@ packages/cli test:  Test Files  70 passed (70)
 packages/cli test:       Tests  296 passed (296)
 ```
 reviewed: pending (adversary r51, then Codex)
+
+### T21 adversary r51 (failing test a611992, fix 788fa22)
+Finding: a call paid from wallet A and interrupted after settlement, then `status --pending` run with `ATTESSA_PRIVATE_KEY` set to wallet B: B's results request got the gateway's 404 (SPEC §6: only the payer's signature fetches), the SDK took it as no result and ended the call `paid_but_rejected{missing_proof}`, final, so wallet A's later run never fetched the answer the gateway held (FLOWS.md:624, 640).
+Fix: the SDK's `fetchResult` returns `unsure` without signing when the loaded wallet isn't the entry's payer, so only chain state can decide such a call; the CLI's next line for it names the paying wallet ("only the wallet that paid can fetch it. Run attessa status --pending with {payer}."; not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  71 passed (71)
+packages/cli test:       Tests  298 passed (298)
+```
+reviewed: pending (adversary r52, then Codex)
