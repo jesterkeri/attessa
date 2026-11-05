@@ -178,6 +178,9 @@ PINNED = {"better-sqlite3@13.0.3": "sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVk
 # A node semver range: comparator sets joined by ||, each a hyphen range or space-separated comparators.
 _V = r"(0|[1-9][0-9]*|[xX*])(\.(0|[1-9][0-9]*|[xX*])){0,2}"
 _SET = rf"{_V} - {_V}|((<=|>=|<|>|=|\^|~) *)?{_V}( +((<=|>=|<|>|=|\^|~) *)?{_V})*"
+# pnpm joins node_modules with each dependency name, so a name is an npm package name: no "/" beyond its scope,
+# no leading "." (so no ".."), nothing that makes it a path.
+NAME = r"(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*"
 NODE_RANGE = rf"({_SET})( *\|\| *({_SET}))*"
 blob = lambda p: open(os.path.join(sys.argv[4], p), "rb").read()
 names = ("package.json", "package.json5", "package.yaml", "pnpm-workspace.yaml", "pnpm-lock.yaml")
@@ -232,6 +235,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
         if scripts: bad.append(f"{p}: scripts not allowed: {sorted(scripts)}")
         for k in ("dependencies", "devDependencies"):
             for n, v in m.get(k, {}).items():
+                if not re.fullmatch(NAME, str(n)): bad.append(f"{p}: dependency name {n!r} is not an npm package name")
                 if not re.fullmatch(r"workspace:[*^~]|[\^~]?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?", str(v)): bad.append(f"{p}: {n}@{v} is not a registry version or workspace:")
 for p, s, f in later:
     if f not in files: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
@@ -262,7 +266,7 @@ def keys(o):
     if isinstance(o, dict): return all(isinstance(k, str) and keys(v) for k, v in o.items())
     return all(keys(v) for v in o) if isinstance(o, list) else True
 if not keys(L): bad.append("pnpm-lock.yaml: every mapping key must be a string (PyYAML and pnpm read null, ~, yes or 1 keys differently)")
-semver = r"(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
+semver = NAME + r"@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
 # pnpm merges each packages entry over its snapshot (its dependencies, version or id win) and reads top-level keys
 # such as overrides, patchedDependencies or catalogs, so only the fields this lockfile uses are allowed.
 extra = set(L) - {"lockfileVersion", "settings", "importers", "packages", "snapshots"}
@@ -284,12 +288,14 @@ for p in reg:
     if re.fullmatch(r"packages/[^/]+/package\.json", p):
         try: nm = json.loads(blob(p).decode("utf-8")).get("name")
         except (ValueError, AttributeError): nm = None
-        if isinstance(nm, str): proj[os.path.dirname(p)] = nm
+        if isinstance(nm, str) and re.fullmatch(NAME, nm): proj[os.path.dirname(p)] = nm
+        else: bad.append(f"{p}: name {nm!r} is not an npm package name")
 snaps = L.get("snapshots") or {}
 for i, deps in (L.get("importers") or {}).items():
     if i != "." and i not in proj: bad.append(f"pnpm-lock.yaml: importer {i} is not the root or a workspace project")
     for f, d in (deps or {}).items():
         for n, x in (d or {}).items():
+            if not re.fullmatch(NAME, str(n)): bad.append(f"pnpm-lock.yaml: importer {i}: dependency name {n!r} is not an npm package name")
             xv, sp = str(x.get("version")), str(x.get("specifier"))
             if xv.startswith("link:"): ok = sp.startswith("workspace:") and proj.get(os.path.normpath(os.path.join(str(i), xv[5:]))) == n
             else: ok = not sp.startswith("workspace:") and f"{n}@{xv}" in snaps
@@ -303,6 +309,7 @@ for k, v in (L.get("snapshots") or {}).items():
     if extra: bad.append(f"pnpm-lock.yaml: snapshot {k}: keys not allowed: {sorted(extra)}")
     for f in ("dependencies", "optionalDependencies"):
         for n, x in ((v or {}).get(f) or {}).items():
+            if not re.fullmatch(NAME, str(n)): bad.append(f"pnpm-lock.yaml: snapshot {k}: dependency name {n!r} is not an npm package name")
             if ":" in str(x): bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: version {x!r} is not a registry version")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
