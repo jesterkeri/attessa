@@ -2193,3 +2193,24 @@ packages/cli test:  Test Files  68 passed (68)
 packages/cli test:       Tests  289 passed (289)
 ```
 reviewed: pending (adversary r49, then Codex)
+
+### T21 adversary r49 (failing test c205614, fix 1ceb6ff)
+Findings: (1) `status --agent 999` for an agent the identity registry doesn't know printed "No releases yet. Approve one with `attessa release approve`.", whose action then ends unknown_agent (FLOWS.md:832). (2) `revoke signer` on an Expired signer, or one Inert because its release was revoked, still said "This stops signer … within 60 s" while `status --agent` lists it Expired or Inert (FLOWS.md:833).
+Fix: agentStatus calls ownerOf first (unknown_agent, as the owner commands); a shared `notLive` (registry.ts) derives Expired/Inert as checkSigner does and is used by `revoke release` and `revoke signer`, whose prompt says the signer "is already {Expired|Inert} and signs nothing" (not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  69 passed (69)
+packages/cli test:       Tests  293 passed (293)
+```
+reviewed: pending (adversary r50, then Codex)
