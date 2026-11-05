@@ -895,6 +895,8 @@ figure.term { margin: 0; border: 1px solid var(--line-2); background: rgba(7, 7,
    terminal blocks, and notes with a coloured edge. */
 .docs { display: grid; grid-template-columns: 220px minmax(0, 1fr) 190px; gap: clamp(32px, 4vw, 64px); align-items: start; padding-top: calc(var(--nav-h) + clamp(56px, 9vh, 96px)); padding-bottom: clamp(100px, 14vh, 160px); }
 .docs-nav { position: sticky; top: calc(var(--nav-h) + 32px); max-height: calc(100svh - var(--nav-h) - 64px); overflow-y: auto; overscroll-behavior: contain; }
+/* The menu scrolls, so it clips: 6px of room (the negative margin keeps the rail where it was) lets a focused link's ring show whole. */
+@media (min-width: 861px) { .docs-nav { padding: 0 6px 6px; margin-left: -6px; } }
 .docs-nav summary { display: none; list-style: none; }
 .docs-nav summary::-webkit-details-marker { display: none; }
 .docs-nav summary::after { content: "+"; font: 400 18px/1 var(--mono); color: var(--text-2); }
