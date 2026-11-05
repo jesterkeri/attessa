@@ -237,10 +237,18 @@ for p, s, f in later:
     if f not in files: bad.append(f"{p}: script {s} must run a tracked regular file of its package, not {f}")
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
+# PyYAML and pnpm (@zkochan/js-yaml) resolve merge keys, anchors and tags differently (two << merges: the later
+# wins in PyYAML, the earlier in pnpm), and pnpm never writes them, so neither YAML file may use them.
+for p in ("pnpm-workspace.yaml", "pnpm-lock.yaml"):
+    if p not in reg: continue
+    try: toks = list(yaml.scan(blob(p)))
+    except yaml.YAMLError: continue  # the load below reports it
+    if any(isinstance(t, (yaml.AnchorToken, yaml.AliasToken, yaml.TagToken, yaml.DirectiveToken)) or (isinstance(t, yaml.ScalarToken) and t.value == "<<") for t in toks):
+        bad.append(f"{p}: anchors, aliases, tags, directives and << merge keys are not allowed (PyYAML and pnpm resolve them differently)")
 w = yaml.safe_load(blob("pnpm-workspace.yaml")) if "pnpm-workspace.yaml" in reg else None
-# PyYAML reads YAML 1.1 (yes/on/y are true), pnpm a 1.2 parser (they are strings), so the setting must be spelled true.
-if w is not None and re.findall(rb"(?m)^[ \t]*[\"\x27]?ignoreScripts\b.*$", blob("pnpm-workspace.yaml")) != [b"ignoreScripts: true"]:
-    bad.append("pnpm-workspace.yaml: ignoreScripts must be one plain `ignoreScripts: true` line")
+# PyYAML reads YAML 1.1 (yes/on are true), pnpm 1.2 (strings), so past its comment lines the file is one exact text.
+if w is not None and b"".join(l for l in blob("pnpm-workspace.yaml").splitlines(True) if not re.match(rb"[ \t]*#", l)) != b"packages:\n  - packages/*\nignoreScripts: true\n":
+    bad.append("pnpm-workspace.yaml: past its comment lines it must be exactly `packages:`, `  - packages/*`, `ignoreScripts: true`, each ending in a newline")
 if w != {"packages": ["packages/*"], "ignoreScripts": True}: bad.append(f"pnpm-workspace.yaml: must be exactly packages [packages/*] and ignoreScripts true, got {w!r}")
 # Every package comes from the default registry by integrity (no tarball, file, directory, git,
 # link or other registry), so pnpm installs the registry copy or fails the integrity check.
