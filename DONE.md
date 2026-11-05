@@ -2342,3 +2342,24 @@ packages/cli test:  Test Files  75 passed (75)
 packages/cli test:       Tests  306 passed (306)
 ```
 reviewed: pending (adversary r56, then Codex)
+
+### T21 adversary r56 (failing test 90a0465, fix 39ec216) - 2026-11-05
+Findings: (1) plain `attessa status` printed only "No calls in progress." (`--json` `{"pending":[],"ok":true}`) after a verified 0.02 USDC call, never spend today against the cap or the per-call limit (FLOWS:851, :881 "`attessa status` shows spend today vs cap"); (2) a call refused with `payment_invalid{insufficient_funds}` under `--no-wait` ended on the open-call line without FLOWS §8's "Add at least {n} USDC to {address}." (FLOWS:832).
+Fix (buyer.ts, copy.ts `BUY.spentToday`): plain `attessa status` (not `--pending`, whose rows and the r13 test's exact lines stay as they were) ends with "Spent today: {spent} of your {cap} {asset} daily cap (at most {per} per call). It resets at 00:00 UTC." for USDC, and for USA₮ once it has spend, with `--json` `limits`; the refused end prints the add-funds line after the open-call line. New copy recorded in OPEN-QUESTIONS (r56 entry), including that "recent verdicts" are not shown beyond the calls status decides in that run.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  76 passed (76)
+packages/cli test:       Tests  309 passed (309)
+```
+reviewed: pending (adversary r57, then Codex)
