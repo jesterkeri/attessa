@@ -1998,3 +1998,22 @@ sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
 reviewed: pending (adversary r39, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 staging merge and adversary r39 fix - 2026-11-05
+CI (`ci` and `harness`) had been red on this branch since before r33: it predated staging's fixes (the deferred BLOCKING questions, the nitro pin, the core oracle test). 74ca132 merges staging. Conflicts: the SDK takes staging's pinned-registry-first rule (SPEC §2.6) and keeps the branch's `no_registry` AttestError; DONE.md is staging's file with the T21 section after it; OPEN-QUESTIONS.md keeps staging's deferred blockers plus the T21 entries; TASKS.md takes staging's ticks and keeps T21 ticked. Since T10 pinned the real Sepolia registry, CLI tests use a vitest setup file (`packages/cli/test/pin-fake-registry.ts`) that pins the fake one, `test/fake-chain.ts`'s REGISTRY equals the SDK FakeChain's default, and `adversary-t21-r33.test.ts` (a network with no registry) unpins Sepolia for its own tests. No assertion changed. CI on 74ca132: `ci` success, `harness` success.
+
+adversary r39 (7e4a88e, test `packages/cli/test/adversary-t21-r39.test.ts`, failing first): a refused call resumed with `--no-wait` that got a 200 with no settlement ended `refused` with no code in `--json` and a second evidence row with `code: null` (SPEC.md:620 "refused (+ code)", SPEC.md:640). Fixed in 18210f4: `finish` (packages/sdk/src/client.ts) gives a kept refusal its stored code, as `current()` does for the same entry.
+
+verify at 18210f4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  58 passed (58)
+packages/cli test:       Tests  270 passed (270)
+```
+reviewed: pending (adversary r40, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
