@@ -2037,3 +2037,21 @@ packages/cli test:  Test Files  59 passed (59)
 packages/cli test:       Tests  271 passed (271)
 ```
 reviewed: pending (adversary r41, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r41 fixes - 2026-11-05
+adversary r41 (e156cc0, test `packages/cli/test/adversary-t21-r41.test.ts`, failing first): the r40 flag was set only after 21 waiting polls, so `attessa status --pending` and a `call --no-wait` resume (one `finalize` pass each) still printed "expires unused at {t} UTC … attessa cancel {id} voids it now" for a permission the chain read as used past expiry with no log indexed (SPEC.md:635, FLOWS.md:832). Fixed in 9da450d: `finalize` (packages/sdk/src/client.ts) remembers that read and marks the single-pass result `authorizationUsed` too, so both commands print cancel's undecided row. Round 40's two leads: the `rpc_unavailable` evidence code for a kept refusal was dropped by r41 (SPEC names no code for that pass); a malformed ATTESSA_REGISTRY stopping buyer commands under `--network local` on a Sepolia fork is real but only the message is affected, not fixed here.
+No existing assertion changed. CI on 225b2fc (r40): `ci` success, `harness` success.
+
+verify at 9da450d (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  60 passed (60)
+packages/cli test:       Tests  273 passed (273)
+```
+reviewed: pending (adversary r42, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
