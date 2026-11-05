@@ -1297,3 +1297,15 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r52's pr
 build=0
 ```
 reviewed: pending (adversary r53, then Codex)
+
+### Site adversary r53 (failing test 39f57dc, fix c5811fa) - 2026-11-05
+Finding: at 1024, 1280, 1366 and 1440px (site/README.md:110) the docs menu (`.docs-nav`, `overflow-y: auto`, no padding) clipped every link's focus ring: the 3px-offset ring lost its left and right sides on all 15 links, and "Known limits" its bottom too, leaving one line between it and "Threat model" (obscured focus).
+Fix (site.css): from 861px up, `.docs-nav { padding: 0 6px 6px; margin-left: -6px; }`: room for the ring inside the clipping menu, with the link rail where it was.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r53's navring probe, docs/reference.html, cdnfail: at 1440x900 and 1280x800 every link's ring now changes 38 to 46 px on its left and right sides (0 before); a bottom side is missing only for the link the browser scrolled flush to the screen's bottom edge, which r53 classed as browser behaviour):
+```
+# tests 174
+# pass 174
+# fail 0
+build=0
+```
+reviewed: pending (adversary r54, then Codex)
