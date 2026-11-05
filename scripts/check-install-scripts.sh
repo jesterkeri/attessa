@@ -192,6 +192,7 @@ for r in sys.stdin.buffer.read().split(b"\0"):
     try: raw.decode("utf-8")
     except UnicodeDecodeError: bad.append(f"{os.fsdecode(raw)!r}: not allowed (a path that is not UTF-8)"); continue
     p = os.fsdecode(raw); parts = p.split("/"); b = parts[-1].lower()
+    if any(c in p for c in ("\u0085", "\u2028", "\u2029")): bad.append(f"{p!r}: not allowed (a path with U+0085, U+2028 or U+2029, which YAML readers disagree on)")
     if mode == "100644": reg[p] = oid
     if mode in ("100644", "100755"): files.add(p)  # a script that node runs may be executable
     # A tracked node_modules is read at install (bins, .modules.yaml, the virtual store).
@@ -248,6 +249,9 @@ for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
 # wins in PyYAML, the earlier in pnpm), and pnpm never writes them, so neither YAML file may use them.
 for p in ("pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: continue
+    # PyYAML (YAML 1.1) reads NEL, LS and PS as line breaks inside a quoted scalar, pnpm (YAML 1.2) as plain characters
+    if any(c in blob(p) for c in ("\u0085".encode(), "\u2028".encode(), "\u2029".encode())):
+        bad.append(f"{p}: the characters U+0085, U+2028 and U+2029 are not allowed (PyYAML and pnpm read them differently)")
     try: toks = list(yaml.scan(blob(p)))
     except yaml.YAMLError: continue  # the load below reports it
     if any(isinstance(t, (yaml.AnchorToken, yaml.AliasToken, yaml.TagToken, yaml.DirectiveToken)) or (isinstance(t, yaml.ScalarToken) and t.value == "<<") for t in toks):
