@@ -2426,3 +2426,24 @@ packages/cli test:  Test Files  79 passed (79)
 packages/cli test:       Tests  316 passed (316)
 ```
 reviewed: pending (adversary r60, then Codex)
+
+### T21 adversary r60 (failing test be67d35, fix 83f910f) - 2026-11-05
+Finding: an owner or operator write whose confirm got anything but its verb, which is always the case with a non-TTY stdin (bin.ts answers no without asking), exited 1 with a bare `{"ok":false,"lines":[...]}` under `--json`, no `error` and no `next`, and with no closing line without `--json` (FLOWS.md:832 "Every error row has one next action"; FLOWS.md:833 `--yes` for non-interactive agents).
+Fix: `planOrSend` throws `ERR.cancelled(verb)`: code `not_confirmed`, "Cancelled: nothing was sent.", next "Run it again and type {verb}, or add --yes to send without asking." Its callers (owner, signer, registry) lose the dead `'cancelled'` branch. OPEN-QUESTIONS gains an r60 entry for the copy.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  80 passed (80)
+packages/cli test:       Tests  317 passed (317)
+```
+reviewed: pending (adversary r61, then Codex)
