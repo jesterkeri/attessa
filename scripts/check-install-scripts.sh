@@ -277,7 +277,7 @@ if not keys(L): bad.append("pnpm-lock.yaml: every mapping key must be a string (
 # which pnpm then prints back as another name (1e3 -> 1000, 0o17 -> 15, 08 -> 8). pnpm quotes such values when
 # it writes them ('9.0'), so a plain one of those shapes is refused (a superset of the 1.2 core forms, underscores too).
 CORE12 = re.compile(r"[-+]?(\.[0-9_]+|[0-9][0-9_]*(\.[0-9_]*)?)([eE][-+]?[0-9_]+)?|[-+]?\.(inf|Inf|INF)|\.(nan|NaN|NAN)"
-                    r"|0b[01_]+|0o[0-7_]+|0x[0-9a-fA-F_]+|[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?"
+                    r"|[-+]?0b[01_]+|[-+]?0o[0-7_]+|[-+]?0x[0-9a-fA-F_]+|[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?"
                     r"|~|null|Null|NULL|true|True|TRUE|false|False|FALSE|")
 def plain12(n):
     if isinstance(n, yaml.ScalarNode): return n.style is None and n.tag == "tag:yaml.org,2002:str" and CORE12.fullmatch(n.value) is not None
@@ -334,7 +334,8 @@ for k, v in (L.get("snapshots") or {}).items():
     for f in ("dependencies", "optionalDependencies"):
         for n, x in ((v or {}).get(f) or {}).items():
             if not re.fullmatch(NAME, str(n)): bad.append(f"pnpm-lock.yaml: snapshot {k}: dependency name {n!r} is not an npm package name")
-            if ":" in str(x): bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: version {x!r} is not a registry version")
+            # The snapshot of that name: pnpm reads `name: other@1.0.0` as an alias that installs `other` under `name`.
+            if ":" in str(x) or f"{n}@{x}" not in snaps: bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: {x!r} is not the registry snapshot {n}@{x} (no alias, link or other source)")
 for x in bad: print("FAIL " + x.encode("utf-8", "surrogateescape").decode("utf-8", "backslashreplace"))
 if bad: sys.exit(1)
 print(json.loads(blob("package.json")).get("packageManager", ""))
