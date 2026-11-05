@@ -100,7 +100,8 @@ says what each name forms.
 ## Responsive behaviour
 
 - **Desktop and tablets (720px and wider):** pinned scenes with the object beside the text. Short screens
-  (under about 860px tall) tighten the story and the proves section so they fit.
+  tighten the story (under about 820px tall) and the proves section (under about 960px) so they fit, and a
+  pinned box that still overflows (200% zoom on a laptop) scrolls from its top.
 - **Phones (under 720px):** nothing pins. Each object gets its own slot above its section's text and forms as
   that slot scrolls in; the statement's cubes form under the sentence; the story puts the step, the cubes and
   the checklist one above the other. The final call to action has no ring on phones.
