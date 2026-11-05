@@ -1259,3 +1259,16 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r49's pi
 build=0
 ```
 reviewed: pending (adversary r50, then Codex)
+
+### Site adversary r50 (failing test 38c77c6, fix 56b8c75) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px) the story, "Three ways a call can end" and the four uses boxes overflow and scroll (r49), but they had no tabindex and nothing inside them takes focus, so arrow keys, Page Down and Space scrolled the page and never the box (WCAG 2.1.1; site/README.md "scrolls from its top"). The hidden part of the outcomes box held the three outcomes.
+Fix: the three boxes get `tabindex="0" role="group"` with the section's name (index.html, use-cases.html), and a focused pinned box draws its outline inside (`outline-offset: -3px`). site/README.md says so.
+Not fixed, reported by the adversary without a test: the wheel scrolls a box's own content while its section is still entering, so it can pin already scrolled; it stays reachable by scrolling back up.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe at 720x450, live, focusing each box and pressing PageDown: story scrollTop 0 to 194 of 194, outcomes 0 to 334 of 418, uses 0 to 99 of 99, page moved 0, outline solid; Tab lands on each box):
+```
+# tests 164
+# pass 164
+# fail 0
+build=0
+```
+reviewed: pending (adversary r51, then Codex)
