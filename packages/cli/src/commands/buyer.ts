@@ -631,7 +631,7 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     d.io.out('  (dry run: nothing was sent)');
     return 0;
   }
-  if (!g.yes && !(await d.io.confirm('cancel'))) return 1;
+  // FLOWS.md:833: "Cancel no longer prompts".
   try {
     // A chain read the SDK throws as RpcError is one made before anything was signed (cancelAuthorization wraps every
     // failure after the cancel permission's signature in CancelInterruptedError), so the rpc row is true for it.
