@@ -552,7 +552,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     }
     if (!settlement) {
       // An answer with no settlement on chain (V11) is unknown: by default wait for the expiry check (SPEC §7 uncertain to final).
-      const e = ledger.update(entry.requestId, { state: 'uncertain' });
+      // A refused call stays refused until the chain decides it (settled_after_refusal, not missing_proof).
+      const e = entry.state === 'refused' ? entry : ledger.update(entry.requestId, { state: 'uncertain' });
       return waitForExpiry ? finalize(n, e, meta, true) : finish(e, 'uncertain', meta, {});
     }
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
