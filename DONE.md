@@ -1369,3 +1369,29 @@ node site/build.mjs: exit 0
 # fail 0
 ```
 reviewed: pending (Codex)
+
+### Site Codex r1 fixes - 2026-11-05
+Codex r1 (site-ui-review-r1.md, on d7b0a5d): REVISE, 2 major, 1 minor.
+- M1 (the recorded count): on this machine `node --test site/test/*.test.mjs` at d7b0a5d prints `# tests 186` / `# pass 186` under node v22.23.2: 186 tests in 65 files. Codex's run reported 65, the file count, as top-level tests. From this entry on, the record quotes the node version, the file count and the whole TAP footer.
+- M2: the pinned third-party script and stylesheet tags carry `integrity` (sha512) and `crossorigin="anonymous"`: GSAP 3.12.5 and ScrollTrigger (the hashes cdnjs publishes, matched by sha512 of the downloaded bytes), Phosphor 2.1.1 CSS (the same bytes from unpkg and jsDelivr), and three 0.160.0 through the import map's `integrity` entry. Google Fonts' CSS stays unpinned: Google serves different CSS per browser. Test: site/test/cdn-integrity.test.mjs (3; 2 fail on the old layout).
+- m1: the focus fallback skips a control with `tabIndex < 0` (a roving tab that isn't selected). Test added to site/test/focus-return-at-page-end.test.mjs (fails on the old site.js).
+verify:
+```
+$ node --version
+v22.23.2
+$ node site/build.mjs
+exit 0
+$ ls site/test/*.test.mjs | wc -l
+66
+$ node --test site/test/*.test.mjs (TAP footer)
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1352.085698
+```
+reviewed: pending (Codex r2)

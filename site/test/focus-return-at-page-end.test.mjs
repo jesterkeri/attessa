@@ -122,7 +122,7 @@ const matches = (el, sel) => splitTop(sel, /,/).some(s => matchComplex(el, s));
 
 // The measured state of index.html at 1024x900 at the bottom of the page (see the header).
 const VW = 1024, VH = 900, NAV_H = 68, PAGE_H = 10776, START_Y = 9876;
-function stubPage() {
+function stubPage(extra) {
   const view = { scrollY: START_Y };
   const focusLog = [];
   const doc = { listeners: [], nodeType: 9 };
@@ -188,6 +188,7 @@ function stubPage() {
   for (let i = 0; i < 13; i++) el('a', 300 + i * 700, 44, { class: 'btn', href: `#s${i}` }, main, { name: `main stop ${i + 1}` });
   el('a', 9503, 50, { class: 'btn', href: 'explorer.html' }, main, { name: 'main stop 14 (the last)' });
   const footer = el('footer', 9676, 1099, { class: 'foot' }, body);
+  extra?.(el, footer);
   const fl = (href, top) => el('a', top, 29, { href }, footer, { name: `footer link ${href}` });
   fl('https://github.com/jesterkeri/attessa', 10029); fl('how-it-works.html', 10029); fl('use-cases.html', 10058);
   fl('docs/index.html', 10058); fl('explorer.html', 10088); fl('security.html', 10088); fl('privacy.html', 10117);
@@ -210,8 +211,8 @@ function stubPage() {
   return { view, doc, focusLog, netChip, main, header };
 }
 
-function run(tracker) {
-  const page = stubPage();
+function run(tracker, extra) {
+  const page = stubPage(extra);
   const frames = [];
   const win = {
     get scrollY() { return page.view.scrollY; }, get pageYOffset() { return page.view.scrollY; },
@@ -259,5 +260,18 @@ test('at the end of a page, focus returned after a width change stays on screen 
       `the reader's place is lost: at the bottom of index.html, the header network chip hidden by narrowing ` +
       `1440x900 to 1024x900 sends focus to main, which is wholly above the screen, and the page jumps to its middle. ${where}`);
     assert.ok(onScreen, `focus is put off screen or nowhere. ${where}`);
+  }
+});
+
+// Codex site review r1 m1: a roving-tabindex control (how-it-works.html's Buyer/Seller tabs, the one not selected
+// has tabIndex -1) can be the first visible candidate. It takes focus programmatically but is not a tab stop, so
+// the fallback must pass over it to the next stop in the keyboard order.
+test('the fallback never returns focus to a visible control that is not a tab stop (tabindex -1)', () => {
+  for (const tracker of trackers) {
+    const page = run(tracker, (el, footer) =>
+      el('button', 10000, 30, { type: 'button', role: 'tab', tabindex: '-1' }, footer, { name: 'roving tab not selected (tabindex -1)' }));
+    const active = page.doc.activeElement;
+    assert.ok(active.tabIndex >= 0, `focus went to ${active.name}, which is not a tab stop; focus() calls: ${JSON.stringify(page.focusLog)}`);
+    assert.ok(Math.abs(page.view.scrollY - START_Y) < VH / 2, 'the page jumped');
   }
 });
