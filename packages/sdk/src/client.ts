@@ -707,12 +707,17 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         if (logs.canceled.length > 0) {
           return finish(entry, 'not_charged', meta, { code: 'cancelled', confirmedAtBlock: logs.canceledBlocks[0]! });
         }
-        if (head.timestamp > vb + EXPIRY_MARGIN) {
-          const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
-          if (!used) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
-          // Used, but no matching log yet: the log index lags. Ask again.
+        // Read every pass, not only past expiry: a permission already used has nothing left to expire.
+        const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
+        if (!used && head.timestamp > vb + EXPIRY_MARGIN) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
+        if (used) {
+          // Used (or cancelled), but no matching log yet: the log index lags. Ask again.
           usedNoLog = true;
-          if (++lagging > 20) return { ...current(entry, meta), authorizationUsed: true };
+          if (++lagging > 20) {
+            // Every outcome is in evidence (SPEC §7): a refusal already wrote its row; any other call writes `uncertain`.
+            const r = ledger.get(entry.requestId)?.state === 'refused' ? current(entry, meta) : finish(entry, 'uncertain', meta);
+            return { ...r, authorizationUsed: true };
+          }
         }
       } catch (e) {
         if (!(e instanceof RpcError)) throw e;
