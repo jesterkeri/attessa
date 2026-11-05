@@ -10,6 +10,8 @@
 # each `node` (optionally --experimental-strip-types) on a tracked .ts, .js, .mjs or .cjs file under
 # the package's scripts/; none of these runs at install. Each manifest is a UTF-8 JSON object with
 # no byte-order mark, and its scripts and dependency maps are objects.
+# These rules hold for every tracked package.json at any depth, not only pnpm's workspace projects:
+# none is needed elsewhere, and refusing one costs less than proving which ones pnpm or node read.
 # Nothing is resolved from the tree under test: pnpm, its store, config and log live beside the
 # snapshot, never inside it, and PATH keeps only absolute entries outside the checked folder.
 # Git runs no program the repository configures. In order, git is asked only for:
@@ -236,6 +238,9 @@ for p, s, f in later:
 for p in ("package.json", "pnpm-workspace.yaml", "pnpm-lock.yaml"):
     if p not in reg: bad.append(f"{p}: missing or not a regular file (mode 100644)")
 w = yaml.safe_load(blob("pnpm-workspace.yaml")) if "pnpm-workspace.yaml" in reg else None
+# PyYAML reads YAML 1.1 (yes/on/y are true), pnpm a 1.2 parser (they are strings), so the setting must be spelled true.
+if w is not None and re.findall(rb"(?m)^[ \t]*[\"\x27]?ignoreScripts\b.*$", blob("pnpm-workspace.yaml")) != [b"ignoreScripts: true"]:
+    bad.append("pnpm-workspace.yaml: ignoreScripts must be one plain `ignoreScripts: true` line")
 if w != {"packages": ["packages/*"], "ignoreScripts": True}: bad.append(f"pnpm-workspace.yaml: must be exactly packages [packages/*] and ignoreScripts true, got {w!r}")
 # Every package comes from the default registry by integrity (no tarball, file, directory, git,
 # link or other registry), so pnpm installs the registry copy or fails the integrity check.
