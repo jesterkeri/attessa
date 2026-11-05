@@ -2151,3 +2151,24 @@ packages/cli test:  Test Files  66 passed (66)
 packages/cli test:       Tests  284 passed (284)
 ```
 reviewed: pending (adversary r47, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r47 (failing test 581b89e, fix f38735f)
+Finding: after `endpoint retire` and `endpoint add` with a new operator, the running key's signer keeps the old operator (Inert, SPEC §3.4). `signer renew` from the new operator said that wallet "isn't the operator", and `signer register --fresh` sent it back to `signer renew`; neither could pass (FLOWS.md:832).
+Fix: renew splits the wrong-wallet check from the operator-changed check and gives the latter `operator_mismatch` with "Restart with `attessa enclave start`, then `attessa signer register`."; register's signer_exists row gives that restart line whenever renew can't extend the signer (expired, revoked or old operator). Copy logged in OPEN-QUESTIONS (not in FLOWS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  67 passed (67)
+packages/cli test:       Tests  286 passed (286)
+```
+reviewed: pending (adversary r48, then Codex)
