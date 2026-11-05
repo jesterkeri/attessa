@@ -3,8 +3,8 @@
 # Major 1: a snapshot dependency written `prebuild-install: node-addon-api@8.9.2` is an alias to pnpm (it installs
 # node-addon-api under the name prebuild-install), yet the guard only refused a ":" in the value. Contract: "each
 # dependency is ... the registry snapshot of that name". Every snapshot dependency must be the snapshot `name@ref`.
-# Minor 1: CORE12 missed signed base-prefixed numbers (+0o17, -0o17, +0x1F, -0b1), plain strings to PyYAML and
-# numbers to pnpm's YAML 1.2 reader. They are refused like the unsigned forms.
+# Minor 1: CORE12 missed signed octal (+0o17, -0o17), a plain string to PyYAML (YAML 1.1 has no 0o) and a number
+# to pnpm's YAML 1.2 reader. Refused like the unsigned form.
 # Each case breaks the better-sqlite3 integrity so the guard stops at its static stage (no pnpm, no network).
 # Expected: every line "ok:" and exit 0.
 # Usage: $0 <repo> [commit under test, default HEAD]
@@ -47,7 +47,8 @@ case_() {  # case_ <label> <expect refused: 1|0> [python regex] [text added afte
 DEPS='\n  better-sqlite3@13\.0\.3:\n    dependencies:\n'
 case_ 'snapshot better-sqlite3 dependency prebuild-install: node-addon-api@8.9.2 (an alias)' 1 "$DEPS" '      prebuild-install: node-addon-api@8.9.2\n'
 case_ 'snapshot better-sqlite3 dependency node-addon-api: 9.9.9 (no such snapshot)' 1 '\n  better-sqlite3@13\.0\.3:\n    dependencies:\n      node-addon-api: 8\.9\.2' '\n      attessa-r2-missing: 1.0.0'
-for v in +0o17 -0o17 +0x1F -0b1; do
+# +0x1F and -0b1 are not cases: PyYAML reads them as integers too, so both readers agree (as for 0x1F, 0b1).
+for v in +0o17 -0o17; do
   case_ "snapshot better-sqlite3 plain transitivePeerDependencies entry $v (a number to YAML 1.2)" 1 "$DEPS"'      node-addon-api: 8\.9\.2' "\n    transitivePeerDependencies:\n      - $v"
 done
 case_ "control: the same entry quoted, '+0o17'" 0 "$DEPS"'      node-addon-api: 8\.9\.2' "\n    transitivePeerDependencies:\n      - '+0o17'"
