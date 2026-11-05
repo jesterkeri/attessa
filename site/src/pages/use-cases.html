@@ -24,7 +24,8 @@
 <!-- Pinned scene: one use case at a time. The particles form an object for each beside the text and
      burst back into dust between them. scene.js reads the progress. -->
 <section class="scene-sec uses-sec" id="uses" data-scene-sec="uses" style="--len: 5.2" aria-label="Four uses">
-  <div class="scene-sticky">
+  <!-- tabindex: at 200% zoom this box scrolls, and nothing in it takes focus, so the keyboard needs a stop on it. -->
+  <div class="scene-sticky" tabindex="0" role="group" aria-label="Four uses">
     <div class="wrap scene-grid">
       <div class="scene-copy">
         <ol class="beats uses">

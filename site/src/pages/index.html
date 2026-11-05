@@ -40,7 +40,8 @@
 </section>
 
 <section class="story" data-story aria-label="How a call is checked">
-  <div class="story-sticky">
+  <!-- tabindex: at 200% zoom this box scrolls, and nothing in it takes focus, so the keyboard needs a stop on it. -->
+  <div class="story-sticky" tabindex="0" role="group" aria-label="How a call is checked">
     <div class="wrap story-grid">
       <div class="story-copy">
         <ol class="story-steps">
@@ -142,7 +143,7 @@
 <!-- Pinned scenes: the page holds while the particles form an object in the slot beside the text,
      the text plays out around it, then both leave together. scene.js reads each scene's progress. -->
 <section class="scene-sec outcomes-sec" data-scene-sec="outcomes" style="--len: 3.4" aria-labelledby="outcomes">
-  <div class="scene-sticky">
+  <div class="scene-sticky" tabindex="0" role="group" aria-labelledby="outcomes">
     <div class="wrap scene-grid">
       <div class="scene-copy">
         <h2 id="outcomes" data-split>Three ways a call can end</h2>

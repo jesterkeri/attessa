@@ -349,6 +349,7 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 :root:not(.scene-live) .scene-sticky { position: relative; height: auto; overflow: visible; padding: 96px 0; }
 /* A pinned box taller than the screen (short screens, 200% zoom on a laptop) scrolls from its top instead of
    cutting off half its overflow above the screen, where nothing can reach it. Phones unpin them below. */
+.story-sticky:focus-visible, .scene-sticky:focus-visible { outline-offset: -3px; }
 .story-sticky, .scene-sticky { overflow-y: auto; align-items: safe center; scroll-padding-top: var(--nav-h); }
 .story-sticky > .wrap { height: auto; min-height: 100%; align-content: safe center; }
 .scene-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 0.85fr); align-items: center; gap: 40px clamp(32px, 5vw, 80px); }
