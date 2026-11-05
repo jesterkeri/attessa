@@ -396,6 +396,10 @@ export const BUY = {
   // a settlement is known (the permission was used; cancel can't void it).
   stillOpen: (id: string, t: string) =>
     `Not confirmed yet: your payment permission expires unused at ${t} UTC unless the gateway used it. attessa status --pending checks it again; attessa cancel ${id} voids it now.`,
+  // not in FLOWS: the two lines above for a call another wallet signed: only that wallet can cancel it (EIP-3009).
+  voidHintOther: (payer: string) => `  Only ${payer}, the wallet that signed it, can void it now. Ctrl-C stops waiting; attessa status --pending checks later.`,
+  stillOpenOther: (t: string, payer: string) =>
+    `Not confirmed yet: your payment permission expires unused at ${t} UTC unless the gateway used it. attessa status --pending checks it again; only ${payer}, the wallet that signed it, can cancel it now.`,
   // §8 cancel
   // not in FLOWS: after "Too late to cancel" or "The payment went through", when the answer isn't served yet (the one
   // next action; never "attessa cancel … voids it now").

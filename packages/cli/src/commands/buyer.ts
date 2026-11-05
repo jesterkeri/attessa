@@ -393,7 +393,8 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           if (e.entry.settlementTx || (e.entry.state === 'uncertain' && seen.uncertain)) return;
           const vb = BigInt(e.entry.validBefore!);
           out(BUY.confirming(hms(vb), String(vb > e.chainNow ? vb - e.chainNow : 0n)));
-          out(BUY.voidHint(e.entry.requestId));
+          const payer = e.entry.payer.toLowerCase();
+          out(payer === w.account.address.toLowerCase() ? BUY.voidHint(e.entry.requestId) : BUY.voidHintOther(payer));
           return;
         }
       }
@@ -498,7 +499,11 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
         const u = BUYERR.cancelUndecided();
         out(u.message);
         out(u.next!);
-      } else out(BUY.stillOpen(r.requestId, hms(BigInt(entry()?.validBefore ?? '0'))));
+      } else {
+        const t = hms(BigInt(entry()?.validBefore ?? '0'));
+        const payer = entry()?.payer?.toLowerCase();
+        out(c.wallet && payer && payer !== c.wallet ? BUY.stillOpenOther(t, payer) : BUY.stillOpen(r.requestId, t));
+      }
       return 1;
     case 'stopped':
       if (r.code === 'dry_run') {
