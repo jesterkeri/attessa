@@ -430,6 +430,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (e.state !== ledgerState) return current(e, meta);
     }
     const r: CallResult = { ...baseResult(e, outcome, meta), ...fields };
+    // The kept refusal reports its stored code, as current() does for the same entry.
+    if (keepRefusal && !r.code && stored.code) r.code = parseCode(stored.code);
     if (ev.inputsBlock !== undefined) r.inputsBlock = ev.inputsBlock;
     evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
     return r;
