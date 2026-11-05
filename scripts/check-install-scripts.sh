@@ -188,6 +188,9 @@ bad, reg, later, files = [], {}, [], set()
 for r in sys.stdin.buffer.read().split(b"\0"):
     if not r: continue
     meta, raw = r.split(b"\t", 1); mode, _, oid = meta.decode().split()
+    # node reads folder names as UTF-8 (bad bytes become U+FFFD), so a path that is not UTF-8 names another folder for pnpm
+    try: raw.decode("utf-8")
+    except UnicodeDecodeError: bad.append(f"{os.fsdecode(raw)!r}: not allowed (a path that is not UTF-8)"); continue
     p = os.fsdecode(raw); parts = p.split("/"); b = parts[-1].lower()
     if mode == "100644": reg[p] = oid
     if mode in ("100644", "100755"): files.add(p)  # a script that node runs may be executable
