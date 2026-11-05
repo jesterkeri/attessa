@@ -279,7 +279,10 @@ export async function releaseStatus(g: Global, deps: Deps, o: { id?: string | un
     const live: Hex[] = [];
     for (const ev of await events(c, 'SignerRegistered', { agentId, releaseId: rid })) {
       const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [ev.args.signer as Address]);
-      if (SIGNER_STATUS[s.status as number] === 'Active' && (s.expiresAt as bigint) > now) live.push(s.originHash as Hex);
+      if (SIGNER_STATUS[s.status as number] !== 'Active' || (s.expiresAt as bigint) <= now) continue;
+      // A signer on a retired endpoint (or one with another operator now) is already Inert (FLOWS §7): not live.
+      const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [s.originHash as Hex]);
+      if (ENDPOINT_STATUS[e.status as number] === 'Active' && (e.operator as string).toLowerCase() === (s.operator as string).toLowerCase()) live.push(s.originHash as Hex);
     }
     const hosts = [...new Set(await Promise.all([...new Set(live)].map(async (oh) => safe(host((await originOf(c, oh)) ?? short(oh))))))];
     prompt = () => OWN.revokeReleasePrompt(src, live.length, hosts);
@@ -383,9 +386,14 @@ export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | u
     const addr = (ev.args.signer as string).toLowerCase() as Address;
     const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [addr]);
     const st = SIGNER_STATUS[s.status as number]!;
+    // FLOWS §7: Inert is derived: the signer is fine but its release isn't Approved, or its endpoint isn't Active
+    // or has another operator now. A release or endpoint not listed here (another agent's) counts as not live.
+    const rel = releases.find((r) => r.releaseId === (s.releaseId as Hex));
+    const ep = endpoints.find((e) => e.originHash === (s.originHash as Hex));
+    const inert = rel?.status !== 'Approved' || ep?.status !== 'Active' || ep.operator !== (s.operator as string).toLowerCase();
     signers.push({
       signer: addr,
-      status: st === 'Active' && (s.expiresAt as bigint) <= now ? 'Expired' : st,
+      status: st === 'Active' && (s.expiresAt as bigint) <= now ? 'Expired' : st === 'Active' && inert ? 'Inert' : st,
       releaseId: s.releaseId as Hex,
       originHash: s.originHash as Hex,
       expiresAt: (s.expiresAt as bigint).toString(),

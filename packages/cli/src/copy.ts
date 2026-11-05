@@ -575,9 +575,10 @@ export const OWNERR = {
   noSuchRelease: (id: string) => new CliError('unknown_release', `No agent has approved release ${id} on this network.`, 'Check the id with `attessa status --agent <id>`.'),
   ambiguousRelease: (id: string, agents: string[]) =>
     new CliError('usage', `Release ${id} is approved for agents ${agents.join(', ')}.`, 'Pass --agent <id>.'),
-  invalidTransition: (id: string, status: string) => new CliError('invalid_transition', `Release ${short(id)} is ${status}; that change isn't allowed.`),
-  signerNotActive: (id: string) => new CliError('signer_not_active', `Signer ${short(id)} is already revoked.`),
+  invalidTransition: (id: string, status: string) =>
+    new CliError('invalid_transition', `Release ${short(id)} is ${status}; that change isn't allowed.`, '`attessa status --agent <id>` lists each release and its state.'),
+  signerNotActive: (id: string) => new CliError('signer_not_active', `Signer ${short(id)} is already revoked.`, '`attessa status --agent <id>` lists the signers.'),
   endpointNotActive: (origin: string) => new CliError('endpoint_not_active', `${origin} isn't an active endpoint.`, '`attessa status --agent <id>` lists the endpoints.'),
   unknownAgent: (agent: string) => new CliError('unknown_agent', `Agent ${agent} doesn't exist on this network's identity registry.`, 'Check --agent and --network.'),
-  selfDisabled: () => new CliError('self_disabled', 'Self linking is turned off in this registry.'),
+  selfDisabled: () => new CliError('self_disabled', 'Self linking is turned off in this registry.', 'Skip `attessa selflink`: it is optional, and the agent works without it.'),
 } as const;
