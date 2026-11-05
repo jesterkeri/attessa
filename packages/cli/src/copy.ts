@@ -543,7 +543,11 @@ export const OWN = {
     `This stops buyers paying for answers from this build (owner says ${src}). ${
       live === 0
         ? 'It has no live signers.' // not in FLOWS
-        : `Its ${live} live signer${live === 1 ? ' stops' : 's stop'} working within 60 s, and ${hosts.join(' and ')} ${hosts.length === 1 ? 'refuses' : 'refuse'} calls until you approve and register another build.`
+        : `Its ${live} live signer${live === 1 ? ' stops' : 's stop'} working within 60 s${
+            hosts.length === 0
+              ? '; another approved build still serves its endpoints.' // not in FLOWS
+              : `, and ${hosts.join(' and ')} ${hosts.length === 1 ? 'refuses' : 'refuse'} calls until you approve and register another build.`
+          }`
     } Revoking is permanent.  [revoke/cancel]`,
   revoked: (tx: string) => `Revoked (tx ${short(tx)}).`,
   // not in FLOWS: the other owner prompts.
