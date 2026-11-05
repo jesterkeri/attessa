@@ -411,6 +411,8 @@ export const BUY = {
   tooLateToCancel: (tx: string) => `Too late to cancel: the payment went through (tx ${short(tx)}). Fetching your answer.`,
   cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
   noPending: 'No calls in progress.', // not in FLOWS
+  // not in FLOWS: the FLOWS:851/:881 oversight line, spend today (settled plus reserved) against the daily cap
+  spentToday: (spent: string, cap: string, sym: string, per: string) => `Spent today: ${spent} of your ${cap} ${sym} daily cap (at most ${per} per call). It resets at 00:00 UTC.`,
 } as const;
 
 /** FLOWS §8 rows for refusals after signing: "{what happened} {tail}". */

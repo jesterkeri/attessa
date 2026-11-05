@@ -27,7 +27,7 @@ import {
   type PendingEntry,
   type Progress,
 } from '@attessa/sdk';
-import type { Hex, LocalAccount } from 'viem';
+import type { Address, Hex, LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { DEFAULT_RPC, type Deps, type Global, type NetworkFlag } from '../context.ts';
 import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, safe, signedRefusal } from '../copy.ts';
@@ -507,6 +507,7 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
         const payer = entry()?.payer?.toLowerCase();
         out(c.wallet && payer && payer !== c.wallet ? BUY.stillOpenOther(t, payer) : BUY.stillOpen(r.requestId, t));
       }
+      if (c.fund) out(c.fund);
       return 1;
     case 'stopped':
       if (r.code === 'dry_run') {
@@ -540,6 +541,29 @@ async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: {
     default:
       return sdkError(g, r.code ?? 'stopped', r.detail, c.origin);
   }
+}
+
+/** FLOWS:851, :881: `attessa status` shows spend today against the cap and the per-call limit, per asset in use. */
+function spendLines(d: Deps, entries: PendingEntry[]): void {
+  let cfg: BuyerConfig | null = null;
+  try {
+    cfg = readConfig(d);
+  } catch {
+    // a config status can't read leaves init's defaults on show; `attessa init` reports the bad file itself
+  }
+  const json: Record<string, { spentToday: string; dailyCap: string; maxAmountPerCall: string }> = {};
+  for (const k of ['usdc', 'usat'] as const) {
+    const spent = [...new Set(entries.filter((e) => assetOf(e.asset) === k).map((e) => e.asset.toLowerCase()))].reduce(
+      (t, a) => t + spendToday(entries, a as Address, Date.now()),
+      0n,
+    );
+    if (k === 'usat' && spent === 0n) continue; // init saves both assets' limits; USA₮ shows once it is used
+    const l = { ...DEFAULT_LIMITS, ...cfg?.limits?.[k] };
+    const row = { spentToday: amount(spent), dailyCap: amount(parseAmount(l.dailyCap, '--daily-cap')), maxAmountPerCall: amount(parseAmount(l.maxAmountPerCall, '--max-amount')) };
+    json[k] = row;
+    d.io.out(BUY.spentToday(row.spentToday, row.dailyCap, SYMBOL[k], row.maxAmountPerCall));
+  }
+  d.io.data?.({ limits: json });
 }
 
 /** The RPC a buyer command used, for the FLOWS rpc_unavailable row. Never throws (it runs while reporting an error). */
@@ -726,6 +750,8 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
       }
     }
     if (errors.length > 0) d.io.data?.({ errors });
+    // FLOWS:881 names plain `attessa status`; `--pending` asks only about calls in progress.
+    if (target === undefined && !o.pending) spendLines(d, client.ledger.list());
     return errors.length > 0 ? 1 : 0;
   }
   // `status <origin>`: the registry entry and a fresh liveness check. A read never loads the wallet (FLOWS: "Reading
