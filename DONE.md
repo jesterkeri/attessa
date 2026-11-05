@@ -1530,3 +1530,27 @@ ok: refused
 r9full_rc=0
 ```
 reviewed: pending (adversary r16, then Codex r2)
+
+### Install allow-list adversary r16 - 2026-11-05
+adversary r16 on a732336: pnpm 10.32.1 builds each package as the lockfile snapshot merged with `packages[key minus its peer suffix]`, so a snapshot with no packages entry keeps its own `resolution`. A snapshot-only `keytar@7.9.0: {resolution: {directory: vendor/keytar, type: directory}}` passed the guard (it checked resolution only under packages), and pnpm, offline with --frozen-lockfile, installed keytar from vendor/keytar in the tree into node_modules/.pnpm/keytar@7.9.0/node_modules/keytar, the path the lifecycle check trusts as a registry copy.
+Test fa1c8aa (`scripts/adversary-install-r16/lock-snapshot-resolution.test.sh`, failing before the fix); fix 70edca9: every snapshot needs a packages entry for its key minus the "(peers)" suffix, and may hold only dependencies, optionalDependencies, transitivePeerDependencies and optional.
+
+verify at 70edca9 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r17, then Codex r2)
