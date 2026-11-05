@@ -1693,4 +1693,22 @@ cli:       Tests  265 passed (265)
 sdk:  Test Files  18 passed (18)
 sdk:       Tests  185 passed (185)
 ```
-reviewed: pending (adversary r36, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
+reviewed: pending (adversary r36 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r36 fixes - 2026-11-05
+adversary r36 (db34134, `packages/cli/test/adversary-t21-r36.test.ts`, failing): a gateway answering 200 with a proof and a PAYMENT-RESPONSE tx that never settles on chain made `settleAndVerify` return `uncertain` at once, though `waitForExpiry` is on by default (SPEC.md:635 "by default (`waitForExpiry`) the SDK waits until a block with timestamp > validBefore + 5"; SPEC.md:660 `attessa call` "waits to confirm not-charged unless `--no-wait`"). The call ended "Not confirmed yet" with the amount still reserved. Fixed in de764a5:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): with no settlement found, the entry goes `uncertain` and, by default, through `finalize` (the same expiry wait as a lost connection), ending `not_charged` or the settlement it then finds; with `waitForExpiry: false` it returns `uncertain` as before. The 202 poll and V0 resume paths call the same function.
+- `packages/cli/src/commands/buyer.ts`: r36 also noted (unproven) that `cancel` on a never-signed request ended `nothing_signed` with no next action (FLOWS:832); it now has "Run `attessa status --pending` to see your open calls." (OPEN-QUESTIONS.md entry).
+No existing assertion changed.
+
+verify at de764a5 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  55 passed (55)
+cli:       Tests  266 passed (266)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r37, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above)
