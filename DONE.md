@@ -2055,3 +2055,21 @@ packages/cli test:  Test Files  60 passed (60)
 packages/cli test:       Tests  273 passed (273)
 ```
 reviewed: pending (adversary r42, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r42 fixes - 2026-11-05
+adversary r42 (f00e49a, test `packages/cli/test/adversary-t21-r42.test.ts`, failing first): a waiting re-run past expiry of a call whose permission the chain already read as used (no log indexed yet) first printed "Confirming you weren't charged: your payment permission expires unused at {t} UTC (in 0 s). Waiting…" and the `attessa cancel` hint, then ended with the undecided row (SPEC.md:635, FLOWS.md:832). Fixed in fb83434: the SDK's `waiting` progress carries `used: true` in that state (packages/sdk/src/types.ts, client.ts), and the CLI prints "Your payment permission was already used or cancelled; waiting for Celo to show which…  (up to a minute)" instead (packages/cli/src/copy.ts, buyer.ts; noted in OPEN-QUESTIONS.md, not in FLOWS). Round 41's lead (an RpcError on `authorizationState` with wait false) was dropped by r42.
+No existing assertion changed. CI on 704cab7 (r41): `ci` success, `harness` success.
+
+verify at fb83434 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  61 passed (61)
+packages/cli test:       Tests  274 passed (274)
+```
+reviewed: pending (adversary r43, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
