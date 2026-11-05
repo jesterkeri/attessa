@@ -273,6 +273,20 @@ def keys(o):
     if isinstance(o, dict): return all(isinstance(k, str) and keys(v) for k, v in o.items())
     return all(keys(v) for v in o) if isinstance(o, list) else True
 if not keys(L): bad.append("pnpm-lock.yaml: every mapping key must be a string (PyYAML and pnpm read null, ~, yes or 1 keys differently)")
+# The other way round: a plain scalar PyYAML reads as a string can be a number, null or bool in YAML 1.2 core,
+# which pnpm then prints back as another name (1e3 -> 1000, 0o17 -> 15, 08 -> 8). pnpm quotes such values when
+# it writes them ('9.0'), so a plain one of those shapes is refused (a superset of the 1.2 core forms, underscores too).
+CORE12 = re.compile(r"[-+]?(\.[0-9_]+|[0-9][0-9_]*(\.[0-9_]*)?)([eE][-+]?[0-9_]+)?|[-+]?\.(inf|Inf|INF)|\.(nan|NaN|NAN)"
+                    r"|0b[01_]+|0o[0-7_]+|0x[0-9a-fA-F_]+|[-+]?[0-9][0-9_]*(:[0-5]?[0-9])+(\.[0-9_]*)?"
+                    r"|~|null|Null|NULL|true|True|TRUE|false|False|FALSE|")
+def plain12(n):
+    if isinstance(n, yaml.ScalarNode): return n.style is None and n.tag == "tag:yaml.org,2002:str" and CORE12.fullmatch(n.value) is not None
+    if isinstance(n, yaml.SequenceNode): return any(plain12(x) for x in n.value)
+    return isinstance(n, yaml.MappingNode) and any(plain12(k) or plain12(v) for k, v in n.value)
+try: lock_node = yaml.compose(blob("pnpm-lock.yaml")) if "pnpm-lock.yaml" in reg else None
+except yaml.YAMLError: lock_node = None  # the load above reports it
+if lock_node is not None and plain12(lock_node):
+    bad.append("pnpm-lock.yaml: a plain value or key that YAML 1.2 reads as a number, null or bool (1e3, 0o17, 08) is not allowed (PyYAML reads it as a string, pnpm as another name)")
 semver = NAME + r"@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
 # pnpm merges each packages entry over its snapshot (its dependencies, version or id win) and reads top-level keys
 # such as overrides, patchedDependencies or catalogs, so only the fields this lockfile uses are allowed.
