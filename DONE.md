@@ -2256,3 +2256,24 @@ packages/cli test:  Test Files  71 passed (71)
 packages/cli test:       Tests  298 passed (298)
 ```
 reviewed: pending (adversary r52, then Codex)
+
+### T21 adversary r52 (failing test 9b62a62, fix cd009ab)
+Finding: `attessa cancel <id>` from a wallet that didn't pay, on a call already settled, printed "Too late to cancel" and then "attessa status --pending checks again and fetches it", which that wallet can never do (FLOWS.md:832; SPEC §6.1). r51 gave `call` and `status --pending` the paying-wallet line but not cancel. Lead taken too: for such a wallet the settled path still retried the fetch five times with a POLL_MS sleep each, a silent wait of up to 15 s (FLOWS.md:825).
+Fix: cancel's report context carries the loaded wallet, so it prints `answerOtherWallet`; the SDK's settledPath makes no fetch attempts when the loaded wallet isn't the payer (`notPayer`, shared with fetchResult).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  72 passed (72)
+packages/cli test:       Tests  300 passed (300)
+```
+reviewed: pending (adversary r53, then Codex)
