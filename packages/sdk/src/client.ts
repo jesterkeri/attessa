@@ -607,9 +607,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * clocks further apart, a Date that moved) is `unsure`, which decides nothing (a later getResult can still fetch
    * and verify the answer). The stamp never strays more than the window from chain time, whatever Date says.
    */
+  // The gateway answers 404 to any signature but the payer's (SPEC §6), so another wallet's fetch decides nothing.
+  const notPayer = (entry: PendingEntry) => !!entry.payer && cfg.account.address.toLowerCase() !== entry.payer.toLowerCase();
+
   async function fetchResult(n: Net, entry: PendingEntry): Promise<Fetched> {
-    // The gateway answers 404 to any signature but the payer's (SPEC §6), so another wallet's fetch decides nothing.
-    if (entry.payer && cfg.account.address.toLowerCase() !== entry.payer.toLowerCase()) return { kind: 'unsure' };
+    if (notPayer(entry)) return { kind: 'unsure' };
     try {
       const chainTs = Number((await n.chain.latest()).timestamp);
       const ok = PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S;
@@ -655,7 +657,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   async function settledPath(n: Net, entry: PendingEntry, settlement: Settlement, meta: CallMeta): Promise<CallResult> {
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
     let noResult = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    // Another wallet's fetch can never succeed: no retries, no silent wait.
+    for (let attempt = 0; attempt < (notPayer(entry) ? 0 : 5); attempt++) {
       const f = await fetchResult(n, entry);
       if (f.kind === 'result') return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, meta, settlement);
       if (f.kind === 'none') {

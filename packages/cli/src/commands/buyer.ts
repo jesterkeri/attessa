@@ -627,7 +627,7 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   const client = makeClient(g, d, w.account, { limits: NO_LIMITS, asset: 'usdc', wait: true });
   const entry = client.ledger.get(id);
   if (!entry) throw BUYERR.unknownRequest(id);
-  const ctx = (e: PendingEntry) => ({ origin: e.origin, sym: SYMBOL[assetOf(e.asset)], asset: assetOf(e.asset), uncertain: false, outFile: `${id}.json`, dailyCap: 0n });
+  const ctx = (e: PendingEntry) => ({ origin: e.origin, sym: SYMBOL[assetOf(e.asset)], asset: assetOf(e.asset), uncertain: false, outFile: `${id}.json`, dailyCap: 0n, wallet: w.account.address.toLowerCase() });
   if (entry.nonce === null) throw new CliError('nothing_signed', 'Nothing was signed for this request, so there is nothing to cancel.', 'Run `attessa status --pending` to see your open calls.'); // not in FLOWS
   if (['verified', 'not_charged', 'paid_but_rejected', 'settled_after_refusal'].includes(entry.state)) {
     return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));
