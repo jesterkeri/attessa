@@ -2073,3 +2073,24 @@ packages/cli test:  Test Files  61 passed (61)
 packages/cli test:       Tests  274 passed (274)
 ```
 reviewed: pending (adversary r43, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r43 fixes - 2026-11-05
+adversary r43 (fbc00c1, tests `packages/cli/test/adversary-t21-r43.test.ts` and `adversary-t21-r43-evidence.test.ts`, the second made from its evidence probe; failing first):
+1. A refused call whose permission the chain already read as used before expiry, with no log indexed, printed the confirming line ("expires unused at {t}") and the `attessa cancel` hint on its first wait pass, then ended on the undecided row (SPEC.md:635, FLOWS.md:832). `finalize` read `authorizationState` only past validBefore + 5.
+2. A waiting lost-connection call that ended on the lagging-log exit wrote no evidence row (SPEC.md:700 "Every outcome is in evidence"); with `--no-wait` it did.
+Fixed in 5eac46b: `finalize` (packages/sdk/src/client.ts) reads the permission state on every pass; used with no log counts as lagging and announces `used`, unused decides `not_charged` only past validBefore + 5; the lagging exit writes an `uncertain` row unless the entry is refused (whose row exists).
+That made three SDK tests fail (`packages/sdk/test/outcomes.test.ts`: two INV-20 tests and the confirmNotCharged test), which asserted that no `authorizationState` read happens before validBefore + 5, stricter than INV-20 ("never reports `not_charged` without reading … == false at a block whose timestamp > validBefore + 5"). Joshua chose (2026-11-05) to narrow them to INV-20's wording: a2423af asserts the deciding (last) read is past validBefore + 5, and keeps every other assertion, including `confirmedAtBlock` past validBefore + 5.
+
+verify at a2423af (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  63 passed (63)
+packages/cli test:       Tests  277 passed (277)
+```
+reviewed: pending (adversary r44, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
