@@ -1357,3 +1357,15 @@ node site/build.mjs: exit 0
 # fail 0
 ```
 reviewed: pending (adversary r58, then Codex)
+
+### Site adversary r58 (failing test ea140e0, fix below) - 2026-11-05
+Finding: at the end of any page, when a width change hid the focused control (the header network chip under 1181px, the menu button over 1020px), the focusout fallback found no stop of main on screen and called main.focus(), which scrolled the page to main's middle (index.html at 1024x900: scrollY 10387 to 4354) and sent the next Tab to the top of the page (WCAG 2.2 SC 2.4.3; site/README.md states).
+Fix: site.js's fallback takes the first enabled tab stop fully on screen below the header anywhere on the page (footer links and radios included), else focuses main with preventScroll. No more adversary rounds (Joshua, 2026-11-05: Codex reviews from here).
+verify:
+```
+node site/build.mjs: exit 0
+# tests 186
+# pass 186
+# fail 0
+```
+reviewed: pending (Codex)

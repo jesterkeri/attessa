@@ -55,8 +55,9 @@
 
   // A width change can hide the focused control (docs summary over 860px, TOC under 1181px, menu button over
   // 1020px), and the browser drops focus to <body>, sometimes before a media listener runs: give it back to
-  // the first tab stop in main that is fully on screen below the header (the docs menu's links first, as it
-  // sticks over 860px), else to main, which doesn't scroll: the reader keeps their place and Tab goes on from it.
+  // the first enabled tab stop on the page that is fully on screen below the header, in document order (the docs
+  // menu's links first, as it sticks over 860px; the footer's links and radios at the end of a page), else to main
+  // without scrolling: the reader keeps their place and Tab goes on from it.
   document.addEventListener('focusout', e => {
     const t = e.target;
     if (e.relatedTarget || !(t instanceof Element)) return;
@@ -64,7 +65,9 @@
       if (document.activeElement !== document.body || !t.isConnected || t.getClientRects().length) return;
       const top = $('header')?.getBoundingClientRect().bottom ?? 0;
       const onScreen = el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top >= top && r.bottom <= innerHeight; };
-      ($$('a[href], button, summary, input, select, [tabindex="0"]', $('main') ?? document).find(onScreen) ?? $('main'))?.focus();
+      const stop = $$('a[href], button, summary, input, select, [tabindex="0"]').find(el => !el.disabled && onScreen(el));
+      if (stop) stop.focus();
+      else $('main')?.focus({ preventScroll: true });
     });
   });
 
