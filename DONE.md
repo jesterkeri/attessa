@@ -1235,3 +1235,15 @@ build=0
 == live 390x844 use-cases.html 0
 ```
 reviewed: pending (adversary r48, then Codex)
+
+### Site adversary r48 (failing test de1a898, fix e64f0ee) - 2026-11-05
+Finding: at 200% zoom on 1280, 1366 and 1440px laptops (640x400, 683x384, 720x450 CSS px), the open `.menu` (fixed, `justify-content: center`, no overflow) was taller than the screen: "How it works" sat under the nav bar, "Explorer preview" below the screen, and nothing scrolled (site/README.md:104,109; WCAG 1.4.4, 2.4.11). Lead taken too: r47's `overflow-wrap: anywhere` broke "RECOMMENDATIONS" mid-word at every width in a fallback face.
+Fix: `.menu { justify-content: safe center; overflow-y: auto; scroll-padding-top: 100px; }`; the `.use h2` wrap rule now applies under 720px only.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r48's menufit probe, index.html, cdnfail and live, at 640x400, 683x384, 720x450, 768x432 and 768x1024: every menu link visible below the 68px nav bar as Tab cycles, the menu scrolls where it is taller than the screen; r48's midword probe: the break is at 390px only, none at 768 or 1440; r47's offright probe, use-cases.html at 390x844: 0 in nojs, cdnfail and live):
+```
+# tests 160
+# pass 160
+# fail 0
+build=0
+```
+reviewed: pending (adversary r49, then Codex)
