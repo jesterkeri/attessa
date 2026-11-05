@@ -695,6 +695,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     let chainNow: bigint | undefined;
     let announced = false;
     for (;;) {
+      // The wait is announced only from a pass that read the permission state: before that it may already be used.
+      let stateRead = false;
       try {
         const head = await n.chain.latest();
         chainNow = head.timestamp;
@@ -709,6 +711,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         }
         // Read every pass, not only past expiry: a permission already used has nothing left to expire.
         const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
+        stateRead = true;
         if (!used && head.timestamp > vb + EXPIRY_MARGIN) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
         if (used) {
           // Used (or cancelled), but no matching log yet: the log index lags. Ask again.
@@ -724,7 +727,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         if (!wait) return current(entry, meta, 'rpc_unavailable');
       }
       if (!wait) return usedNoLog ? { ...current(entry, meta), authorizationUsed: true } : current(entry, meta);
-      if (!announced && chainNow !== undefined) {
+      if (!announced && stateRead && chainNow !== undefined) {
         announced = true;
         progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow, ...(usedNoLog ? { used: true as const } : {}) });
       }
