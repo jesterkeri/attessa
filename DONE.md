@@ -1580,3 +1580,31 @@ ok: refused
 r9full_rc=0
 ```
 reviewed: pending (adversary r18, then Codex r2)
+
+### Install allow-list adversary r18 - 2026-11-05
+adversary r18 on e151ac7: pnpm 10.32.1 under `--frozen-lockfile` compares an importer's specifier with package.json and links or installs its `version` as written, and the guard checked only that a `link:` version had a `workspace:` specifier. So `viem: workspace:*` linked to `link:../../vendor/viem` (a tree folder that is no workspace project), `@attessa/core` linked to `link:/opt/...` (outside the repository), and `viem: 2.57.13` with version `typescript@5.9.3` (another registry package) all passed the guard; the adversary showed pnpm installing each.
+Test 9d8a2a3: `scripts/adversary-install-r18/importer-versions.test.sh` (the adversary's), failing before the fix. Fix ef3b7f1: each importer is `.` or a tracked `packages/<dir>`; each dependency is either the workspace project of that name (`workspace:` specifier, `link:` resolving to that project's folder) or a snapshot keyed by its own name and version; package names in `packages` keys may not start with `.` or `_`. The r14 to r17 tests now stop when mktemp fails (the adversary's r18 test caught that flaw; without a scratch folder they ran git reset in the cwd). The r13 glob has no test files (rc=127 below is that empty glob, as in earlier runs).
+
+verify at ef3b7f1 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r13/* rc=127
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r19, then Codex r2)
