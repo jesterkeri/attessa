@@ -2405,3 +2405,24 @@ packages/cli test:  Test Files  78 passed (78)
 packages/cli test:       Tests  314 passed (314)
 ```
 reviewed: pending (adversary r59, then Codex)
+
+### T21 adversary r59 (failing test bf1cee5, fix 531cda5) - 2026-11-05
+Finding: with `--json` and no `--yes`, an owner or operator write (`revoke release` in the test; every `write`/`planOrSend` command shares the path) asked for the typed verb while its prompt ("... Revoking is permanent.  [revoke/cancel]", or the CELO cost) was still held in the `--json` buffer, so the consequence was never shown before the permanent transaction could be confirmed (FLOWS.md:833, "Each prompt names the consequence and uses the verb as the button").
+Fix: under `--json`, `run()` wraps `io.confirm`: the lines held so far go to stderr before the confirm is asked (they stay in the JSON `lines` too). bin.ts asks its "Type {verb} to continue" question on stderr, so stdout holds only the JSON object.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  79 passed (79)
+packages/cli test:       Tests  316 passed (316)
+```
+reviewed: pending (adversary r60, then Codex)
