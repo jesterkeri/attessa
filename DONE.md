@@ -1272,3 +1272,16 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe 
 build=0
 ```
 reviewed: pending (adversary r51, then Codex)
+
+### Site adversary r51 (failing test 2aa9b89, fix 28620fb) - 2026-11-05
+Finding: seven docs code blocks (how-to: seller commands, the MCP args, the "Use it with buy" output with the 206-character "you pay even if the answer fails it" line; tutorial: git clone, `attessa init` output, the JSON body, `attessa call`) scroll sideways at 390px, three of them at 720x450 (200% zoom), with no tabindex and nothing focusable inside, so the keyboard couldn't bring the ends of their lines into view (site/README.md:104; WCAG 2.1.1). The four reference tables' `.table-wrap` had the same gap.
+Fix: `<pre tabindex="0">` for the code blocks in docs/how-to.html, docs/tutorial.html and docs/reference.html, and `tabindex="0"` on reference.html's `.table-wrap`; site/README.md says so.
+Not filed by the adversary: the r50 tab stops stay on phones and without JavaScript, where the boxes don't scroll (an extra named group stop; the static tabindex can't depend on JS); under reduced motion, scrolling a pinned box may leave the 3D object and globe labels where the slot was (scene.js:1003, not rendered: no real three.js here).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe, cdnfail, focusing each tab-stop scroller and pressing ArrowRight: every scroller reached its end, how-to 384/384 and 993/993 at 720x450, 674, 151 and 1283 at 390x844; tutorial 300 at 720x450, 158, 590, 127 and 143 at 390x844; reference tables 32 at 720x450, 72, 209, 18 and 322 at 390x844):
+```
+# tests 167
+# pass 167
+# fail 0
+build=0
+```
+reviewed: pending (adversary r52, then Codex)
