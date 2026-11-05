@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { vi } from 'vitest';
 import { keccak256, stringToBytes, type Address, type Hex, type LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { originHash } from '@attessa/core';
+import { DEPLOYMENTS, originHash } from '@attessa/core';
 import { createAttestClient } from '../../src/client.ts';
 import type { ClientOptions, Limits } from '../../src/types.ts';
 import { FakeChain } from './chain.ts';
@@ -27,6 +27,11 @@ export interface WorldOpts {
 /** Chain + registry state + a running fake gateway + an SDK client with a signing spy. */
 export async function makeWorld(opts: WorldOpts = {}) {
   const chain = new FakeChain();
+  // The FakeChain reports Sepolia's chain id, and a pinned registry wins over options.registry (SPEC §2.6). Since T10
+  // pinned the real Sepolia registry, the fake one stands in for it while this world is open; close() restores it.
+  const sepolia = DEPLOYMENTS['celo-sepolia'] as { enclaveRegistry: string | null };
+  const savedPin = sepolia.enclaveRegistry;
+  sepolia.enclaveRegistry = chain.registry;
   const operator = randomAccount().address.toLowerCase() as Address;
   const payTo = randomAccount().address.toLowerCase() as Address;
   const enclave = randomAccount();
@@ -78,6 +83,7 @@ export async function makeWorld(opts: WorldOpts = {}) {
     /** EIP-3009 TransferWithAuthorization signatures made so far. */
     transferSignatures: () => signSpy.mock.calls.filter((c) => (c[0] as { primaryType: string }).primaryType === 'TransferWithAuthorization').length,
     async close() {
+      sepolia.enclaveRegistry = savedPin;
       await gw.stop();
       rmSync(dataDir, { recursive: true, force: true });
     },

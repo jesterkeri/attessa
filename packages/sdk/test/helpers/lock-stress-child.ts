@@ -32,10 +32,16 @@ syncBuiltinESMExports();
 const { Ledger } = await import('../../src/ledger.ts');
 const ledger = new Ledger(dir);
 
-/** Running or stopped; a killed peer the parent hasn't reaped yet is a zombie, not alive (Linux). */
+/**
+ * Running or stopped. Not alive (Linux): a zombie (state Z), or a process already exiting (PF_EXITING, 0x4 in
+ * /proc/<pid>/stat field 9). A killed holder's file locks are released in exit_files() before exit_notify() makes it
+ * a zombie, so in that gap a peer can take the lock while the dead holder still reads as state R; it never runs user
+ * code again, so it cannot be inside.
+ */
 function alive(pid: number): boolean {
   try {
-    return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]![0] !== 'Z';
+    const rest = readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1]!.split(' ');
+    return rest[0] !== 'Z' && (Number(rest[6]) & 0x4) === 0;
   } catch {
     return false;
   }

@@ -10,5 +10,5 @@ export default defineConfig({
       '@attessa/seller-host': fileURLToPath(new URL('../seller-host/src/index.ts', import.meta.url)),
     },
   },
-  test: { testTimeout: 20000, hookTimeout: 20000, pool: 'forks' },
+  test: { testTimeout: 20000, hookTimeout: 20000, pool: 'forks', setupFiles: ['test/pin-fake-registry.ts'] },
 });

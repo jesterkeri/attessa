@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Facilitator, FacilitatorAnswer } from '../src/facilitator.ts';
 import { makeHarness, type Harness } from './fakes/harness.ts';
 
@@ -29,6 +29,8 @@ function holdable() {
     sends: 0,
     held: [] as Array<() => void>,
     release() {
+      // stop holding first, so an answer still in flight is not held after the release
+      s.hold = false;
       for (const r of s.held.splice(0)) r();
     },
     wrap: (f: Facilitator): Facilitator => ({
@@ -111,8 +113,8 @@ describe('adversary T19 r2: background re-sends (SPEC §6.3 step 5, INV-11)', ()
     f.hold = true;
     const a = h.gw.reconciler.tick();
     const b = h.gw.reconciler.tick();
-    await wait(50);
-    expect(f.sends).toBe(4); // 2 handler sends + one re-send per row
+    // wait for the re-sends rather than a fixed 50 ms: a 2-core CI runner can take longer
+    await vi.waitFor(() => expect(f.sends).toBe(4), { timeout: 5000 }); // 2 handler sends + one re-send per row
     f.release();
     await Promise.all([a, b]);
     expect(f.sends).toBe(4);

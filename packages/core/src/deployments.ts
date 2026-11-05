@@ -38,8 +38,12 @@ export const DEPLOYMENTS: Record<Exclude<Network, 'local'>, Deployment> = {
     x402Network: 'eip155:11142220',
     identityRegistry: '0x8004A818BFB912233c491871b3d84c89A494BD9e',
     selfRegistry: '0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379',
-    enclaveRegistry: null,
-    validatorStack: null,
+    enclaveRegistry: '0x42Bf5Cb440c3C321CB42b0F4c81c3c7435cB92fF',
+    validatorStack: {
+      p384Verifier: '0xd26C0d863B71CBBBa07E6EeeDaB545d0F7c1a84E',
+      certManager: '0x29F2a69B5685d0db11FA10aa7C9079B3F14CF7fd',
+      nitroValidator: '0x72B06e740D5F2C262b3193De69c7065A0C7424db',
+    },
     assets: {
       usdc: { address: '0x01c5c0122039549ad1493b8220cabedd739bc44e', name: 'USDC', version: '2' },
     },

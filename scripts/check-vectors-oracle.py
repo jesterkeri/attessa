@@ -44,7 +44,7 @@ MIN = {
     ("headers.json", "bytes32.valid"): 2, ("headers.json", "bytes32.invalid"): 7,
     ("headers.json", "retryAfter.valid"): 3, ("headers.json", "retryAfter.invalid"): 4,
     ("headers.json", "payerSig.valid"): 3, ("headers.json", "payerSig.invalid"): 9,
-    ("headers.json", "attestedProof.valid"): 3, ("headers.json", "attestedProof.invalid"): 14,
+    ("headers.json", "attestedProof.valid"): 3, ("headers.json", "attestedProof.invalid"): 27,
 }
 FILE_MIN = 10  # TASKS T03: at least 10 cases in each vectors file
 
@@ -463,12 +463,28 @@ def origin_oracle(inp, local):
 PROOF_FIELDS = {"agentId": 256, "releaseId": "b32", "requestId": "b32", "requestHash": "b32", "responseHash": "b32",
                 "inputsHash": "b32", "paymentId": "b32", "issuedAt": 64, "expiresAt": 64}
 B64 = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/")
+PROOF_MAX_DEPTH = 32  # SPEC §2.5: each object or array opens a level, the outer object is level 1
+def nests_deeper_than(raw, limit):
+    """Bracket depth of the decoded bytes, ignoring brackets inside JSON strings; a stray closer stops at 0."""
+    depth, in_str, esc = 0, False, False
+    for b in raw:
+        if in_str:
+            if esc: esc = False
+            elif b == 0x5C: esc = True
+            elif b == 0x22: in_str = False
+        elif b == 0x22: in_str = True
+        elif b in (0x5B, 0x7B):
+            depth += 1
+            if depth > limit: return True
+        elif b in (0x5D, 0x7D): depth = max(0, depth - 1)
+    return False
 def parse_attested_proof(h):
     if not isinstance(h, str) or h == "" or len(h) % 4 or not set(h.rstrip("=")) <= B64 or len(h) - len(h.rstrip("=")) > 2:
         return ("base64", None, None)
     try: raw = base64.b64decode(h, validate=True)
     except binascii.Error: return ("base64", None, None)
     if base64.b64encode(raw).decode("ascii") != h: return ("base64", None, None)  # non-zero padding bits
+    if nests_deeper_than(raw, PROOF_MAX_DEPTH): return ("too_deep", None, None)  # before any parse (SPEC §2.5)
     try:
         text = raw.decode("utf-8")
         obj = json.loads(text)

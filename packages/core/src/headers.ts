@@ -9,8 +9,6 @@ const SECONDS = /^(0|[1-9][0-9]*)$/;
 const PAYER_SIG = /^(0|[1-9][0-9]*)\.(0x[0-9a-f]{130})$/;
 const SIGNATURE = /^0x[0-9a-f]{130}$/;
 const ADDRESS = /^0x[0-9a-f]{40}$/;
-// RFC 4648 standard alphabet with padding.
-const BASE64 = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
 
 export const HEADER = {
   requestId: 'X-Request-Id',
@@ -57,9 +55,29 @@ export function payerSigDigest(requestId: Hex, unixSeconds: number): Hex {
   return hashMessage(payerSigMessage(requestId, unixSeconds));
 }
 
+/** Whether c is in the RFC 4648 standard base64 alphabet `A-Za-z0-9+/`. */
+function isBase64Char(c: number): boolean {
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39) || c === 0x2b || c === 0x2f;
+}
+
+/**
+ * RFC 4648 standard alphabet with padding: whole 4-character groups, the last of which may end in
+ * `=` or `==`. A linear loop rather than a regex, because V8's regex engine overflows its stack on a
+ * repeated group a few megabytes long, and every header length must reach the SPEC §2.5 checks.
+ */
+function isPaddedBase64(v: string): boolean {
+  const n = v.length;
+  if (n % 4 !== 0) return false;
+  let pad = 0;
+  while (pad < n && v.charCodeAt(n - 1 - pad) === 0x3d) pad++;
+  if (pad > 2) return false;
+  for (let i = 0; i < n - pad; i++) if (!isBase64Char(v.charCodeAt(i))) return false;
+  return true;
+}
+
 /** Strict RFC 4648 base64 (standard alphabet, padded, canonical) to bytes, or null. */
 export function decodeBase64Strict(v: string): Uint8Array | null {
-  if (v === '' || !BASE64.test(v)) return null;
+  if (v === '' || !isPaddedBase64(v)) return null;
   const bytes = Buffer.from(v, 'base64');
   // Rejects non-zero padding bits, which Buffer would silently drop.
   if (bytes.toString('base64') !== v) return null;

@@ -1,11 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { originHash } from '@attessa/core';
+import { DEPLOYMENTS, originHash } from '@attessa/core';
 import type { Keychain } from '@attessa/sdk';
 import { keccak256, stringToBytes, type Address } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { FakeChain } from '../../sdk/test/fakes/chain.ts';
 import { FakeGateway } from '../../sdk/test/fakes/gateway.ts';
 import type { Deps } from '../src/context.ts';
@@ -126,6 +126,13 @@ afterEach(async () => w?.close());
 const LOCAL = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
 
 type JsonErr = { ok: boolean; error: string; message: string; next: string | null };
+
+// Since the staging merge (T10) Sepolia has a pinned registry, so this world needs a chain with none (mainnet until T30):
+// the Sepolia entry is unpinned for each test here and restored after.
+const sepolia = DEPLOYMENTS['celo-sepolia'] as { enclaveRegistry: string | null };
+const pinned = sepolia.enclaveRegistry;
+beforeEach(() => void (sepolia.enclaveRegistry = null));
+afterEach(() => void (sepolia.enclaveRegistry = pinned));
 
 describe('T21 adversary r33: buyer commands on a network whose EnclaveRegistry address is not known', () => {
   it('attessa call: a row with one next action (FLOWS §9 Recovery), not "Unexpected error" with none', async () => {

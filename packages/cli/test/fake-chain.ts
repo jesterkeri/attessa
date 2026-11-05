@@ -28,7 +28,7 @@ import { RpcError, RpcUnavailable, type Rpc } from '../src/rpc.ts';
  * request, including `eth_sendRawTransaction`, stays in this object, and `sent` records them.
  */
 
-export const REGISTRY = '0x00000000000000000000000000000000000000e1' as Address;
+export const REGISTRY = '0x5fbdb2315678afecb367f032d93f642f64180aa3' as Address;
 export const IDENTITY = '0x8004a818bfb912233c491871b3d84c89a494bd9e' as Address;
 export const VALIDATOR = '0x00000000000000000000000000000000000000e2' as Address;
 export const CERT_MANAGER = '0x00000000000000000000000000000000000000e3' as Address;
