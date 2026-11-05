@@ -1554,3 +1554,29 @@ ok: refused
 r9full_rc=0
 ```
 reviewed: pending (adversary r17, then Codex r2)
+
+### Install allow-list adversary r17 - 2026-11-05
+(The first r17 run stopped before testing anything and is not counted; this is the second.) adversary r17 on 134a85b: pnpm 10.32.1 builds each package as `Object.assign(snapshot, packages[id])`, so a `packages` entry's own fields win, `dependencies` included, and the guard checked only its key and resolution. Adding `dependencies: {punycode: link:vendor/punycode}` to the `tr46@5.1.1` packages entry passed the full guard, and a real `--frozen-lockfile` install linked tr46's punycode to vendor/punycode in the tree (no integrity). The same goes for other entry fields (`version`, `id`), and the adversary left top-level keys (overrides, patchedDependencies, catalogs) unchecked.
+Tests b99b5f9: `scripts/adversary-install-r17/lock-package-dependencies.test.sh` (the adversary's) and `scripts/adversary-install-r17/lock-keys.test.sh` (a packages entry's own `version`, a top-level `overrides`), failing before the fix. Fix 237550c: packages entries may hold only resolution, engines, os, cpu, libc, hasBin, peerDependencies, peerDependenciesMeta and deprecated, and the lockfile only its five top-level keys.
+
+verify at 237550c (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r17/lock-package-dependencies rc=0
+r17/lock-keys rc=0
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r18, then Codex r2)
