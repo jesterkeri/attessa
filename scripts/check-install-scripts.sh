@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -p
 # Refuse any install config outside an explicit allow-list (pnpmfiles, .npmrc, manifest keys,
 # scripts, dependency specs, pnpm-workspace.yaml), then install HEAD with the pinned pnpm
 # (packageManager), a fresh store and no side-effects cache, and fail if any install-time script
@@ -28,7 +28,8 @@ set -u
 # to whatever version a pull request pins (pnpm 9 ignores ignoreScripts in pnpm-workspace.yaml).
 pnpm_version=10.32.1
 # PATH keeps only absolute entries outside the checked folder, found with builtins alone (no
-# command is looked up on PATH before this; the interpreter is /bin/bash itself, not env's lookup): an entry such as $PWD/node_modules/.bin would
+# command is looked up on PATH before this; the interpreter is /bin/bash itself, not env's lookup, and -p
+# keeps it from sourcing BASH_ENV or importing functions from the environment): an entry such as $PWD/node_modules/.bin would
 # otherwise resolve git, python3 or node from files the tree under test ships.
 root=$(pwd -P); keep=
 IFS=: read -ra entries <<<"$PATH"
@@ -38,6 +39,8 @@ for e in "${entries[@]}"; do
   [[ $r/ == "$root"/* ]] && continue
   keep=${keep:+$keep:}$e
 done
+# An empty PATH would mean the current folder, which is the checkout itself.
+[ -n "$keep" ] || { echo "FAIL: no PATH entry outside the checked folder"; exit 1; }
 PATH=$keep
 # mktemp's folder must be absolute: the probe later cds into the snapshot and removes $tmp.
 [[ ${TMPDIR:-/tmp} == /* ]] || unset TMPDIR
