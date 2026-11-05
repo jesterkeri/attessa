@@ -53,6 +53,19 @@
   // Same breakpoint as site.css, where the menu button shows at max-width 1020.98px (no fractional width between).
   matchMedia('(min-width: 1021px)').addEventListener('change', e => { if (e.matches) setMenu(false); });
 
+  // A width change can hide the focused control (docs summary over 860px, TOC under 1181px, menu button over
+  // 1020px), and the browser drops focus to <body>, sometimes before a media listener runs: give it back to
+  // the docs menu's first link if it shows, else to main.
+  document.addEventListener('focusout', e => {
+    const t = e.target;
+    if (e.relatedTarget || !(t instanceof Element)) return;
+    requestAnimationFrame(() => {
+      if (document.activeElement !== document.body || !t.isConnected || t.getClientRects().length) return;
+      const near = $('.docs-nav a');
+      (near?.getClientRects().length ? near : $('main'))?.focus();
+    });
+  });
+
   // Entrances: elements fade up once as they enter the viewport.
   const reveals = $$('.reveal');
   if (reveals.length && 'IntersectionObserver' in window && !document.body.classList.contains('flat')) {
