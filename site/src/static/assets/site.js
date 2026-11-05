@@ -55,14 +55,16 @@
 
   // A width change can hide the focused control (docs summary over 860px, TOC under 1181px, menu button over
   // 1020px), and the browser drops focus to <body>, sometimes before a media listener runs: give it back to
-  // the docs menu's first link if it shows, else to main.
+  // the first tab stop in main that is fully on screen below the header (the docs menu's links first, as it
+  // sticks over 860px), else to main, which doesn't scroll: the reader keeps their place and Tab goes on from it.
   document.addEventListener('focusout', e => {
     const t = e.target;
     if (e.relatedTarget || !(t instanceof Element)) return;
     requestAnimationFrame(() => {
       if (document.activeElement !== document.body || !t.isConnected || t.getClientRects().length) return;
-      const near = $('.docs-nav a');
-      (near?.getClientRects().length ? near : $('main'))?.focus();
+      const top = $('header')?.getBoundingClientRect().bottom ?? 0;
+      const onScreen = el => { const r = el.getBoundingClientRect(); return r.height > 0 && r.top >= top && r.bottom <= innerHeight; };
+      ($$('a[href], button, summary, input, select, [tabindex="0"]', $('main') ?? document).find(onScreen) ?? $('main'))?.focus();
     });
   });
 
