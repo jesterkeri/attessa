@@ -291,7 +291,7 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
   const price = await gasPrice(c);
   const maxTxs = certs.total + 1;
   deps.io.out(COPY.registerPrompt(certs.cached, certs.total, steps.length, celo(quote(sims) * price), celo(BigInt(maxTxs) * GAS_PER_UNESTIMATED_TX * price)));
-  const r = await planOrSend(c, g, deps, { yesWord: 'register', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
+  await planOrSend(c, g, deps, { yesWord: 'register', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
     if (i < steps.length - 1) return deps.io.out(COPY.certCached(i + 1, steps.length, sent.hash));
     deps.io.out(COPY.signerLive(i + 1, steps.length, chk.signer, host(origin), agent, sent.hash));
     const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [chk.signer]);
@@ -300,7 +300,7 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
     if (lurl && (await livenessOk(c, deps, lurl, chk.signer, oh))) deps.io.out(COPY.livenessOk);
     else deps.io.out(`  (liveness not confirmed from this machine; check it with attessa status ${host(origin)})`);
   });
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }
 
 export async function signerRenew(g: Global, deps: Deps, o: { attestation?: string; sellerHost?: string }): Promise<number> {
@@ -346,10 +346,10 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const steps = [...certs.steps, renew];
   const sims = [...certs.simulations, renewSim];
   deps.io.out(COPY.renewPrompt(signer, certs.cached, certs.total, steps.length, celo(quote(sims) * (await gasPrice(c)))));
-  const r = await planOrSend(c, g, deps, { yesWord: 'renew', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
+  await planOrSend(c, g, deps, { yesWord: 'renew', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
     if (i < steps.length - 1) return deps.io.out(COPY.certCached(i + 1, steps.length, sent.hash));
     const after = await read(c, c.registry, REGISTRY_ABI, 'signers', [signer]);
     deps.io.out(COPY.renewed(i + 1, steps.length, signer, utcShort(after.expiresAt as bigint), sent.hash));
   });
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }

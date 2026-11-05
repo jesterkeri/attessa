@@ -200,7 +200,7 @@ export async function planOrSend(
   plan: { yesWord: string; steps: Step[]; from: Address; simulations: Array<Simulation | null> },
   onRevert: (r: Revert | null, message: string) => CliError,
   onSent: (index: number, sent: Sent) => Promise<void> | void,
-): Promise<'sent' | 'planned' | 'cancelled'> {
+): Promise<'sent' | 'planned'> {
   const { io } = deps;
   if (g.dryRun || !c.account) {
     plan.steps.forEach((s, i) => {
@@ -212,7 +212,7 @@ export async function planOrSend(
     io.out(g.dryRun ? '  (dry run: nothing was sent)' : '  (no ATTESSA_PRIVATE_KEY: nothing was sent; set it and run again to send these yourself)');
     return 'planned';
   }
-  if (!g.yes && !(await io.confirm(plan.yesWord))) return 'cancelled';
+  if (!g.yes && !(await io.confirm(plan.yesWord))) throw ERR.cancelled(plan.yesWord); // a non-TTY stdin answers no (bin.ts)
   for (let i = 0; i < plan.steps.length; i++) {
     let sent: Sent;
     try {

@@ -70,10 +70,10 @@ export async function releaseApprove(g: Global, deps: Deps, o: { agent?: string;
   const src = sourceLabel(o.source);
   deps.io.out(COPY.approveIntro(src, agent, rid));
   deps.io.out(COPY.approvePrompt(src, celo(sim.gas * (await gasPrice(c)))));
-  const r = await planOrSend(c, g, deps, { yesWord: 'approve', steps: [step], from, simulations: [sim] }, (rv, m) => revertToError(rv, m, rc), (_i, s) =>
+  await planOrSend(c, g, deps, { yesWord: 'approve', steps: [step], from, simulations: [sim] }, (rv, m) => revertToError(rv, m, rc), (_i, s) =>
     deps.io.out(COPY.approved(s.hash)),
   );
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }
 
 export async function endpointAdd(g: Global, deps: Deps, o: { agent?: string; origin?: string; payTo?: string; operator?: string }): Promise<number> {
@@ -110,8 +110,8 @@ export async function endpointAdd(g: Global, deps: Deps, o: { agent?: string; or
   if (!sim.ok) throw revertToError(sim.revert, sim.message, rc);
   deps.io.out(COPY.endpointPrompt(host(origin), payTo.toLowerCase(), agent, celo(sim.gas * (await gasPrice(c)))));
   if (!o.operator) deps.io.out(`  (operator ${operator.toLowerCase()}: the wallet that will run attessa signer register)`);
-  const r = await planOrSend(c, g, deps, { yesWord: 'add', steps: [step], from, simulations: [sim] }, (rv, m) => revertToError(rv, m, rc), (_i, s) =>
+  await planOrSend(c, g, deps, { yesWord: 'add', steps: [step], from, simulations: [sim] }, (rv, m) => revertToError(rv, m, rc), (_i, s) =>
     deps.io.out(COPY.endpointAdded(s.hash)),
   );
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }

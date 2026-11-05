@@ -64,8 +64,8 @@ async function write(
   const sim = await simulate(c, o.from, o.step);
   if (!sim.ok) throw fail(sim.revert, sim.message);
   deps.io.out(o.prompt(celo(sim.gas * (await gasPrice(c)))));
-  const r = await planOrSend(c, g, deps, { yesWord: o.yesWord, steps: [o.step], from: o.from, simulations: [sim] }, fail, (_i, s) => o.done(s.hash, s.logs));
-  return r === 'cancelled' ? 1 : 0;
+  await planOrSend(c, g, deps, { yesWord: o.yesWord, steps: [o.step], from: o.from, simulations: [sim] }, fail, (_i, s) => o.done(s.hash, s.logs));
+  return 0;
 }
 
 function needAgent(v: string | undefined): bigint {

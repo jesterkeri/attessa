@@ -156,6 +156,9 @@ export function diskError(e: unknown, dir: string): CliError | null {
 }
 
 export const ERR = {
+  /** A write's confirm answered anything but its verb (or stdin isn't a terminal). Not in FLOWS: OPEN-QUESTIONS r60. */
+  cancelled: (verb: string) =>
+    new CliError('not_confirmed', 'Cancelled: nothing was sent.', `Run it again and type ${verb}, or add --yes to send without asking.`),
   // §6 J3 repair paths
   attestationStale: (min: number) =>
     new CliError(
