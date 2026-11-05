@@ -44,6 +44,9 @@ done
 PATH=$keep
 # mktemp's folder must be absolute: the probe later cds into the snapshot and removes $tmp.
 [[ ${TMPDIR:-/tmp} == /* ]] || unset TMPDIR
+# git reads $XDG_CONFIG_HOME/git/config and $HOME/.gitconfig: a relative one would resolve inside the checkout.
+[[ ${XDG_CONFIG_HOME:-/} == /* ]] || unset XDG_CONFIG_HOME
+[[ ${HOME:-} == /* ]] || { echo "FAIL: HOME must be an absolute path"; exit 1; }
 # The checked folder is the one this is run from, where the developer runs pnpm install, and it
 # must be the repository root. Git is never left to choose it: GIT_* variables are dropped, git's
 # own toplevel (which core.worktree or a .git file can move) must be this same folder, and every
