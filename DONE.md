@@ -2094,3 +2094,21 @@ packages/cli test:  Test Files  63 passed (63)
 packages/cli test:       Tests  277 passed (277)
 ```
 reviewed: pending (adversary r44, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r44 fixes - 2026-11-05
+adversary r44 (a7186c1, test `packages/cli/test/adversary-t21-r44.test.ts`, failing first): when the first `authorizationState` read of a wait threw an RpcError, `finalize` still announced the wait from that pass, without `used`, so the CLI printed the confirming line ("expires unused") and the `attessa cancel` hint for a permission the chain already read as used (SPEC.md:635, FLOWS.md:832). Fixed in 2b8a56e: the wait is announced only from a pass whose state read succeeded (packages/sdk/src/client.ts). Known trade-off, already in the OPEN-QUESTIONS.md entry on `finalize`'s unbounded RPC retry: if every state read fails while the head answers, the wait now prints nothing until a read succeeds.
+No existing assertion changed. CI on 11a4a35 (r43): `ci` success, `harness` success.
+
+verify at 2b8a56e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  64 passed (64)
+packages/cli test:       Tests  278 passed (278)
+```
+reviewed: pending (adversary r45, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
