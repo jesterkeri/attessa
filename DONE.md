@@ -2277,3 +2277,24 @@ packages/cli test:  Test Files  72 passed (72)
 packages/cli test:       Tests  300 passed (300)
 ```
 reviewed: pending (adversary r53, then Codex)
+
+### T21 adversary r53 (failing test 0eafffb, fix 5dfad32)
+Finding: for an open, unsettled call signed by wallet A, `status --pending` and a resumed waiting `call` run with wallet B offered "attessa cancel {id} voids it now" / "To void it right now instead: attessa cancel {id}", but the SDK signs CancelAuthorization for `authorizer: entry.payer` with B's key, which the token refuses, so the cancel reverted (FLOWS.md:832).
+Fix: for a call another wallet signed, the open-call line (`stillOpenOther`) and the waiting void hint (`voidHintOther`) name the signing wallet instead of offering cancel (not in FLOWS, logged in OPEN-QUESTIONS). An up-front refusal in `cancel` itself was tried and dropped: it hid the "Too late to cancel" report r52's test requires for a settled call.
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  73 passed (73)
+packages/cli test:       Tests  303 passed (303)
+```
+reviewed: pending (adversary r54, then Codex)
