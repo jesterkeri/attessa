@@ -930,6 +930,8 @@ figure.term { margin: 0; border: 1px solid var(--line-2); background: rgba(7, 7,
 .docs-main ol:not([class]) { list-style: decimal; }
 .docs-main li::marker { color: var(--text-3); }
 .docs-main .code { margin: 22px 0; border: 1px solid var(--line-2); background: rgba(7, 7, 8, 0.9); overflow: hidden; }
+/* The figure clips, so a focused code block (a tab stop, README) draws its ring inside. */
+.docs-main .code pre:focus-visible { outline-offset: -3px; }
 .docs-main .code figcaption > span:first-child:not(.dots) { font: 500 10.5px/1.4 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); }
 .doc-note { margin: 22px 0; padding: 16px 20px; border-left: 2px solid var(--text-2); background: rgba(255, 255, 255, 0.025); }
 .doc-note.is-fail { border-left-color: var(--fail); }
