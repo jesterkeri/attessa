@@ -2511,3 +2511,13 @@ packages/cli test:       Tests  326 passed (326)
 test=0
 ```
 reviewed: pending (adversary r64, then Codex)
+
+### T21 adversary r64 (failing test 5326086, fix below) - 2026-11-05
+Finding: a refused `attessa gateway resume` (and `resume --dry-run`) ended on "Not resumed: ..." with no next action, under --json with no `next` field (FLOWS.md:832 "Every error row has one next action"; SPEC.md:562).
+Fix: both refusals carry "Next: check FACILITATOR_API_KEY in this shell and the facilitator credit, then run attessa gateway resume --network {network} again." (packages/gateway/src/cli.ts). Last adversary round: Joshua stopped adversary rounds on 2026-11-05 to save API budget; Codex reviews from here.
+verify (gateway tests touched by r63/r64; the full `pnpm -r test` run was cut off by a session end after build=0, typecheck=0, lint=0, so Codex runs it):
+```
+ Test Files  3 passed (3)
+      Tests  13 passed (13)
+```
+reviewed: pending (Codex r1)

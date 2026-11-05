@@ -74,18 +74,19 @@ export async function runGatewayCommand(
     );
   }
   const dryRun = v['dry-run'] === true;
+  const resumeNext = `Next: check FACILITATOR_API_KEY in this shell and the facilitator credit, then run attessa gateway resume --network ${network} again.`;
   if (dryRun && cmd === 'pause') return say(`Would pause the ${network} gateway (${path}). Dry run: nothing was changed.`);
   if (cmd === 'resume') {
     const f = new HttpFacilitator(cfg.facilitatorUrl, process.env.FACILITATOR_API_KEY, cfg.facilitatorAuthHeader, cfg.facilitatorAuthPrefix);
     if (dryRun) {
       // The same /supported check the real resume makes, so the preview can't promise a resume it would refuse.
       const refused = await resumeCheck(f);
-      return refused ? fail(1, 'not_resumed', refused) : say(`Would resume the ${network} gateway (${path}). Dry run: nothing was changed.`);
+      return refused ? fail(1, 'not_resumed', refused, resumeNext) : say(`Would resume the ${network} gateway (${path}). Dry run: nothing was changed.`);
     }
     const db = new CallStore(cfg.dbPath);
     try {
       const r = await resume(db, f);
-      return r.ok ? say(r.message) : fail(1, 'not_resumed', r.message);
+      return r.ok ? say(r.message) : fail(1, 'not_resumed', r.message, resumeNext);
     } finally {
       db.close();
     }
