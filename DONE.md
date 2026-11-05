@@ -1481,3 +1481,29 @@ r9full_rc=0
 FAIL: HOME must be an absolute path
 ```
 reviewed: pending (adversary r14 with tests run, then Codex r2)
+
+### Install allow-list adversary r14 - 2026-11-05
+adversary r14 on d645889 (tests run) reported:
+- Finding, not taken as a defect: the allow-list refuses a tracked nested package.json (for example a test fixture under packages/core/test/fixtures/) that pnpm never reads, while the header named only "workspace manifests". The guard stays strict on purpose: no nested manifest is needed, and loosening a supply-chain check for a file that doesn't exist is the riskier change. 6379949 makes the header say so ("These rules hold for every tracked package.json at any depth"). Its test is archived in .worktrees/archive/adversary/install-r14/nested-manifest.test.sh, not committed, since it asserts the looser rule. For Codex to judge.
+- Lead, closed: PyYAML reads YAML 1.1, so `ignoreScripts: yes` (or `on`) passed the pnpm-workspace.yaml check, while pnpm's YAML 1.2 parser reads it as a string. Test 523581c (`scripts/adversary-install-r14/yaml-bool.test.sh`, 3 FAIL lines before the fix); fix 6379949 requires exactly one plain `ignoreScripts: true` line.
+
+verify at 6379949 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+r14yaml_rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r15, then Codex r2)
