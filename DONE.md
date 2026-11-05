@@ -1309,3 +1309,15 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r53's na
 build=0
 ```
 reviewed: pending (adversary r54, then Codex)
+
+### Site adversary r54 (failing test d2b29fc, fix 964c8d9) - 2026-11-05
+Finding: r53 gave the docs menu its ring room under `(min-width: 861px)` while its clip stops only under `(max-width: 860px)`, so at fractional CSS widths between 860 and 861px (1076 device px at 125%, 947px at 110%, 1291px at 150%) the menu clipped with no room and a focused link lost its left and right ring sides.
+Fix (site.css): the room (`padding: 0 6px 6px; margin-left: -6px`) is on the base `.docs-nav` rule and reset to 0 inside the same `(max-width: 860px)` block that sets `overflow: visible`, so the two always switch together. (`not all and (...)` and `(width > 860px)` would also work in browsers, but the site tests' CSS harness doesn't parse them.)
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r54's fracnav probe, docs/reference.html at device scale 1.17, windows 859 to 862: at 860.684px CSS the menu now has `pad="0px 6px 6px" ml=-6px` and the focused link's ring changes left 84 and right 81 px, the same as at 861.539px (before the fix: left 0, right 0); at 859.829px the menu is static and unclipped):
+```
+# tests 176
+# pass 176
+# fail 0
+build=0
+```
+reviewed: pending (adversary r55, then Codex)
