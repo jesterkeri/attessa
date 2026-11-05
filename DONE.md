@@ -1247,3 +1247,15 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r48's me
 build=0
 ```
 reviewed: pending (adversary r49, then Codex)
+
+### Site adversary r49 (failing test 6510b18, fix 6256e43) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px), with everything working, the pinned proves section's content (at least 609.8px) overflowed its `overflow: hidden; align-items: center` 450px box, so its h2, lede and "security page" link sat above the screen where nothing scrolls (site/README.md:102-103, site.css "the two lists must fit"; WCAG 1.4.4, 2.4.11). The probe showed the same for the outcomes, explorer, defaults and story steps, and the proves section 86px too tall even at 1440x900 at 100%.
+Fix (site.css): `.story-sticky, .scene-sticky { overflow-y: auto; align-items: safe center; scroll-padding-top: var(--nav-h); }` and `.story-sticky > .wrap { height: auto; min-height: 100%; align-content: safe center; }`, so a box that still overflows scrolls from its top; the proves short-screen rule now reaches 960px tall. site/README.md says so.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r49's pinscan probe, index.html live at 720x450, 768x432, 1024x600, 1280x800, 1440x900 and 1920x1080: no text above a box or under the nav bar (before the fix: 15 such lines at 720x450, 6 at 1024x600, 1 at 1440x900); and boxoverflow.mjs: boxes scroll only where content overflows, at 720x450 and 1024x600, none at 1280x800, 1366x768, 1440x900, 1536x960, 1680x1050 or 1920x1080):
+```
+# tests 161
+# pass 161
+# fail 0
+build=0
+```
+reviewed: pending (adversary r50, then Codex)
