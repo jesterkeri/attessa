@@ -676,6 +676,8 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 @media (hover: hover) and (pointer: fine) { .view-switch [role="tab"]:hover { -webkit-text-stroke-color: var(--text); } }
 /* Without JavaScript both panels show in order (site.js hides the unselected one), so the tabs do nothing: hide them. */
 .no-js .view-switch { display: none; }
+/* Without JavaScript the menu can't open: hide its button (every page is linked from the footer). */
+.no-js .menu-btn { display: none; }
 .view-switch [role="tab"]:focus-visible { outline-offset: 8px; }
 .walk { position: relative; padding: clamp(80px, 12vh, 140px) 0; }
 @media (max-width: 719px) { .walk { padding-top: 28px; } }
