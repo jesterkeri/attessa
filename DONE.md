@@ -2172,3 +2172,24 @@ packages/cli test:  Test Files  67 passed (67)
 packages/cli test:       Tests  286 passed (286)
 ```
 reviewed: pending (adversary r48, then Codex)
+
+### T21 adversary r48 (failing test 2cc909b, fix f265c7c)
+Finding: with live signers on two Approved releases for one origin, `revoke release R1` said "risk.example refuses calls until you approve and register another build", but R2's signer keeps serving it (FLOWS.md:833, SPEC §3.4 checkSigner per release).
+Fix: releaseStatus walks every SignerRegistered for the agent and leaves out of the prompt any origin a live signer on another Approved release still serves; when none is left the prompt says "another approved build still serves its endpoints" (not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  68 passed (68)
+packages/cli test:       Tests  289 passed (289)
+```
+reviewed: pending (adversary r49, then Codex)
