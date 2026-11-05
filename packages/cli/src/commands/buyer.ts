@@ -544,7 +544,8 @@ async function stoppedError(g: Global, client: AttestClient, r: CallResult, c: {
 }
 
 /** FLOWS:851, :881: `attessa status` shows spend today against the cap and the per-call limit, per asset in use. */
-function spendLines(d: Deps, entries: PendingEntry[]): void {
+async function spendLines(d: Deps, client: AttestClient): Promise<void> {
+  const entries = client.ledger.list();
   let cfg: BuyerConfig | null = null;
   try {
     cfg = readConfig(d);
@@ -553,10 +554,10 @@ function spendLines(d: Deps, entries: PendingEntry[]): void {
   }
   const json: Record<string, { spentToday: string; dailyCap: string; maxAmountPerCall: string }> = {};
   for (const k of ['usdc', 'usat'] as const) {
-    const spent = [...new Set(entries.filter((e) => assetOf(e.asset) === k).map((e) => e.asset.toLowerCase()))].reduce(
-      (t, a) => t + spendToday(entries, a as Address, Date.now()),
-      0n,
-    );
+    // Only this network's token: the cap counts per asset address, and one data folder serves every network.
+    const addr = await client.assetAddress(k).catch(() => undefined);
+    if (addr === undefined) continue;
+    const spent = spendToday(entries, addr, Date.now());
     if (k === 'usat' && spent === 0n) continue; // init saves both assets' limits; USA₮ shows once it is used
     const l = { ...DEFAULT_LIMITS, ...cfg?.limits?.[k] };
     const row = { spentToday: amount(spent), dailyCap: amount(parseAmount(l.dailyCap, '--daily-cap')), maxAmountPerCall: amount(parseAmount(l.maxAmountPerCall, '--max-amount')) };
@@ -751,7 +752,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     }
     if (errors.length > 0) d.io.data?.({ errors });
     // FLOWS:881 names plain `attessa status`; `--pending` asks only about calls in progress.
-    if (target === undefined && !o.pending) spendLines(d, client.ledger.list());
+    if (target === undefined && !o.pending) await spendLines(d, client);
     return errors.length > 0 ? 1 : 0;
   }
   // `status <origin>`: the registry entry and a fresh liveness check. A read never loads the wallet (FLOWS: "Reading
@@ -804,7 +805,7 @@ const EVIDENCE_COLUMNS: (keyof EvidenceRow)[] = [
 
 /** RFC 4180 quoting, and OWASP's CSV-injection rule: a cell starting with = + - @ tab or CR gets a leading `'`. */
 function csvCell(v: unknown): string {
-  const raw = v === null || v === undefined ? '' : String(v);
+  const raw = v === null || v === undefined ? '' : safe(String(v)); // seller text (sourceRef) never reaches the terminal raw
   const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }

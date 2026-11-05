@@ -1095,6 +1095,10 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   }
 
   return {
+    /** The pinned token address of `key` on the RPC's network: the asset the daily cap counts (SPEC §7 V6). */
+    async assetAddress(key: AssetKey): Promise<Address> {
+      return pinFor(await net(), key).address;
+    },
     async resolveEndpoint(url: string): Promise<ResolvedEndpoint> {
       return (await resolve(url)).ep;
     },
