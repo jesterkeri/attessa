@@ -1398,4 +1398,34 @@ probe exit 1: FAIL: repo install config is outside the allow-list
 ok: refused
 r9full_rc=0
 ```
-reviewed: pending (adversary r11, then Codex r2)
+reviewed: pending (adversary r11 found a defect; see below; then Codex r2)
+
+adversary r11 (42b97df, `scripts/adversary-install-r11/path-bash-shebang.test.sh`, failing before the fix): the guard's `#!/usr/bin/env bash` made env look `bash` up on the unfiltered PATH, so a tracked `bin/bash` with `$root/bin` on PATH, or a tracked `./bash` with an empty PATH entry, ran the whole guard. The adversary r10 note above ("computed with bash builtins alone before any command is looked up") was therefore not true: the interpreter was looked up first. Fixed in ca3cf57:
+- `scripts/check-install-scripts.sh`: the shebang is `#!/bin/bash`, so no PATH lookup happens before the filter; the comment says so. r11's unproven note on a relative TMPDIR: TMPDIR is now ignored unless absolute, so `$tmp` can't resolve inside the snapshot after the probe changes folder.
+No existing assertion changed.
+
+checks at ca3cf57 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+r11_rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r12, then Codex r2)
