@@ -2028,3 +2028,18 @@ ok: refused
 rc=0
 ```
 reviewed: pending (adversary r24, then Codex r2)
+
+### Install guard adversary r24 (failing test 4fc7740, fix f750739) - 2026-11-05
+Finding: a plain lockfile key that PyYAML (YAML 1.1) reads as a string and pnpm 10.32.1 (YAML 1.2 core) as a number, printed back as another name (`1e3` -> 1000, `0o17` -> 15, `08` -> 8), let an importer dependency `1000` link to the workspace project named `1e3` while the guard saw "the workspace project of that name" (the importer rule comment).
+Fix: any plain scalar in pnpm-lock.yaml that PyYAML resolves as a string but that has a YAML 1.2 core number, null or bool form is refused (pnpm quotes such values when it writes them).
+Last adversary round: Joshua stopped adversary rounds on 2026-11-05 to save API budget; Codex reviews from here.
+verify (`bash scripts/adversary-install-r24/lockfile-numeric-names.test.sh "$PWD" HEAD` at f750739; the full suite was cut off by a session end after the first 11 runs, all rc=0, so Codex runs it):
+```
+ok: packages/cli dependency 1000 (workspace:*), lockfile key 1e3 (link:../attessa-r24-a, project named 1e3): refused
+ok: packages/cli dependency 15 (workspace:*), lockfile key 0o17 (link:../attessa-r24-a, project named 0o17): refused
+ok: packages/cli dependency 8 (workspace:*), lockfile key 08 (link:../attessa-r24-a, project named 08): refused
+ok: control: packages/cli dependency attessa-r24-ctl, lockfile key attessa-r24-ctl, project of that name: accepted
+ok: the committed lockfile: accepted
+rc=0
+```
+reviewed: pending (Codex r2)
