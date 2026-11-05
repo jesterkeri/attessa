@@ -2214,3 +2214,24 @@ packages/cli test:  Test Files  69 passed (69)
 packages/cli test:       Tests  293 passed (293)
 ```
 reviewed: pending (adversary r50, then Codex)
+
+### T21 adversary r50 (failing test a95e1d0, fix 2ce4d83)
+Finding: `attessa cancel <id>` without `--yes` showed a bare confirm; declined, or with stdin not a TTY (bin.ts answers false), it exited 1 printing nothing (`--json`: `{"ok":false,"lines":[]}`), and the permission stayed open. FLOWS.md:833: "Cancel no longer prompts"; FLOWS.md:832 one next action.
+Fix: the confirm is removed from cancel (buyer.ts).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  70 passed (70)
+packages/cli test:       Tests  296 passed (296)
+```
+reviewed: pending (adversary r51, then Codex)
