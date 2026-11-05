@@ -343,7 +343,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   if (!w) throw BUYERR.noWallet();
   const out = d.io.out;
   const sym = SYMBOL[asset];
-  const seen: { uncertain: boolean; release?: string } = { uncertain: false };
+  const seen: { uncertain: boolean; release?: string; price?: bigint; fund?: boolean } = { uncertain: false };
   out(BUY.checking(host(origin)));
   const client = makeClient(g, d, w.account, {
     limits,
@@ -363,6 +363,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           if (e.ownerClaimedSource !== undefined) out(BUY.ownerSays(claimLabel(e.ownerClaimedSource)));
           out(BUY.live((e.quoteMs / 1000).toFixed(1)));
           out(BUY.price(amount(e.amount), sym, amount(e.maxAmount)));
+          seen.price = e.amount;
           out(BUY.sign);
           return;
         case 'refused':
@@ -371,6 +372,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
             out(BUY.refusedCheck(words, term));
           } else {
             out(signedRefusal(e.code, e.detail));
+            if (e.code === 'payment_invalid' && e.detail === 'insufficient_funds') seen.fund = true;
           }
           return;
         case 'uncertain':
@@ -403,7 +405,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   const r = await client.payAndVerify(o.url, { body, asset, newRequest: o.newRequest });
   // A resumed call (V0) may be in another asset than this run's --asset: report the one the entry paid in.
   const paid = r.asset ? assetOf(r.asset) : asset;
-  return report(g, d, client, r, { origin, sym: SYMBOL[paid], asset: paid, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[paid].dailyCap, wallet: w.account.address.toLowerCase() });
+  return report(g, d, client, r, { origin, sym: SYMBOL[paid], asset: paid, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[paid].dailyCap, wallet: w.account.address.toLowerCase(), ...(seen.fund && seen.price !== undefined ? { fund: BUY.addFunds(amount(seen.price), SYMBOL[paid], w.account.address) } : {}) });
 }
 
 function readBody(d: Deps, file: string): Uint8Array {
@@ -415,7 +417,7 @@ function readBody(d: Deps, file: string): Uint8Array {
 }
 
 /** The end state of a call, in FLOWS §6 words. Exit 0 only for `verified` (and a dry run). */
-type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; shownRelease?: string | undefined; outFile: string; dailyCap: bigint; paid?: boolean; wallet?: string };
+type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; shownRelease?: string | undefined; outFile: string; dailyCap: bigint; paid?: boolean; wallet?: string; fund?: string };
 
 /** A result whose evidence row couldn't be written (SDK `evidenceNotWritten`) is reported as usual, then the missing record is its one next action. */
 async function report(g: Global, d: Deps, client: AttestClient, r: CallResult, c: ReportCtx): Promise<number> {
@@ -478,6 +480,7 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
       if (r.code === 'cancelled') out(b ? BUY.notChargedCancelled(b) : BUY.notChargedCancelledNoBlock);
       else if (c.uncertain) out(BUY.notChargedAt(hms(BigInt(entry()?.validBefore ?? '0'))));
       else out(b ? BUY.notCharged(b) : BUY.notChargedNoBlock);
+      if (c.fund) out(c.fund);
       return 1;
     }
     case 'paid_but_rejected':

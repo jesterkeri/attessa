@@ -362,6 +362,8 @@ export const BUY = {
   usedWaiting: "Your payment permission was already used or cancelled; waiting for Celo to show which…  (up to a minute)",
   voidHint: (id: string) =>
     `  To void it right now instead: attessa cancel ${id}  (on-chain cancel, ~0.0004 CELO gas). Ctrl-C stops waiting; attessa status --pending checks later.`,
+  // FLOWS §8 "payment invalid" for insufficient_funds; {n} is the price, which covers the call whatever the balance.
+  addFunds: (n: string, sym: string, address: string) => `Add at least ${n} ${sym} to ${address}.`,
   notCharged: (block: string) => `Not charged: confirmed on Celo, your payment permission expired unused  (block ${block})`,
   notChargedCancelled: (block: string) => `Not charged: confirmed on Celo, your payment permission was cancelled  (block ${block})`, // not in FLOWS
   // not in FLOWS: the same lines for an entry stored before the deciding block was recorded (never "(block 0)").
