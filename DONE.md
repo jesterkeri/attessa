@@ -1321,3 +1321,15 @@ verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r54's fr
 build=0
 ```
 reviewed: pending (adversary r55, then Codex)
+
+### Site adversary r55 (failing test 85248d5, fix b772ee2) - 2026-11-05
+Finding: a docs page loaded at 760px or narrower closes the docs menu `<details>` (site.js), and over 860px site.css hides its summary, the only control that opens it, so after a 200% zoom reset, a tablet rotation or a widened window the whole docs menu was gone from the page and the Tab order until a reload (site/README.md:108, "the docs menu becomes a toggle under 860px").
+Fix: site.js listens on `(max-width: 860px)` and opens the menu again when it stops matching (so fractional widths between 860 and 861 are covered too). Browser check with r55's probe/docsrotate.mjs on the built dist, docs/reference.html: live 720x450 to 1440x900, cdnfail 744x1133 to 1133x744 and nojs 390x844 to 1024x768 all end `details.open=true`, 15/15 links with a box, first docs-menu Tab stop "Overview"; the control 1440x900 to 720x450 still reaches the "Docs menu" summary.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 178
+# pass 178
+# fail 0
+```
+reviewed: pending (adversary r56, then Codex)
