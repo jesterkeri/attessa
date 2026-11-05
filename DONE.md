@@ -2569,3 +2569,27 @@ packages/cli test:       Tests  338 passed (338)
 test=0
 ```
 reviewed: pending (Codex r3)
+
+### T21b MCP server - 2026-11-06
+
+Built `packages/mcp` (@attessa/mcp): a stdio MCP server on `@modelcontextprotocol/sdk` 1.32.2 (exact, no install scripts) with the 9 FLOWS agent tools: `resolve_endpoint`, `check_liveness`, `quote`, `pay_and_verify`, `verify_proof`, `get_result`, `list_pending`, `cancel_authorization`, `status`. Each has a JSON input schema and description; `pay_and_verify` and `cancel_authorization` say SIDE EFFECT (signs and spends / sends a transaction). Tools drive the CLI `run()` with `--json` (so the SDK bounds, key loading, FLOWS §6/§8 strings and credential-safe errors are the CLI's), `verify_proof` is offline, `get_result`/`list_pending` read the ledger. maxAmount may lower the saved per-call limit, never raise it; dailyCap is the CLI's; keys only from ATTESSA_PRIVATE_KEY / ATTESSA_KEYSTORE / keychain; every result is scrubbed of configured secrets and URL userinfo. 17 vitest tests, including an in-process MCP client that lists exactly 9 tools and runs `verify_proof` on the recorded Sepolia vector (vectors/headers.json), bounds refusals and no-key-in-output. Design choices not in FLOWS are in OPEN-QUESTIONS.md.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && ./scripts/check-install-scripts.sh`. Build, typecheck, lint and the mcp tests passed; the last step FAILED on checks outside this package (pre-existing: other packages' manifests and a lockfile integrity entry), tail of the real output:
+
+```
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  22:18:27
+   Duration  1.06s (transform 290ms, setup 248ms, collect 338ms, tests 251ms, environment 0ms, prepare 83ms)
+
+FAIL packages/cli/package.json: keys not allowed: ['bin']
+FAIL packages/core/package.json: scripts not allowed: ['gen:vectors']
+FAIL packages/gateway/package.json: keys not allowed: ['bin']
+FAIL packages/sdk/package.json: keys not allowed: ['engines']
+FAIL packages/seller-host/package.json: keys not allowed: ['bin']
+FAIL packages/seller-host/package.json: scripts not allowed: ['render-units']
+FAIL pnpm-lock.yaml: better-sqlite3@13.0.3: allowlisted package without its pinned registry integrity
+FAIL: repo install config is outside the allow-list
+```
+reviewed: pending (Codex r1)

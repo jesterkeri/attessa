@@ -1,0 +1,21 @@
+{
+  "name": "@attessa/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p ../cli && tsc -p . --noEmit",
+    "test": "vitest run",
+    "lint": "tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p ../cli && tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@attessa/cli": "workspace:*",
+    "@attessa/core": "workspace:*",
+    "@attessa/sdk": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "viem": "2.57.13"
+  }
+}
