@@ -709,7 +709,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
           if (!used) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
           // Used, but no matching log yet: the log index lags. Ask again.
-          if (++lagging > 20) return current(entry, meta);
+          if (++lagging > 20) return { ...current(entry, meta), authorizationUsed: true };
         }
       } catch (e) {
         if (!(e instanceof RpcError)) throw e;

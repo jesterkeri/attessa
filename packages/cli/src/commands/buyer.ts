@@ -264,6 +264,7 @@ function jsonResult(r: CallResult): Record<string, unknown> {
   if (r.ownerClaimedSource !== undefined) out.ownerClaimedSource = r.ownerClaimedSource;
   if (r.inputsChecked !== undefined) out.inputsChecked = r.inputsChecked;
   if (r.confirmedAtBlock !== undefined) out.confirmedAtBlock = r.confirmedAtBlock.toString();
+  if (r.authorizationUsed) out.authorizationUsed = true;
   return out;
 }
 
@@ -482,7 +483,12 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
         if (!c.paid) out(BUY.paymentFound(r.settlementTx!));
         out(BUY.answerNotYet);
       } else if (c.paid) out(BUY.answerNotYet);
-      else out(BUY.stillOpen(r.requestId, hms(BigInt(entry()?.validBefore ?? '0'))));
+      else if (r.authorizationUsed) {
+        // Used or cancelled on chain, no log yet: it can't expire unused and cancel can't void it (cancel's own row).
+        const u = BUYERR.cancelUndecided();
+        out(u.message);
+        out(u.next!);
+      } else out(BUY.stillOpen(r.requestId, hms(BigInt(entry()?.validBefore ?? '0'))));
       return 1;
     case 'stopped':
       if (r.code === 'dry_run') {

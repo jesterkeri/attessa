@@ -127,6 +127,8 @@ export interface CallResult {
   evidenceNotWritten?: true;
   /** V10: the block the inputs were read at, on a verified result. */
   inputsBlock?: bigint;
+  /** Past expiry the chain reads the permission used (or cancelled), but neither log has appeared yet: it can't expire unused. */
+  authorizationUsed?: true;
 }
 
 export interface ResolvedEndpoint {
