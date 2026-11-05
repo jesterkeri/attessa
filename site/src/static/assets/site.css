@@ -469,6 +469,7 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 
 .cmd { display: inline-flex; align-items: center; gap: 14px; font: 400 0.92rem var(--mono); color: var(--text); }
 .cmd .p { color: var(--text-3); margin-right: 6px; }
+.cmd code { overflow-wrap: anywhere; }
 
 /* Story callouts: one floating panel per step beside the 3D, joined to it by a leader line */
 .callouts { position: absolute; right: var(--gutter); top: calc(var(--nav-h) + 6vh); width: min(300px, 26vw); pointer-events: none; }
