@@ -8,9 +8,12 @@ export function defaultConfigPath(network: string): string {
   return `/etc/attessa/gateway-${network}.config.json`;
 }
 
+/** `--name value` or `--name=value`, as parseArgs reads the rest of the CLI; a flag with no value is '' so it is refused, not defaulted. */
 function flag(args: string[], name: string): string | undefined {
+  const eq = args.find((a) => a.startsWith(`${name}=`));
+  if (eq !== undefined) return eq.slice(name.length + 1);
   const i = args.indexOf(name);
-  return i >= 0 ? args[i + 1] : undefined;
+  return i >= 0 ? (args[i + 1] ?? '') : undefined;
 }
 
 /**
