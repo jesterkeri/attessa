@@ -2384,3 +2384,24 @@ packages/cli test:  Test Files  77 passed (77)
 packages/cli test:       Tests  312 passed (312)
 ```
 reviewed: pending (adversary r58, then Codex)
+
+### T21 adversary r58 (failing test 59b58e6, fix 4a48277) - 2026-11-05
+Findings: (1) with the key in ATTESSA_PRIVATE_KEY and no `init`, `call` refuses without `--max-amount` (FLOWS:788 max_amount_required) but plain `attessa status` said "(at most 0.10 per call)" and `--json` gave `maxAmountPerCall: "0.10"`, a limit nothing enforced (FLOWS:851, :881); (2) `evidence export --format jsonl` printed seller text (sourceRef) with raw C1 (U+009B CSI) and bidi (U+202E) characters, which JSON.stringify leaves unescaped (copy.ts `safe()`, KNOWN-LIMITS L20).
+Fix: `spendLines` reads the saved limits as `limitsFor` does: no saved per-call limit shows "(no per-call limit is set)" and `maxAmountPerCall: null`; the daily cap is the saved one `??` 1.00. A new `jsonOut()` in copy.ts escapes C1, U+2028/9 and the Bidi_Control set as `\uNNNN` (lossless JSON) for jsonl rows and every `--json` result. OPEN-QUESTIONS r56 entry notes the new wording.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock; a doc-comment typo in copy.ts was fixed after this run):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  78 passed (78)
+packages/cli test:       Tests  314 passed (314)
+```
+reviewed: pending (adversary r59, then Codex)
