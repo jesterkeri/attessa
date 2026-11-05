@@ -257,6 +257,13 @@ if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settin
     bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
     L = {}
 semver = r"(@[A-Za-z0-9._~-]+/)?[A-Za-z0-9._~-]+@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
+# pnpm merges each packages entry over its snapshot (its dependencies, version or id win) and reads top-level keys
+# such as overrides, patchedDependencies or catalogs, so only the fields this lockfile uses are allowed.
+extra = set(L) - {"lockfileVersion", "settings", "importers", "packages", "snapshots"}
+if extra: bad.append(f"pnpm-lock.yaml: top-level keys not allowed: {sorted(extra)}")
+for k, v in (L.get("packages") or {}).items():
+    extra = set(v or {}) - {"resolution", "engines", "os", "cpu", "libc", "hasBin", "peerDependencies", "peerDependenciesMeta", "deprecated"}
+    if extra: bad.append(f"pnpm-lock.yaml: {k}: keys not allowed: {sorted(extra)}")
 for k, v in (L.get("packages") or {}).items():
     r = (v or {}).get("resolution")
     if not re.fullmatch(semver, str(k)) or not isinstance(r, dict) or set(r) != {"integrity"} or not re.fullmatch(r"sha512-[A-Za-z0-9+/]+={0,2}", str(r["integrity"])):
