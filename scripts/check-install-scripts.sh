@@ -270,7 +270,13 @@ for i, deps in (L.get("importers") or {}).items():
             xv = str(x.get("version"))
             if ":" in xv and not (xv.startswith("link:") and str(x.get("specifier")).startswith("workspace:")):
                 bad.append(f"pnpm-lock.yaml: importer {i} {n}: version {xv!r} is not a registry version")
+# pnpm builds each package as the snapshot merged with packages[key minus its "(peers)" suffix], so a snapshot
+# with no packages entry, or with fields of its own such as resolution, would install from wherever it says.
+pkgs = L.get("packages") or {}
 for k, v in (L.get("snapshots") or {}).items():
+    if str(k).split("(", 1)[0] not in pkgs: bad.append(f"pnpm-lock.yaml: snapshot {k} has no packages entry")
+    extra = set(v or {}) - {"dependencies", "optionalDependencies", "transitivePeerDependencies", "optional"}
+    if extra: bad.append(f"pnpm-lock.yaml: snapshot {k}: keys not allowed: {sorted(extra)}")
     for f in ("dependencies", "optionalDependencies"):
         for n, x in ((v or {}).get(f) or {}).items():
             if ":" in str(x): bad.append(f"pnpm-lock.yaml: snapshot {k} {n}: version {x!r} is not a registry version")
