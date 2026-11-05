@@ -256,6 +256,12 @@ L = yaml.safe_load(blob("pnpm-lock.yaml")) if "pnpm-lock.yaml" in reg else {}
 if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settings") != {"autoInstallPeers": True, "excludeLinksFromLockfile": False}:
     bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
     L = {}
+# PyYAML reads YAML 1.1 (a key null, ~, yes or 1 is no string), pnpm 1.2 and then String(key), so every
+# mapping key in the lockfile must be a string for the two to name the same thing.
+def keys(o):
+    if isinstance(o, dict): return all(isinstance(k, str) and keys(v) for k, v in o.items())
+    return all(keys(v) for v in o) if isinstance(o, list) else True
+if not keys(L): bad.append("pnpm-lock.yaml: every mapping key must be a string (PyYAML and pnpm read null, ~, yes or 1 keys differently)")
 semver = r"(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
 # pnpm merges each packages entry over its snapshot (its dependencies, version or id win) and reads top-level keys
 # such as overrides, patchedDependencies or catalogs, so only the fields this lockfile uses are allowed.
@@ -276,8 +282,9 @@ for k, v in (L.get("packages") or {}).items():
 proj = {}
 for p in reg:
     if re.fullmatch(r"packages/[^/]+/package\.json", p):
-        try: proj[os.path.dirname(p)] = json.loads(blob(p).decode("utf-8")).get("name")
-        except (ValueError, AttributeError): pass
+        try: nm = json.loads(blob(p).decode("utf-8")).get("name")
+        except (ValueError, AttributeError): nm = None
+        if isinstance(nm, str): proj[os.path.dirname(p)] = nm
 snaps = L.get("snapshots") or {}
 for i, deps in (L.get("importers") or {}).items():
     if i != "." and i not in proj: bad.append(f"pnpm-lock.yaml: importer {i} is not the root or a workspace project")
