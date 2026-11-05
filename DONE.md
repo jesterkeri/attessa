@@ -1220,3 +1220,18 @@ lint=0
 ```
 - Adversary r1 on 133c133: CLEAN. Weakening check: 5 gateway mutants (cap 17, cap 15, the 17th call executed and settled, two re-sends per row, ticks run one after the other) fail both the old and the new form of the tests. 3 more pass both forms (existing blind spots, none added by this change). Flake check: the two files on one core with 8 busy loops failed in the old form 3 runs of 3 (7, 9 and 10 of 16 calls got 200; the ticks test timed out at 20 s). In the new form they passed 4 of 4, and 5 of 5 with 4 busy loops. `taskset -c 0,1 pnpm -r test` twice: gateway 154/154. The other `holdable` tests pass with the new `release()`. Its side-by-side test and scripts are archived outside the repo.
 reviewed: reviews/gateway-ci-timing-review-r1.md | verdict: implementation-ready | C0 M0 m0
+
+### Site adversary r47 (failing test 4c640f9, fix d5c5f34) - 2026-11-05
+Finding: on use-cases.html at 390px, with Anybody not loaded (Google Fonts blocked, or before `display=swap` lands), "RECOMMENDATIONS" in a 35.2px uppercase `.use h2` is wider than the 350px column; `.beats`' auto grid column grew to it and `main`'s overflow clip cut the line ends of all four uses (site/README.md:109).
+Fix: `.use h2 { overflow-wrap: anywhere; }` (site.css).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then the r47 off-right probe, `offright.mjs site/dist use-cases.html <state> 390x844`, which counted 8 elements past the edge before the fix):
+```
+# tests 154
+# pass 154
+# fail 0
+build=0
+== nojs 390x844 use-cases.html 0
+== cdnfail 390x844 use-cases.html 0
+== live 390x844 use-cases.html 0
+```
+reviewed: pending (adversary r48, then Codex)
