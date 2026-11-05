@@ -70,7 +70,21 @@ export function host(origin: string): string {
  */
 export function sourceLabel(sourceRef: string): string {
   const m = /^https:\/\/github\.com\/([^/\s]+)\/([^/\s]+)\/(?:commit|tree)\/([0-9a-f]{7,40})\/?$/i.exec(sourceRef);
-  return safe(m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : sourceRef);
+  return safe(m ? `${m[1]}/${m[2]} @ ${m[3]!.slice(0, 7)}` : withoutCredentials(sourceRef));
+}
+
+/**
+ * A URL-like text as it may be printed: a parsable URL keeps scheme, host and path but loses its userinfo, query
+ * and fragment (where tokens ride); free text loses anything shaped like `//user:secret@` or `?…`/`#…`.
+ */
+export function withoutCredentials(text: string): string {
+  try {
+    const u = new URL(text);
+    if (u.host) return `${u.protocol}//${u.host}${u.pathname === '/' ? '' : u.pathname}`;
+  } catch {
+    // not a URL: fall through to the text rules
+  }
+  return text.replace(/\/\/[^/@\s]*@/g, '//').replace(/[?#].*$/s, '');
 }
 
 export const COPY = {
@@ -112,13 +126,13 @@ export const COPY = {
  * (`/v3/<key>`), the query or the fragment, so none of those is ever shown. Anything that isn't a URL is shown as
  * "your RPC", except the fixed label "your --rpc".
  */
-export function rpcShownSafe(rpc: string): string {
+export function rpcShownSafe(rpc: string, fallback = 'your RPC'): string {
   if (rpc === 'your --rpc') return rpc;
   try {
     const u = new URL(rpc);
-    return /^(https?|wss?):$/.test(u.protocol) && u.host ? `${u.protocol}//${u.host}` : 'your RPC';
+    return /^(https?|wss?):$/.test(u.protocol) && u.host ? `${u.protocol}//${u.host}` : fallback;
   } catch {
-    return 'your RPC';
+    return fallback;
   }
 }
 
@@ -153,6 +167,12 @@ export class CliError extends Error {
  * be a key (viem prints a key above the curve order in decimal; SPEC §7 "Never printed"). Only the error's class
  * name and a Node-style code get out, and only when they look like identifiers. // not in FLOWS
  */
+/** The binary's last resort for a rejection that escapes run(): the fixed line and its next action, never the raw message. */
+export function lastResortLines(e: unknown): string {
+  const err = unexpected(e);
+  return `${err.message}\n${err.next && !err.inline ? `${err.next}\n` : ''}`;
+}
+
 export function unexpected(e: unknown): CliError {
   const name = e instanceof Error && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(e.name) ? e.name : 'Error';
   const raw = (e as { code?: unknown } | null)?.code;
@@ -247,7 +267,7 @@ export const ERR = {
       'Pass the file nitro-cli wrote.',
     ),
   releaseExists: (agent: string, rid: string) =>
-    new CliError('release_exists', `This build is already approved for agent ${agent} (release ${short(rid)}).`, `Nothing to do; \`attessa status --agent ${agent}\` shows it.`, true),
+    new CliError('release_exists', `This build is already approved for agent ${agent} (release ${short(rid)}).`, `Nothing to do; \`attessa status --agent ${agent}\` shows it.`),
   endpointInactive: (origin: string, agent: string) =>
     new CliError('endpoint_inactive', `Not registered: ${origin} isn't an active endpoint for agent ${agent}.`, 'Add it with `attessa endpoint add`.'),
   notOperator: (address: string, origin: string) =>

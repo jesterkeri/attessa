@@ -14,7 +14,7 @@ import { decodeAbiParameters, encodeFunctionData, parseAbiItem, size, toEventSel
 import { CERT_MANAGER_ABI, ENDPOINT_STATUS, REGISTRY_ABI, RELEASE_STATUS, SIGNER_STATUS, VALIDATOR_ABI } from '../abi.ts';
 import { hintPlan, parseAttestation, type ParsedAttestation } from '../attestation.ts';
 import { SELLER_HOST_URL, connect, type Chain, type Deps, type Global } from '../context.ts';
-import { COPY, CliError, ERR, RENEW, celo, host, short, utcShort } from '../copy.ts';
+import { COPY, CliError, ERR, RENEW, celo, host, rpcShownSafe, short, utcShort } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Simulation, type Step } from '../tx.ts';
 import { parseAgent } from './owner.ts';
@@ -38,6 +38,8 @@ export function sellerHostUrl(g: Global, flag: string | undefined): string {
 
 /** `POST /internal/attest` on the local seller-host: a fresh attestation for the running key (no restart). */
 export async function fetchAttestation(deps: Deps, url: string): Promise<Buffer> {
+  // Messages name scheme://host[:port] only: a --seller-host URL can carry credentials in its userinfo, path or query.
+  const shown = rpcShownSafe(url, 'the --seller-host URL');
   let res: Response;
   try {
     res = await deps.fetch(`${url}/internal/attest`, {
@@ -47,14 +49,14 @@ export async function fetchAttestation(deps: Deps, url: string): Promise<Buffer>
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    throw new CliError('seller_host_unreachable', `Can't reach the seller-host at ${url}.`, 'Check `systemctl status attessa-seller@<network>` on this host.');
+    throw new CliError('seller_host_unreachable', `Can't reach the seller-host at ${shown}.`, 'Check `systemctl status attessa-seller@<network>` on this host.');
   }
   const json = (await res.json().catch(() => null)) as { attestation?: unknown; error?: unknown } | null;
   if (res.status !== 200 || typeof json?.attestation !== 'string') {
     if (json?.error === 'enclave_unavailable' || json?.error === 'not_configured') {
-      throw new CliError('enclave_unavailable', `The seller-host at ${url} has no running, configured enclave (${String(json.error)}).`, 'Run `attessa enclave start` first.');
+      throw new CliError('enclave_unavailable', `The seller-host at ${shown} has no running, configured enclave (${String(json.error)}).`, 'Run `attessa enclave start` first.');
     }
-    throw new CliError('seller_host_error', `The seller-host at ${url} answered HTTP ${res.status}.`, 'Check that seller-host is running on this machine, then run the command again.');
+    throw new CliError('seller_host_error', `The seller-host at ${shown} answered HTTP ${res.status}.`, 'Check that seller-host is running on this machine, then run the command again.');
   }
   return Buffer.from(json.attestation, 'base64');
 }

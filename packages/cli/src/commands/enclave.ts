@@ -25,8 +25,9 @@ async function git(deps: Deps, args: string[]): Promise<string> {
 
 /** `https://github.com/acme/risk.git` or `git@github.com:acme/risk.git` → `acme/risk`. */
 export function repoLabel(remote: string): string {
-  const m = /[/:]([^/:]+)\/([^/]+?)(?:\.git)?\/?$/.exec(remote.trim());
-  return m ? `${m[1]}/${m[2]}` : remote.trim();
+  const m = /[/:]([^/:@]+)\/([^/?#@]+?)(?:\.git)?\/?$/.exec(remote.trim());
+  // A remote that doesn't parse is never echoed: it can carry a token (https://user:token@host/…).
+  return m ? `${m[1]}/${m[2]}` : 'your git remote';
 }
 
 function requireHost(deps: Deps): void {

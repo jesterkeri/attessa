@@ -2543,3 +2543,29 @@ packages/cli test:       Tests  331 passed (331)
 test=0
 ```
 reviewed: pending (Codex r2)
+
+### T21 Codex r2 fixes - 2026-11-05
+Codex r2 (reviews/t21-cli-review-r2.md, on 4262186): REVISE, 2 major, 2 minor.
+- M1: the seller-host URL, a non-GitHub `--source` and an unparsable git remote could print credentials. Seller-host lines now show scheme://host[:port] only (the request still uses the full URL); `sourceLabel` drops userinfo, query and fragment (`withoutCredentials`); `repoLabel` shows owner/repo or "your git remote", never the raw remote.
+- M2: `release_exists` was marked inline though its line does not hold the action; it now prints "Nothing to do; `attessa status --agent {a}` shows it." as its own line (the owner test asserts the rendered text).
+- m1: the binary's last-resort handler prints the fallback next action too (`lastResortLines`).
+- m2: correction to the "T21 Codex r1 fixes" entry above: five existing tests (two in t21-r3-fix.test.ts, three in t21-r6-fix.test.ts) were changed to expect the next line, not six. One more existing test changes here (owner.test.ts, release_exists).
+Tests: packages/cli/test/codex-t21-r2.test.ts (7).
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  85 passed (85)
+packages/cli test:       Tests  338 passed (338)
+test=0
+```
+reviewed: pending (Codex r3)
