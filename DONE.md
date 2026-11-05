@@ -1636,3 +1636,33 @@ ok: refused
 probe-rc=0
 ```
 reviewed: pending (adversary r20, then Codex r2)
+
+### Install allow-list adversary r20 - 2026-11-05
+(The first r20 run was stopped by a safety check before it ran anything and is not counted; this is the second.) adversary r20 on 76ba3a3: the guard checked dependency values but never dependency names, and kept any string workspace project name. pnpm 10.32.1 links each dependency at `path.join(<project>/node_modules, name)`, so a project named `../../../.git/hooks` with a tracked executable `pre-commit`, depended on as `"../../../.git/hooks": "workspace:*"`, passed the guard, and pnpm (run offline by the adversary on a scratch workspace) replaced .git/hooks with a link to the tree folder, moving the real one aside; the next `git commit` would run the tree's hook. A name like `../../../../attessa-r20-outside` linked outside the checkout.
+Test 35a3cd9: `scripts/adversary-install-r20/dependency-name-path.test.sh` (the adversary's), failing before the fix. Fix 4e15bb2: every dependency name in package.json files, lockfile importers and snapshots, and every workspace project name, must be an npm package name (`(@scope/)?name`, no `/` beyond the scope, no leading `.`).
+The first verify run's real `pnpm install` stalled on the registry (no log line for 29 minutes, sockets idle) and was stopped; the heavy stage was rerun with a 30-minute timeout per step. The real repository's .git/hooks is untouched (no .git/.ignored_hooks).
+
+verify at 4e15bb2 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+r20/dependency-name-path rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r21, then Codex r2)
