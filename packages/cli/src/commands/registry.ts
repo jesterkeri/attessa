@@ -244,6 +244,28 @@ export async function selflink(g: Global, deps: Deps, o: { agent?: string | unde
   });
 }
 
+// ---------------------------------------------------------------- signer liveness
+
+/**
+ * Why a stored-Active signer can't sign now, as checkSigner sees it (SPEC §3.4; FLOWS §7 Expired and Inert), or null when
+ * it is live: expired, or its release isn't Approved, or its endpoint isn't Active for this agent with its operator.
+ */
+async function notLive(
+  c: Awaited<ReturnType<typeof connect>>,
+  agentId: bigint,
+  s: Record<string, unknown>,
+  now: bigint,
+  approved = new Map<string, boolean>(),
+): Promise<'Expired' | 'Inert' | null> {
+  if ((s.expiresAt as bigint) <= now) return 'Expired';
+  const rid = (s.releaseId as string).toLowerCase();
+  if (!approved.has(rid)) approved.set(rid, RELEASE_STATUS[(await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, rid as Hex])).status as number] === 'Approved');
+  if (!approved.get(rid)) return 'Inert';
+  const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [s.originHash as Hex]);
+  const ok = ENDPOINT_STATUS[e.status as number] === 'Active' && (e.agentId as bigint) === agentId && (e.operator as string).toLowerCase() === (s.operator as string).toLowerCase();
+  return ok ? null : 'Inert';
+}
+
 // ---------------------------------------------------------------- release deprecate|revoke, revoke release (J4)
 
 export async function releaseStatus(g: Global, deps: Deps, o: { id?: string | undefined; agent?: string | undefined; to: 'deprecate' | 'revoke' }): Promise<number> {
@@ -283,21 +305,9 @@ export async function releaseStatus(g: Global, deps: Deps, o: { id?: string | un
     // A Deprecated release has no live signers to stop (FLOWS §7: Deprecated-for-new-calls makes them Inert).
     for (const ev of status === 'Approved' ? await events(c, 'SignerRegistered', { agentId }) : []) {
       const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [ev.args.signer as Address]);
-      if (SIGNER_STATUS[s.status as number] !== 'Active' || (s.expiresAt as bigint) <= now) continue;
-      const srid = (s.releaseId as string).toLowerCase();
-      if (!approved.has(srid)) approved.set(srid, RELEASE_STATUS[(await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, srid as Hex])).status as number] === 'Approved');
-      if (!approved.get(srid)) continue;
-      // A signer on a retired endpoint, one with another operator now, or one another agent holds is already Inert
-      // (FLOWS §7; checkSigner's AGENT_MISMATCH and OPERATOR_MISMATCH, SPEC §3.4): not live.
+      if (SIGNER_STATUS[s.status as number] !== 'Active' || (await notLive(c, agentId, s, now, approved))) continue;
       const oh = (s.originHash as string).toLowerCase() as Hex;
-      const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [oh]);
-      if (
-        ENDPOINT_STATUS[e.status as number] !== 'Active' ||
-        (e.agentId as bigint) !== agentId ||
-        (e.operator as string).toLowerCase() !== (s.operator as string).toLowerCase()
-      )
-        continue;
-      if (srid === rid) live.push(oh);
+      if ((s.releaseId as string).toLowerCase() === rid) live.push(oh);
       else others.add(oh);
     }
     const down = [...new Set(live)].filter((oh) => !others.has(oh));
@@ -332,12 +342,13 @@ export async function revokeSigner(g: Global, deps: Deps, o: { signer?: string |
   const from = sender(c, owner);
   if (from !== owner) throw ERR.notOwner(agent, owner, from);
   const origin = (await originOf(c, s.originHash as Hex)) ?? short(s.originHash as Hex);
+  const stopped = await notLive(c, agentId, s, (await head(c)).timestamp);
   const step: Step = { label: 'revokeSigner', to: c.registry, data: encodeFunctionData({ abi: REGISTRY_ABI, functionName: 'revokeSigner', args: [getAddress(signer)] }) };
   return write(c, g, deps, {
     from,
     step,
     yesWord: 'revoke',
-    prompt: () => OWN.revokeSignerPrompt(signer, host(origin), agent),
+    prompt: () => OWN.revokeSignerPrompt(signer, host(origin), agent, stopped),
     rc: { agent, from, owner, signer },
     extra: { SignerNotActive: () => OWNERR.signerNotActive(signer) },
     done: (tx) => deps.io.out(OWN.revoked(tx)),
@@ -381,6 +392,7 @@ export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | u
   const agentId = needAgent(o.agent);
   const agent = agentId.toString();
   const c = await connect(g, deps, { wallet: false }); // a read: no wallet
+  await ownerOf(c, agentId); // an unknown agent ends unknown_agent, not "No releases yet"
   const now = (await head(c)).timestamp;
   const out = deps.io.out;
   const releases: Array<{ releaseId: Hex; status: string; sourceRef: string }> = [];

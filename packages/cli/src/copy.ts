@@ -554,8 +554,11 @@ export const OWN = {
   deprecatePrompt: (src: string) =>
     `This stops new calls to this build (owner says ${src}); answers it already gave stay valid. You can approve it again later.  [deprecate/cancel]`,
   deprecated: (tx: string) => `Deprecated (tx ${short(tx)}).`,
-  revokeSignerPrompt: (signer: string, h: string, agent: string) =>
-    `This stops signer ${short(signer)} for ${h} (agent ${agent}) within 60 s. Revoking is permanent; the operator registers a new key to continue.  [revoke/cancel]`,
+  // `stopped`: the signer already can't sign (FLOWS §7 Expired or Inert), so revoking only makes that permanent. // not in FLOWS
+  revokeSignerPrompt: (signer: string, h: string, agent: string, stopped: 'Expired' | 'Inert' | null = null) =>
+    stopped
+      ? `Signer ${short(signer)} for ${h} (agent ${agent}) is already ${stopped} and signs nothing; revoking makes that permanent. The operator registers a new key to continue.  [revoke/cancel]`
+      : `This stops signer ${short(signer)} for ${h} (agent ${agent}) within 60 s. Revoking is permanent; the operator registers a new key to continue.  [revoke/cancel]`,
   retirePrompt: (h: string, agent: string) =>
     `Buyers of ${h} stop paying agent ${agent}, and its signers stop working within 60 s. You can add it again later.  [retire/cancel]`,
   retired: (tx: string) => `Retired (tx ${short(tx)}).`,
