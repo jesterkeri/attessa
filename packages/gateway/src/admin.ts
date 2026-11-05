@@ -13,18 +13,26 @@ export function pause(db: CallStore): string {
 
 export type ResumeResult = { ok: true; message: string } | { ok: false; message: string };
 
-/** SPEC §6.6: `resume` first calls `/supported` with the API key and refuses on 401/402. */
-export async function resume(db: CallStore, facilitator: Facilitator, timeoutMs = 10_000): Promise<ResumeResult> {
+/**
+ * SPEC §6.6: the check `resume` makes before it unpauses: `/supported` with the API key, refused on 401/402.
+ * Returns the refusal, or null when resuming may go ahead. Changes nothing, so `resume --dry-run` runs it too.
+ */
+export async function resumeCheck(facilitator: Facilitator, timeoutMs = 10_000): Promise<string | null> {
   let status: number;
   try {
     status = (await facilitator.supported(timeoutMs)).status;
   } catch {
-    return { ok: false, message: 'Not resumed: the facilitator did not answer /supported.' };
+    return 'Not resumed: the facilitator did not answer /supported.';
   }
-  if (status === 401 || status === 402) {
-    return { ok: false, message: `Not resumed: the facilitator refused the API key or credit (HTTP ${status}).` };
-  }
-  if (status < 200 || status >= 300) return { ok: false, message: `Not resumed: the facilitator answered /supported with HTTP ${status}.` };
+  if (status === 401 || status === 402) return `Not resumed: the facilitator refused the API key or credit (HTTP ${status}).`;
+  if (status < 200 || status >= 300) return `Not resumed: the facilitator answered /supported with HTTP ${status}.`;
+  return null;
+}
+
+/** SPEC §6.6: `resume` first calls `/supported` with the API key and refuses on 401/402. */
+export async function resume(db: CallStore, facilitator: Facilitator, timeoutMs = 10_000): Promise<ResumeResult> {
+  const refused = await resumeCheck(facilitator, timeoutMs);
+  if (refused) return { ok: false, message: refused };
   db.setPaused(false);
   return { ok: true, message: 'Gateway resumed.' };
 }

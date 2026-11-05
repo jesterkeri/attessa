@@ -2489,3 +2489,25 @@ packages/cli test:  Test Files  82 passed (82)
 packages/cli test:       Tests  323 passed (323)
 ```
 reviewed: pending (adversary r63, then Codex)
+
+### T21 adversary r63 (failing test 4db718b, fix below) - 2026-11-05
+Finding: after r62, `attessa gateway` refused the SPEC §8 global flags `--yes` and `--json` as unknown options (exit 2), so `attessa gateway pause --network mainnet --yes` left mainnet taking calls and `attessa gateway status --json` printed no status (SPEC.md:653, :688; FLOWS.md:438). Unproven lead from the same round, fixed with it: `resume --dry-run` said "Would resume" without the `/supported` check the real resume makes (SPEC.md:562).
+Fix: packages/gateway/src/cli.ts takes `--yes`, `--rpc` (both change nothing here) and `--json` (one JSON object per outcome on stdout, errors included, with `error`, `message` and `next`); `resume --dry-run` runs `resumeCheck` (packages/gateway/src/admin.ts, the check `resume` now calls) and refuses as resume would. New tests: packages/gateway/test/cli-flags.test.ts (6). OPEN-QUESTIONS gains an r63 entry for the JSON shapes and error codes.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  22 passed (22)
+packages/gateway test:       Tests  160 passed (160)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  83 passed (83)
+packages/cli test:       Tests  326 passed (326)
+test=0
+```
+reviewed: pending (adversary r64, then Codex)
