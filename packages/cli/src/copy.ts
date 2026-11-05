@@ -400,6 +400,8 @@ export const BUY = {
   // not in FLOWS: after "Too late to cancel" or "The payment went through", when the answer isn't served yet (the one
   // next action; never "attessa cancel … voids it now").
   answerNotYet: "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.",
+  // not in FLOWS: the call was paid from another wallet than the one loaded (ATTESSA_PRIVATE_KEY, --keystore or the keychain).
+  answerOtherWallet: (payer: string) => `The answer isn't confirmed yet, and only the wallet that paid can fetch it. Run attessa status --pending with ${payer}.`,
   tooLateToCancel: (tx: string) => `Too late to cancel: the payment went through (tx ${short(tx)}). Fetching your answer.`,
   cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
   noPending: 'No calls in progress.', // not in FLOWS

@@ -402,7 +402,7 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
   const r = await client.payAndVerify(o.url, { body, asset, newRequest: o.newRequest });
   // A resumed call (V0) may be in another asset than this run's --asset: report the one the entry paid in.
   const paid = r.asset ? assetOf(r.asset) : asset;
-  return report(g, d, client, r, { origin, sym: SYMBOL[paid], asset: paid, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[paid].dailyCap });
+  return report(g, d, client, r, { origin, sym: SYMBOL[paid], asset: paid, uncertain: seen.uncertain, shownRelease: seen.release, outFile: o.out ?? 'result.json', dailyCap: limits[paid].dailyCap, wallet: w.account.address.toLowerCase() });
 }
 
 function readBody(d: Deps, file: string): Uint8Array {
@@ -414,7 +414,7 @@ function readBody(d: Deps, file: string): Uint8Array {
 }
 
 /** The end state of a call, in FLOWS §6 words. Exit 0 only for `verified` (and a dry run). */
-type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; shownRelease?: string | undefined; outFile: string; dailyCap: bigint; paid?: boolean };
+type ReportCtx = { origin: string; sym: string; asset: AssetKey; uncertain: boolean; shownRelease?: string | undefined; outFile: string; dailyCap: bigint; paid?: boolean; wallet?: string };
 
 /** A result whose evidence row couldn't be written (SDK `evidenceNotWritten`) is reported as usual, then the missing record is its one next action. */
 async function report(g: Global, d: Deps, client: AttestClient, r: CallResult, c: ReportCtx): Promise<number> {
@@ -429,6 +429,11 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
   const p = amount(r.amount ?? 0n);
   const record = display(d, client.ledger.evidencePath);
   const entry = (): PendingEntry | undefined => client.ledger.get(r.requestId);
+  // Only the payer's signature fetches the answer (SPEC §6), so another wallet is sent to the payer's.
+  const answerNext = () => {
+    const payer = entry()?.payer?.toLowerCase();
+    return c.wallet && payer && payer !== c.wallet ? BUY.answerOtherWallet(payer) : BUY.answerNotYet;
+  };
   switch (r.outcome) {
     case 'verified': {
       // An answer is written only when one came with this result. A stored outcome reported again (getResult on a
@@ -486,8 +491,8 @@ async function reportOutcome(g: Global, d: Deps, client: AttestClient, r: CallRe
       else if (paymentFound(r)) {
         // After "Too late to cancel: the payment went through" the payment line is already out.
         if (!c.paid) out(BUY.paymentFound(r.settlementTx!));
-        out(BUY.answerNotYet);
-      } else if (c.paid) out(BUY.answerNotYet);
+        out(answerNext());
+      } else if (c.paid) out(answerNext());
       else if (r.authorizationUsed) {
         // Used or cancelled on chain, no log yet: it can't expire unused and cancel can't void it (cancel's own row).
         const u = BUYERR.cancelUndecided();
@@ -698,7 +703,7 @@ export async function status(g: Global, d: Deps, o: { target?: string | undefine
     for (const r of results) {
       const e = client.ledger.get(r.requestId);
       const asset = assetOf(e?.asset ?? '');
-      const c = { origin: e?.origin ?? '', sym: SYMBOL[asset], asset, uncertain: false, outFile: `${r.requestId}.json`, dailyCap: 0n };
+      const c = { origin: e?.origin ?? '', sym: SYMBOL[asset], asset, uncertain: false, outFile: `${r.requestId}.json`, dailyCap: 0n, wallet: w.account.address.toLowerCase() };
       out(`${r.requestId}  ${host(c.origin)}`); // not in FLOWS
       if (r.outcome === 'stopped') continue;
       // Every call here is already decided in the ledger, so one call's error (an answer --out can't take) must not

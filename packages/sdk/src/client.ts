@@ -608,6 +608,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * and verify the answer). The stamp never strays more than the window from chain time, whatever Date says.
    */
   async function fetchResult(n: Net, entry: PendingEntry): Promise<Fetched> {
+    // The gateway answers 404 to any signature but the payer's (SPEC §6), so another wallet's fetch decides nothing.
+    if (entry.payer && cfg.account.address.toLowerCase() !== entry.payer.toLowerCase()) return { kind: 'unsure' };
     try {
       const chainTs = Number((await n.chain.latest()).timestamp);
       const ok = PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S;
