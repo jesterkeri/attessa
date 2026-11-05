@@ -1333,3 +1333,15 @@ node site/build.mjs: exit 0
 # fail 0
 ```
 reviewed: pending (adversary r56, then Codex)
+
+### Site adversary r56 (failing test 1931399, fix 84858ba) - 2026-11-05
+Finding: a width change that hides the focused control dropped focus to `<body>` (WCAG 2.4.3; the brief's "lost or obscured focus"): the "Docs menu" summary growing past 860px, an "On this page" link narrowing under 1181px, and the closed menu button growing past 1020px. Chromium sometimes moves focus before a media listener runs, so a check inside the width listener is a race.
+Fix: site.js listens for `focusout` with no `relatedTarget`; on the next frame, if focus is on `<body>` and the element that lost it no longer renders, focus goes to the docs menu's first link if it shows, else `main` (`tabindex="-1"`). Browser check with r56's probe/focusrepeat.mjs on the built dist, docs/reference.html: summary closed and open 800x900 to 1024x768, TOC link 1280x800 to 1024x768, menu button 900x800 to 1280x800 all end on "Overview", 6 of 6 (CDN failed) and 3 of 3 (live) each; focuscross.mjs TOC link 1280x800 to 720x800 ends on "Overview", next Tab "Pay-if-verified in 10 minutes".
+verify:
+```
+node site/build.mjs: exit 0
+# tests 182
+# pass 182
+# fail 0
+```
+reviewed: pending (adversary r57, then Codex)
