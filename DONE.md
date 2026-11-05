@@ -1428,4 +1428,36 @@ probe exit 1: FAIL: repo install config is outside the allow-list
 ok: refused
 r9full_rc=0
 ```
-reviewed: pending (adversary r12, then Codex r2)
+reviewed: pending (adversary r12 found a defect; see below; then Codex r2)
+
+adversary r12 (d1ef492, `scripts/adversary-install-r12/empty-path.test.sh`, failing before the fix): when no PATH entry lies outside the checked folder (only `$root/bin`, or only `.`), the filter set `PATH=` to the empty string, which bash reads as the current folder, the checkout; the tree's own `grep` then ran at `compgen -e | grep '^GIT_'`, and `git` after it. Fixed in adfa749:
+- `scripts/check-install-scripts.sh`: an empty filtered PATH stops the guard with "FAIL: no PATH entry outside the checked folder". r12's unproven note on BASH_ENV: the shebang is now `#!/bin/bash -p`, so bash sources no BASH_ENV and imports no functions from the environment.
+No existing assertion changed.
+
+checks at adfa749 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r12/empty-path.test.sh "$PWD"
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+r12 rc=0
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"  # 2 ok lines
+r11 rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10 rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r13, then Codex r2)
