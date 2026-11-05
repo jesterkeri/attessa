@@ -226,6 +226,8 @@
   // the section you're in, and the menu marks that section's link if it has one, else the page's own link.
   const docsNav = $('.docs-nav details');
   if (docsNav && matchMedia('(max-width: 760px)').matches) docsNav.open = false;
+  // The summary shows only up to 860px (site.css), so once the window is wider a closed menu must open again.
+  if (docsNav) matchMedia('(max-width: 860px)').addEventListener('change', e => { if (!e.matches) docsNav.open = true; });
   const pathOf = u => u.pathname.replace(/\/index\.html$/, '/');
   const idOf = a => decodeURIComponent(a.hash.slice(1));
   const navAside = $('.docs-nav');
