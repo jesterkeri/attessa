@@ -22,7 +22,7 @@
     </ol>
     <figure class="code" data-copy="commands">
       <figcaption><span>Seller commands</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code><span class="p">$ </span><span class="c">attessa agent register --name "Acme risk check"</span>
+      <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa agent register --name "Acme risk check"</span>
 <span class="p">$ </span><span class="c">attessa enclave build</span>
 <span class="p">$ </span><span class="c">attessa release approve --agent 412 --from-build build/measurements.json --source https://github.com/acme/risk/commit/a1b2c3d</span>
 <span class="p">$ </span><span class="c">attessa endpoint add --agent 412 --origin https://risk.example --pay-to 0xGATE…01</span>
@@ -44,7 +44,7 @@
     <p>Revoking a build stops buyers paying for answers from it. Its live signers stop working within 60 seconds, and your endpoint refuses calls until you approve and register another build. <strong>Revoking is permanent.</strong></p>
     <figure class="code" data-copy="commands">
       <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code><span class="p">$ </span><span class="c">attessa release revoke &lt;releaseId&gt;</span>
+      <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa release revoke &lt;releaseId&gt;</span>
 <span class="p">$ </span><span class="c">attessa revoke signer &lt;signerAddress&gt;</span></code></pre>
     </figure>
     <p><span class="muted">Coming.</span> These commands, and <code>attessa status</code>, aren't built yet. Run them from the agent owner's wallet. <code>attessa status --agent &lt;id&gt;</code> lists your releases, endpoints and signers with their states.</p>
@@ -53,7 +53,7 @@
     <p><span class="muted">Coming.</span> The MCP server isn't built yet. The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.</p>
     <figure class="code">
       <figcaption><span>MCP client config</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code>{
+      <pre tabindex="0"><code>{
   <span class="k">"mcpServers"</span>: {
     <span class="k">"attessa"</span>: {
       <span class="k">"command"</span>: <span class="c">"node"</span>,
@@ -68,7 +68,7 @@
     <p><span class="muted">Optional, not built yet.</span> buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.</p>
     <figure class="code">
       <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code><span class="p">$ </span><span class="c">attessa call --via buy https://&lt;buy-capability&gt;</span>
+      <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa call --via buy https://&lt;buy-capability&gt;</span>
 <span class="k">→</span> Price: 0.005 USDC. buy (usebuy.ai, Celo's pay-per-call API marketplace) takes payment before the service runs, so this call isn't protected by the check: you pay even if the answer fails it.  [pay/cancel]
 <span class="k">→</span> Paid 0.005 USDC through buy <span class="m">(tx 0x…)</span>
 <span class="k">→</span> No proof offered: this service doesn't say which code produced its answer, so it can't be checked  <span class="m">(unattested)</span>

@@ -101,7 +101,7 @@ says what each name forms.
 
 - **Desktop and tablets (720px and wider):** pinned scenes with the object beside the text. Short screens
   tighten the story (under about 820px tall) and the proves section (under about 960px) so they fit, and a
-  pinned box that still overflows (200% zoom on a laptop) scrolls from its top. A box that scrolls with nothing focusable inside (the story, the outcomes, the uses) has `tabindex="0"`, so the keyboard can scroll it.
+  pinned box that still overflows (200% zoom on a laptop) scrolls from its top. A box that scrolls with nothing focusable inside (the story, the outcomes, the uses) has `tabindex="0"`, so the keyboard can scroll it; so do the docs code blocks and reference tables, which scroll sideways on phones and at 200% zoom.
 - **Phones (under 720px):** nothing pins. Each object gets its own slot above its section's text and forms as
   that slot scrolls in; the statement's cubes form under the sentence; the story puts the step, the cubes and
   the checklist one above the other. The final call to action has no ring on phones.

@@ -13,7 +13,7 @@
     <h2 id="cli">CLI commands</h2>
     <p>Rows marked <span class="muted">Coming</span> are planned but not built yet. Rows marked <span class="muted">Optional</span> may not ship.</p>
     <h3 id="cli-buyer">Buyer</h3>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
         <tr><td><code>attessa init</code></td><td><span class="muted">Coming.</span> Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>.</td></tr>
@@ -27,7 +27,7 @@
       </tbody>
     </table></div>
     <h3 id="cli-seller">Seller</h3>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
         <tr><td><code>attessa agent register</code></td><td><span class="muted">Coming.</span> Creates your agent's ERC-8004 identity from this wallet.</td></tr>
@@ -49,7 +49,7 @@
 
     <h2 id="tools">Agent tools</h2>
     <p><span class="muted">Coming.</span> The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.</p>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th><th scope="col">Side effect</th></tr></thead>
       <tbody>
         <tr><td><code>resolve_endpoint</code></td><td>Looks a service up in the registry: agent, approved builds, pay-to address.</td><td>None</td></tr>
@@ -67,7 +67,7 @@
     <h2 id="sdk">SDK: <code>payAndVerify</code></h2>
     <figure class="code">
       <figcaption><span>TypeScript</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
-      <pre><code>payAndVerify(url: string, req: {
+      <pre tabindex="0"><code>payAndVerify(url: string, req: {
   body: Uint8Array | string;
   requestId?: Hex;
   maxAmount?: bigint;
@@ -75,7 +75,7 @@
   newRequest?: boolean;
 }): Promise&lt;CallResult&gt;</code></pre>
     </figure>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Option</th><th scope="col">Meaning</th></tr></thead>
       <tbody>
         <tr><td><code>maxAmount</code></td><td>The most this call may cost, in the asset's atomic units. The SDK uses the lower of this and your configured limit per call. Over it, nothing is signed: <code>over_max_amount</code>.</td></tr>
@@ -88,7 +88,7 @@
 
     <h2 id="refusals">Refusal codes</h2>
     <p>A refusal is the product working: a named check failed, and the gateway shouldn't use your payment permission. If you had signed one, the SDK checks on Celo whether it was used, unless you passed <code>--no-wait</code>, and reports <code>not_charged</code> or <code>settled_after_refusal</code>. Codes marked <strong>R</strong> are refusals; the rest are conditions with a next step.</p>
-    <div class="table-wrap"><table class="table">
+    <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Code</th><th scope="col">What it means</th><th scope="col">Next step</th></tr></thead>
       <tbody>
         <tr><td><code>proof_rejected</code> R</td><td>A check in the proof failed. The reason names it: <code>response_hash_mismatch</code>, <code>request_mismatch</code>, <code>inputs_hash_mismatch</code>, <code>signer_not_active</code>, <code>release_not_approved</code>, <code>proof_expired</code> and others.</td><td>Wait for your permission to expire, or cancel it now.</td></tr>
