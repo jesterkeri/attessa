@@ -234,8 +234,13 @@ export const ERR = {
   // not in FLOWS
   noRegistry: (network: string) =>
     new CliError('no_registry', `No EnclaveRegistry address is known for ${network}.`, 'Set ATTESSA_REGISTRY to the registry address.'),
-  signerExists: (signer: string) =>
-    new CliError('signer_exists', `Not registered: signer ${short(signer)} is already registered.`, 'To extend it without a restart: attessa signer renew.'),
+  // `renewable` false: the signer is expired, revoked or carries an old operator, so renew can't pass and only a new key works.
+  signerExists: (signer: string, renewable = true) =>
+    new CliError(
+      'signer_exists',
+      `Not registered: signer ${short(signer)} is already registered.`,
+      renewable ? 'To extend it without a restart: attessa signer renew.' : 'Restart with `attessa enclave start`, then `attessa signer register`.',
+    ),
   attestationFromFuture: () =>
     new CliError('attestation_from_future', "Not registered: the machine's report is dated ahead of Celo's clock.", 'Check the host clock, then run `attessa signer register --fresh`.'),
   usage: (msg: string) => new CliError('usage', msg),

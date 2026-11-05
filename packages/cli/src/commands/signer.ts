@@ -268,7 +268,12 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
   const field = bindingField(binding, c, agentId, oh);
   if (field !== null) throw ERR.bindingMismatch(bindingWords(binding)(field), String(field));
   const existing = await read(c, c.registry, REGISTRY_ABI, 'signers', [chk.signer]);
-  if (SIGNER_STATUS[existing.status as number] !== 'None') throw ERR.signerExists(chk.signer);
+  const est = SIGNER_STATUS[existing.status as number];
+  if (est !== 'None') {
+    // renewSigner needs an Active, unexpired signer whose operator is still the endpoint's (SPEC §3.4).
+    const renewable = est === 'Active' && now < (existing.expiresAt as bigint) && (existing.operator as string).toLowerCase() === operator;
+    throw ERR.signerExists(chk.signer, renewable);
+  }
 
   const certs = await certSteps(c, a, from, now);
   const register: Step = {
@@ -319,7 +324,9 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const origin = await originFor(c, oh, undefined, g.network === 'local');
   const { operator } = await checkEndpoint(c, oh, agentId, origin, RENEW);
   const from = (c.account?.address.toLowerCase() as Address | undefined) ?? operator;
-  if (from !== operator || operator !== (s.operator as string).toLowerCase()) throw RENEW.notOperator(from, origin);
+  if (from !== operator) throw RENEW.notOperator(from, origin);
+  // The endpoint's operator changed since registration: the signer is Inert and renewSigner can never pass (SPEC §3.4).
+  if (operator !== (s.operator as string).toLowerCase()) throw ERR.renewRefused('operator_mismatch', "the endpoint's operator changed after this signer was registered", true);
   // renewSigner repeats registerSigner steps 2-7 (SPEC §3.4), so the same checks run before any certificate is cached.
   const { rid, ageMinutes, binding } = await checkAttestation(c, a, agentId, now, true);
   const field = bindingField(binding, c, agentId, oh);
