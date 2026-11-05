@@ -8,7 +8,7 @@
 # Usage: $0 <repo> [commit under test, default HEAD]
 set -u
 src="${1:?repo}"; rev="${2:-HEAD}"
-R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-keys-r17.XXXX"); trap 'rm -rf "$R"' EXIT
+R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-keys-r17.XXXX") && [ -d "$R" ] || { echo "FAIL: no scratch folder"; exit 1; }; trap 'rm -rf "$R"' EXIT
 git -C "$src" archive "$rev" | tar -x -C "$R"; cd "$R"
 git init -q && git add -A && git -c user.name=adv -c user.email=adv@x commit -qm base
 rc=0

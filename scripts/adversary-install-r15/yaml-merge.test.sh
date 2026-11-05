@@ -12,7 +12,7 @@
 # Usage: $0 <repo> [commit under test, default HEAD]
 set -u
 src="${1:?repo}"; rev="${2:-HEAD}"
-R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-yaml-r15.XXXX"); trap 'rm -rf "$R"' EXIT
+R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-yaml-r15.XXXX") && [ -d "$R" ] || { echo "FAIL: no scratch folder"; exit 1; }; trap 'rm -rf "$R"' EXIT
 two=$'packages:\n  - packages/*\n<<: {ignoreScripts: false}\n<<: {\nignoreScripts: true\n}'
 rc=0
 if [ -n "${PNPM_CJS:-}" ]; then

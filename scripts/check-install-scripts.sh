@@ -256,7 +256,7 @@ L = yaml.safe_load(blob("pnpm-lock.yaml")) if "pnpm-lock.yaml" in reg else {}
 if not isinstance(L, dict) or L.get("lockfileVersion") != "9.0" or L.get("settings") != {"autoInstallPeers": True, "excludeLinksFromLockfile": False}:
     bad.append("pnpm-lock.yaml: must be lockfileVersion 9.0 with the default settings")
     L = {}
-semver = r"(@[A-Za-z0-9._~-]+/)?[A-Za-z0-9._~-]+@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
+semver = r"(@[A-Za-z0-9~-][A-Za-z0-9._~-]*/)?[A-Za-z0-9~-][A-Za-z0-9._~-]*@[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?"
 # pnpm merges each packages entry over its snapshot (its dependencies, version or id win) and reads top-level keys
 # such as overrides, patchedDependencies or catalogs, so only the fields this lockfile uses are allowed.
 extra = set(L) - {"lockfileVersion", "settings", "importers", "packages", "snapshots"}
@@ -270,13 +270,23 @@ for k, v in (L.get("packages") or {}).items():
         bad.append(f"pnpm-lock.yaml: {k}: resolution must be the default registry with a sha512 integrity only, got {r!r}")
     elif str(k).rsplit("@", 1)[0] in ALLOW and PINNED.get(k) != r["integrity"]:
         bad.append(f"pnpm-lock.yaml: {k}: allowlisted package without its pinned registry integrity")
-# Dependency versions never point into the tree: link: only for a workspace: specifier.
+# pnpm under --frozen-lockfile checks only an importer specifier against package.json and links or installs its
+# version as written, so each importer is the root or a workspace project, and each dependency is either the
+# workspace project of that name (workspace: specifier, link: to its folder) or the registry snapshot of that name.
+proj = {}
+for p in reg:
+    if re.fullmatch(r"packages/[^/]+/package\.json", p):
+        try: proj[os.path.dirname(p)] = json.loads(blob(p).decode("utf-8")).get("name")
+        except (ValueError, AttributeError): pass
+snaps = L.get("snapshots") or {}
 for i, deps in (L.get("importers") or {}).items():
+    if i != "." and i not in proj: bad.append(f"pnpm-lock.yaml: importer {i} is not the root or a workspace project")
     for f, d in (deps or {}).items():
         for n, x in (d or {}).items():
-            xv = str(x.get("version"))
-            if ":" in xv and not (xv.startswith("link:") and str(x.get("specifier")).startswith("workspace:")):
-                bad.append(f"pnpm-lock.yaml: importer {i} {n}: version {xv!r} is not a registry version")
+            xv, sp = str(x.get("version")), str(x.get("specifier"))
+            if xv.startswith("link:"): ok = sp.startswith("workspace:") and proj.get(os.path.normpath(os.path.join(str(i), xv[5:]))) == n
+            else: ok = not sp.startswith("workspace:") and f"{n}@{xv}" in snaps
+            if not ok: bad.append(f"pnpm-lock.yaml: importer {i} {n}: version {xv!r} is neither the workspace project {n} nor the registry package {n}")
 # pnpm builds each package as the snapshot merged with packages[key minus its "(peers)" suffix], so a snapshot
 # with no packages entry, or with fields of its own such as resolution, would install from wherever it says.
 pkgs = L.get("packages") or {}

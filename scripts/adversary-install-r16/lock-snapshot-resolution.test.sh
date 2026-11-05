@@ -17,7 +17,7 @@
 # Usage: $0 <repo> [commit under test, default HEAD]
 set -u
 src="${1:?repo}"; rev="${2:-HEAD}"
-R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-lock-r16.XXXX"); trap 'rm -rf "$R"' EXIT
+R=$(mktemp -d "${TMPDIR:-/tmp}/attessa-adv-lock-r16.XXXX") && [ -d "$R" ] || { echo "FAIL: no scratch folder"; exit 1; }; trap 'rm -rf "$R"' EXIT
 snap=$'\nsnapshots:\n\n  keytar@7.9.0:\n    resolution: {directory: vendor/keytar, type: directory}\n'
 rc=0
 if [ -n "${PNPM_CJS:-}" ]; then
