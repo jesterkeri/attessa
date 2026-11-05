@@ -16,7 +16,7 @@ import {
 } from './commands/registry.ts';
 import { signerRegister, signerRenew } from './commands/signer.ts';
 import type { Deps, Global, NetworkFlag } from './context.ts';
-import { COPY, CliError, diskError, unexpected } from './copy.ts';
+import { COPY, CliError, diskError, jsonOut, unexpected } from './copy.ts';
 
 export * from './context.ts';
 export * from './copy.ts';
@@ -233,7 +233,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
             // signed); anything else is said without its raw message (it could carry a key), and --json gets its error object.
             ((g && e instanceof AttestError ? fromSdk(g, e) : null) ?? (BUYER.has(key) ? diskError(e, display(deps, dataDir(deps))) : null) ?? unexpected(e));
     if (json) {
-      deps.io.out(JSON.stringify({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
+      deps.io.out(jsonOut({ ok: false, error: err.code, message: err.message, next: err.next, lines, ...data }));
     } else {
       io.err(err.message);
       if (err.next) io.err(err.next);
@@ -242,7 +242,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
   }
 
   function finish(code: number): number {
-    if (json) deps.io.out(JSON.stringify({ ...data, ok: code === 0, lines }));
+    if (json) deps.io.out(jsonOut({ ...data, ok: code === 0, lines }));
     return code;
   }
 }

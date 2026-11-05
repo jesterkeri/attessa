@@ -30,7 +30,7 @@ import {
 import type { Address, Hex, LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { DEFAULT_RPC, type Deps, type Global, type NetworkFlag } from '../context.ts';
-import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, safe, signedRefusal } from '../copy.ts';
+import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, jsonOut, safe, signedRefusal } from '../copy.ts';
 
 /** Buyer commands (SPEC §8): `init`, `call`, `cancel`, `status [<origin>] [--pending]`, `evidence export`. All payment logic is the SDK's. */
 
@@ -552,15 +552,20 @@ async function spendLines(d: Deps, client: AttestClient): Promise<void> {
   } catch {
     // a config status can't read leaves init's defaults on show; `attessa init` reports the bad file itself
   }
-  const json: Record<string, { spentToday: string; dailyCap: string; maxAmountPerCall: string }> = {};
+  const json: Record<string, { spentToday: string; dailyCap: string; maxAmountPerCall: string | null }> = {};
   for (const k of ['usdc', 'usat'] as const) {
     // Only this network's token: the cap counts per asset address, and one data folder serves every network.
     const addr = await client.assetAddress(k).catch(() => undefined);
     if (addr === undefined) continue;
     const spent = spendToday(entries, addr, Date.now());
     if (k === 'usat' && spent === 0n) continue; // init saves both assets' limits; USA₮ shows once it is used
-    const l = { ...DEFAULT_LIMITS, ...cfg?.limits?.[k] };
-    const row = { spentToday: amount(spent), dailyCap: amount(parseAmount(l.dailyCap, '--daily-cap')), maxAmountPerCall: amount(parseAmount(l.maxAmountPerCall, '--max-amount')) };
+    const saved = cfg?.limits?.[k]; // as limitsFor reads it: no saved per-call limit means `call` needs --max-amount
+    const per = saved?.maxAmountPerCall;
+    const row = {
+      spentToday: amount(spent),
+      dailyCap: amount(parseAmount(saved?.dailyCap ?? DEFAULT_LIMITS.dailyCap, '--daily-cap')),
+      maxAmountPerCall: per === undefined ? null : amount(parseAmount(per, '--max-amount')),
+    };
     json[k] = row;
     d.io.out(BUY.spentToday(row.spentToday, row.dailyCap, SYMBOL[k], row.maxAmountPerCall));
   }
@@ -815,7 +820,7 @@ export async function evidenceExport(_g: Global, d: Deps, o: { format?: string |
   if (format !== 'csv' && format !== 'jsonl') throw ERR.usage('--format must be csv or jsonl.');
   const rows = new Ledger(dataDir(d)).readEvidence();
   if (rows.length === 0) throw BUYERR.nothingToExport();
-  if (format === 'jsonl') for (const r of rows) d.io.out(JSON.stringify(r));
+  if (format === 'jsonl') for (const r of rows) d.io.out(jsonOut(r));
   else {
     d.io.out(EVIDENCE_COLUMNS.join(','));
     for (const r of rows) d.io.out(EVIDENCE_COLUMNS.map((k) => csvCell(r[k])).join(','));

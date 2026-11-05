@@ -49,6 +49,11 @@ export function safe(text: string): string {
   });
 }
 
+/** JSON for a terminal: the C1, separator and Bidi_Control characters `safe()` names become `\uNNNN` (JSON.stringify already escapes C0), lossless. */
+export function jsonOut(v: unknown): string {
+  return JSON.stringify(v).replace(/[\x7f-\x9f\u2028\u2029\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, (ch) => `\\u${ch.charCodeAt(0).toString(16).padStart(4, '0')}`);
+}
+
 /** Own-property lookup, so a `detail` of "constructor" or "__proto__" isn't found on Object.prototype. */
 export function checkWords(detail: string | undefined): [string, string] | undefined {
   return detail !== undefined && Object.hasOwn(CHECK_WORDS, detail) ? CHECK_WORDS[detail] : undefined;
@@ -412,7 +417,8 @@ export const BUY = {
   cancelled: (tx: string) => `Cancelled (tx ${short(tx)}).`, // not in FLOWS
   noPending: 'No calls in progress.', // not in FLOWS
   // not in FLOWS: the FLOWS:851/:881 oversight line, spend today (settled plus reserved) against the daily cap
-  spentToday: (spent: string, cap: string, sym: string, per: string) => `Spent today: ${spent} of your ${cap} ${sym} daily cap (at most ${per} per call). It resets at 00:00 UTC.`,
+  spentToday: (spent: string, cap: string, sym: string, per: string | null) =>
+    `Spent today: ${spent} of your ${cap} ${sym} daily cap (${per === null ? 'no per-call limit is set' : `at most ${per} per call`}). It resets at 00:00 UTC.`,
 } as const;
 
 /** FLOWS §8 rows for refusals after signing: "{what happened} {tail}". */
