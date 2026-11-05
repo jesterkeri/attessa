@@ -2320,3 +2320,25 @@ packages/cli test:  Test Files  74 passed (74)
 packages/cli test:       Tests  304 passed (304)
 ```
 reviewed: pending (adversary r55, then Codex)
+
+### T21 adversary r55 (failing test f8e874e, fix 224e24f) - 2026-11-05
+Finding: `attessa agent register` wrote docs/agent.json with `registrations: []` before it simulated or asked, so a `--dry-run` or a cancel at `[register/cancel]` after a landed register erased the agent id and registry from the file (FLOWS:846 "Preview replaces undo"; FLOWS:833).
+Fix (registry.ts `agentRegister`): with a key the file is written only in `done`, after the register lands; without a key (the register is signed elsewhere) and not on `--dry-run`, the unregistered file is written only if the file doesn't already list a registration.
+Lead for r56, unproven: a resumed call (V0) refused with `payment_invalid{insufficient_funds}` may end without `BUY.addFunds`, since the price comes from this run's `authorizing` event.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  75 passed (75)
+packages/cli test:       Tests  306 passed (306)
+```
+reviewed: pending (adversary r56, then Codex)
