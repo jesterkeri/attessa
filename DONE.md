@@ -2017,3 +2017,23 @@ packages/cli test:  Test Files  58 passed (58)
 packages/cli test:       Tests  270 passed (270)
 ```
 reviewed: pending (adversary r40, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r40 fixes - 2026-11-05
+adversary r40 (58a0f07, test `packages/cli/test/adversary-t21-r40.test.ts`, failing first): past validBefore + 5 the chain read the permission as used but the RPC's log index had no AuthorizationUsed yet; after 21 polls `finalize` returned the entry as it stood, and `attessa call` printed "expires unused … unless the gateway used it" and "attessa cancel … voids it now", a next action that can't work (SPEC.md:635, FLOWS.md:832). Fixed in 2cea645:
+- `packages/sdk/src/client.ts` (`finalize`): that exit marks the result `authorizationUsed: true` (new optional `CallResult` field in `packages/sdk/src/types.ts`).
+- `packages/cli/src/commands/buyer.ts`: such a result prints cancel's undecided row ("Your payment permission was already used or cancelled, but Celo doesn't show which yet." / "Run attessa status --pending in a minute to see which."), and `--json` carries `authorizationUsed: true`. OPEN-QUESTIONS.md entry added for the copy.
+No existing assertion changed.
+
+verify at 2cea645 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  59 passed (59)
+packages/cli test:       Tests  271 passed (271)
+```
+reviewed: pending (adversary r41, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
