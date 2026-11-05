@@ -1461,3 +1461,23 @@ ok: refused
 r9full_rc=0
 ```
 reviewed: pending (adversary r13, then Codex r2)
+
+### Install allow-list adversary r13 follow-up - 2026-11-05
+adversary r13 on 0230768 reported no defect, but it ran static reads only (it could not run git or the tests), so it is not a clean round. Its one lead, git reading user config through a relative path, is closed anyway in 6608dbe: `scripts/check-install-scripts.sh` unsets a relative `XDG_CONFIG_HOME` and refuses a relative `HOME` ("FAIL: HOME must be an absolute path"), so `$XDG_CONFIG_HOME/git/config` and `$HOME/.gitconfig` can't resolve inside the checkout.
+
+verify at 6608dbe (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock; then the guard run with `HOME=rel`), run by Claude, 2026-11-05:
+```
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+FAIL: HOME must be an absolute path
+```
+reviewed: pending (adversary r14 with tests run, then Codex r2)
