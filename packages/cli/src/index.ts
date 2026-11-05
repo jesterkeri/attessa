@@ -113,7 +113,12 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
   const lines: string[] = [];
   const data: Record<string, unknown> = {};
   let json = argv.includes('--json');
-  const io = json ? { ...deps.io, out: (l: string) => lines.push(l), data: (f: Record<string, unknown>) => void Object.assign(data, f) } : deps.io;
+  let told = 0; // FLOWS:833: a confirm names its consequence first, so under --json the held lines go to stderr before it
+  const confirm = async (yesWord: string): Promise<boolean> => {
+    for (; told < lines.length; told++) deps.io.err(lines[told]!);
+    return deps.io.confirm(yesWord);
+  };
+  const io = json ? { ...deps.io, confirm, out: (l: string) => lines.push(l), data: (f: Record<string, unknown>) => void Object.assign(data, f) } : deps.io;
   const d: Deps = { ...deps, io };
   let g: Global | undefined;
   try {

@@ -14,7 +14,7 @@ const deps: Deps = {
     err: (l) => process.stderr.write(`${l}\n`),
     async confirm(yesWord) {
       if (!process.stdin.isTTY) return false;
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const rl = createInterface({ input: process.stdin, output: process.stderr }); // stdout stays the --json object
       const a = await rl.question(`Type ${yesWord} to continue, anything else cancels: `);
       rl.close();
       return a.trim() === yesWord;
