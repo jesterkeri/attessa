@@ -2468,3 +2468,24 @@ packages/cli test:  Test Files  81 passed (81)
 packages/cli test:       Tests  319 passed (319)
 ```
 reviewed: pending (adversary r62, then Codex)
+
+### T21 adversary r62 (failing test 88a94bb, fix 759e5e2) - 2026-11-05
+Findings, all in the `attessa gateway` pass-through: (1) `pause --network sepolia --network mainnet` paused Sepolia and reported success (the r61 `flag()` kept the first value; parseArgs, which the rest of the CLI uses, keeps the last; SPEC.md:653, :688); (2) `pause --dry-run` paused the live gateway (SPEC.md:653, FLOWS.md:846); (3) `export --since yesterday` ended on the generic "Unexpected error" line with no next action (FLOWS.md:832).
+Fix: packages/gateway/src/cli.ts reads its flags with node:util parseArgs (`--x v` or `--x=v`, last wins, an unknown flag refused with the usage line, exit 2); `pause`/`resume --dry-run` print what would happen and change nothing; a bad `--since` and an unreadable config each end with a message and a next action (only the error code of a config read failure is shown). OPEN-QUESTIONS gains an r62 entry for the new lines.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  82 passed (82)
+packages/cli test:       Tests  323 passed (323)
+```
+reviewed: pending (adversary r63, then Codex)
