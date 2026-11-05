@@ -2363,3 +2363,24 @@ packages/cli test:  Test Files  76 passed (76)
 packages/cli test:       Tests  309 passed (309)
 ```
 reviewed: pending (adversary r57, then Codex)
+
+### T21 adversary r57 (failing test 2b69a96, fix 709684c) - 2026-11-05
+Findings: (1) the r56 "Spent today" line summed every asset address `assetOf()` maps to USDC, so a mainnet USDC call in the same ~/.attessa ledger was added to the Sepolia figure (1.01 shown of a 1.00 cap while `call` on that network, which counts only its own token, still paid): SPEC.md:604 and :627 (V6) count per asset; (2) `attessa evidence export --format csv` printed seller-written text (sourceRef) with raw terminal control characters (ESC, CR), against the code's never-print-raw rule (copy.ts `safe()`, KNOWN-LIMITS L20).
+Fix: the SDK gains `assetAddress(key)` (the pinned token on the RPC's network); `spendLines` counts `spendToday` for that address only and skips an asset the network doesn't offer; `csvCell` passes every cell through `safe()`.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  77 passed (77)
+packages/cli test:       Tests  312 passed (312)
+```
+reviewed: pending (adversary r58, then Codex)
