@@ -380,10 +380,11 @@ export async function call(g: Global, d: Deps, o: CallOpts, cfg: BuyerConfig | n
           out(BUY.settlePending(hms(BigInt(e.entry.validBefore!) + 60n), e.tx));
           return;
         case 'waiting': {
-          // A refused call whose settlement is known was used: no expiry to wait for, nothing to void. An uncertain
-          // call already printed "Lost the connection…" unless it got an answer with no settlement: that wait gets
-          // this line too (not in FLOWS for uncertain), so it isn't silent (FLOWS:825).
-          if (e.entry.settlementTx || (e.entry.state !== 'refused' && (e.entry.state !== 'uncertain' || seen.uncertain))) return;
+          // A call whose settlement is known was used: no expiry to wait for, nothing to void. An uncertain call that
+          // printed "Lost the connection…" already said it is checking. Every other wait (refused; uncertain after an
+          // answer with no settlement; a resumed signed or settle_pending call) gets this line, so none is silent
+          // (FLOWS:825); FLOWS has it only for refused.
+          if (e.entry.settlementTx || (e.entry.state === 'uncertain' && seen.uncertain)) return;
           const vb = BigInt(e.entry.validBefore!);
           out(BUY.confirming(hms(vb), String(vb > e.chainNow ? vb - e.chainNow : 0n)));
           out(BUY.voidHint(e.entry.requestId));
