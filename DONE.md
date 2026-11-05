@@ -2298,3 +2298,25 @@ packages/cli test:  Test Files  73 passed (73)
 packages/cli test:       Tests  303 passed (303)
 ```
 reviewed: pending (adversary r54, then Codex)
+
+### T21 adversary r54 (failing test 78be856, fix 86ac770) - 2026-11-05
+Finding: a signed `attessa call` refused with HTTP 402 `payment_invalid{insufficient_funds}` (the facilitator's /verify: the wallet can't cover the price) printed the "Not paid" line and "Not charged" and exited 1, but never FLOWS §8 "payment invalid"'s one next action, "Add at least {n} USDC to {address}." (FLOWS:832 "Every error row has one next action").
+Fix (buyer.ts, copy.ts `BUY.addFunds`): after "Not charged" the call prints "Add at least {price} {asset} to {wallet}." when the refusal was `payment_invalid` / `insufficient_funds`. {n} is the price, which covers the call whatever the balance; the CLI does not read the token balance to show the exact shortfall.
+Leads from the adversary, not proven and left for r55: `agent register` writes docs/agent.json before it simulates or prompts; `attessa status` may not show spend today against the cap (FLOWS:851, :881).
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  74 passed (74)
+packages/cli test:       Tests  304 passed (304)
+```
+reviewed: pending (adversary r55, then Codex)
