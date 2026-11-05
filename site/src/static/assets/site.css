@@ -866,7 +866,8 @@ figure.term { margin: 0; border: 1px solid var(--line-2); background: rgba(7, 7,
 /* ---------- Use cases ---------- */
 /* One use at a time beside its particle object; "what the proof adds" set off under a rule in lime. */
 .uses-sec .beats { margin-top: 0; padding-top: 0; border-top: 0; }
-.use h2 { max-width: 17ch; font-size: clamp(2.2rem, 1rem + 3vw, 4.2rem); }
+/* anywhere: in a fallback face without Anybody's width axis, "RECOMMENDATIONS" is wider than a 390px column. */
+.use h2 { max-width: 17ch; font-size: clamp(2.2rem, 1rem + 3vw, 4.2rem); overflow-wrap: anywhere; }
 .use > p { margin-top: 18px; max-width: 32em; color: var(--text-2); font-size: 1.02rem; }
 .use .adds { margin-top: 26px; padding-top: 18px; max-width: 32em; border-top: 1px solid var(--line-2); color: var(--text); }
 .adds-k { display: block; margin-bottom: 10px; font: 500 11px/1 var(--mono); letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); }
