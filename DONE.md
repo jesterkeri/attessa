@@ -1345,3 +1345,15 @@ node site/build.mjs: exit 0
 # fail 0
 ```
 reviewed: pending (adversary r57, then Codex)
+
+### Site adversary r57 (failing test 7411472, fix b95b596) - 2026-11-05
+Finding: the r56 focusout fallback sent focus to the docs menu's first link, which at 860px and under sits at the top of the page (not sticky), so turning a tablet or snapping a window narrower with focus on an "On this page" link jumped a deep docs page to scrollY 0 (the brief's "lost or obscured focus"; site.js's own "give it back to something visible").
+Fix: the fallback focuses the first tab stop inside main that is fully on screen below the header (the docs menu's links come first in main, so over 860px, where the menu sticks, it is still "Overview"), else main, which does not scroll. Browser check with r57's probe/tocjump.mjs on the built dist: reference 1280x800 to 800x1280 and 1194x834 to 834x1194 keep scrollY (6488, 6691; no tab stop fully on screen there, focus on main, the next Tab starts at main's top); tutorial live 1280x800 to 768x1024 keeps 3604 with focus on an on-screen "Copy" button; explanation 1440x900 to 720x900 keeps 3531 on "KNOWN-LIMITS.md on GitHub". r56's focusrepeat.mjs: all four cases still end on "Overview", 3 of 3.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 184
+# pass 184
+# fail 0
+```
+reviewed: pending (adversary r58, then Codex)
