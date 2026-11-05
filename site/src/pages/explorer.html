@@ -36,7 +36,7 @@
   <section class="explorer-results" aria-label="Result">
     <div class="wrap">
       <div class="preview-bar">
-        <p><span class="preview-k">UI preview</span>Nothing is read from Celo yet, so results show sample slots. Pick a state to see each one. The rejected states need request-ID lookup and the call's proof, which are planned.</p>
+        <p><span class="preview-k">UI preview</span>Sample states, not a check of any transaction: pick one to see how each result looks, with sample slots. Nothing is read from Celo yet for the rejected states: they need request-ID lookup and the call's proof, which are planned.</p>
         <label class="sr-only" for="preview">Preview state</label>
         <select id="preview" data-preview>
           <option value="settled">Settled on Celo</option>
@@ -54,7 +54,7 @@
       <div class="result-grid" data-scene-sec="explorer" data-verdict="idle">
         <div class="scene-slot" data-slot aria-hidden="true"></div>
         <div class="result" data-result aria-live="polite">
-          <noscript><p class="muted">This preview needs JavaScript. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>. <span class="muted">Coming.</span> It isn't built yet.</p></noscript>
+          <noscript><p class="muted">The check and this preview need JavaScript. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>. <span class="muted">Coming.</span> It isn't built yet.</p></noscript>
         </div>
       </div>
     </div>
@@ -109,3 +109,5 @@
     </div>
   </section>
 </div>
+<!-- The live payment check. Not deferred, so it is defined before site.js (deferred) runs a ?q= check. -->
+<script src="{{root}}assets/explorer.js"></script>
