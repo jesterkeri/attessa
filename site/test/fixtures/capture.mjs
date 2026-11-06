@@ -87,20 +87,23 @@ else console.log('no transaction with more than one USDC transfer in the scanned
 
 // 2. A reverted transaction and a successful one that moves no USDC: walk recent blocks' receipts.
 let reverted = null, plain = null;
-for (let n = head, seen = 0; n > head - 3000n && seen < 3000 && !(reverted && plain); n--, seen++) {
-  let receipts;
-  try { receipts = await result('eth_getBlockReceipts', [`0x${n.toString(16)}`]); } catch (err) {
+// Blocks are read forty at a time: Forno answers each in about a second.
+const receiptsOf = async n => {
+  try { return await result('eth_getBlockReceipts', [`0x${n.toString(16)}`]); } catch {
     const block = await result('eth_getBlockByNumber', [`0x${n.toString(16)}`, false]);
-    receipts = [];
-    for (const tx of block.transactions) receipts.push(await result('eth_getTransactionReceipt', [tx]));
+    return Promise.all(block.transactions.map(tx => result('eth_getTransactionReceipt', [tx])));
   }
-  for (const r of receipts ?? []) {
+};
+const SCAN = BigInt(process.env.CAPTURE_SCAN_BLOCKS ?? 3000); // widen it when no transaction in the last 3000 blocks reverted
+for (let n = head; n > head - SCAN && !(reverted && plain); n -= 40n) {
+  const batch = await Promise.all(Array.from({ length: 40 }, (_, i) => receiptsOf(n - BigInt(i)).catch(() => [])));
+  for (const receipts of batch) for (const r of receipts ?? []) {
     if (!reverted && r.status === '0x0') reverted = r.transactionHash;
     const usdc = r.logs.some(l => l.address.toLowerCase() === USDC && l.topics[0] === TRANSFER);
     // Skip the chain's own deposit transactions (type 0x7e): a pasted settlement is never one.
     if (!plain && r.status === '0x1' && !usdc && r.type !== '0x7e') plain = r.transactionHash;
   }
-  await pause(60);
+  await pause(100);
 }
 if (reverted) await record('reverted', 'A real Celo Sepolia transaction that reverted (status 0x0). Found by reading recent blocks\' receipts.', reverted);
 else console.log('no reverted transaction in the scanned blocks: sepolia-reverted.json not written');
