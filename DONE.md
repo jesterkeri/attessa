@@ -2599,3 +2599,26 @@ pnpm@10.32.1 install ran no non-allowlisted install script: ok
 rc=0
 ```
 So @modelcontextprotocol/sdk 1.32.2 and its new transitive packages pass the allow-list. Not covered by tests yet: a successful `cancel_authorization`, and `get_result`/`status` on an open call (left for Codex r1).
+
+### T21b Codex r1 fixes - 2026-11-06
+
+Codex r1 (REVISE, 4 major, 2 minor) on 9f4c76a. Each defect got a failing test first (commits 5cc6c8e, fe271d8, 38bd213), then its fix:
+
+- Major 1 (scrub leaked short and encoded secrets): scrub now hides every non-empty configured secret of any length, raw, JSON-escaped, percent-encoded (both cases, + for space) and without 0x; tests go through the real result path.
+- Major 2 (verify_proof could not check the request): it takes `requestHash` or `request {method, pathAndQuery, body}`, hashes by SPEC 2.2 and compares with the proof (request_mismatch); the description no longer claims request binding.
+- Major 3 (notChecked incomplete): result has `scope: offline` and notChecked names signer, release, endpoint/agent/operator, payment binding, settlement, time anchors, expiry now, inputs block and values, plus any of request id, request hash, response hash, inputs hash not asked for. No chain read added (OPEN-QUESTIONS).
+- Major 4 (status/get_result sign payer messages, said they do not): descriptions say SIGNS A PAYER MESSAGE, readOnlyHint false; a spy test shows the payer signature on an open call and none from quote, resolve_endpoint, check_liveness, list_pending, verify_proof.
+- Minor 1 (get_result terminal failures had no copy): a call decided against the buyer is reported through the CLI stored-outcome report: FLOWS warning as message, last line as next, isError.
+- Minor 2 (untested paths): tests for a successful cancel_authorization (cancel tx, not_charged recorded) and an open call through list_pending, get_result and status (decided from chain evidence only). These passed on 9f4c76a: coverage, not a defect.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Duration  2.16s (transform 320ms, setup 280ms, collect 410ms, tests 1.23s, environment 0ms, prepare 69ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  13.62s (transform 2.21s, setup 31.84s, collect 16.93s, tests 105.57s, environment 25ms, prepare 8.53s)
+```
+reviewed: pending (Codex r2)
