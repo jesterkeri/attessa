@@ -1,5 +1,5 @@
 title: Tutorial: pay-if-verified on Celo Sepolia | Attessa
-description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: the buyer commands aren't built yet.
+description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet.
 
 Skip to content
 AttessaA check your agent runs
@@ -12,11 +12,11 @@ Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes Coming
+Pay-if-verified in 10 minutes
 How-tos
 All how-tos
 Run a seller
-Revoke a build or a signer Coming
+Revoke a build or a signer
 Use it from an MCP agent Coming
 Use it with buy Optional, not built yet
 Reference
@@ -32,7 +32,7 @@ Known limits
 Tutorial
 Pay-if-verified on Celo Sepolia in 10 minutes
 You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.
-Coming. The buyer commands aren't built yet. attessa init, attessa call and attessa verify are coming; until then, this tutorial shows what they will do.
+attessa init and attessa call are built. Coming. attessa verify isn't built yet, so the last step shows what it will do. The output shown for init and call is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.
 You need Node.js 22.13 or later, pnpm (corepack enable), git and a terminal. No browser wallet.
 Install
 Terminal
@@ -94,7 +94,8 @@ Copy
 → Refused: the answer doesn't match what the sealed machine signed (response hash differs from the proof)
 → Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…
 → Not charged: confirmed on Celo, your payment permission expired unused (block 31,204,245)
-Re-check it with attessa verify
+Re-check it with attessa verify Coming
+Coming. attessa verify isn't built yet; this step shows what it will do.
 Every call adds one line to your record, ~/.attessa/evidence.jsonl. The newest line is the call you just made, and its entry ID is the request ID: 0x followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.
 Terminal
 Copy

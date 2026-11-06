@@ -1,5 +1,5 @@
 title: How-tos | Attessa
-description: Run a seller. Coming: revoke a build or a signer, and use Attessa from an MCP agent. Optional, not built yet: use it with buy.
+description: Run a seller, and revoke a build or a signer. Coming: use Attessa from an MCP agent. Optional, not built yet: use it with buy.
 
 Skip to content
 AttessaA check your agent runs
@@ -12,11 +12,11 @@ Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes Coming
+Pay-if-verified in 10 minutes
 How-tos
 All how-tos
 Run a seller
-Revoke a build or a signer Coming
+Revoke a build or a signer
 Use it from an MCP agent Coming
 Use it with buy Optional, not built yet
 Reference
@@ -33,7 +33,7 @@ How-tos
 How-tos
 Short recipes for one job each. They assume you've done the tutorial or know the basics.
 Run a seller
-Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends. Coming. attessa agent register isn't built yet; the other five commands are.
+Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends. Every command in this guide is built.
 Register your agent's public identity (ERC-8004).
 On your AWS host, build the sealed machine image from the commit you'll publish.
 Approve that build on Celo.
@@ -60,7 +60,7 @@ Terminal
 Copy
 $ attessa release revoke <releaseId>
 $ attessa revoke signer <signerAddress>
-Coming. These commands, and attessa status, aren't built yet. Run them from the agent owner's wallet. attessa status --agent <id> lists your releases, endpoints and signers with their states.
+Run them from the agent owner's wallet. attessa status --agent <id> lists your releases, endpoints and signers with their states.
 Use Attessa from an MCP-capable agent
 Coming. The MCP server isn't built yet. The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.
 MCP client config

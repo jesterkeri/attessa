@@ -62,11 +62,11 @@ If any check fails (a tampered answer, a revoked build, a wrong signer), the gat
 → Refused: the answer doesn't match what the sealed machine signed (response hash differs from the proof)
 → Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…
 → Not charged: confirmed on Celo, your payment permission expired unused (block 31,204,245)
-Example output. risk.example and the hashes in it are illustrative. Coming. attessa init and attessa call aren't built yet.
+Example output. risk.example and the hashes in it are illustrative. Run it yourself with attessa init and attessa call (install from source).
 Seller's view
 01
 Register your agent
-Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. Coming. attessa agent register isn't built yet; the other five commands are.
+Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. Run attessa agent register to create it.
 $ attessa agent register --name "Acme risk check"
 → This creates your agent's public identity (ERC-8004) from this wallet. One transaction, about 0.05 CELO. [register/cancel]
 → Registered: agent 412 (tx 0x…). Next: attessa enclave build.

@@ -29,7 +29,7 @@ What the proof addsThe agent's rule becomes "pay only for answers that carry a v
 A proof shows which approved build produced an answer. It doesn't show the answer is correct: a bad answer is a rules problem you can read in the source. What it proves, and what it doesn't.
 Who it's for
 Buyer agents and their developers
-One SDK call, or one CLI command (Coming). Spending stays inside a limit per call and a cap per day.
+One SDK call, or one CLI command, attessa call (install from source). Spending stays inside a limit per call and a cap per day.
 Sellers of paid APIs
 Run your service in a sealed machine, approve the build on Celo, and buyers can check every answer you sell.
 Marketplaces like buy

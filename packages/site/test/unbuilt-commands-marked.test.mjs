@@ -25,14 +25,24 @@ const page = p => readFileSync(join(src, 'pages', p), 'utf8');
 const text = h => h.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
 const marked = /\b(coming|not built|isn't built|aren't built|not yet built|not available yet)\b/i;
 
-test('the reference and how-to mark these commands as not built (precondition)', () => {
-  assert.match(text(page('docs/reference.html')), /attessa verify <requestId> Coming/);
-  assert.match(text(page('docs/how-to.html')), /attessa agent register isn't built yet/);
+// T21 is ticked, so `attessa agent register` and `attessa call` are built (the reference no longer marks them). `attessa verify` (T21a) is
+// still marked, so a page that offers it must say it isn't built.
+test('the reference marks verify as not built and agent register as built (precondition)', () => {
+  const ref = text(page('docs/reference.html'));
+  assert.match(ref, /attessa verify <requestId> Coming/);
+  assert.doesNotMatch(ref, /attessa agent register Coming/);
+  assert.doesNotMatch(text(page('docs/how-to.html')), /attessa agent register isn't built yet/);
+});
+
+test('how-it-works offers attessa init, attessa call and attessa agent register as built, with no "not built" marker', () => {
+  const t = text(page('how-it-works.html'));
+  assert.match(t, /attessa agent register/);
+  assert.match(t, /attessa init and attessa call/);
+  assert.doesNotMatch(t, /\b(coming|isn't built|aren't built|not yet built)\b/i, 'how-it-works.html marks a built command as unbuilt');
 });
 
 for (const [p, offers] of [
   ['explorer.html', /You can run the same check with attessa verify <requestId>/],
-  ['how-it-works.html', /attessa agent register --name/],
 ]) {
   test(`${p} offers an unbuilt command, and says it isn't built`, () => {
     const t = text(page(p));

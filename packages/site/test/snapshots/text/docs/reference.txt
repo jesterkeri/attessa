@@ -12,11 +12,11 @@ Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes Coming
+Pay-if-verified in 10 minutes
 How-tos
 All how-tos
 Run a seller
-Revoke a build or a signer Coming
+Revoke a build or a signer
 Use it from an MCP agent Coming
 Use it with buy Optional, not built yet
 Reference
@@ -33,45 +33,45 @@ Reference
 Reference
 Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.
 CLI commands
-Rows marked Coming are planned but not built yet. Rows marked Optional may not ship.
+These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. Run attessa --help for the full list; --network sepolia is the only network Attessa is deployed on today.
 Buyer
 Command
 What it does
 attessa init
-Coming. Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. --network sepolia|mainnet.
+Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
 attessa call <url>
-Coming. Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. --body, --max-amount, --asset usdc|usat, --new, --no-wait, --dry-run (stops before signing), --json.
+Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. --body, --max-amount, --asset usdc|usat, --new, --no-wait, --out <file>, --keystore <file>, --dry-run (stops before signing), --json, --yes.
 attessa call --via buy <url>
 Optional, not built yet. Buys through buy and records what came back. No payment protection. --accept-unprotected skips the prompt for agents.
 attessa verify <requestId>
 Coming. Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.
 attessa cancel <requestId>
-Coming. Voids an unused payment permission on chain, for a little gas.
+Voids an unused payment permission on chain, for a little gas.
 attessa status
-Coming. Spend today against your cap, pending permissions, recent verdicts. --pending, --agent <id>, or an origin.
+Spend today against your cap, pending permissions, recent verdicts. --pending, --agent <id>, or an origin.
 attessa evidence export
-Coming. Exports your call records.
+Exports your call records. --format csv|jsonl.
 attessa release verify
 Optional, not built yet. Rebuilds a release from the source you name and compares its measurements.
 Seller
 Command
 What it does
 attessa agent register
-Coming. Creates your agent's ERC-8004 identity from this wallet.
+Creates your agent's ERC-8004 identity from this wallet.
 attessa agent transfer, wallet-sig, set-wallet
-Coming. Moves your agent to a cold owner wallet, then sets the agent wallet from it.
+Moves your agent to a cold owner wallet, then sets the agent wallet from it.
 attessa enclave build
 Builds the sealed machine image and writes its measurements. Refuses a dirty tree.
 attessa release approve
 Approves a build for your agent, with the source you claim it came from.
 attessa release deprecate
-Coming. Marks an approved build deprecated. It can be approved again later.
+Marks an approved build deprecated. It can be approved again later.
 attessa release revoke
-Coming. Permanently revokes a build. Its signers stop working within 60 s.
+Permanently revokes a build. Its signers stop working within 60 s.
 attessa endpoint add
 Registers the origin buyers call and the address they pay.
 attessa endpoint retire
-Coming. Stops selling at an origin.
+Stops selling at an origin.
 attessa enclave start
 Starts the sealed machine and writes AWS's attestation to att.bin. attessa signer register --fresh gets a new one.
 attessa signer register
@@ -79,11 +79,11 @@ Registers the machine's key on Celo. --fresh, --dry-run (estimates gas).
 attessa signer renew
 Renews a running signer without a restart.
 attessa revoke signer <addr>
-Coming. Permanently revokes a signer. Takes effect within 60 s.
+Permanently revokes a signer. Takes effect within 60 s.
 attessa selflink
-Coming. Links a Self Agent ID to your agent. Informational only.
+Links a Self Agent ID to your agent. Informational only.
 attessa gateway pause|resume|status|export
-Coming. Stops and restarts new paid calls at your gateway, shows its state, and exports its records.
+Stops and restarts new paid calls at your gateway, shows its state, and exports its records.
 Agent tools
 Coming. The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.
 Tool
@@ -154,19 +154,19 @@ The service claims to be a different agent than the registry says.
 Don't retry. Report it.
 over_max_amount R
 The price is above your limit per call.
-Coming: raise --max-amount if that's fine.
+raise --max-amount if that's fine.
 over_daily_cap R
 This call would take today's spend past your cap.
-Wait until 00:00 UTC. Coming: raise --daily-cap.
+Wait until 00:00 UTC. raise --daily-cap.
 endpoint_not_registered
 The origin isn't an attested endpoint.
 Ask the seller to register. Optional, not built yet: pay without protection with --via buy.
 endpoint_retired
 The owner stopped selling at this origin. Nothing was signed.
-Coming: attessa status --agent <id> lists current endpoints.
+attessa status --agent <id> lists current endpoints.
 liveness_failed
 The sealed machine didn't answer a fresh check.
-Retry later. Coming: attessa status <origin> shows when it last answered.
+Retry later. attessa status <origin> shows when it last answered.
 payment_invalid
 The payment permission was refused, for example for insufficient funds.
 Add funds to your address.
@@ -214,13 +214,13 @@ Too late to cancel: the payment went through.
 None: Attessa fetches your answer.
 payment_reused, request_id_conflict
 This request ID or permission was already used for a different call.
-Coming: call again with --new.
+call again with --new.
 in_progress
 This call is already running.
 None: it checks again in 2 s.
 result_not_found
 No stored result for this request ID. Results expire after 24 hours.
-Coming: attessa status --pending.
+attessa status --pending.
 bad_request
 The service can't read this input.
 Fix the input and call again.
@@ -235,10 +235,10 @@ Can't reach Celo. Before signing, the call stops and nothing is signed. While ch
 Retry or set another --rpc.
 max_amount_required
 No limit per call is set, so nothing was signed.
-Coming: run attessa init or pass --max-amount.
+run attessa init or pass --max-amount.
 no_wallet
 No wallet set up yet.
-Coming: run attessa init.
+run attessa init.
 attestation_stale R
 Seller: the machine's report is over 30 minutes old.
 attessa signer register --fresh.
@@ -271,7 +271,7 @@ Seller: the build measurements file can't be read. It should be the JSON that ni
 Pass the file nitro-cli wrote.
 release_exists R
 Seller: this build is already approved for the agent.
-None. Coming: attessa status shows it.
+None. attessa status shows it.
 endpoint_inactive R
 Seller: the origin isn't an active endpoint for the agent.
 Add it with attessa endpoint add.
@@ -280,7 +280,7 @@ Seller: attessa signer renew refused, for example because the signer already exp
 Expired: restart with attessa enclave start, then attessa signer register. Otherwise: run attessa signer renew on the machine that holds this key.
 self_link_invalid R
 Seller: the Self Agent ID must be held by this wallet (Self's linked mode) and have a current human proof.
-Coming: check it in the Self app, then run attessa selflink again.
+check it in the Self app, then run attessa selflink again.
 nsm_unavailable
 Seller: the machine couldn't get a signed report from AWS.
 Use an instance with enclaves enabled.

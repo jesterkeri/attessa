@@ -26,8 +26,13 @@ const marked = /\b(coming|planned|preview|not built|isn't built|aren't built|not
 // The docs landing page's cards, one per <a>.
 const cards = () => [...page('docs/index.html').matchAll(/<a href="([^"]+)">([\s\S]*?)<\/a>/g)].map(m => ({ href: m[1], t: text(m[2]) }));
 
-test('the tutorial and how-tos mark these surfaces as not built (precondition)', () => {
-  assert.match(text(page('docs/tutorial.html')), /Coming\. The buyer commands aren't built yet\./);
+// T21 is ticked (the buyer CLI: init, call, cancel, status, evidence export): the tutorial says so. What it still marks
+// Coming is T21a `attessa verify`; the how-to still marks the MCP server (T21b).
+test('the tutorial says init and call are built and verify is not; the how-to marks the MCP server not built (precondition)', () => {
+  const t = text(page('docs/tutorial.html'));
+  assert.match(t, /attessa init and attessa call are built\./);
+  assert.match(t, /Coming\. attessa verify isn't built yet/);
+  assert.doesNotMatch(t, /buyer commands aren't built yet/, 'the tutorial still calls the built buyer commands unbuilt');
   assert.match(text(page('docs/how-to.html')), /Coming\. The MCP server isn't built yet\./);
 });
 
@@ -43,8 +48,8 @@ for (const [href, offers] of [
   });
 }
 
-test('the tutorial meta description marks the call as not built yet', () => {
+test('the tutorial meta description marks the verify step as not built yet', () => {
   const d = page('docs/tutorial.html').match(/<!-- description: (.*?) -->/)?.[1] ?? '';
   assert.match(d, /Make your first pay-if-verified call on Celo Sepolia/, 'the description no longer offers it');
-  assert.match(d, marked, `the tutorial's meta description "${d}" offers a working call; the page says the buyer commands aren't built (TASKS.md T21)`);
+  assert.match(d, marked, `the tutorial's meta description "${d}" offers a working verify step; the page says attessa verify isn't built (TASKS.md T21a)`);
 });

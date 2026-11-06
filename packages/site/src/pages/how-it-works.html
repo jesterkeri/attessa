@@ -94,7 +94,7 @@
 <span class="ln"><span class="s">→</span> Not charged: confirmed on Celo, your payment permission expired unused  <span class="m">(block 31,204,245)</span></span></code></pre></figure>
         </li>
       </ol>
-      <p class="walk-note">Example output. <code>risk.example</code> and the hashes in it are illustrative. <span class="muted">Coming.</span> <code>attessa init</code> and <code>attessa call</code> aren't built yet.</p>
+      <p class="walk-note">Example output. <code>risk.example</code> and the hashes in it are illustrative. Run it yourself with <code>attessa init</code> and <code>attessa call</code> (<a href="docs/tutorial.html#install">install from source</a>).</p>
     </div>
 
     <div id="panel-seller" role="tabpanel" aria-labelledby="tab-seller" tabindex="0">
@@ -102,7 +102,7 @@
       <ol class="walk-steps" data-walk>
         <li class="walk-step" data-walk-step>
           <span class="walk-n" aria-hidden="true">01</span>
-          <div class="walk-copy"><h3>Register your agent</h3><p>Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. <span class="muted">Coming.</span> <code>attessa agent register</code> isn't built yet; the other five commands are.</p></div>
+          <div class="walk-copy"><h3>Register your agent</h3><p>Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. Run <code>attessa agent register</code> to create it.</p></div>
           <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa agent register --name "Acme risk check"</span></span>
 <span class="ln"><span class="k">→</span> This creates your agent's public identity (ERC-8004) from this wallet. One transaction, about 0.05 CELO.  <span class="m">[register/cancel]</span></span>
 <span class="ln"><span class="s">→</span> Registered: agent 412  <span class="m">(tx 0x…)</span>. Next: attessa enclave build.</span></code></pre></figure>

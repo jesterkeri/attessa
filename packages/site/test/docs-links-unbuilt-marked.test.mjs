@@ -37,16 +37,18 @@ const section = (page, id) => {
   return text(end < 0 ? rest : rest.slice(0, end));
 };
 
+// T21 is ticked: how-to.html#revoke (release revoke, revoke signer, status) is built and no longer marked. Still unbuilt: the MCP
+// server (T21b), buy (T29) and the agent tools.
 const UNBUILT = [
-  ['how-to.html', 'revoke', /Coming\. These commands, and attessa status ?, aren't built yet\./],
   ['how-to.html', 'mcp', /Coming\. The MCP server isn't built yet\./],
   ['how-to.html', 'buy', /Optional, not built yet\./],
   ['reference.html', 'tools', /Coming\. The MCP server isn't built yet\./],
 ];
 
-test('the target sections mark revoke, MCP, buy and the agent tools as not built (precondition)', () => {
+test('the target sections mark MCP, buy and the agent tools as not built; revoke and the tutorial are built (precondition)', () => {
   for (const [page, id, says] of UNBUILT) assert.match(section(page, id), says, `${page}#${id}`);
-  assert.match(text(read('pages/docs/tutorial.html')), /Coming\. The buyer commands aren't built yet\./);
+  assert.doesNotMatch(section('how-to.html', 'revoke'), /aren't built yet|Coming/, 'revoke is built (T21) and must not be marked');
+  assert.match(text(read('pages/docs/tutorial.html')), /attessa init and attessa call are built\./);
 });
 
 test('the tutorial closing card that offers the MCP server says it is not built', () => {
@@ -63,7 +65,7 @@ test('the docs menu marks each link whose target section is not built', () => {
   const nav = read('partials/docs-nav.html');
   const links = [...nav.matchAll(/<a href="\{\{root\}\}docs\/([^"#]+)(?:#([^"]+))?"[^>]*>([\s\S]*?)<\/a>/g)]
     .map(m => ({ page: m[1], id: m[2] ?? '', label: text(m[3]) }));
-  const targets = [...UNBUILT.map(([p, id]) => [p, id]), ['tutorial.html', '']];
+  const targets = UNBUILT.map(([p, id]) => [p, id]);
   const unmarked = targets
     .map(([p, id]) => {
       const l = links.find(x => x.page === p && x.id === id);
@@ -73,5 +75,14 @@ test('the docs menu marks each link whose target section is not built', () => {
     .filter(l => !marked.test(l.label))
     .map(l => `${l.page}${l.id ? '#' + l.id : ''}: "${l.label}"`);
   assert.deepEqual(unmarked, [],
-    'docs-nav.html (on every docs page) offers these as usable today, but each target says Coming / not built (TASKS.md T21, T21b, T29 unticked)');
+    'docs-nav.html (on every docs page) offers these as usable today, but each target says Coming / not built (TASKS.md T21b, T29 unticked)');
+});
+
+test('the docs menu does not mark the built tutorial or the built revoke recipe as Coming', () => {
+  const nav = read('partials/docs-nav.html');
+  for (const target of ['docs/tutorial.html"', 'docs/how-to.html#revoke"']) {
+    const li = nav.split('\n').find(l => l.includes(target));
+    assert.ok(li, `precondition: the docs menu links ${target}`);
+    assert.doesNotMatch(text(li), /\b(coming|not built)\b/i, `${target} is built (TASKS.md T21 ticked) but the menu marks it`);
+  }
 });

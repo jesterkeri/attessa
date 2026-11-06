@@ -12,11 +12,11 @@ Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes Coming
+Pay-if-verified in 10 minutes
 How-tos
 All how-tos
 Run a seller
-Revoke a build or a signer Coming
+Revoke a build or a signer
 Use it from an MCP agent Coming
 Use it with buy Optional, not built yet
 Reference
