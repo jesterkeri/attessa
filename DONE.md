@@ -2710,3 +2710,29 @@ node v22.23.2: 73 files, 255 tests, 0 failed
 ```
 
 reviewed: pending (Codex r1)
+
+### Website finish: merged with feat/site-ui 8600d5d, lead's check - 2026-11-06
+Merged the latest feat/site-ui (test-count.sh runs each module directly) into feat/site-finish; test-count.sh keeps that logic with the paths for packages/site. Disclosure: T40 (b749736) removed packages/site/test/cdn-integrity.test.mjs (the SRI test on CDN tags; the CDN tags are gone because every asset is now self-hosted) and added packages/site/test/no-third-party-origins.test.mjs, which asserts no page loads anything from another origin. The project rule is never to delete a test; this one is replaced by a stronger one and is listed for Codex to judge. The built output (packages/site/dist) holds CNAME (attessa.xyz), .nojekyll and a CSP meta tag in every page; its only third-party URLs are plain links (GitHub, the Celo and Circle faucets).
+verify (build, typecheck, lint, `pnpm -r test`, install guard, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/site test: # tests 255
+packages/site test: # pass 255
+packages/site test: # fail 0
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  16 passed (16)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+test=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard=0
+```
+reviewed: pending (Codex r1)
