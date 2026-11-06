@@ -2,7 +2,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, mkdirSync, cpSync, symlinkSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -63,4 +63,23 @@ test('site config: a bad contact, a past or far expiry, one value without the ot
     assert.notEqual(r.status, 0, JSON.stringify(cfg));
     assert.match(r.stderr, /site\.config\.json/);
   }
+});
+
+test('site config: the default config refuses to build without a security contact and expiry; SITE_CONFIG is the explicit local opt-out', () => {
+  // A copy of the package whose committed site.config.json has both values null.
+  const copy = join(tmp, 'pkg-copy');
+  mkdirSync(copy);
+  for (const f of ['build.mjs', 'csp.mjs', 'config.mjs', 'networks.json']) cpSync(join(pkg, f), join(copy, f));
+  cpSync(join(pkg, 'src'), join(copy, 'src'), { recursive: true });
+  symlinkSync(join(pkg, 'node_modules'), join(copy, 'node_modules'));
+  writeFileSync(join(copy, 'site.config.json'), JSON.stringify({ ...real, securityContact: null, securityTxtExpires: null }));
+  const env = { ...process.env, SITE_OUT: join(tmp, 'copy-out') };
+  delete env.SITE_CONFIG;
+  const refused = spawnSync(process.execPath, [join(copy, 'build.mjs')], { cwd: copy, encoding: 'utf8', env });
+  assert.notEqual(refused.status, 0, 'a default-config build with null contact must fail');
+  assert.match(refused.stderr, /securityContact and securityTxtExpires are null/);
+  const optedOut = spawnSync(process.execPath, [join(copy, 'build.mjs')], { cwd: copy, encoding: 'utf8', env: { ...env, SITE_CONFIG: join(copy, 'site.config.json') } });
+  assert.equal(optedOut.status, 0, optedOut.stderr);
+  // The committed config itself builds as the default.
+  assert.ok(real.securityContact && real.securityTxtExpires, 'the committed config carries both values');
 });

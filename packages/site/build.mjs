@@ -30,6 +30,9 @@ if (contactSet) {
   if (!/^(mailto:\S+@\S+|https:\/\/\S+|tel:\S+)$/.test(siteConfig.securityContact)) throw new Error('site.config.json: securityContact must be a mailto:, https: or tel: URI');
   const t = Date.parse(siteConfig.securityTxtExpires);
   if (!/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z)?$/.test(siteConfig.securityTxtExpires) || Number.isNaN(t) || t < Date.now() || t > Date.now() + 366 * 864e5) throw new Error('site.config.json: securityTxtExpires must be an ISO date in the future, within a year (RFC 9116)');
+} else if (!process.env.SITE_CONFIG) {
+  // The committed config is the publishable one: no contact or expiry, no build. A local build can opt out with SITE_CONFIG=<file>.
+  throw new Error('site.config.json: securityContact and securityTxtExpires are null. A production build needs both (RFC 9116); for a local build point SITE_CONFIG at a config file');
 } else if ((siteConfig.securityContact == null) !== (siteConfig.securityTxtExpires == null)) {
   throw new Error('site.config.json: set securityContact and securityTxtExpires together, or neither');
 }
