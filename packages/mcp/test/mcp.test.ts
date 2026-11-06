@@ -6,7 +6,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js';
 import { keccak256, stringToBytes, type Address } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeChain } from '../../sdk/test/fakes/chain.ts';
 import { FakeGateway } from '../../sdk/test/fakes/gateway.ts';
 import { createMcpServer, scrub } from '../src/index.ts';
@@ -383,5 +383,121 @@ describe('mcp: Codex r1 Major 3, notChecked names every skipped check', () => {
       ]),
     );
     expect(r.json.scope).toBe('offline');
+  });
+});
+
+/** Calls to a gateway's result endpoint that carried a payer signature (`X-Attest-Payer-Sig`), i.e. a wallet signature. */
+function spyPayerSigs() {
+  const real = globalThis.fetch;
+  const seen: string[] = [];
+  const spy = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+    const h = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+    if (url.includes('/v1/results/') && h.get('x-attest-payer-sig')) seen.push(url);
+    return real(input, init);
+  });
+  return { seen, restore: () => spy.mockRestore() };
+}
+
+describe('mcp: Codex r1 Major 4, tools that sign a payer message say so', () => {
+  it('status and get_result descriptions disclose the payer-message signature and are not marked read-only', async () => {
+    w = await world();
+    const { tools } = await w.client.listTools();
+    for (const n of ['status', 'get_result']) {
+      const t = tools.find((x) => x.name === n)!;
+      expect(t.description).toMatch(/signs a payer message/i);
+      expect(t.description).not.toMatch(/signs and spends nothing/i);
+      expect(t.annotations?.readOnlyHint).toBe(false);
+    }
+    for (const n of ['resolve_endpoint', 'check_liveness', 'verify_proof', 'list_pending']) {
+      expect(tools.find((x) => x.name === n)!.annotations?.readOnlyHint).toBe(true);
+    }
+  });
+
+  it('an open call: get_result and status each send a payer signature to the gateway (the disclosed behaviour)', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    expect(paid.json.outcome).not.toBe('verified');
+    const id = paid.json.requestId as string;
+    const spy = spyPayerSigs();
+    try {
+      const g = await w.tool('get_result', { requestId: id });
+      expect(g.json.requestId).toBe(id);
+      expect(spy.seen.length).toBeGreaterThan(0);
+    } finally {
+      spy.restore();
+    }
+  });
+
+  it('quote, resolve_endpoint, check_liveness, verify_proof and list_pending never send a payer signature', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    const spy = spyPayerSigs();
+    try {
+      await w.tool('quote', { url: w.url, body: w.body });
+      await w.tool('resolve_endpoint', { url: w.url });
+      await w.tool('check_liveness', { url: w.url });
+      await w.tool('list_pending');
+      await w.tool('verify_proof', vectorArgs());
+      expect(spy.seen).toEqual([]);
+    } finally {
+      spy.restore();
+    }
+  });
+});
+
+describe('mcp: Codex r1 Minor 1, a terminal failed outcome from get_result is the FLOWS row with a next action', () => {
+  it('settled_after_refusal: isError, the FLOWS warning as message, one next action', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'refuse_but_settle' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    const id = paid.json.requestId as string;
+    await w.tool('cancel_authorization', { requestId: id }); // too late: decides the call settled_after_refusal
+    expect(w.pending()[0]).toMatchObject({ state: 'settled_after_refusal' });
+    const g = await w.tool('get_result', { requestId: id });
+    expect(g.isError).toBe(true);
+    expect(g.json.ok).toBe(false);
+    expect(g.json.outcome ?? g.json.state).toBe('settled_after_refusal');
+    expect(g.json.message).toMatch(/the service refused this call, but your payment permission was used anyway/);
+    expect(typeof g.json.next).toBe('string');
+    expect(g.json.next.length).toBeGreaterThan(5);
+  });
+});
+
+describe('mcp: Codex r1 Minor 2, cancel and open-call paths', () => {
+  it('cancel_authorization on a refused open call sends the cancel and records not_charged', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'refuse' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    const id = paid.json.requestId as string;
+    expect(w.pending()[0]).toMatchObject({ requestId: id });
+    expect(w.pending()[0]!.state).not.toBe('not_charged');
+    const c = await w.tool('cancel_authorization', { requestId: id });
+    expect(c.isError).toBe(false);
+    expect(c.json).toMatchObject({ ok: true, requestId: id, outcome: 'not_charged', code: 'cancelled' });
+    expect(c.json.cancelTx).toMatch(/^0x[0-9a-f]{64}$/);
+    expect(w.pending()[0]).toMatchObject({ state: 'not_charged', code: 'cancelled' });
+    const again = await w.tool('get_result', { requestId: id });
+    expect(again.json.state).toBe('not_charged');
+  });
+
+  it('an open call is listed, then decided by status from chain evidence only', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    const id = paid.json.requestId as string;
+    const list = await w.tool('list_pending');
+    expect(list.json.pending.map((e: { requestId: string }) => e.requestId)).toEqual([id]);
+    expect(['settle_pending', 'uncertain', 'refused', 'signed']).toContain(list.json.pending[0].state);
+    const s = await w.tool('status');
+    // Nothing settled on the fake chain, and its clock passed validBefore during the reconcile: the chain decides not_charged,
+    // with the block that decided it, and never `verified`.
+    expect(s.json.pending).toHaveLength(1);
+    expect(s.json.pending[0]).toMatchObject({ requestId: id, outcome: 'not_charged' });
+    expect(s.json.pending[0].confirmedAtBlock).toMatch(/^\d+$/);
+    expect(s.json.pending[0].settlementTx).toBeUndefined();
+    expect(w.pending()[0]).toMatchObject({ state: 'not_charged' });
   });
 });
