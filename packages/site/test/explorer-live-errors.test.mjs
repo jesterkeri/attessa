@@ -115,6 +115,33 @@ test('malformed receipts (each the real one with one field broken) are refused, 
   }
 });
 
+// Codex site-finish r2 M1: SPEC §6.2 V11 needs AuthorizationUsed and the Transfer in the same transaction. Every log
+// the check uses must name this transaction (and, when it says, this block); one that doesn't is a forged answer.
+test('a spliced or unanchored AuthorizationUsed or Transfer log is refused, never shown as settled', async () => {
+  const real = fixture('x402settled');
+  const at = m => real.calls.find(c => c.request.method === m).response.result;
+  const base = at('eth_getTransactionReceipt');
+  const block = at('eth_getBlockByNumber');
+  const is = topic => l => l.address.toLowerCase() === net.tokens[0].address && l.topics[0].toLowerCase() === topic;
+  const AUTH_USED = '0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5'; // AuthorizationUsed(address,bytes32), EIP-3009
+  const iA = base.logs.findIndex(is(AUTH_USED));
+  const iT = base.logs.findIndex(is(live.TRANSFER));
+  assert.ok(iA >= 0 && iT >= 0, 'the recorded settlement has both logs');
+  const mutate = (i, f) => { const r = structuredClone(base); f(r.logs[i]); return r; };
+  const cases = {
+    'AuthorizationUsed from another transaction': mutate(iA, l => { l.transactionHash = `0x${'00'.repeat(32)}`; }),
+    'AuthorizationUsed with no transaction hash': mutate(iA, l => { delete l.transactionHash; }),
+    'AuthorizationUsed from another block': mutate(iA, l => { l.blockHash = `0x${'cd'.repeat(32)}`; }),
+    'Transfer with no transaction hash': mutate(iT, l => { delete l.transactionHash; }),
+    'Transfer from another block': mutate(iT, l => { l.blockHash = `0x${'cd'.repeat(32)}`; }),
+  };
+  for (const [what, receipt] of Object.entries(cases)) {
+    const fetch = scripted(req => ok(req.method === 'eth_chainId' ? CHAIN : req.method === 'eth_getTransactionReceipt' ? receipt : block)(req));
+    const o = await live.check(real.txHash, 'sepolia', { fetch });
+    assert.equal(o.kind, 'badanswer', `${what}: ${o.kind}`);
+  }
+});
+
 test('a block that is not the receipt\'s block is refused (each the real one with one field broken)', async () => {
   const real = fixture('x402settled');
   const at = m => real.calls.find(c => c.request.method === m).response.result;
