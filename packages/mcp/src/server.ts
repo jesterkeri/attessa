@@ -84,7 +84,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'verify_proof',
     description:
-      'Check an X-Attested-Proof header offline: signature, request binding, proof lifetime and, if you pass the response text, its response and inputs hashes. Does not read the chain, so it cannot say the signing key is still active; the result lists what was not checked. No wallet, signs and spends nothing.',
+      'Check an X-Attested-Proof header OFFLINE, with no chain read: signature recovery against the registry address, the fixed proof lifetime, and, for each argument you pass, the request id, the request hash (give `requestHash` or `request` {method, pathAndQuery, body}), the response hash and the inputs hash (give `response`). Everything else a paid call is checked for (signer and release status on the chain, payment binding, settlement, time anchors, expiry now, inputs block and values) is listed in `notChecked`: a success is NOT a verified paid result. No wallet, signs and spends nothing.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -93,6 +93,14 @@ export const TOOLS: Tool[] = [
         registry: { type: 'string', pattern: '^0x[0-9a-fA-F]{40}$', description: 'EnclaveRegistry address; defaults to the pinned one for chainId.' },
         response: { type: 'string', description: 'The exact response body text the proof should cover.' },
         requestId: REQUEST_ID_SCHEMA,
+        requestHash: { type: 'string', pattern: '^0x[0-9a-f]{64}$', description: 'The request hash you expect (SPEC §2.2: keccak256 of METHOD, 0x00, path and query, 0x00, body).' },
+        request: {
+          type: 'object',
+          description: 'The request you made, hashed as SPEC §2.2 and compared with the proof.',
+          properties: { method: { type: 'string' }, pathAndQuery: { type: 'string', description: 'Starts with /.' }, body: { type: 'string', description: 'The exact request body text.' } },
+          required: ['method', 'pathAndQuery', 'body'],
+          additionalProperties: false,
+        },
       },
       required: ['proof', 'chainId'],
       additionalProperties: false,
@@ -325,7 +333,16 @@ export function createMcpServer(opts: ServerOptions): Server {
         if (!registry) throw new CliError('no_registry', `No EnclaveRegistry is pinned for chain ${chainId}.`, 'Pass the registry address you expect as `registry`.');
         const requestId = str(a, 'requestId')?.toLowerCase();
         if (requestId !== undefined && !REQUEST_ID.test(requestId)) throw ERR.usage('requestId must be 0x followed by 64 hex characters.');
-        const res = await verifyProof({ proof, chainId, registry, response: str(a, 'response'), requestId }, registry);
+        const requestHash = str(a, 'requestHash')?.toLowerCase();
+        if (requestHash !== undefined && !REQUEST_ID.test(requestHash)) throw ERR.usage('requestHash must be 0x followed by 64 hex characters.');
+        let request: { method: string; pathAndQuery: string; body: string } | undefined;
+        if (a.request !== undefined) {
+          const q = a.request as Record<string, unknown>;
+          if (typeof q !== 'object' || q === null || typeof q.method !== 'string' || typeof q.pathAndQuery !== 'string' || typeof q.body !== 'string' || !q.pathAndQuery.startsWith('/'))
+            throw ERR.usage('request needs a method, a pathAndQuery that starts with /, and a body (all text).');
+          request = { method: q.method, pathAndQuery: q.pathAndQuery, body: q.body };
+        }
+        const res = await verifyProof({ proof, chainId, registry, response: str(a, 'response'), requestId, requestHash, request }, registry);
         if (res.ok) return text(env, res);
         const words = CHECK_WORDS[res.check!]?.[0] ?? res.check;
         return text(env, { ...res, error: 'proof_rejected', message: `The proof failed a check: ${safe(words ?? 'unnamed')}.`, next: "Don't use this answer. If you paid for it, run `get_result` with its request id to see what was charged." }, true);
