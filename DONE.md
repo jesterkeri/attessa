@@ -2569,3 +2569,28 @@ packages/cli test:       Tests  338 passed (338)
 test=0
 ```
 reviewed: pending (Codex r3)
+
+### T21 Codex r3 fixes - 2026-11-06
+Codex r3 (reviews/t21-cli-review-r3.md, on d4567fc): REVISE, 2 major.
+- M1: a dry run (or a run with no wallet) prints the calldata of `release approve --source` and `agent register --uri`, which holds the URL as given. The CLI now refuses a URL with a user name, password, query or fragment before anything is read, encoded or signed (`secret_in_url`), since it would be published on Celo for good.
+- M2: `status --agent` printed and returned on-chain source refs and endpoint origins raw. Source refs are cleaned (no userinfo, query or fragment) and origins shown as scheme://host[:port], in text and --json alike. URL paths stay visible; OPEN-QUESTIONS records why and asks Joshua.
+Tests: packages/cli/test/codex-t21-r3.test.ts (4); all 4 fail on d4567fc and pass here.
+Codex's own r3 run failed in its environment (core tests failed with no test named; CLI tests timed out at 20 s); the same commands pass here, below.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  86 passed (86)
+packages/cli test:       Tests  342 passed (342)
+test=0
+```
+reviewed: pending (Codex r4)

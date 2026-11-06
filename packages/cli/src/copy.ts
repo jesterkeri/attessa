@@ -74,6 +74,28 @@ export function sourceLabel(sourceRef: string): string {
 }
 
 /**
+ * A URL the CLI is about to publish on Celo (a release's `--source`, an agent's `--uri`): anything published stays
+ * public for good, so a user name, password, query or fragment is refused before anything is encoded or signed.
+ */
+export function refuseSecretUrl(value: string | undefined, flag: string): void {
+  if (value === undefined) return;
+  let u: URL | null;
+  try {
+    u = new URL(value);
+  } catch {
+    u = null;
+  }
+  const secret = u ? u.username !== '' || u.password !== '' || u.search !== '' || u.hash !== '' : /\/\/[^/@\s]*@/.test(value);
+  if (secret) {
+    throw new CliError(
+      'secret_in_url', // not in FLOWS
+      `${flag} would be published on Celo for good, and it has a user name, password, query or fragment in it. Nothing was signed.`,
+      `Pass ${flag} with only its scheme, host and path.`,
+    );
+  }
+}
+
+/**
  * A URL-like text as it may be printed: a parsable URL keeps scheme, host and path but loses its userinfo, query
  * and fragment (where tokens ride); free text loses anything shaped like `//user:secret@` or `?…`/`#…`.
  */

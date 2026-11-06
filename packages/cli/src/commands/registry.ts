@@ -11,7 +11,7 @@ import {
 } from 'viem';
 import { AGENT_WALLET_SET_TYPES, ENDPOINT_STATUS, IDENTITY_ABI, REGISTRY_ABI, REGISTRY_EVENTS, RELEASE_STATUS, SIGNER_STATUS } from '../abi.ts';
 import { connect, type Chain, type Deps, type Global } from '../context.ts';
-import { CliError, ERR, OWN, OWNERR, celo, host, safe, short, sourceLabel, utcShort } from '../copy.ts';
+import { CliError, ERR, OWN, OWNERR, celo, host, rpcShownSafe, safe, short, sourceLabel, utcShort, withoutCredentials } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Revert, type Step } from '../tx.ts';
 import { ownerOf, parseAgent } from './owner.ts';
@@ -409,7 +409,8 @@ export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | u
     const rid = ev.args.releaseId as Hex;
     if (releases.some((r) => r.releaseId === rid)) continue;
     const r = await read(c, c.registry, REGISTRY_ABI, 'releases', [agentId, rid]);
-    releases.push({ releaseId: rid, status: RELEASE_STATUS[r.status as number]!, sourceRef: ev.args.sourceRef as string });
+    // Read from chain, shown and returned without userinfo, query or fragment (text and --json alike).
+    releases.push({ releaseId: rid, status: RELEASE_STATUS[r.status as number]!, sourceRef: withoutCredentials(ev.args.sourceRef as string) });
   }
   const endpoints: Array<{ origin: string; originHash: Hex; status: string; payTo: string; operator: string }> = [];
   for (const ev of await events(c, 'EndpointAdded', { agentId })) {
@@ -417,7 +418,8 @@ export async function agentStatus(g: Global, deps: Deps, o: { agent?: string | u
     const e = await read(c, c.registry, REGISTRY_ABI, 'endpoints', [oh]);
     // An origin retired and re-added by another agent belongs to that agent now.
     if ((e.agentId as bigint) !== agentId || endpoints.some((x) => x.originHash === oh)) continue;
-    endpoints.push({ origin: ev.args.origin as string, originHash: oh, status: ENDPOINT_STATUS[e.status as number]!, payTo: (e.payTo as string).toLowerCase(), operator: (e.operator as string).toLowerCase() });
+    // The registry accepts any https:// text as an origin; shown and returned as scheme://host[:port] only.
+    endpoints.push({ origin: rpcShownSafe(ev.args.origin as string, '(an origin that is not a URL)'), originHash: oh, status: ENDPOINT_STATUS[e.status as number]!, payTo: (e.payTo as string).toLowerCase(), operator: (e.operator as string).toLowerCase() });
   }
   const signers = [];
   for (const ev of await events(c, 'SignerRegistered', { agentId })) {

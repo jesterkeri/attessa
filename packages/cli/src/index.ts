@@ -16,7 +16,7 @@ import {
 } from './commands/registry.ts';
 import { signerRegister, signerRenew } from './commands/signer.ts';
 import type { Deps, Global, NetworkFlag } from './context.ts';
-import { COPY, CliError, diskError, jsonOut, unexpected } from './copy.ts';
+import { COPY, CliError, diskError, jsonOut, refuseSecretUrl, unexpected } from './copy.ts';
 
 export * from './context.ts';
 export * from './copy.ts';
@@ -179,6 +179,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
       case 'evidence export':
         return finish(await evidenceExport(g, d, { format: str(v, 'format') }));
       case 'agent register':
+        refuseSecretUrl(str(v, 'uri'), '--uri');
         return finish(await agentRegister(g, d, { name: str(v, 'name'), description: str(v, 'description'), uri: str(v, 'uri') }));
       case 'agent transfer':
         return finish(await agentTransfer(g, d, { agent: str(v, 'agent'), to: str(v, 'to') }));
@@ -211,6 +212,7 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
           } as never),
         );
       case 'release approve':
+        refuseSecretUrl(str(v, 'source'), '--source');
         return finish(await releaseApprove(g, d, { agent: str(v, 'agent'), fromBuild: str(v, 'from-build'), source: str(v, 'source') } as never));
       case 'endpoint add':
         return finish(await endpointAdd(g, d, { agent: str(v, 'agent'), origin: str(v, 'origin'), payTo: str(v, 'pay-to'), operator: str(v, 'operator') } as never));
