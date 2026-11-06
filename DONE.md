@@ -2736,3 +2736,11 @@ pnpm@10.32.1 install ran no non-allowlisted install script: ok
 guard=0
 ```
 reviewed: pending (Codex r1)
+
+### Website: security contact filled in (Joshua) - 2026-11-06
+packages/site/site.config.json: `securityContact` `mailto:attessa7@gmail.com` (Joshua, 2026-11-06), `securityTxtExpires` `2027-11-05T00:00:00Z` (within RFC 9116's year). The built /.well-known/security.txt now has Contact and Expires; security.html drops the "placeholder fields" clause (the one-line snapshot diff in packages/site/test/snapshots/text/security.txt). test/site-config.test.mjs: the committed-config test now checks these values; the no-contact test builds with both set to null through SITE_CONFIG, so that path keeps its coverage.
+verify (`./packages/site/test-count.sh`, exit 0):
+```
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+reviewed: pending (Codex r2)

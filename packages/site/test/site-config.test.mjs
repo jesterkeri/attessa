@@ -21,14 +21,15 @@ const build = cfg => {
 };
 const year = () => new Date(Date.now() + 200 * 864e5).toISOString().slice(0, 10);
 
-test('site config: the committed config names the origin and leaves contact and expiry unset, never invented', () => {
+test('site config: the committed config names the origin and the contact Joshua gave (2026-11-06), with an expiry within a year', () => {
   assert.equal(real.siteOrigin, 'https://attessa.xyz');
-  assert.equal(real.securityContact, null);
-  assert.equal(real.securityTxtExpires, null);
+  assert.equal(real.securityContact, 'mailto:attessa7@gmail.com');
+  const t = Date.parse(real.securityTxtExpires);
+  assert.ok(t > Date.now() && t <= Date.now() + 366 * 864e5, real.securityTxtExpires);
 });
 
 test('site config: with no contact, security.txt says so and no page or file carries a {placeholder}', () => {
-  const r = build(real);
+  const r = build({ ...real, securityContact: null, securityTxtExpires: null });
   assert.equal(r.status, 0, r.stderr);
   const txt = readFileSync(join(r.dir, '.well-known', 'security.txt'), 'utf8');
   assert.doesNotMatch(txt, /\{\w+\}/);

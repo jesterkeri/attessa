@@ -66,7 +66,7 @@ Paying through buy has no payment protection: buy takes payment before the servi
 Confirming "not charged" after a refusal takes up to about two minutes, or a little gas to cancel sooner.
 All known limits, explained, or the full list with when each will be revisited in KNOWN-LIMITS.md on GitHub.
 Report a problem
-Security contacts are in /.well-known/security.txt, which still has placeholder fields: its contact is published before launch. See also the privacy notice and the terms.
+Security contacts are in /.well-known/security.txt. See also the privacy notice and the terms.
 Attessa
 A check your agent runs before paying for a service. Built for Celo.
 GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
