@@ -1,0 +1,75 @@
+title: Security and limits | Attessa
+description: Attessa's contracts and addresses, how changes are reviewed, its admin keys, and the known limits.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Security
+and limits
+What's deployed on Celo, how changes are reviewed, who holds which keys, and what Attessa doesn't cover.
+On this page
+Contracts How changes are reviewed Who holds which keys Known limits Report a problem
+Contracts
+Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Ours are live on Celo Sepolia; our Celo mainnet addresses fill in once deployed.
+Contract
+What it does
+Celo Sepolia
+Celo mainnet
+Attessa registry
+Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.
+0x42Bf…92fF
+After launch
+Nitro validator
+Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.
+0x72B0…24db
+After launch
+Certificate manager
+Caches AWS's certificates so registering a signer costs less.
+0x29F2…F7fd
+After launch
+P-384 verifier
+Verifies the P-384 signatures in AWS's certificates for the two contracts above.
+0xd26C…a84E
+After launch
+ERC-8004 identity registry
+The agent identity registry. Not ours, and upgradeable by whoever holds its keys.
+0x8004…BD9e
+0x8004…a432
+Self Agent ID registry
+Links a person-verified ID to an agent. Shown for information only, never part of the check. Not ours, and upgradeable.
+0x043D…d379
+0xaC3D…5944
+A deploy check confirms that each of our four contracts' code on chain matches the compiled production build, and that they point at each other.
+How changes are reviewed
+Attacked first
+An adversarial test writer tries to break the code with failing tests, in rounds. The rounds and what they found are logged in DONE.md.
+Then a second model
+A second model then reviews each task's diff. Its finished reviews are in the reviews folder.
+No AI in the check
+Whether a call is paid is decided by signatures, registry reads and re-reads of the Celo inputs alone.
+The code and its review records are public: the reviews folder and DONE.md on GitHub.
+Who holds which keys
+The Attessa registry has no admin. Nobody can change its rules after deploy.
+Each agent's owner approves and revokes that agent's builds and endpoints, from their own wallet.
+The certificate manager's owner is a single offline key for now; a 2-of-3 Safe is planned. Its only power is revoking cached AWS certificates, which can block new signer registrations. Existing signers keep working, and it can't forge an attestation.
+The signing key inside each sealed machine never leaves it. A restart makes a new one, which has to be registered again.
+Known limits
+A proof shows which approved build produced an answer. It doesn't show the answer is correct, or that the service is available.
+The link from a build to its source code is the owner's claim until someone reproduces the build.
+In the demo, the gateway is run by the seller's side, so its protection rests on the short payment window, cancel, the registered pay-to address, your own re-check, and the on-chain "not charged" confirmation.
+Request bodies are visible to the gateway and to the server the sealed machine runs on.
+Paying through buy has no payment protection: buy takes payment before the service runs.
+Confirming "not charged" after a refusal takes up to about two minutes, or a little gas to cancel sooner.
+All known limits, explained, or the full list with when each will be revisited in KNOWN-LIMITS.md on GitHub.
+Report a problem
+Security contacts are in /.well-known/security.txt, which still has placeholder fields: its contact is published before launch. See also the privacy notice and the terms.
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

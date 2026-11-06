@@ -1,0 +1,65 @@
+title: Docs | Attessa
+description: Attessa developer docs: a tutorial, how-tos, reference and explanation.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Docs menu
+Start
+Overview
+Tutorial
+Pay-if-verified in 10 minutes Coming
+How-tos
+All how-tos
+Run a seller
+Revoke a build or a signer Coming
+Use it from an MCP agent Coming
+Use it with buy Optional, not built yet
+Reference
+Reference
+CLI commands
+Agent tools Coming
+SDK payAndVerify
+Refusal codes
+Explanation
+What it proves
+Threat model
+Known limits
+Attessa docs
+Attessa is a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with. The docs come in four kinds. Pick the one that matches what you need right now.
+TutorialMake your first pay-if-verified call on Celo Sepolia, in about 10 minutes. Coming: the buyer commands aren't built yet. How-tosRun a seller. Coming: revoke a build, use Attessa from an MCP agent. Optional, not built yet: use it with buy. ReferenceCLI commands, the nine agent tools, SDK options and every refusal code. ExplanationWhat a proof shows and doesn't, the threat model, and known limits.
+Words used in these docs
+Word
+Meaning
+Attested
+The answer carries a proof.
+Verified
+A proof passed every check against the registry.
+Unattested
+No proof was offered, so there is nothing to check.
+Rejected
+A named check failed.
+Approved build
+A build the agent's owner approved on Celo. In the contracts and SDK it's a release, identified by the measurements PCR0 to PCR2.
+Sealed machine
+An AWS Nitro enclave: its running code is measured, and the operator can't log in or change it.
+Signer
+The key a sealed machine makes when it starts, registered on Celo with AWS's attestation.
+Proof
+An EIP-712 signature by the signer that binds a request, its answer, the inputs and the payment to the approved build.
+Pay, settle
+Pay is the plain word. Settle is the technical step: the gateway takes the payment on chain.
+Cancel
+Void an unused payment permission on chain before it expires.
+On this page
+Words used in these docs
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

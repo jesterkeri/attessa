@@ -1,0 +1,14 @@
+{
+  "name": "@attessa/site",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "node build.mjs",
+    "lint": "tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js",
+    "typecheck": "tsc -p . --noEmit",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

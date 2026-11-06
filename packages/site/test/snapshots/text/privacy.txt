@@ -1,0 +1,26 @@
+title: Privacy | Attessa
+description: What the Attessa site does with your data today, ahead of the full privacy notice.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Privacy
+The full privacy notice goes here before launch. Until then, this is what the site does today.
+Draft
+What this site does today
+No accounts. There's no sign-in, and Attessa sets no cookies.
+Your network choice is saved in your browser's local storage, on your device only. Until Attessa launches on Celo mainnet, Celo Sepolia is the only choice.
+Fonts and scripts load from Google Fonts, cdnjs, jsDelivr and unpkg, so those services see your IP address when a page loads.
+The proof explorer is a preview: it reads nothing from Celo yet and shows sample results. When live, it will read public Celo data for the transaction you paste, with no wallet.
+When you make a call
+Calls go from your own computer to the service you choose, never through this site. The service's gateway can read the request body you send. The Attessa gateway keeps the answer it sends you for 24 hours after it delivers or settles the call, then deletes it. It keeps each call's row, with your wallet address, the amount, the call's state and its settlement transaction, until 2026-12-31, then deletes it. It never stores your IP address. Your record of each call stays on your computer, in ~/.attessa/evidence.jsonl.
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

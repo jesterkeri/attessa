@@ -1,0 +1,24 @@
+title: Terms | Attessa
+description: Attessa terms of use, ahead of launch.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Terms
+The terms of use go here before launch. Until then, a few plain facts about using Attessa.
+Draft
+Before you use it
+Celo Sepolia uses test money with no value. Once Attessa launches on Celo mainnet, use --network mainnet only when you mean to pay real money.
+A proof shows which approved build produced an answer, not that the answer is right. What a proof shows, and what it doesn't.
+Payments on chain can't be reversed. Through buy, payment is taken before the service runs, so Attessa can't protect it.
+The code is public at github.com/jesterkeri/attessa.
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

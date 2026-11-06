@@ -1,0 +1,97 @@
+title: How-tos | Attessa
+description: Run a seller. Coming: revoke a build or a signer, and use Attessa from an MCP agent. Optional, not built yet: use it with buy.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Docs menu
+Start
+Overview
+Tutorial
+Pay-if-verified in 10 minutes Coming
+How-tos
+All how-tos
+Run a seller
+Revoke a build or a signer Coming
+Use it from an MCP agent Coming
+Use it with buy Optional, not built yet
+Reference
+Reference
+CLI commands
+Agent tools Coming
+SDK payAndVerify
+Refusal codes
+Explanation
+What it proves
+Threat model
+Known limits
+How-tos
+How-tos
+Short recipes for one job each. They assume you've done the tutorial or know the basics.
+Run a seller
+Sell an API that buyers can check before paying: you approve a build of your code, run it in a sealed AWS machine, and register that machine's key on Celo. Every transaction shows its CELO cost and asks before it sends. Coming. attessa agent register isn't built yet; the other five commands are.
+Register your agent's public identity (ERC-8004).
+On your AWS host, build the sealed machine image from the commit you'll publish.
+Approve that build on Celo.
+Add the endpoint buyers will call and the address they'll pay.
+Start the sealed machine.
+Register its signer, within 30 minutes of starting it.
+Seller commands
+Copy
+$ attessa agent register --name "Acme risk check"
+$ attessa enclave build
+$ attessa release approve --agent 412 --from-build build/measurements.json --source https://github.com/acme/risk/commit/a1b2c3d
+$ attessa endpoint add --agent 412 --origin https://risk.example --pay-to 0xGATE…01
+$ attessa enclave start --agent 412 --origin https://risk.example
+$ attessa signer register --agent 412 --attestation att.bin
+Use an enclave-enabled instance. For example c6g.xlarge with --enclave-options Enabled=true. Debug mode isn't accepted: AWS doesn't sign for it.
+A signer is valid until its expiry or until the machine restarts. Renew a running one with attessa signer renew. After a restart, the machine has a new key, so run attessa enclave start and attessa signer register again.
+If registration is refused
+The report is too old. Celo accepts reports up to 30 minutes old. Run attessa signer register --fresh on the same machine; no restart needed.
+Wrong build. The machine runs a build your agent hasn't approved. Approve it with attessa release approve, or start the approved build.
+Debug mode. Start the machine without --debug-mode.
+Revoke a build or a signer
+Revoking a build stops buyers paying for answers from it. Its live signers stop working within 60 seconds, and your endpoint refuses calls until you approve and register another build. Revoking is permanent.
+Terminal
+Copy
+$ attessa release revoke <releaseId>
+$ attessa revoke signer <signerAddress>
+Coming. These commands, and attessa status, aren't built yet. Run them from the agent owner's wallet. attessa status --agent <id> lists your releases, endpoints and signers with their states.
+Use Attessa from an MCP-capable agent
+Coming. The MCP server isn't built yet. The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. Keys come from your environment or keystore and never appear in tool output.
+MCP client config
+Copy
+{
+"mcpServers": {
+"attessa": {
+"command": "node",
+"args": ["/path/to/attessa/packages/mcp/dist/bin.js"]
+}
+}
+}
+Two tools have side effects, and say so in their descriptions: pay_and_verify signs a payment within your bounds, and cancel_authorization sends a transaction. The full list is in the reference.
+Use it with buy
+Optional, not built yet. buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.
+Example output
+Copy
+$ attessa call --via buy https://<buy-capability>
+→ Price: 0.005 USDC. buy (usebuy.ai, Celo's pay-per-call API marketplace) takes payment before the service runs, so this call isn't protected by the check: you pay even if the answer fails it. [pay/cancel]
+→ Paid 0.005 USDC through buy (tx 0x…)
+→ No proof offered: this service doesn't say which code produced its answer, so it can't be checked (unattested)
+Answer saved. Record: ~/.attessa/evidence.jsonl
+No payment protection in this mode. buy has no refunds. If a service fails after payment, your record has the transaction to show buy.
+On this page
+Run a seller
+Revoke a build or a signer
+Use it from an MCP agent
+Use it with buy
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

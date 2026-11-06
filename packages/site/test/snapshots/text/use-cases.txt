@@ -1,0 +1,43 @@
+title: Use cases | Attessa
+description: Where paying only for attested answers matters: DeFi risk checks, yield and route recommendations, payment-risk checks, and agents buying data.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Where a proof
+changes what
+you pay for
+Attessa fits any paid API whose answer an agent acts on. The seller's service runs in a sealed machine that signs every answer. The agent signs a payment permission that moves no money by itself, and the gateway uses it only after the answer's signature checks out against the build the seller approved on Celo. These are the four uses we built it around.
+The four uses
+DeFi risk checks Yield or route recommendations Payment-risk checks Agents buying data Who it's for
+DeFi risk checks before lending
+A lending agent asks a risk service to score a borrower's address before it lends.
+What the proof addsThe score came from the risk model the seller approved, run on Celo data read at a stated block, and not from different code the operator swapped in.
+Yield or route recommendations
+An agent asks which pool or route to use for a deposit or a swap.
+What the proof addsEach recommendation is tied to the approved build and the block it read, so the logic behind it is the build the seller approved, and anyone can check the call's payment on Celo later, in the proof explorer once live.
+Payment-risk checks before sending stablecoins
+Before an agent sends USDC or USA₮, it asks a service whether the recipient looks risky.
+What the proof addsIf the answer was changed after the sealed machine signed it, the agent never acts on it. An honest gateway refuses it without using the agent's payment permission; if the gateway itself made the change and settled anyway, the agent is charged and Attessa reports paid_but_rejected, with a record that proves it.
+Agents buying data or decisions
+Any agent that pays per call for a computed answer.
+What the proof addsThe agent's rule becomes "pay only for answers that carry a valid proof", inside a per-call limit and a daily cap it can't exceed. The one exception is buying through buy, Celo's marketplace of pay-per-call APIs, which takes payment before the service runs: there Attessa can only record what came back, after the payment.
+A proof shows which approved build produced an answer. It doesn't show the answer is correct: a bad answer is a rules problem you can read in the source. What it proves, and what it doesn't.
+Who it's for
+Buyer agents and their developers
+One SDK call, or one CLI command (Coming). Spending stays inside a limit per call and a cap per day.
+Sellers of paid APIs
+Run your service in a sealed machine, approve the build on Celo, and buyers can check every answer you sell.
+Marketplaces like buy
+buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before calling the API today; Attessa's gateway can check first.
+Step by step, both sidesHow it works Explorer previewOpen the explorer
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

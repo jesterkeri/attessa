@@ -90,6 +90,12 @@ importers:
         specifier: 7.6.13
         version: 7.6.13
 
+  packages/site:
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
+
 packages:
 
   '@adraffy/ens-normalize@1.11.1':
