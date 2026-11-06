@@ -25,7 +25,7 @@ test('privacy: no cookies or analytics, GitHub Pages, and what the explorer send
   assert.match(t, /sets no cookies/);
   assert.match(t, /no analytics/);
   assert.match(t, /GitHub Pages/);
-  assert.match(t, /sends that hash straight to Celo Sepolia's public node \(forno\.celo-sepolia\.celo-testnet\.org\), which can see the hash and your IP address/);
+  assert.match(t, /sends that hash straight to Celo Sepolia's public node \(\s*forno\.celo-sepolia\.celo-testnet\.org\s*\), which can see the hash and your IP address/);
   assert.match(t, /does not go to Attessa/);
 });
 
