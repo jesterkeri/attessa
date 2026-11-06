@@ -3,7 +3,8 @@
 The public website for Attessa: a homepage, How it works, the Proof explorer, Use cases, Docs (five pages),
 Security and limits, Privacy and Terms. Dark only. This folder is the **finished UI as static HTML, CSS and
 JS**, built from the website brief (`claude-design-attessa-website-v1.md`) and the copy in `FLOWS.md` and
-`SPEC.md`. It is the design reference for the real frontend: it is not wired to Celo, the gateway or the SDK yet.
+`SPEC.md`. It is the design reference for the real frontend. One thing reads Celo: the explorer's payment check
+on Celo Sepolia (below). Nothing is wired to the gateway or the SDK yet.
 
 Nothing here is part of the pnpm workspace (`packages/*`), so it adds no dependencies, no lockfile change and
 no CI job.
@@ -23,12 +24,25 @@ screenshots and checking layouts).
 ## What is real and what is a sample
 
 - **Every live value is a slot.** `[[slot:name]]` in a page renders as a dashed `{name}` chip marked
-  "(sample)". Nothing on the site reads chain data yet, and no value on it is invented.
-- **Proof explorer:** a "UI preview" switcher at the top of the results shows every state from the brief
-  (verified, tampered, unapproved, unattested, checking, not found, malformed ID, Celo unreachable). The
-  checklist rows are rendered by `assets/site.js` from sample slots. The recent-calls table is samples too.
+  "(sample)". Apart from the explorer's payment check, nothing on the site reads chain data, and no value on
+  it is invented.
+- **Proof explorer, payment check (live on Celo Sepolia):** a pasted settlement transaction is checked by
+  `assets/explorer.js` with plain JSON-RPC to `https://forno.celo-sepolia.celo-testnet.org` (the CLI's
+  default): `eth_chainId` (must be 11142220), `eth_getTransactionReceipt` and `eth_getBlockByNumber`. It finds
+  the one ERC-20 `Transfer` of the pinned Sepolia USDC (`packages/core/src/deployments.ts`; no USA₮ is pinned on
+  Sepolia) and shows the payer, the address paid, the amount (6 decimals), the block, its time in UTC and a
+  Blockscout link. Not found, reverted, no USDC transfer, more than one USDC transfer (refused, none shown),
+  Celo unreachable or too slow (10 s), the wrong chain and unreadable answers each get their own message.
+  Answers are checked for shape and rendered with `textContent` only. The other four checks stay "Planned".
+  Tests replay answers recorded from the real RPC (`test/fixtures/`, re-record with
+  `node site/test/fixtures/capture.mjs`).
+- **Proof explorer, UI preview:** the "UI preview" switcher shows every state from the brief (verified,
+  tampered, unapproved, unattested, checking, not found, malformed ID, Celo unreachable) with sample slots. It
+  never takes the pasted transaction and never reads Celo. The recent-calls table is samples too.
 - **Network switch** (footer): Celo Sepolia only. Mainnet is shown, disabled and marked "After launch" until
-  Gate 5, and a stored `mainnet` from an earlier version is ignored. It changes nothing else yet.
+  Gate 5, and a stored `mainnet` from an earlier version is ignored. The payment check's network data (chain
+  id, RPC, block explorer, pinned tokens) is one `NETWORKS` table in `assets/explorer.js`: mainnet is added there
+  as data at Gate 5.
 - **Terminal output** on the homepage and How it works is the CLI's example output from `FLOWS.md`, marked
   illustrative.
 - **Privacy and Terms** are marked Draft; the legal wording is still to be written.
@@ -54,11 +68,12 @@ and a few shorthands are expanded.
 | `{{track:pass pass fail na free}}` | an outcome track: four checks, then `paid`, `free` (not charged) or `stopped` (nothing signed) |
 | `[[slot:name]]`, `[[hash:0x...]]` | a sample slot chip, or a real value with copy and expand |
 
-`src/static/` is copied as is. The four scripts:
+`src/static/` is copied as is. The five scripts:
 
 - `assets/site.css`: all styles.
 - `assets/site.js`: menu, tabs, copy buttons, the How it works walkthrough, the docs menu and on-this-page
   markers, and the explorer's preview states.
+- `assets/explorer.js`: the explorer's live payment check (loaded on the explorer page only; no CDN).
 - `assets/motion.js`: GSAP text and section reveals.
 - `assets/scene.js`: the three.js particle scene (below).
 
@@ -112,9 +127,10 @@ phone or tablet.
 
 ## What the real frontend still needs
 
-- Read Celo and the gateway for the explorer (the checks in `SPEC.md`), and fill every slot from chain data,
-  the deploy record and the SDK.
-- Wire the network switch to the RPC and registry addresses it implies.
+- The explorer's other four checks (the proof checks in `SPEC.md`, which need the call's proof and request-ID
+  lookup), the recent-calls feed from Celo events, and every other slot from chain data, the deploy record and
+  the SDK. The payment check reads Celo Sepolia today.
+- Celo mainnet in the explorer at Gate 5 (USDC and USA₮), and the registry addresses the network switch implies.
 - Self-host or pin the CDN scripts and fonts with integrity hashes.
 - Final Privacy and Terms wording, and the real `security.txt` contact.
 - A real-device pass (tap feel, safe areas, keyboard, particle performance on older phones).

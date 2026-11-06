@@ -438,6 +438,7 @@
 
   function show(key, { focus = false } = {}) {
     clearTimeout(timer);
+    window.AttessaLive?.cancel();
     result.removeAttribute('aria-busy');
     if (key !== 'malformed') { input.removeAttribute('aria-invalid'); fieldError.hidden = true; }
     if (key === 'loading') renderLoading();
@@ -446,7 +447,23 @@
     if (focus) $('[data-result-heading]', result)?.focus();
   }
 
+  // A pasted transaction is checked live on Celo by assets/explorer.js. The picker only ever shows samples.
+  function checkLive(focus) {
+    clearTimeout(timer);
+    input.removeAttribute('aria-invalid'); fieldError.hidden = true;
+    if (!window.AttessaLive) {
+      message('wait', 'plug', "The check didn't load", '<p>The part of this page that reads Celo didn\'t load, so nothing was checked. Reload the page to try again.</p>');
+      if (focus) $('[data-result-heading]', result)?.focus();
+      return;
+    }
+    window.AttessaLive.start(lastQuery, {
+      result, focus, announce, setVerdict, names: NAMES, rows: STATES.settled.rows.slice(0, 4), settled: STATES.settled,
+      network: root.dataset.network === 'mainnet' ? 'mainnet' : 'sepolia',
+    });
+  }
+
   function run({ focus = true } = {}) {
+    if (lastQuery) { checkLive(focus); return; }
     show('loading');
     const outcome = preview.value;
     const target = ['loading', 'malformed'].includes(outcome) ? 'settled' : outcome;
@@ -472,7 +489,7 @@
     run();
   });
 
-  preview.addEventListener('change', () => show(preview.value));
+  preview.addEventListener('change', () => { lastQuery = null; show(preview.value); });
   result.addEventListener('click', e => { if (e.target.closest('[data-retry]')) run(); });
   $$('[data-open-state]', explorer).forEach(btn => btn.addEventListener('click', () => {
     lastQuery = null;
