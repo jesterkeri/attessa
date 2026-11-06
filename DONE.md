@@ -4470,3 +4470,10 @@ EXIT=0
 ```
 
 reviewed: pending (Codex r4)
+
+### Website live at https://attessa.xyz - 2026-11-06
+Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.153, .111.153; `www` CNAME jesterkeri.github.io (checked over DNS-over-HTTPS). GitHub had not issued a certificate after 60 minutes (the custom domain was saved before DNS pointed at Pages); re-saving the custom domain through the Pages API started it, and a fresh build ran. Pages API state:
+```
+status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
+```
+The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
