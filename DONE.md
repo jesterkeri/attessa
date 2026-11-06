@@ -2474,3 +2474,163 @@ verify (`grep -n -i -E 'explorer proof source|install path' OPEN-QUESTIONS.md`, 
 95:- [x] **Install path (D2, PR #8 review C2).** `@attessa/cli` and `@attessa/mcp` are not on npm (E404 on 2026-11-02) a
 ```
 reviewed: pending (adversary, then Codex)
+
+### Website finish (T39, T40, T42, T47, T48) - 2026-11-06
+
+branch: feat/site-finish (not pushed). Commits: 044a5b1 (step 0 fixtures), 7fad5d3 (T39), the T40, T42, T47 and T48 commits after it (`git log --oneline 6a1039c..HEAD`).
+
+- Step 0: recorded the Celo Sepolia fixtures with `site/test/fixtures/capture.mjs` (read-only `eth_*` calls, no key, no transaction); `explorer-live-recorded` and `explorer-live-errors` pass. capture.mjs now reads 40 blocks at a time and takes `CAPTURE_SCAN_BLOCKS` (no reverted transaction in 3000 blocks).
+- T39: `site/` is `packages/site` (`@attessa/site`, private; scripts build, lint, typecheck, test; esbuild 0.28.2 exact). The lockfile gained only importer entries for packages/site. `test/pages.test.mjs` snapshots the text of all 12 pages. `test-count.sh` moved with it (two path lines changed).
+- T40: three 0.160.0 and gsap 3.12.5 (bundled by esbuild into assets/scene.js and assets/motion.js), fonts vendored as woff2 with `SHA256SUMS` (latin and latin-ext), Phosphor 2.1.1 inlined as SVG, CSP as a `<meta>` tag in every page with computed inline-script hashes, `CNAME` (attessa.xyz) and `.nojekyll` written into dist. `test/cdn-integrity.test.mjs` became `test/no-third-party-origins.test.mjs`. Headless Chromium smoke: scene live, only the site's own origin requested, no CSP violation.
+- T42: `config.mjs` builds `assets/config.js` from `@attessa/core` DEPLOYMENTS and `networks.json`; mainnet disabled while `enclaveRegistry` is null; `?network=` beats local storage; `[[chain:...]]` fills addresses; a `[[slot:` the deploy record has fails the build (`test/config.test.mjs`).
+- T47: scene idle stop, DPR 1 on coarse pointers, particle tiers, Data Saver off, no ScrollTrigger under reduced motion; menu Tab containment, one live region, search focus ring, hash button name. `node packages/site/scripts/perf-probe.mjs` (local headless Chromium):
+```
+ok   docs/reference.html idle 2 s: 0 scene frames (124 while loading), 129 rAF calls
+ok   docs/reference.html scroll wakes it: 27 scene frames after a scroll
+ok   index.html idle 2 s: 0 scene frames (114 while loading), 128 rAF calls
+ok   index.html scroll wakes it: 25 scene frames after a scroll
+ok   docs/reference.html reduced motion idle 2 s: 0 rAF calls, 0 scene frames, 0 ScrollTriggers
+ok   reduced motion registers no ScrollTrigger: 0
+ok   index.html with saveData: 0 scene frames, no-webgl class true
+```
+  (the 129 rAF calls at idle are GSAP's ticker, not the scene; see OPEN-QUESTIONS.) The real-phone pass is Joshua's and not done.
+- T48: `site.config.json` (origin https://attessa.xyz; securityContact and securityTxtExpires null, for Joshua), security.txt built from it, privacy copy corrected. `grep -rn -E '\{securityContact\}|\{securityTxtExpires\}|\{siteOrigin\}|@attessa/(cli|mcp)|npx ' packages/site/dist` printed nothing (exit 1). The text snapshot diff since T39 is one privacy.html change plus the earlier privacy line; Joshua approves it. T41 and T43 to T46 are not built (OPEN-QUESTIONS).
+
+Final verify, `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/site test && ./scripts/check-install-scripts.sh` (build, typecheck and lint output, then the TAP summary lines of the site test run, then the guard):
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+
+> @attessa/site@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-site-finish/packages/site
+> node --test test/*.test.mjs
+
+...
+# tests 255
+# suites 0
+# pass 255
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2459.14687
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+`./packages/site/test-count.sh` (one file at a time):
+```
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+8 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+4 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+
+reviewed: pending (Codex r1)
