@@ -102,9 +102,9 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_result',
     description:
-      'Report what happened to an earlier call by request id: its stored outcome, or, if it is still open, ask the chain and gateway and decide it now. Never pays again. Needs the buyer wallet only for a call that is still open.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A decided call is read from the local record (no wallet, no network). A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
     inputSchema: { type: 'object', properties: { requestId: REQUEST_ID_SCHEMA }, required: ['requestId'], additionalProperties: false },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false },
   },
   {
     name: 'list_pending',
@@ -122,9 +122,9 @@ export const TOOLS: Tool[] = [
   {
     name: 'status',
     description:
-      'Show your spending today against the daily cap and per-call limit, and decide any open calls. Needs the buyer wallet; signs and spends nothing new.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): shows your spending today against the daily cap and the per-call limit, and decides every open call of this wallet. To decide them the buyer wallet signs a short payer message (an EIP-191 text, not a payment) per open call and asks each gateway for its answer; the chain is read. Needs the buyer wallet. Pays nothing and sends no transaction.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
-    annotations: { readOnlyHint: true },
+    annotations: { readOnlyHint: false, destructiveHint: false },
   },
 ];
 
@@ -139,23 +139,35 @@ interface ToolResult {
   isError?: boolean;
 }
 
-/** Everything that may have been given to the process as a secret, as strings that must never appear in a result. */
-function secretsOf(env: Record<string, string | undefined>): string[] {
-  const out: string[] = [];
+/** Names whose values are secrets whatever they look like; the key and keystore password are always included. */
+const SECRET_NAME = /KEY|SECRET|PASSWORD|PASSPHRASE|TOKEN|CREDENTIAL|AUTH/i;
+
+/**
+ * Every configured secret, of any length (an empty value has nothing to hide), and the forms it takes once it is put in
+ * a URL, a form or a JSON string: percent-encoded in both cases, with `+` for a space, JSON-escaped, and a key without its 0x.
+ * Longest first, so a longer form is replaced whole before a shorter one inside it.
+ */
+function secretForms(env: Record<string, string | undefined>): string[] {
+  const forms = new Set<string>();
   for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || v.length < 8) continue;
-    if (/KEY|SECRET|PASSWORD|TOKEN|CREDENTIAL|AUTH/i.test(k)) {
-      out.push(v);
-      if (/^0x[0-9a-fA-F]{64}$/.test(v)) out.push(v.slice(2));
+    if (v === undefined || v === '' || !(SECRET_NAME.test(k) || k === 'ATTESSA_PRIVATE_KEY' || k === 'ATTESSA_KEYSTORE_PASSWORD')) continue;
+    const bases = [v];
+    if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.push(v.slice(2));
+    for (const b of bases) {
+      const pct = encodeURIComponent(b);
+      const strict = pct.replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+      for (const f of [b, JSON.stringify(b).slice(1, -1), pct, strict, pct.replace(/%20/g, '+'), strict.replace(/%20/g, '+'), pct.toLowerCase(), encodeURI(b)]) {
+        if (f !== '') forms.add(f);
+      }
     }
   }
-  return out;
+  return [...forms].sort((x, y) => y.length - x.length);
 }
 
-/** The last line of defence on every result: configured secrets and URL userinfo never leave. */
+/** The last line of defence on every result: configured secrets (any length, any common encoding) and URL userinfo never leave. */
 export function scrub(text: string, env: Record<string, string | undefined>): string {
   let t = text;
-  for (const s of secretsOf(env)) t = t.split(s).join('[hidden]');
+  for (const s of secretForms(env)) t = t.split(s).join('[hidden]');
   return t.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s"'@\\]*@/gi, '$1');
 }
 
