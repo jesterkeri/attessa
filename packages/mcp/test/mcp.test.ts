@@ -501,3 +501,92 @@ describe('mcp: Codex r1 Minor 2, cancel and open-call paths', () => {
     expect(w.pending()[0]).toMatchObject({ state: 'not_charged' });
   });
 });
+
+describe('mcp: Codex r2 Major 1, a short configured secret never corrupts a result', () => {
+  it('a one-character secret changes nothing: the result is the same valid JSON, amounts and hashes intact', async () => {
+    w = await world(null);
+    const clean = await w.tool('verify_proof', vectorArgs());
+    w.env.DEMO_TOKEN = '0';
+    const withSecret = await w.tool('verify_proof', vectorArgs());
+    expect(withSecret.json).toEqual(clean.json);
+    expect(withSecret.text).toContain(VECTOR_REQUEST_HASH);
+    const paid = await (async () => {
+      await w.close();
+      w = await world();
+      w.env.DEMO_TOKEN = '0';
+      return w.tool('pay_and_verify', { url: w.url, body: w.body });
+    })();
+    expect(paid.json).toMatchObject({ ok: true, outcome: 'verified', amount: '20000' });
+  });
+
+  it('secrets are replaced only inside string values: keys and numbers are never touched, and the minimum is 4 characters', async () => {
+    w = await world();
+    w.env.SHORT_TOKEN = 'abc'; // 3 characters: too short to hide safely, left as is (OPEN-QUESTIONS)
+    w.env.LONG_TOKEN = 'abcd';
+    const a = await w.tool('prefix-abc-and-abcd-suffix');
+    expect(a.text).toContain('abc-and-');
+    expect(a.text).not.toContain('abcd');
+    expect(a.json.error).toBe('unknown_tool');
+  });
+});
+
+describe('mcp: Codex r2 Major 2, notChecked is complete on every failure path', () => {
+  it('a failed request id still lists the request hash, response hash and inputs hash it never reached', async () => {
+    w = await world(null);
+    const r = await w.tool('verify_proof', { ...vectorArgs(), requestId: `0x${'ab'.repeat(32)}` });
+    expect(r.json.check).toBe('request_mismatch');
+    expect(r.json.notChecked).toEqual(expect.arrayContaining(['request_hash', 'response_hash', 'inputs_hash', 'lifetime', 'signer_active_on_chain', 'inputs_block_and_values']));
+    expect(r.json.notChecked).not.toContain('request_id');
+    expect(r.json.notChecked).not.toContain('signature');
+  });
+
+  it('a malformed proof and a bad signature list every other check as not made, even those whose argument was given', async () => {
+    w = await world(null);
+    const junk = await w.tool('verify_proof', { ...vectorArgs(), proof: 'not base64!', response: '{}', requestId: `0x${'ab'.repeat(32)}` });
+    expect(junk.json.check).toBe('bad_signature');
+    expect(junk.json.notChecked).toEqual(
+      expect.arrayContaining(['request_id', 'request_hash', 'lifetime', 'response_hash', 'inputs_hash', 'signer_active_on_chain', 'settlement']),
+    );
+    const wrongRegistry = await w.tool('verify_proof', { ...vectorArgs(), registry: '0x0000000000000000000000000000000000000001' });
+    expect(wrongRegistry.json.notChecked).toEqual(expect.arrayContaining(['request_id', 'request_hash', 'lifetime', 'response_hash', 'inputs_hash']));
+    const badResponse = await w.tool('verify_proof', { ...vectorArgs(), response: '{"inputs":{}}' });
+    expect(badResponse.json.check).toBe('response_hash_mismatch');
+    expect(badResponse.json.notChecked).toEqual(expect.arrayContaining(['request_id', 'request_hash', 'inputs_hash']));
+    expect(badResponse.json.notChecked).not.toContain('response_hash');
+    expect(badResponse.json.notChecked).not.toContain('lifetime');
+  });
+});
+
+describe('mcp: Codex r2 Minor 1, status says exactly when it signs', () => {
+  it('status does not sign for an open call already refused; its description says signing is conditional', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'refuse' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    expect(w.pending()[0]).toMatchObject({ requestId: paid.json.requestId, state: 'refused' });
+    const spy = spyPayerSigs();
+    try {
+      await w.tool('status');
+      expect(spy.seen).toEqual([]);
+    } finally {
+      spy.restore();
+    }
+    const { tools } = await w.client.listTools();
+    const d = tools.find((t) => t.name === 'status')!.description!;
+    expect(d).not.toMatch(/per open call/i);
+    expect(d).toMatch(/already refused/i);
+  });
+
+  it('status signs a payer message for an open call whose answer can still come', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    expect(w.pending()[0]!.state).not.toBe('refused');
+    const spy = spyPayerSigs();
+    try {
+      await w.tool('status');
+      expect(spy.seen.length).toBeGreaterThan(0);
+    } finally {
+      spy.restore();
+    }
+  });
+});
