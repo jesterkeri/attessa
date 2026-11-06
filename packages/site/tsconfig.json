@@ -12,5 +12,5 @@
     "types": ["node"]
   },
   // The test files are plain scripts run by node --test; they are not type-checked.
-  "include": ["build.mjs", "csp.mjs", "serve.mjs", "scripts/**/*.mjs"]
+  "include": ["build.mjs", "config.mjs", "csp.mjs", "serve.mjs", "scripts/**/*.mjs"]
 }

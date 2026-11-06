@@ -40,10 +40,14 @@ screenshots and checking layouts).
 - **Proof explorer, UI preview:** the "UI preview" switcher shows every state from the brief (verified,
   tampered, unapproved, unattested, checking, not found, malformed ID, Celo unreachable) with sample slots. It
   never takes the pasted transaction and never reads Celo. The recent-calls table is samples too.
-- **Network switch** (footer): Celo Sepolia only. Mainnet is shown, disabled and marked "After launch" until
-  Gate 5, and a stored `mainnet` from an earlier version is ignored. The payment check's network data (chain
-  id, RPC, block explorer, pinned tokens) is one `NETWORKS` table in `assets/explorer.js`: mainnet is added there
-  as data at Gate 5.
+- **Network switch** (footer): the networks come from `@attessa/core` DEPLOYMENTS plus `networks.json` (RPC, block
+  explorer, labels, demo origin), turned into `assets/config.js` (`window.ATTESSA_CONFIG`) by `config.mjs` at build
+  time. A network is enabled only when its `enclaveRegistry` is deployed, so Celo mainnet stays disabled and marked
+  "After launch" until Gate 5. `assets/network.js` picks the starting network: `?network=` first, then the one saved
+  in local storage, then Sepolia; a disabled network is never picked. Addresses on the pages are `[[chain:celo-sepolia.enclaveRegistry]]`
+  (a chip) or `{{chain:celo-sepolia.usdc}}` (plain text), never typed in; a `[[slot:name]]` whose name the deploy
+  record has a value for fails the build. The explorer's own `NETWORKS` table (`assets/explorer.js`) is checked
+  against the config by `test/config.test.mjs`.
 - **Terminal output** on the homepage and How it works is the CLI's example output from `FLOWS.md`, marked
   illustrative.
 - **Privacy and Terms** are marked Draft; the legal wording is still to be written.

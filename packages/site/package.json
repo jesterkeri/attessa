@@ -4,11 +4,12 @@
   "private": true,
   "scripts": {
     "build": "node build.mjs",
-    "lint": "tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js",
+    "lint": "tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js",
     "typecheck": "tsc -p . --noEmit",
     "test": "node --test test/*.test.mjs"
   },
   "devDependencies": {
+    "@attessa/core": "workspace:*",
     "@phosphor-icons/core": "2.1.1",
     "esbuild": "0.28.2",
     "gsap": "3.12.5",

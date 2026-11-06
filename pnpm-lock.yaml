@@ -92,6 +92,9 @@ importers:
 
   packages/site:
     devDependencies:
+      '@attessa/core':
+        specifier: workspace:*
+        version: link:../core
       '@phosphor-icons/core':
         specifier: 2.1.1
         version: 2.1.1

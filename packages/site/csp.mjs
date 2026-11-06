@@ -4,7 +4,9 @@
 import { createHash } from 'node:crypto';
 
 // The one network the pages read: the explorer's payment check on Celo Sepolia (assets/explorer.js).
-export const CONNECT = ['https://forno.celo-sepolia.celo-testnet.org'];
+// Only networks the switch offers (config.networks[*].enabled) are listed.
+import { config } from './config.mjs';
+export const CONNECT = Object.values(config.networks).filter(n => n.enabled).map(n => new URL(n.rpc).origin);
 
 /** sha256 CSP source of every inline <script> (no src) in the page. @param {string} html */
 export function inlineScriptHashes(html) {

@@ -15,15 +15,17 @@
     setTimeout(() => { el.textContent = msg; }, 30);
   };
 
-  // Network switch
-  const NETWORKS = { sepolia: 'Celo Sepolia', mainnet: 'Celo mainnet' };
-  const networkName = () => NETWORKS[root.dataset.network === 'mainnet' ? 'mainnet' : 'sepolia'];
+  // Network switch. config.js (generated from @attessa/core DEPLOYMENTS and networks.json) says which networks
+  // exist and which are enabled; network.js picks the starting one: ?network= first, then local storage, then Sepolia.
+  const CONFIG = window.ATTESSA_CONFIG ?? { networks: { sepolia: { label: 'Celo Sepolia', enabled: true }, mainnet: { label: 'Celo mainnet', enabled: false } } };
+  const keyOf = n => (n === 'mainnet' ? 'mainnet' : 'sepolia');
+  const networkName = () => CONFIG.networks[keyOf(root.dataset.network)].label;
   const applyNetwork = n => {
     if (n === 'mainnet') root.dataset.network = 'mainnet'; else delete root.dataset.network;
     $$('[data-network-label], [data-network-name]').forEach(el => { el.textContent = networkName(); });
-    $$('input[name="network"]').forEach(r => { r.checked = r.value === (n === 'mainnet' ? 'mainnet' : 'sepolia'); });
+    $$('input[name="network"]').forEach(r => { r.checked = r.value === keyOf(n); });
   };
-  applyNetwork(root.dataset.network);
+  applyNetwork(window.AttessaNetwork ? window.AttessaNetwork.pick(CONFIG, location.search, store.get('attessa-network')) : 'sepolia');
   $$('input[name="network"]').forEach(r => r.addEventListener('change', () => {
     applyNetwork(r.value);
     store.set('attessa-network', r.value === 'mainnet' ? 'mainnet' : null);
