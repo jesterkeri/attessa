@@ -40,8 +40,10 @@ async function events(c: Chain, eventName: EventName, args: Record<string, unkno
   }));
 }
 
+/** An endpoint's origin from its EndpointAdded log, for display only: scheme://host[:port] (the registry accepts any https:// text). */
 async function originOf(c: Chain, oh: Hex): Promise<string | undefined> {
-  return (await events(c, 'EndpointAdded', { originHash: oh })).at(-1)?.args.origin as string | undefined;
+  const o = (await events(c, 'EndpointAdded', { originHash: oh })).at(-1)?.args.origin as string | undefined;
+  return o === undefined ? undefined : rpcShownSafe(o, short(oh));
 }
 
 /** The sender: the env key's address, or the owner when only planning (no key). */

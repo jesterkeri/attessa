@@ -2594,3 +2594,31 @@ packages/cli test:       Tests  342 passed (342)
 test=0
 ```
 reviewed: pending (Codex r4)
+
+### T21 Codex r4 fixes - 2026-11-06
+Codex r4 (reviews/t21-cli-review-r4.md, on a49ffa1): REVISE, 2 major, 1 minor.
+- M1: `--source`/`--uri` text that is not a URL but holds `?` or `#` passed `refuseSecretUrl` and reached printed calldata. Non-URL text is now refused for `//user@`, `?` or `#` too.
+- M2: `originOf` (registry.ts, behind `revoke signer` and `revoke release`) and `originFor` (signer.ts, behind `signer register` and `signer renew`) returned the raw EndpointAdded origin. Both readers now return scheme://host[:port] (their result is used only in messages and copy; the endpoint is identified by its hash). Command-level tests cover the revoke flows; the signer flows share the same reader and are covered only through it.
+- m1 (correction to the "T21 Codex r3 fixes" entry): "all 4 fail on d4567fc" was measured by copying the new test file onto d4567fc, where `refuseSecretUrl` did not exist, so the first test failed on a missing function rather than an assertion. This round's tests were run the reproducible way: packages/cli/test/codex-t21-r4.test.ts copied onto a49ffa1 with `refuseSecretUrl` read through a namespace import (`import * as copy`), so a missing export fails at the assertion, not the import:
+```
+on a49ffa1:  Tests  5 failed (5)
+on the fix:  Tests  5 passed (5)
+```
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+```
+reviewed: pending (Codex r5)

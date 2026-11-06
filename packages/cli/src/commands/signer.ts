@@ -119,7 +119,8 @@ async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boo
     const last = logs.at(-1);
     if (last) {
       const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
-      if (hashOrigin(o) === oh) return o;
+      // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
+      if (hashOrigin(o) === oh) return rpcShownSafe(o, short(oh));
     }
   } catch {
     // Some RPCs cap log ranges; fall back to the hash.

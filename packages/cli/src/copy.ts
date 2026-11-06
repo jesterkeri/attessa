@@ -85,7 +85,8 @@ export function refuseSecretUrl(value: string | undefined, flag: string): void {
   } catch {
     u = null;
   }
-  const secret = u ? u.username !== '' || u.password !== '' || u.search !== '' || u.hash !== '' : /\/\/[^/@\s]*@/.test(value);
+  // Text that is not a URL is refused for `//user@`, `?` or `#` too: it is published as given.
+  const secret = u ? u.username !== '' || u.password !== '' || u.search !== '' || u.hash !== '' : /\/\/[^/@\s]*@|[?#]/.test(value);
   if (secret) {
     throw new CliError(
       'secret_in_url', // not in FLOWS
