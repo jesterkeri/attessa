@@ -1,4 +1,1 @@
-Contact: {securityContact}
-Expires: {securityTxtExpires}
-Preferred-Languages: en
-Canonical: {siteOrigin}/.well-known/security.txt
+# Written by build.mjs from site.config.json (contact, expiry and origin); the build replaces this file.

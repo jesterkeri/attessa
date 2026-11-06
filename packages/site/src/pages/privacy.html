@@ -18,8 +18,8 @@
     <ul>
       <li><strong>No accounts.</strong> There's no sign-in, and Attessa sets no cookies.</li>
       <li><strong>Your network choice</strong> is saved in your browser's local storage, on your device only. Until Attessa launches on Celo mainnet, Celo Sepolia is the only choice.</li>
-      <li><strong>Fonts, icons and scripts</strong> are served from this site, not from another company's servers, so loading a page tells nobody else you visited.</li>
-      <li><strong>The proof explorer</strong> is a preview: it reads nothing from Celo yet and shows sample results. When live, it will read public Celo data for the transaction you paste, with no wallet.</li>
+      <li><strong>Fonts, icons and scripts</strong> are served from this site, not from another company's servers, so loading a page tells no other company you visited.</li>
+      <li><strong>The proof explorer</strong> is a preview. Its payment check is the only part that reads Celo yet: it sends the transaction hash you paste, from your browser, to Celo Sepolia's public node (forno.celo-sepolia.celo-testnet.org), which can see that hash and your IP address. The hash does not go to Attessa, and no wallet is involved. The sample states read nothing.</li>
     </ul>
     <h2 id="calls">When you make a call</h2>
     <p>Calls go from your own computer to the service you choose, never through this site. The service's gateway can read the request body you send. The Attessa gateway keeps the answer it sends you for 24 hours after it delivers or settles the call, then deletes it. It keeps each call's row, with your wallet address, the amount, the call's state and its settlement transaction, until 2026-12-31, then deletes it. It never stores your IP address. Your record of each call stays on your computer, in <code>~/.attessa/evidence.jsonl</code>.</p>
