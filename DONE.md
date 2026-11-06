@@ -2642,3 +2642,24 @@ Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filt
    Duration  13.80s (transform 2.09s, setup 32.63s, collect 18.01s, tests 105.69s, environment 20ms, prepare 8.70s)
 ```
 reviewed: pending (Codex r3)
+
+### T21b Codex r3 fixes - 2026-11-06
+
+Codex r3 (REVISE, 6152342). Failing tests first (commit before f94c813, ends "(failing)"). The two r2 short-secret tests were rewritten to assert refusal, the stricter policy Joshua/coordinator asked for; no assertion was loosened.
+
+- Major 1 (short and encoded secrets escaped): the server refuses to start, and every tool call refuses (`unsafe_secret`, variable name only, with a next action), while a secret-named env var is under 4 characters or digits-only under 8. The rest are hidden in string values in their raw, JSON-escaped and URL-encoded spellings (any mix of upper and lower case hex, + or %20 for a space, reserved characters literal or encoded) and 0x-less. End-to-end result-path tests cover each. Policy in OPEN-QUESTIONS.
+- Major 2 (validation errors lacked notChecked): every verify_proof refusal before a check runs (no proof, bad chainId, bad registry, unpinned chain, bad requestId, requestHash or request) now returns scope offline and the full notChecked list; one test per path.
+- Minor 1 (get_result overstated signing): description now says an open call already refused is checked against the chain with no signature; spy test added.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  45 passed (45)
+   Duration  2.53s (transform 315ms, setup 267ms, collect 399ms, tests 1.60s, environment 0ms, prepare 51ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  14.14s (transform 2.24s, setup 34.12s, collect 18.37s, tests 106.48s, environment 20ms, prepare 9.24s)
+exit=0
+```
+reviewed: pending (Codex r4)
