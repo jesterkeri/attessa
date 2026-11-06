@@ -30,8 +30,10 @@ screenshots and checking layouts).
 - **Proof explorer, payment check (live on Celo Sepolia):** a pasted settlement transaction is checked by
   `assets/explorer.js` with plain JSON-RPC to `https://forno.celo-sepolia.celo-testnet.org` (the CLI's
   default): `eth_chainId` (must be 11142220), `eth_getTransactionReceipt` and `eth_getBlockByNumber`. It finds
-  the one ERC-20 `Transfer` of the pinned Sepolia USDC (`packages/core/src/deployments.ts`; no USA₮ is pinned on
-  Sepolia) and shows the payer, the address paid, the amount (6 decimals), the block, its time in UTC and a
+  the one ERC-20 `Transfer` of the pinned Sepolia USDC and, for it to count as an x402 settlement (SPEC.md §6.2 V11), the same
+  token's `AuthorizationUsed` from the same address in that transaction; a Transfer without it is shown as "a plain USDC
+  transfer, not an x402 settlement". It never shows a link to an Attessa call (that needs the proof, D1). The token is the one pinned in
+  `packages/core/src/deployments.ts` (no USA₮ is pinned on Sepolia). A settlement shows the payer, the address paid, the amount (6 decimals), the block, its time in UTC and a
   Blockscout link. Not found, reverted, no USDC transfer, more than one USDC transfer (refused, none shown),
   Celo unreachable or too slow (10 s), the wrong chain and unreadable answers each get their own message.
   Answers are checked for shape and rendered with `textContent` only. The other four checks stay "Planned".

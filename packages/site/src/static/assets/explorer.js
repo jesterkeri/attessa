@@ -22,6 +22,9 @@
     },
   };
   const TRANSFER = '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef'; // Transfer(address,address,uint256)
+  // AuthorizationUsed(address indexed authorizer, bytes32 indexed nonce): EIP-3009, emitted by transferWithAuthorization.
+  // SPEC.md section 6.2 V11: an x402 settlement is this event and the matching Transfer, both from the pinned token, in one transaction.
+  const AUTH_USED = '0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5';
   const TIMEOUT_MS = 10000;
 
   // ---- Reading Celo -------------------------------------------------------------------------------------
@@ -90,13 +93,18 @@
     if (status !== '0x1' && status !== '0x0') throw bad('status is neither 0x1 nor 0x0');
     if (status === '0x0') throw new Stop('reverted', { blockNumber });
     if (!Array.isArray(receipt.logs)) throw bad('logs is not a list');
-    const transfers = [];
+    const transfers = [], authorizers = [];
     for (const log of receipt.logs) {
       if (!log || typeof log !== 'object') throw bad('a log is not an object');
       if (typeof log.address !== 'string' || !ADDR.test(lower(log.address))) throw bad('a log has no address');
       const token = net.tokens.find(t => t.address === lower(log.address));
-      if (!token || !Array.isArray(log.topics) || lower(log.topics[0]) !== TRANSFER) continue;
-      if (log.removed === true) continue;
+      if (!token || !Array.isArray(log.topics) || log.removed === true) continue;
+      if (lower(log.topics[0]) === AUTH_USED) {
+        // Only the pinned token's own event counts, and only with its two indexed fields (authorizer, nonce).
+        if (log.topics.length === 3) authorizers.push({ token, authorizer: wordToAddress(log.topics[1], 'authorizer') });
+        continue;
+      }
+      if (lower(log.topics[0]) !== TRANSFER) continue;
       if (log.topics.length !== 3) throw bad('a Transfer log has the wrong topics');
       if (typeof log.data !== 'string' || !WORD.test(lower(log.data))) throw bad('a Transfer amount is not one word');
       if (log.transactionHash != null && lower(log.transactionHash) !== hash) throw bad('a log is from another transaction');
@@ -109,7 +117,10 @@
     }
     if (transfers.length === 0) throw new Stop('notransfer', { blockNumber });
     if (transfers.length > 1) throw new Stop('multiple', { blockNumber, count: transfers.length });
-    return { ...transfers[0], blockNumber, blockHash: lower(receipt.blockHash) };
+    const t = transfers[0];
+    // x402 only when this token's AuthorizationUsed names the address the Transfer came from (V11).
+    const x402 = authorizers.some(a => a.token === t.token && a.authorizer === t.payer);
+    return { ...t, x402, blockNumber, blockHash: lower(receipt.blockHash) };
   }
 
   function readBlock(block, paid) {
@@ -145,6 +156,8 @@
       const got = qty(chainId, 'chain id');
       if (got !== BigInt(net.chainId)) return { kind: 'wrongchain', net, hash, got: got.toString() };
       const paid = readReceipt(receipt, hash, net);
+      // A Transfer without the authorization event is a plain transfer: shown as that, never as a settlement.
+      if (!paid.x402) return { kind: 'plaintransfer', net, hash, ...paid };
       const block = await raced(call('eth_getBlockByNumber', [`0x${paid.blockNumber.toString(16)}`, false]));
       const time = readBlock(block, paid);
       return { kind: 'settled', net, hash, ...paid, time };
@@ -232,6 +245,10 @@
       case 'notransfer': return { tone: 'na', icon: 'search', title: 'No payment in this transaction', body: [
         h('p', null, chip(o.hash), ` is in block ${o.blockNumber} on ${name}, but it moves no ${tokenNames(o.net)}, the money Attessa settles in on this network, so it isn't a settlement.`),
         h('p', null, txLink(o))] };
+      case 'plaintransfer': return { tone: 'na', icon: 'search', title: 'A plain USDC transfer, not an x402 settlement', body: [
+        h('p', null, chip(o.hash), ` is in block ${o.blockNumber} on ${name}. `, chip(o.payer), ` sent ${formatAmount(o.amount, o.token.decimals)} ${o.token.symbol} to `, chip(o.payTo), ', but the transaction has no x402 authorization (the token\'s AuthorizationUsed event), so nothing shows it paid for an Attessa call.'),
+        h('p', { class: 'muted' }, 'An x402 settlement is that authorization and the matching transfer in one transaction. No link to an Attessa call is shown here.'),
+        h('p', null, txLink(o))] };
       case 'multiple': return { tone: 'fail', icon: 'alert', title: 'More than one payment in this transaction', body: [
         h('p', null, chip(o.hash), ` moves ${tokenNames(o.net)} ${o.count} times, in block ${o.blockNumber} on ${name}. A settlement moves it once, so the explorer doesn't pick one and shows none of them.`),
         h('p', null, txLink(o))] };
@@ -290,6 +307,7 @@
             r.h('p', { class: 'check-name' }, ui.names[4]),
             r.h('p', { class: 'check-line' }, r.chip(o.payer), ` paid ${amount} to `, r.chip(o.payTo), ` at block ${o.blockNumber}.`),
             r.h('p', { class: 'check-term' }, `block time ${formatTime(o.time)}, ${o.token.symbol} contract `, r.chip(o.token.address)),
+            r.h('p', { class: 'check-term' }, 'An x402 payment settled on Celo: the token\'s authorization and the matching transfer are in this transaction. No link to an Attessa call is shown: that needs the call\'s proof, which nothing serves yet.'),
             r.h('p', { class: 'check-links' }, r.txLink(o)))),
         r.h('li', { class: 'check is-verdict', 'data-status': s.verdict }, badge(),
           r.h('div', null, r.h('p', { class: 'check-name' }, 'Overall verdict'), r.h('p', { class: 'check-line' }, s.verdictLine))))));
