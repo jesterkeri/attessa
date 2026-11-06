@@ -2890,3 +2890,8 @@ site=0
 FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first
 ```
 reviewed: pending (Codex r3)
+
+The install guard above ran before the fix was committed and refused a dirty checkout; run again on ee679ac (clean), under the lock:
+```
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
