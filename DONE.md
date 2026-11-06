@@ -2744,3 +2744,135 @@ verify (`./packages/site/test-count.sh`, exit 0):
 node v22.23.2: 73 files, 255 tests, 0 failed
 ```
 reviewed: pending (Codex r2)
+
+### Website finish Codex r1 fixes - 2026-11-06
+
+Codex r1 (REVISE, reviews/site-finish-review-r1.md) at ca0af9d; fixes on feat/site-finish, not pushed.
+
+- M1: `explorer.js` calls a pinned-USDC transfer an x402 settlement only when the same token's `AuthorizationUsed` names the address the Transfer came from (SPEC.md 6.2 V11). Otherwise: "A plain USDC transfer, not an x402 settlement". The settled result says an x402 payment settled on Celo and that no link to an Attessa call is shown (needs the proof; D1). Failing tests and real read-only fixtures (a real transferWithAuthorization settlement and a real plain transfer) went in first, alone: d6a3b41; the fix is a2fba7e.
+- M2: final Privacy and Terms copy (ca5ceec); the build refuses the default config when `securityContact` or `securityTxtExpires` is null, `SITE_CONFIG=<file>` is the explicit local opt-out (tested on a copy of the package). The security contact and expiry were already set by the lead (2adcd56).
+- m1: OFL 1.1 text for Anybody, Geist and Geist Mono and `fonts/PROVENANCE.json` (44d4329); `test/font-provenance.test.mjs` requires them and checks every hash.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/sdk lint$ tsc -p . --noEmit
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 75 files, 267 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r2)
