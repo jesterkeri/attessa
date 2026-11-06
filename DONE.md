@@ -2461,6 +2461,82 @@ For reference, the globbed command on this machine:
 ```
 reviewed: pending (Codex r3)
 
+### Site Codex r3: the counter runs each module directly - 2026-11-06
+Codex r3 (site-ui-review-r3.md, on 64a615f): REVISE, 1 major, 1 minor. M1: `node --test <file>` reports one wrapper test per file in Codex's environment, so the r2 counter summed 66 there; running the module itself (`node <file>`) reports the module's own tests in both environments. m1: a failure was counted twice (TAP footer plus nonzero exit).
+Fix: site/test-count.sh runs `node <file>` and counts each failure once (the footer, or 1 for a nonzero exit with no footer). Correction to the site entries above: their totals (154 to 190) are direct-module totals, which Codex replayed at each cited commit with zero failures; the globbed `node --test site/test/*.test.mjs` footer differs between environments (190 on this machine, 66 in Codex's), so it is no longer used as evidence.
+verify (`./site/test-count.sh`, exit 0):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+Mutant check: one assertion in site/test/built-state-consistent.test.mjs made to fail, then restored: `node v22.23.2: 66 files, 190 tests, 1 failed`, exit 1.
+reviewed: pending (Codex r4)
+
 ## T38 - 2026-11-02
 Decisions from the PR #8 review (posted on PR #8 as a comment review), recorded in OPEN-QUESTIONS.md:
 - D1, explorer proof source: Joshua chose option A (public read-only proof route, T43), 2026-11-02.
