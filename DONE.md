@@ -2622,3 +2622,23 @@ Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filt
    Duration  13.62s (transform 2.21s, setup 31.84s, collect 16.93s, tests 105.57s, environment 25ms, prepare 8.53s)
 ```
 reviewed: pending (Codex r2)
+
+### T21b Codex r2 fixes - 2026-11-06
+
+Codex r2 (REVISE, 54179d8). Failing tests first (commit after 54179d8, message ends "(failing)"), then:
+
+- Major 1 (short secret corrupted results): redaction is now structural, applied to string values of the parsed result before serialising; keys, numbers and JSON structure are never touched. Minimum secret length 4 (shorter values cannot be told from protocol data and are not redacted; stated in OPEN-QUESTIONS). Tests: a one-character DEMO_TOKEN=0 leaves verify_proof and pay_and_verify results identical, amounts and hashes intact; 3 characters left alone, 4 hidden.
+- Major 2 (notChecked incomplete on early failures): notChecked is derived on every path: each offline check not passed and not the failing one, plus the always-skipped chain checks. Tests cover request id mismatch, malformed proof, bad signature and response mismatch.
+- Minor 1 (status overstated signing): description says it signs only for an open call whose answer can still come, and that an open call already refused is checked on the chain with no signature. Separate status spy tests: none for a refused call, a payer signature for a pending one.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Duration  2.19s (transform 289ms, setup 235ms, collect 361ms, tests 1.35s, environment 0ms, prepare 48ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  13.80s (transform 2.09s, setup 32.63s, collect 18.01s, tests 105.69s, environment 20ms, prepare 8.70s)
+```
+reviewed: pending (Codex r3)
