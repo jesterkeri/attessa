@@ -51,7 +51,8 @@ screenshots and checking layouts).
 - **Terminal output** on the homepage and How it works is the CLI's example output from `FLOWS.md`, marked
   illustrative.
 - **Privacy and Terms** are marked Draft; the legal wording is still to be written.
-- **`/.well-known/security.txt`** has placeholder fields.
+- **`/.well-known/security.txt`** is built from `site.config.json` (origin, contact, expiry). Contact and expiry are
+  unset until Joshua fills them in; until then the file says so and carries no placeholder.
 
 Slots used in the pages: `demoServiceUrl`, `callTime`, `payTo`, `amount`,
 `asset`. The explorer's checklist also uses `endpointOrigin`, `releaseId`, `agentId`, `sourceRepo`, `sourceCommit`,
@@ -147,5 +148,5 @@ phone or tablet.
   lookup), the recent-calls feed from Celo events, and every other slot from chain data, the deploy record and
   the SDK. The payment check reads Celo Sepolia today.
 - Celo mainnet in the explorer at Gate 5 (USDC and USA₮), and the registry addresses the network switch implies.
-- Final Privacy and Terms wording, and the real `security.txt` contact.
+- Final Privacy and Terms wording, and the real `security.txt` contact (`site.config.json`).
 - A real-device pass (tap feel, safe areas, keyboard, particle performance on older phones).
