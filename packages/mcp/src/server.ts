@@ -110,7 +110,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_result',
     description:
-      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A decided call is read from the local record (no wallet, no network). A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A verified call is read from the local record (no wallet, no network); a call decided against you (not charged, paid but rejected, settled after refusal) is reported in the CLI's FLOWS words and needs the wallet loaded, but sends nothing. A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
     inputSchema: { type: 'object', properties: { requestId: REQUEST_ID_SCHEMA }, required: ['requestId'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -354,10 +354,28 @@ export function createMcpServer(opts: ServerOptions): Server {
         const entry = ledger?.get(id as `0x${string}`);
         if (!ledger || !entry) throw BUYERR.unknownRequest(id);
         if (TERMINAL_STATES.includes(entry.state)) {
+          if (entry.state !== 'verified') {
+            // Decided against the buyer or not charged: the CLI's own report of a stored outcome (never re-fetches, never signs
+            // a payment), so the FLOWS §6/§8 words and next action are its. It loads the wallet, as `attessa cancel` does.
+            const r = await cli(['cancel', id], true);
+            const lines = Array.isArray(r.json.lines) ? (r.json.lines as string[]).filter((l) => l.trim() !== '') : [];
+            if (r.json.ok === true || r.json.error !== undefined || lines.length === 0) return text(env, r.json, r.json.ok !== true);
+            const warning = entry.state === 'not_charged' ? null : lines[0]!;
+            return text(
+              env,
+              {
+                ...r.json,
+                requestId: id,
+                state: entry.state,
+                ...(warning ? { error: entry.state, message: warning, next: lines.length > 1 ? lines.at(-1)!.trim() : 'Run `status` to see your spending and open calls.' } : {}),
+              },
+              warning !== null,
+            );
+          }
           const evidence = ledger.readEvidence().filter((e) => e.requestId === id).at(-1);
           const answer = join(dir, `${id}.json`);
           return text(env, {
-            ok: entry.state === 'verified',
+            ok: true,
             requestId: id,
             state: entry.state,
             ...(entry.code ? { code: entry.code } : {}),
