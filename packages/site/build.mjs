@@ -145,7 +145,7 @@ const slotChip = name =>
   `<button type="button" class="hash-copy" data-copy="{${name}}" aria-label="Copy {${name}}">${copyIcon}</button></span>`;
 
 const hashChip = full =>
-  `<span class="hash" title="${full}"><button type="button" class="hash-val" data-full="${full}" aria-expanded="false" aria-label="Show full value ${full}">${full.slice(0, 6)}…${full.slice(-4)}</button>` +
+  `<span class="hash" title="${full}"><button type="button" class="hash-val" data-full="${full}" aria-expanded="false">${full.slice(0, 6)}…${full.slice(-4)}</button>` +
   `<button type="button" class="hash-copy" data-copy="${full}" aria-label="Copy ${full}">${copyIcon}</button></span>`;
 
 function expand(html, depth = 0) {

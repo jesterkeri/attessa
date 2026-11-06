@@ -205,7 +205,7 @@
     };
     // The same chip markup as site.js hashChip(): site.js's click handler expands and copies it.
     const chip = full => h('span', { class: 'hash', title: full },
-      h('button', { type: 'button', class: 'hash-val', 'data-full': full, 'aria-expanded': 'false', 'aria-label': `Show full value ${full}` }, `${full.slice(0, 6)}…${full.slice(-4)}`),
+      h('button', { type: 'button', class: 'hash-val', 'data-full': full, 'aria-expanded': 'false' }, `${full.slice(0, 6)}…${full.slice(-4)}`),
       h('button', { type: 'button', class: 'hash-copy', 'data-copy': full, 'aria-label': `Copy ${full}` }, icon('copy')));
     const txLink = o => h('a', { class: 'bracket-link', href: `${o.net.explorer.tx}${o.hash}`, target: '_blank', rel: 'noopener noreferrer' },
       `See it on ${o.net.explorer.name}`, h('span', { class: 'sr-only' }, ' (opens in a new tab)'));

@@ -434,7 +434,7 @@ li[data-state="fail"] .hud-word { color: var(--fail); }
 .recheck input { flex: 1 1 auto; min-width: 0; border: 0; background: transparent; color: var(--text); font: 400 1rem var(--mono); padding: 0; min-height: 58px; }
 .recheck input::placeholder { color: var(--text-3); opacity: 1; }
 .recheck input:focus-visible { outline: none; }
-.recheck:focus-within { border-bottom-color: var(--text); }
+.recheck:focus-within { border-bottom-color: var(--text); outline: 1.5px solid var(--text); outline-offset: 3px; } /* the input draws no ring of its own, so the whole field does: 1.5px like every other control */
 .recheck .bracket-link { padding: 14px 0; }
 @media (max-width: 560px) { .recheck > .ph { display: none; } }
 

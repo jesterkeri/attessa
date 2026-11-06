@@ -137,8 +137,13 @@ function updateScenes() {
 }
 
 // --- WebGL ---
+// Data Saver (navigator.connection.saveData) turns the scene off: the pages read the same, the page is lighter.
+const saveData = navigator.connection?.saveData === true;
+// Touch screens: a pixel ratio of 1 and fewer particles. Low core counts and low memory get the lighter tier too.
+const coarse = matchMedia('(pointer: coarse)').matches;
+const lowEnd = coarse || (navigator.hardwareConcurrency ?? 8) <= 4 || (navigator.deviceMemory ?? 8) <= 4;
 const glOK = (() => {
-  if (!canvas) return false;
+  if (!canvas || saveData) return false;
   try { return !!(canvas.getContext('webgl2') || canvas.getContext('webgl')); } catch { return false; }
 })();
 if (!glOK) root.classList.add('no-webgl');
@@ -556,7 +561,7 @@ function cssColor(name) {
 
 function initGL() {
   renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+  renderer.setPixelRatio(coarse ? 1 : Math.min(devicePixelRatio, 1.75));
   scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0x030304, 9, 30);
   camera = new THREE.PerspectiveCamera(35, 1, 0.1, 80);
@@ -566,7 +571,8 @@ function initGL() {
   scene.add(cluster);
 
   const small = innerWidth < 760;
-  const perCube = small ? 800 : 1800;
+  // Particle tiers: full (desktop), small (narrow window), light (touch or few cores or little memory).
+  const perCube = lowEnd ? 500 : small ? 800 : 1800;
   const n = CUBES.length * perCube;
   const pos = new Float32Array(n * 3), cube = new Float32Array(n), corner = new Float32Array(n), rand = new Float32Array(n * 4);
   const tmp = new THREE.Vector3();
@@ -988,8 +994,26 @@ function frame(now) {
     renderer.render(scene, camera);
   }
 
-  if (!reduce || needsFrame) requestAnimationFrame(frame);
+  // Idle stop: once nothing has happened for IDLE_MS (no scroll, resize, pointer or key) and the intro is over, the
+  // loop stops and draws no more frames; any of those events, or the tab coming back, starts it again.
+  const idle = !SETTLE && now - startAt > 2400 && now - lastActive > IDLE_MS;
+  if (reduce ? needsFrame : !idle && !document.hidden) requestAnimationFrame(frame); else running = false;
   needsFrame = false;
+}
+
+const IDLE_MS = 1500;
+let lastActive = performance.now(), running = true;
+function wake() {
+  lastActive = performance.now();
+  if (reduce || running || document.hidden) return;
+  running = true;
+  t0 = performance.now();
+  requestAnimationFrame(frame);
+}
+if (!reduce) {
+  for (const type of ['scroll', 'resize', 'pointermove', 'pointerdown', 'keydown', 'focusin', 'load']) addEventListener(type, wake, { passive: true });
+  document.addEventListener('visibilitychange', wake);
+  document.fonts?.ready.then(wake);
 }
 
 if (glOK) {

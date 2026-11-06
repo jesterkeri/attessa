@@ -51,6 +51,14 @@
   menu?.addEventListener('click', e => { if (e.target.closest('a')) setMenu(false); });
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && root.classList.contains('menu-open')) { setMenu(false); menuBtn.focus(); }
+    // Tab and Shift+Tab cycle through the menu button and the menu's links; nothing else is reachable while it is open.
+    if (e.key === 'Tab' && root.classList.contains('menu-open')) {
+      const ring = [menuBtn, ...$$('a[href], button:not([disabled])', menu)];
+      const i = ring.indexOf(document.activeElement);
+      const next = i === -1 ? 0 : (i + (e.shiftKey ? -1 : 1) + ring.length) % ring.length;
+      e.preventDefault();
+      ring[next].focus();
+    }
   });
   // Same breakpoint as site.css, where the menu button shows at max-width 1020.98px (no fractional width between).
   matchMedia('(min-width: 1021px)').addEventListener('change', e => { if (e.matches) setMenu(false); });
@@ -304,7 +312,7 @@
   if (!explorer) return;
 
   const chip = name => `<span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{${name}}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{${name}}" aria-label="Copy {${name}}">${copySvg}</button></span>`;
-  const hashChip = full => `<span class="hash" title="${full}"><button type="button" class="hash-val" data-full="${full}" aria-expanded="false" aria-label="Show full value ${full}">${full.slice(0, 6)}…${full.slice(-4)}</button><button type="button" class="hash-copy" data-copy="${full}" aria-label="Copy ${full}">${copySvg}</button></span>`;
+  const hashChip = full => `<span class="hash" title="${full}"><button type="button" class="hash-val" data-full="${full}" aria-expanded="false">${full.slice(0, 6)}…${full.slice(-4)}</button><button type="button" class="hash-copy" data-copy="${full}" aria-label="Copy ${full}">${copySvg}</button></span>`;
   const scan = what => `<span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">${what}</span></span>`;
   const STATUS_WORD = { pass: 'Passed', fail: 'Failed', na: 'Not applicable', wait: 'Checking' };
 

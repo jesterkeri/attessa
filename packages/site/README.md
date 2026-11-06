@@ -106,6 +106,15 @@ switches or blinks out:
 A section opts in with `data-scene-sec="name"` and a `[data-slot]` element; `sceneTarget()` in `scene.js`
 says what each name forms.
 
+### Performance
+
+The loop stops after 1.5 s without a scroll, resize, pointer move or key press (and when the tab is hidden), and
+restarts on the next one. Touch screens get a pixel ratio of 1 and fewer particles, as do machines with four or fewer
+cores or 4 GB of memory or less; Data Saver turns the scene off. Under reduced motion there is no animation loop
+and no ScrollTrigger. `node packages/site/scripts/perf-probe.mjs` measures it in local headless Chromium (it needs
+`playwright-core`, which is not a dependency of this repo; see the script header). GSAP's own ticker still wakes
+every frame while ScrollTrigger is registered; that is the one thing the idle stop does not reach.
+
 ## Design rules (keep these)
 
 - Dark only. Near-black page, one hairline grey family.
