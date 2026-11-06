@@ -3,7 +3,7 @@
 //
 // HAND-WRITTEN ANSWERS: everything here except the base receipt is written by hand on purpose, because these
 // are transport failures and malformed answers a real RPC rarely gives on demand. Each malformed receipt is
-// the real recorded one (fixtures/sepolia-settled.json) with one field broken, and says which.
+// the real recorded one (fixtures/sepolia-x402settled.json) with one field broken, and says which.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadLive, fixture, scripted, replay, makeUi, words } from './lib/live.mjs';
@@ -56,7 +56,7 @@ test('a JSON-RPC error object is not a result', async () => {
 
 test('an RPC on another chain is refused before its receipt is used', async () => {
   // Hand-written: 0xa4ec is Celo mainnet (42220). The receipt answer is the real one, to show it is not used.
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   const receipt = real.calls.find(c => c.request.method === 'eth_getTransactionReceipt').response.result;
   const o = await live.check(real.txHash, 'sepolia', { fetch: scripted(req => (req.method === 'eth_chainId' ? ok('0xa4ec')(req) : ok(receipt)(req))) });
   assert.equal(o.kind, 'wrongchain');
@@ -84,7 +84,7 @@ test('answers that are not JSON-RPC answers to this request are refused', async 
 });
 
 test('malformed receipts (each the real one with one field broken) are refused, never half-shown', async () => {
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   const at = m => real.calls.find(c => c.request.method === m).response.result;
   const base = at('eth_getTransactionReceipt');
   const block = at('eth_getBlockByNumber');
@@ -116,7 +116,7 @@ test('malformed receipts (each the real one with one field broken) are refused, 
 });
 
 test('a block that is not the receipt\'s block is refused (each the real one with one field broken)', async () => {
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   const at = m => real.calls.find(c => c.request.method === m).response.result;
   const receipt = at('eth_getTransactionReceipt');
   const base = at('eth_getBlockByNumber');
@@ -134,7 +134,7 @@ test('a block that is not the receipt\'s block is refused (each the real one wit
 });
 
 test('a removed (reorged-out) log is not counted as a payment', async () => {
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   const receipt = structuredClone(real.calls.find(c => c.request.method === 'eth_getTransactionReceipt').response.result);
   for (const l of receipt.logs) l.removed = true; // hand-written: the real receipt with every log marked removed
   const fetch = scripted(req => ok(req.method === 'eth_chainId' ? CHAIN : receipt)(req));
@@ -156,13 +156,13 @@ test('a malformed hash and an unknown network never reach the network', async ()
 });
 
 test('an upper-case pasted hash is checked as its lower-case form', async () => {
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   const o = await live.check(real.txHash.toUpperCase().replace('0X', '0x'), 'sepolia', { fetch: replay(real.calls) });
   assert.equal(o.kind, 'settled');
 });
 
 test('a second check cancels the first, and the late answer is dropped', async () => {
-  const real = fixture('settled');
+  const real = fixture('x402settled');
   let release;
   const gate = new Promise(r => { release = r; });
   const slow = scripted(async req => { await gate; return ok(CHAIN)(req); });

@@ -67,19 +67,39 @@ while (windows < 60 && to > 0n) {
 console.log(`USDC transfers: ${byTx.size} txs, blocks ${to + 1n}..${head}`);
 if (!byTx.size) throw new Error('no USDC transfer found on Celo Sepolia in the scanned range');
 
-// Prefer a single transfer made by transferWithAuthorization (the shape of an x402 settlement).
-let single = null;
+// A plain transfer: exactly one pinned-USDC Transfer and no AuthorizationUsed log, so it is not an x402 settlement.
+let plainTx = null;
 for (const [tx, n] of byTx) {
   if (n !== 1) continue;
   const r = await result('eth_getTransactionReceipt', [tx]);
-  if (r?.status !== '0x1') continue;
-  single ??= tx;
-  if (r.logs.some(l => l.address.toLowerCase() === USDC && l.topics[0] === AUTH_USED)) { single = tx; break; }
   await pause(100);
+  if (r?.status !== '0x1' || r.logs.some(l => l.topics[0] === AUTH_USED)) continue;
+  plainTx = tx; break;
 }
-if (!single) throw new Error('no single USDC transfer found');
-const settledReceipt = await record('settled', 'A real USDC transfer on Celo Sepolia: exactly one Transfer log of the pinned USDC, status 0x1. Found with eth_getLogs on the USDC address.', single);
-console.log(`single: transferWithAuthorization ${settledReceipt.logs.some(l => l.topics[0] === AUTH_USED)}`);
+if (!plainTx) throw new Error('no plain single USDC transfer found');
+await record('plaintransfer', 'A real plain USDC transfer on Celo Sepolia: exactly one Transfer log of the pinned USDC, no AuthorizationUsed log, status 0x1. It is not an x402 settlement. Found with eth_getLogs on the USDC address.', plainTx);
+
+// An x402 settlement (SPEC.md section 6.2 V11): the pinned token's AuthorizationUsed(authorizer, nonce) and one Transfer(from the
+// same address) in one transaction, i.e. a transferWithAuthorization. Found by walking AuthorizationUsed logs of the pinned USDC.
+const authSpan = 5000n, authWindows = Number(BigInt(process.env.CAPTURE_AUTH_BLOCKS ?? 200000) / authSpan);
+let settled = null;
+for (let w = 0; w < authWindows && !settled; w += 8) {
+  const part = await Promise.all(Array.from({ length: 8 }, (_, i) => {
+    const to = head - BigInt(w + i) * authSpan, from = to - authSpan + 1n;
+    return result('eth_getLogs', [{ address: USDC, topics: [AUTH_USED], fromBlock: `0x${from.toString(16)}`, toBlock: `0x${to.toString(16)}` }]).catch(() => []);
+  }));
+  for (const l of part.flat()) {
+    const r = await result('eth_getTransactionReceipt', [l.transactionHash]);
+    await pause(100);
+    const pinned = r.logs.filter(x => x.address.toLowerCase() === USDC);
+    const transfers = pinned.filter(x => x.topics[0] === TRANSFER), auths = pinned.filter(x => x.topics[0] === AUTH_USED);
+    if (r.status === '0x1' && transfers.length === 1 && auths.length === 1 && auths[0].topics[1] === transfers[0].topics[1]) { settled = l.transactionHash; break; }
+  }
+}
+if (!settled) throw new Error('no single transferWithAuthorization settlement of the pinned USDC found: widen CAPTURE_AUTH_BLOCKS');
+await record('x402settled', 'A real x402-shaped settlement on Celo Sepolia (SPEC.md section 6.2 V11): in one transaction, the pinned USDC AuthorizationUsed(authorizer, nonce) and one Transfer from the same address. Found with eth_getLogs for AuthorizationUsed on the USDC address.', settled);
+
+if (process.env.CAPTURE_ONLY === 'settlement') process.exit(0);
 
 const multi = [...byTx].find(([, n]) => n > 1)?.[0];
 if (multi) await record('multiple', `A real Celo Sepolia transaction with ${byTx.get(multi)} Transfer logs of the pinned USDC. Found with eth_getLogs on the USDC address.`, multi);

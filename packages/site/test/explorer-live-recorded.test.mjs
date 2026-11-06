@@ -38,7 +38,7 @@ test('the pinned decimals and symbol match the token on Celo Sepolia', () => {
 
 test('a real USDC transfer: payer, paid address, amount, block and time come from the receipt and block', async () => {
   const log = [];
-  const { f, o } = await run('settled', log);
+  const { f, o } = await run('x402settled', log);
   assert.equal(o.kind, 'settled', JSON.stringify(o, (k, v) => (typeof v === 'bigint' ? v.toString() : v)));
   const receipt = f.calls.find(c => c.request.method === 'eth_getTransactionReceipt').response.result;
   const block = f.calls.find(c => c.request.method === 'eth_getBlockByNumber').response.result;
@@ -57,7 +57,7 @@ test('a real USDC transfer: payer, paid address, amount, block and time come fro
 });
 
 test('the settled result renders the recorded values, the four planned rows and a Blockscout link', async () => {
-  const { f, o } = await run('settled');
+  const { f, o } = await run('x402settled');
   const { ui, doc, said, verdicts } = makeUi();
   live.render(ui, o, { readAt: new Date('2026-11-05T10:00:00Z') });
   const text = words(ui.result);
@@ -121,4 +121,65 @@ test('a real transaction with more than one USDC transfer is refused, not guesse
   const { ui } = makeUi();
   live.render(ui, o);
   assert.equal(words(ui.result), `More than one payment in this transaction ${o.hash.slice(0, 6)}…${o.hash.slice(-4)} moves USDC ${n} times, in block ${o.blockNumber} on Celo Sepolia. A settlement moves it once, so the explorer doesn't pick one and shows none of them. See it on Blockscout (opens in a new tab)`);
+});
+
+// ---- Codex site-finish r1 M1: a plain USDC transfer is not an x402 settlement (SPEC.md section 6.2 V11) ----
+// V11: the same transaction holds the pinned token's AuthorizationUsed(authorizer, nonce) and the matching Transfer from that
+// address. Only then may the explorer say an x402 payment settled; a Transfer alone is a plain transfer.
+const AUTH_USED = '0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5';
+const without = (f, keep) => ({ ...f, calls: f.calls.map(c => (c.request.method === 'eth_getTransactionReceipt' && c.response.result
+  ? { ...c, response: { ...c.response, result: { ...c.response.result, logs: c.response.result.logs.filter(keep) } } } : c)) });
+const outcome = async f => live.check(f.txHash, 'sepolia', { fetch: replay(f.calls) });
+
+test('the recorded x402 settlement really holds AuthorizationUsed and one Transfer from the same address (precondition)', () => {
+  const f = fixture('x402settled');
+  const logs = f.calls[1].response.result.logs.filter(l => l.address.toLowerCase() === net.tokens[0].address);
+  const auth = logs.filter(l => l.topics[0] === AUTH_USED), tr = logs.filter(l => l.topics[0] === live.TRANSFER);
+  assert.equal(auth.length, 1);
+  assert.equal(tr.length, 1);
+  assert.equal(auth[0].topics[1], tr[0].topics[1]);
+});
+
+test('a real plain USDC transfer is "a plain USDC transfer, not an x402 settlement", never a settlement', async () => {
+  const f = fixture('plaintransfer');
+  const logs = f.calls[1].response.result.logs;
+  assert.equal(logs.filter(l => l.topics[0] === AUTH_USED).length, 0, 'precondition: the recording has no AuthorizationUsed');
+  assert.equal(logs.filter(l => l.address.toLowerCase() === net.tokens[0].address && l.topics[0] === live.TRANSFER).length, 1, 'precondition');
+  const o = await outcome(f);
+  assert.equal(o.kind, 'plaintransfer');
+  const { ui, said, verdicts } = makeUi();
+  live.render(ui, o);
+  const text = words(ui.result);
+  assert.match(text, /^A plain USDC transfer, not an x402 settlement /);
+  assert.ok(text.includes(`${o.payer.slice(0, 6)}…${o.payer.slice(-4)} sent`), text);
+  assert.doesNotMatch(text, /Settled on Celo|Settlement tx|Checklist|Overall verdict|Paid Payment/);
+  assert.match(text, /no x402 authorization/i);
+  assert.deepEqual(verdicts, ['idle']);
+  assert.ok(said.every(s => !/settled/i.test(s) || /not an x402 settlement/.test(s)), said.join('|'));
+});
+
+test('a settlement with its AuthorizationUsed removed, or from another address or contract, is a plain transfer', async () => {
+  const real = fixture('x402settled');
+  assert.equal((await outcome(real)).kind, 'settled');
+  const noAuth = await outcome(without(real, l => l.topics[0] !== AUTH_USED));
+  assert.equal(noAuth.kind, 'plaintransfer');
+  const otherPayer = JSON.parse(JSON.stringify(real));
+  const rec = otherPayer.calls[1].response.result.logs.find(l => l.topics[0] === AUTH_USED);
+  rec.topics[1] = `0x${'0'.repeat(24)}${'ab'.repeat(20)}`;
+  assert.equal((await outcome(otherPayer)).kind, 'plaintransfer', 'an authorization by someone else does not make this transfer an x402 payment');
+  const otherToken = JSON.parse(JSON.stringify(real));
+  otherToken.calls[1].response.result.logs.find(l => l.topics[0] === AUTH_USED).address = `0x${'cd'.repeat(20)}`;
+  assert.equal((await outcome(otherToken)).kind, 'plaintransfer', 'AuthorizationUsed from another contract does not count');
+});
+
+test('the x402 settlement result says an x402 payment settled and that the link to a call and its proof is not shown', async () => {
+  const o = await outcome(fixture('x402settled'));
+  const { ui } = makeUi();
+  live.render(ui, o);
+  const text = words(ui.result);
+  assert.match(text, /x402 payment settled on Celo/);
+  assert.match(text, /isn't a verified call/);
+  assert.match(text, /which endpoint, build or signer answered/);
+  assert.match(text, /needs the call's proof/);
+  assert.match(text, /no link to an Attessa call is shown/i);
 });
