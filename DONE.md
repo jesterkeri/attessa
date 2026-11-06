@@ -1220,3 +1220,982 @@ lint=0
 ```
 - Adversary r1 on 133c133: CLEAN. Weakening check: 5 gateway mutants (cap 17, cap 15, the 17th call executed and settled, two re-sends per row, ticks run one after the other) fail both the old and the new form of the tests. 3 more pass both forms (existing blind spots, none added by this change). Flake check: the two files on one core with 8 busy loops failed in the old form 3 runs of 3 (7, 9 and 10 of 16 calls got 200; the ticks test timed out at 20 s). In the new form they passed 4 of 4, and 5 of 5 with 4 busy loops. `taskset -c 0,1 pnpm -r test` twice: gateway 154/154. The other `holdable` tests pass with the new `release()`. Its side-by-side test and scripts are archived outside the repo.
 reviewed: reviews/gateway-ci-timing-review-r1.md | verdict: implementation-ready | C0 M0 m0
+
+## Install-scripts allow-list for bin, engines and two scripts - 2026-11-02
+commit: 724d652 (this entry adds only DONE.md)
+why: `./scripts/check-install-scripts.sh` failed on staging with 7 lines from T15, T19 and T20 (bin in cli, gateway and seller-host; engines in sdk; scripts gen:vectors in core and render-units in seller-host; better-sqlite3@13.0.3 without a pinned integrity). T39 needs the check to pass.
+changed (scripts/check-install-scripts.sh, workspace manifests only; the root manifest rules are unchanged):
+- bin: a map of command names (`[a-z0-9][a-z0-9-]*`) to .js files under the package's dist/; a string, an absolute path, a `.`/`..` or hidden component, or a path outside dist/ fails.
+- engines: a node range only (`>=`, `^` or `~` and up to three numbers); any other engine fails.
+- scripts gen:vectors and render-units: only as `node [--experimental-strip-types] scripts/<file>.(ts|js|mjs)` where that file is a tracked regular file of the same package. Neither runs at install; preinstall, install, postinstall and prepare are still refused (test cases below).
+- PINNED gets better-sqlite3@13.0.3. pnpm-lock.yaml and the registry agree:
+```
+lock: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+npm:  sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+integrity_match
+```
+test: scripts/check-install-scripts.allowlist.test.sh. Each case changes one thing in a scratch copy of HEAD and the probe must print exactly that one FAIL line, so none of the 7 original lines may appear (the old guard fails all 16 cases).
+verified at 724d652:
+```
+$ flock -w 3600 /home/hr/.cache/attessa-heavy.lock ./scripts/check-install-scripts.sh; echo "probe_rc=$?"
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+probe_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh; echo "test_rc=$?"
+ok: bin outside dist/
+ok: bin with .. out of dist/
+ok: bin absolute
+ok: bin as a string
+ok: bin command name with a path
+ok: engines beyond node
+ok: engines node not a range
+ok: extra unknown key
+ok: preinstall script
+ok: install script
+ok: postinstall script
+ok: prepare script
+ok: gen:vectors running more than node
+ok: gen:vectors in the root manifest
+ok: render-units on an untracked file
+ok: wrong better-sqlite3 integrity
+16 cases, rc=0
+test_rc=0
+```
+The T02 install-guard adversary tests, run at 724d652 under flock:
+```
+scripts/adversary-t02-codex-r2/install-probe-dirty-checkout.sh rc=0
+scripts/adversary-t02-r12/install-probe-core-worktree.sh rc=0
+scripts/adversary-t02-r12/install-probe-git-env.sh rc=0
+scripts/adversary-t02-r13/install-probe-archive-filter.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch-tree.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch.sh rc=0
+scripts/adversary-t02-r4/install-probe-false-clean.sh rc=0
+scripts/adversary-t02-r5/install-probe-keytar-dir.sh rc=0
+scripts/adversary-t02-r6/install-probe-pnpmfile.sh rc=0
+scripts/adversary-t02-r7/install-probe-npx-local-bin.sh rc=0
+scripts/adversary-t02-r7/install-probe-xdg-config.sh rc=0
+scripts/adversary-t02-r7/install-static-nonascii-path.sh rc=0
+scripts/adversary-t02-r8/install-probe-manifest-dir.sh rc=0
+scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
+scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
+scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
+```
+adversary r1 (6f950c0): no defect. Bins named node, sh, prebuild-install, node-gyp and tsc ran nothing at install (`probe_rc=0`); traversal, absolute, symlink and non-regular bin targets, flagged or chained scripts, root gen:vectors, extra engines keys, JSON5/YAML manifests and a wrong integrity were all refused. Its unproven suspicion, that a bin named node or tsc would shadow that tool in other packages' scripts after install, is closed in 996e559: bin names must be `attest` or `attessa[-name]` (today: attessa, attest, attessa-gateway-server, attessa-seller-host), with three cases added.
+
+verify at 996e559 (`./scripts/check-install-scripts.sh`, then `./scripts/check-install-scripts.allowlist.test.sh`; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+19 cases, rc=0
+```
+adversary r2 (0448791): one defect. Python's `\d` matches non-ASCII digits, so engines.node "２２" and ">=٢٢.١٣.٠" passed as node ranges, though semver rejects them (nothing runs: pnpm only warns on engines). Fixed in 4ea81d9: every `\d` in the guard's patterns is now `[0-9]`, with one case added to the allow-list test. The adversary's script is archived at .worktrees/archive/adversary/install-r2-engines-nonascii-digits.sh and passes. Bin names with a trailing newline, upper case, a Cyrillic look-alike or dotless i were refused. Its unproven suspicion, that a registry dependency's own bin named node would still shadow node, is outside this guard (registry packages are lockfile- and integrity-pinned; none today has such a bin).
+
+verify at 4ea81d9 (guard, allow-list test, adversary r2 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+20 cases, rc=0
+ok: engines.node ２２ refused
+ok: engines.node >=٢٢.١٣.٠ refused
+```
+adversary r3 (fb5ce94): one defect, failing closed. The snapshot accepts tracked 100755 files, but the later script check looked only at 100644 blobs, so `chmod +x packages/core/scripts/gen-vectors.ts` was refused as "not a tracked regular file". Fixed in 6c88a6e: a script file may be 100644 or 100755 (node runs it either way); one accepting case added. Its other 25 cases (newlines, upper case, dotless i, the Kelvin sign, non-string types, compound ranges, tabs, doubled extensions, Arabic-Indic digits, `pre` hooks, fullwidth versions) were all refused as they should be. Its script is archived at .worktrees/archive/adversary/install-r3-allowlist-semantics.sh.
+
+verify at 6c88a6e (guard, allow-list test, adversary r3 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r3_rc=0
+26 ok lines, 0 FAIL
+```
+adversary r4 (c5416d7): one defect in the allow-list test, not the guard. The executable-file case counted any refusal without a "FAIL path:" line (a pnpm fetch failure, a failed install) as accepted. Fixed in 22bf312: the case passes only on probe exit 0 and the guard's ok line. A manifest, lockfile or workspace file at 100755, and a script target that is a gitlink, symlink, directory or dotted name, were all refused. Its script is archived at .worktrees/archive/adversary/install-r4-allowlist-accept-ignores-refusal.sh.
+
+verify at 22bf312 (guard, allow-list test, adversary r4 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r4_rc=0
+ok: the accepting case does not count a refused probe as accepted
+```
+adversary r5 (2eb7a4a): no defect. Of 23 one-line guard mutants, 13 were caught and 2 are equivalent (the guard crashes and still refuses); 8 (m01 bin not .js, m10 engines with 4+ parts, m12 any node option, m13 script outside scripts/, m14 any extension, m15 another package's file, m16 a gitlink, m23 Unicode digits in dependency versions) passed all 21 cases. Its gap test is added unchanged as `scripts/check-install-scripts.allowlist-gaps.test.sh` in ac9bd19, and the executable-file case now asserts its commit recorded mode 100755. Mutants and scripts archived at .worktrees/archive/adversary/install-r5/.
+
+verify at ac9bd19 (guard, allow-list test, gap test; run by Claude under the heavy lock), 2026-11-04:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+gaps_rc=0
+10 ok lines, 0 FAIL
+```
+Correction to the r5 note above (adversary r6): the 8 surviving mutants were run against the allow-list test's 20 static cases, not the full-probe executable case, so "passed all 21 cases" should read "passed all 20 static cases"; and the archive at .worktrees/archive/adversary/install-r5/mut/ holds 16 of the 23 mutants (m02 to m08 are not there), so those 7 can't be re-checked from it.
+
+adversary r6 (aa2b635): no defect. In all 10 gaps-test cases the matched `FAIL <manifest>:` line is the check the case targets, not the integrity line; the gaps test catches each of the 8 surviving mutants with that mutant's own case; the executable precondition sets rc=1 when chmod or the commit fails; the allow-list test passes 21 cases; scripts as a list or string, a null bin, `__proto__`, BOM or UTF-16 manifests, nested script paths and gitlink or directory targets are all refused. Its scripts are archived at .worktrees/archive/adversary/install-r6/.
+reviewed: Codex r1 REVISE (three false evidence claims, no code finding); corrected below; pending Codex r2
+
+Codex r1 corrections (DONE.md is append-only, so the earlier lines stand and these replace them):
+- The bin rule at 724d652 above ("command names (`[a-z0-9][a-z0-9-]*`)") overstates it. `scripts/check-install-scripts.sh:189` admits only `attest`, `attessa` and `attessa-<part>[-<part>…]` with lowercase ASCII letters and digits (`re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)")`); `node`, `tsc`, `sh`, `npx` or `tool` fail.
+- "the probe must print exactly that one FAIL line" should read "the probe must print the case's expected FAIL line(s)": the root-manifest case (`scripts/check-install-scripts.allowlist.test.sh:64`) expects two.
+- `scripts/check-install-scripts.allowlist-gaps.test.sh`'s header said the surviving mutants pass "the allow-list test's 21 cases"; it now says the 20 static cases, as the adversary r6 correction above records.
+
+adversary r7 (b4097ab): no guard defect; one false comment and two narrow descriptions. `scripts/check-install-scripts.allowlist.test.sh:4-5` still said "exactly that one FAIL line"; it now says the case's expected FAIL line(s), two for the root-manifest case. The bin targets above say ".js files": the rule at `scripts/check-install-scripts.sh:189` also admitted `.cjs` and `.mjs` under dist/ (adversary r8: now `.js` only, as the guard's header and its error line say; every workspace bin is `dist/*.js`). The engines rule above says "`>=`, `^` or `~`": the operator is optional, so a bare version such as `22` also passes. None of these admitted shapes runs a script at install (r7 checked).
+
+adversary r9 (366ee41, `scripts/adversary-install-r9/`, failing before the fix): two fail-closed defects, no admitted install script. (1) The guard refused what its header allowed: script files in a sub-folder of scripts/, with a dot in the name or a `.cjs` extension, and node ranges such as `>22.12.0`, `>=22.13.0 <25` and `22.x`; and the gaps test's header called `node scripts/gen.sh` forbidden by the header, which named no extension. (2) A false evidence claim in the adversary r6 note above: a manifest with `"scripts": ["test"]` or `""`, and one saved with a UTF-8 BOM, passed (the whole probe exited 0 with both). Fixed in 6f4f999:
+- `scripts/check-install-scripts.sh` header: engines are a node semver range (ASCII digits or x/*, at most major.minor.patch, `<` `<=` `>` `>=` `=` `^` `~`, hyphen ranges, `||`); the two scripts run `node` on a tracked `.ts`, `.js`, `.mjs` or `.cjs` file under the package's scripts/ (sub-folders allowed, no hidden or `..` component); each manifest is a UTF-8 JSON object with no BOM, with object `scripts`, `dependencies` and `devDependencies`. The code now matches each of these.
+- Correction to the adversary r6 note above: before 6f4f999, scripts as a list or string and a BOM manifest were accepted, not refused; "nested script paths are refused" is no longer true, since the header now allows them. The adversary r7 note's engines description is superseded by the grammar above.
+No existing assertion changed.
+
+checks at 6f4f999 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r10 found a defect; see below; then Codex r2)
+
+adversary r10 (a55742d, `scripts/adversary-install-r10/path-inside-tree.test.sh`, failing before the fix): the header said "Nothing is resolved from the tree under test", but PATH kept every absolute entry, so an entry inside the checkout (such as the `$PWD/node_modules/.bin` that direnv's `layout node` adds) let the tree's own `git` run at `rev-parse --show-toplevel`, before any check. The PATH filter itself also ran `tr`, `grep` and `paste` through the unfiltered PATH. Fixed in 237d5c0:
+- `scripts/check-install-scripts.sh`: PATH keeps only absolute entries whose `cd -P` target lies outside the checked folder, computed with bash builtins alone before any command is looked up; the header says so.
+- r10's unproven note on the node range grammar: it no longer accepts leading zeros or a `v` prefix, and accepts a space after an operator (`>= 22`), as node-semver does; the header says "ASCII digits with no leading zero, or x/X/*".
+No existing assertion changed.
+
+checks at 237d5c0 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r11 found a defect; see below; then Codex r2)
+
+adversary r11 (42b97df, `scripts/adversary-install-r11/path-bash-shebang.test.sh`, failing before the fix): the guard's `#!/usr/bin/env bash` made env look `bash` up on the unfiltered PATH, so a tracked `bin/bash` with `$root/bin` on PATH, or a tracked `./bash` with an empty PATH entry, ran the whole guard. The adversary r10 note above ("computed with bash builtins alone before any command is looked up") was therefore not true: the interpreter was looked up first. Fixed in ca3cf57:
+- `scripts/check-install-scripts.sh`: the shebang is `#!/bin/bash`, so no PATH lookup happens before the filter; the comment says so. r11's unproven note on a relative TMPDIR: TMPDIR is now ignored unless absolute, so `$tmp` can't resolve inside the snapshot after the probe changes folder.
+No existing assertion changed.
+
+checks at ca3cf57 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+r11_rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r12 found a defect; see below; then Codex r2)
+
+adversary r12 (d1ef492, `scripts/adversary-install-r12/empty-path.test.sh`, failing before the fix): when no PATH entry lies outside the checked folder (only `$root/bin`, or only `.`), the filter set `PATH=` to the empty string, which bash reads as the current folder, the checkout; the tree's own `grep` then ran at `compgen -e | grep '^GIT_'`, and `git` after it. Fixed in adfa749:
+- `scripts/check-install-scripts.sh`: an empty filtered PATH stops the guard with "FAIL: no PATH entry outside the checked folder". r12's unproven note on BASH_ENV: the shebang is now `#!/bin/bash -p`, so bash sources no BASH_ENV and imports no functions from the environment.
+No existing assertion changed.
+
+checks at adfa749 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r12/empty-path.test.sh "$PWD"
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+r12 rc=0
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"  # 2 ok lines
+r11 rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10 rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r13, then Codex r2)
+
+### Install allow-list adversary r13 follow-up - 2026-11-05
+adversary r13 on 0230768 reported no defect, but it ran static reads only (it could not run git or the tests), so it is not a clean round. Its one lead, git reading user config through a relative path, is closed anyway in 6608dbe: `scripts/check-install-scripts.sh` unsets a relative `XDG_CONFIG_HOME` and refuses a relative `HOME` ("FAIL: HOME must be an absolute path"), so `$XDG_CONFIG_HOME/git/config` and `$HOME/.gitconfig` can't resolve inside the checkout.
+
+verify at 6608dbe (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock; then the guard run with `HOME=rel`), run by Claude, 2026-11-05:
+```
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+FAIL: HOME must be an absolute path
+```
+reviewed: pending (adversary r14 with tests run, then Codex r2)
+
+### Install allow-list adversary r14 - 2026-11-05
+adversary r14 on d645889 (tests run) reported:
+- Finding, not taken as a defect: the allow-list refuses a tracked nested package.json (for example a test fixture under packages/core/test/fixtures/) that pnpm never reads, while the header named only "workspace manifests". The guard stays strict on purpose: no nested manifest is needed, and loosening a supply-chain check for a file that doesn't exist is the riskier change. 6379949 makes the header say so ("These rules hold for every tracked package.json at any depth"). Its test is archived in .worktrees/archive/adversary/install-r14/nested-manifest.test.sh, not committed, since it asserts the looser rule. For Codex to judge.
+- Lead, closed: PyYAML reads YAML 1.1, so `ignoreScripts: yes` (or `on`) passed the pnpm-workspace.yaml check, while pnpm's YAML 1.2 parser reads it as a string. Test 523581c (`scripts/adversary-install-r14/yaml-bool.test.sh`, 3 FAIL lines before the fix); fix 6379949 requires exactly one plain `ignoreScripts: true` line.
+
+verify at 6379949 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+r14yaml_rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r15, then Codex r2)
+
+### Install allow-list adversary r15 - 2026-11-05
+adversary r15 on af856ef: a pnpm-workspace.yaml with two `<<` merge keys (`<<: {ignoreScripts: false}` then a flow mapping holding a plain `ignoreScripts: true` line) passed the guard, since PyYAML lets the later merge win, while pnpm 10.32.1's @zkochan/js-yaml lets the earlier win; offline, pnpm ran a root postinstall with it, and the full guard run ended "ok". Its lead, the same split in pnpm-lock.yaml, holds too (merge keys, anchors, aliases and tags all passed).
+Tests 5022ffb: `scripts/adversary-install-r15/yaml-merge.test.sh` (the adversary's) and `scripts/adversary-install-r15/lock-merge.test.sh` (merge key, anchor and alias, tag in the lockfile), all failing before the fix. Fix 3928332: the guard scans both YAML files' tokens and refuses anchors, aliases, tags, directives and `<<` keys (pnpm never writes them), and pnpm-workspace.yaml, past its comment lines, must be one exact text (replacing the r14 one-line check).
+
+verify at 3928332 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r16, then Codex r2)
+
+### Install allow-list adversary r16 - 2026-11-05
+adversary r16 on a732336: pnpm 10.32.1 builds each package as the lockfile snapshot merged with `packages[key minus its peer suffix]`, so a snapshot with no packages entry keeps its own `resolution`. A snapshot-only `keytar@7.9.0: {resolution: {directory: vendor/keytar, type: directory}}` passed the guard (it checked resolution only under packages), and pnpm, offline with --frozen-lockfile, installed keytar from vendor/keytar in the tree into node_modules/.pnpm/keytar@7.9.0/node_modules/keytar, the path the lifecycle check trusts as a registry copy.
+Test fa1c8aa (`scripts/adversary-install-r16/lock-snapshot-resolution.test.sh`, failing before the fix); fix 70edca9: every snapshot needs a packages entry for its key minus the "(peers)" suffix, and may hold only dependencies, optionalDependencies, transitivePeerDependencies and optional.
+
+verify at 70edca9 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r17, then Codex r2)
+
+### Install allow-list adversary r17 - 2026-11-05
+(The first r17 run stopped before testing anything and is not counted; this is the second.) adversary r17 on 134a85b: pnpm 10.32.1 builds each package as `Object.assign(snapshot, packages[id])`, so a `packages` entry's own fields win, `dependencies` included, and the guard checked only its key and resolution. Adding `dependencies: {punycode: link:vendor/punycode}` to the `tr46@5.1.1` packages entry passed the full guard, and a real `--frozen-lockfile` install linked tr46's punycode to vendor/punycode in the tree (no integrity). The same goes for other entry fields (`version`, `id`), and the adversary left top-level keys (overrides, patchedDependencies, catalogs) unchecked.
+Tests b99b5f9: `scripts/adversary-install-r17/lock-package-dependencies.test.sh` (the adversary's) and `scripts/adversary-install-r17/lock-keys.test.sh` (a packages entry's own `version`, a top-level `overrides`), failing before the fix. Fix 237550c: packages entries may hold only resolution, engines, os, cpu, libc, hasBin, peerDependencies, peerDependenciesMeta and deprecated, and the lockfile only its five top-level keys.
+
+verify at 237550c (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r17/lock-package-dependencies rc=0
+r17/lock-keys rc=0
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r18, then Codex r2)
+
+### Install allow-list adversary r18 - 2026-11-05
+adversary r18 on e151ac7: pnpm 10.32.1 under `--frozen-lockfile` compares an importer's specifier with package.json and links or installs its `version` as written, and the guard checked only that a `link:` version had a `workspace:` specifier. So `viem: workspace:*` linked to `link:../../vendor/viem` (a tree folder that is no workspace project), `@attessa/core` linked to `link:/opt/...` (outside the repository), and `viem: 2.57.13` with version `typescript@5.9.3` (another registry package) all passed the guard; the adversary showed pnpm installing each.
+Test 9d8a2a3: `scripts/adversary-install-r18/importer-versions.test.sh` (the adversary's), failing before the fix. Fix ef3b7f1: each importer is `.` or a tracked `packages/<dir>`; each dependency is either the workspace project of that name (`workspace:` specifier, `link:` resolving to that project's folder) or a snapshot keyed by its own name and version; package names in `packages` keys may not start with `.` or `_`. The r14 to r17 tests now stop when mktemp fails (the adversary's r18 test caught that flaw; without a scratch folder they ran git reset in the cwd). The r13 glob has no test files (rc=127 below is that empty glob, as in earlier runs).
+
+verify at ef3b7f1 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r13/* rc=127
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r19, then Codex r2)
+
+### Install allow-list adversary r19 - 2026-11-05
+adversary r19 on 5f583c0: PyYAML (YAML 1.1) reads an unquoted lockfile key `null` or `~` as None, while pnpm 10.32.1 reads it as the string "null". With `"null": "workspace:*"` in packages/cli/package.json and `null: {specifier: workspace:*, version: link:../../vendor/null}` in the lockfile, the r18 rule compared `proj.get(<not a project>)` (None) with the name (None) and accepted the link; pnpm linked node_modules/null to vendor/null (the adversary ran it), and the `~` case to a folder outside the repository.
+Test 77bdbab: `scripts/adversary-install-r19/importer-null-name.test.sh` (the adversary's), failing before the fix. Fix c9aba0f: every mapping key in pnpm-lock.yaml must be a string, and only a workspace project with a string name can be a link target.
+
+verify at c9aba0f (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r20, then Codex r2)
+
+### Install allow-list adversary r20 - 2026-11-05
+(The first r20 run was stopped by a safety check before it ran anything and is not counted; this is the second.) adversary r20 on 76ba3a3: the guard checked dependency values but never dependency names, and kept any string workspace project name. pnpm 10.32.1 links each dependency at `path.join(<project>/node_modules, name)`, so a project named `../../../.git/hooks` with a tracked executable `pre-commit`, depended on as `"../../../.git/hooks": "workspace:*"`, passed the guard, and pnpm (run offline by the adversary on a scratch workspace) replaced .git/hooks with a link to the tree folder, moving the real one aside; the next `git commit` would run the tree's hook. A name like `../../../../attessa-r20-outside` linked outside the checkout.
+Test 35a3cd9: `scripts/adversary-install-r20/dependency-name-path.test.sh` (the adversary's), failing before the fix. Fix 4e15bb2: every dependency name in package.json files, lockfile importers and snapshots, and every workspace project name, must be an npm package name (`(@scope/)?name`, no `/` beyond the scope, no leading `.`).
+The first verify run's real `pnpm install` stalled on the registry (no log line for 29 minutes, sockets idle) and was stopped; the heavy stage was rerun with a 30-minute timeout per step. The real repository's .git/hooks is untouched (no .git/.ignored_hooks).
+
+verify at 4e15bb2 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+r20/dependency-name-path rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r21, then Codex r2)
+
+### Install guard adversary r21 (failing test 256c323, fix 6334bdc) - 2026-11-05
+Finding: the guard counted any tracked `packages/<dir>/package.json` as a workspace project, so a lockfile importer dependency `workspace:*` with `version: link:../.x` (a dot folder) or `link:../bower_components` was accepted, while pnpm 10.32.1's `packages/*` glob (tinyglobby without `dot`, ignoring `**/bower_components/**`) does not list those folders and links them under `--frozen-lockfile` as plain folders with no integrity check (the guard's own comments at the lockfile and importer rules).
+Fix: a tracked `packages/.<name>/package.json` or `packages/bower_components/package.json` is refused ("pnpm does not list this folder as a workspace project"); `node_modules` was already refused.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 18 rc=0, no FAIL line):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:$SCRATCH/tmp-install/attessa-adv-imp-r18.Zun3/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r22, then Codex r2)
+
+### Install guard adversary r22 (failing test 5569022, fix b6abed9) - 2026-11-05
+Finding: a tracked `packages/<name>/package.json` whose folder name is not valid UTF-8 (byte ff) became the project `packages/a\udcff` through `os.fsdecode`, and a lockfile `link:"../a\udcff"` (a YAML escape PyYAML accepts) matched it, while pnpm 10.32.1 decodes folder names as UTF-8 with U+FFFD, lists no such project, and links the dependency to the plain folder `packages/a<ef bf bd>` with no manifest and no integrity check (the guard's lockfile and importer rule comments).
+Fix: any tracked path that is not valid UTF-8 is refused ("not allowed (a path that is not UTF-8)") before any other rule reads it.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 19 rc=0, no FAIL line):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:$SCRATCH/tmp-install/attessa-adv-imp-r18.HJgA/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r23, then Codex r2)
+
+### Install guard adversary r23 (failing test 8949dfb, fix 8b5a937) - 2026-11-05
+Finding: U+0085 (NEL) or U+2028 (LS) inside a quoted lockfile `link:` reads as a line break to PyYAML (YAML 1.1) and as a plain character to pnpm 10.32.1 (YAML 1.2), so the guard matched the link to a workspace project while pnpm linked the dependency to a plain folder with no manifest and no integrity check (the guard's lockfile and importer rule comments).
+Fix: U+0085, U+2028 and U+2029 are refused anywhere in pnpm-workspace.yaml and pnpm-lock.yaml and in any tracked path.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; run again on 8b5a937 in a later session, since the first run's session ended before recording it; 20 rc=0, no failing rc; the FAIL line in the last block is the probe's expected refusal):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:/home/hr/myvscode_linux/attessa/.worktrees/prompts/adv-out/tmp-install/attessa-adv-imp-r18.joBn/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r23/lockfile-line-breaks.test.sh
+ok: pnpm 10.32.1 (ws-nel): pnpm lists ['.', 'packages/a b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a b', pnpm links x -> '../../a\x85b', a plain folder, under --frozen-lockfile
+ok: pnpm 10.32.1 (ws-ls): pnpm lists ['.', 'packages/a\u2028b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a\u2028b', pnpm links x -> '../../a \u2028 b', a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r23-nel (workspace:*, link:"../attessa-r23<U+0085>n"), PyYAML reads ../attessa-r23 n: refused
+ok: packages/cli dependency attessa-r23-ls (workspace:*, link:"../attessa-r23 <U+2028> l"), PyYAML reads ../attessa-r23<U+2028>l: refused
+ok: packages/cli dependency attessa-r23-nfd (workspace:*, link:../attessa-r23-e<U+0301>), project folder NFC: refused
+ok: packages/cli dependency attessa-r23-nfc (workspace:*, link:../attessa-r23-<U+00E9>), project folder NFD: refused
+ok: control: packages/cli dependency attessa-r23-e (workspace:*, link:../attessa-r23-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r24, then Codex r2)
+
+### Install guard adversary r24 (failing test 4fc7740, fix f750739) - 2026-11-05
+Finding: a plain lockfile key that PyYAML (YAML 1.1) reads as a string and pnpm 10.32.1 (YAML 1.2 core) as a number, printed back as another name (`1e3` -> 1000, `0o17` -> 15, `08` -> 8), let an importer dependency `1000` link to the workspace project named `1e3` while the guard saw "the workspace project of that name" (the importer rule comment).
+Fix: any plain scalar in pnpm-lock.yaml that PyYAML resolves as a string but that has a YAML 1.2 core number, null or bool form is refused (pnpm quotes such values when it writes them).
+Last adversary round: Joshua stopped adversary rounds on 2026-11-05 to save API budget; Codex reviews from here.
+verify (`bash scripts/adversary-install-r24/lockfile-numeric-names.test.sh "$PWD" HEAD` at f750739; the full suite was cut off by a session end after the first 11 runs, all rc=0, so Codex runs it):
+```
+ok: packages/cli dependency 1000 (workspace:*), lockfile key 1e3 (link:../attessa-r24-a, project named 1e3): refused
+ok: packages/cli dependency 15 (workspace:*), lockfile key 0o17 (link:../attessa-r24-a, project named 0o17): refused
+ok: packages/cli dependency 8 (workspace:*), lockfile key 08 (link:../attessa-r24-a, project named 08): refused
+ok: control: packages/cli dependency attessa-r24-ctl, lockfile key attessa-r24-ctl, project of that name: accepted
+ok: the committed lockfile: accepted
+rc=0
+```
+reviewed: pending (Codex r2)
+
+### Install guard Codex r2 fixes (failing test 639181b, fix 0627c29, test cases 1bf61cc) - 2026-11-05
+Codex r2 (install-allowlist-review-r2.md, on 209049c): REVISE, 1 major, 1 minor.
+- Major: a snapshot dependency `prebuild-install: node-addon-api@8.9.2` is an alias to pnpm (it installs node-addon-api under that name); the guard only refused a ":" in the value. Fix: every snapshot `dependencies`/`optionalDependencies` entry must be the snapshot `name@ref` of its own name (peer suffix included), the rule importers already follow.
+- Minor: CORE12 missed signed octal (`+0o17`, `-0o17`): a string to PyYAML, a number to pnpm. Fix: `[-+]?` on the 0o/0x/0b forms. Signed hex and binary are no gap: PyYAML reads them as integers too (`yaml.safe_load` gives int for `+0x1F` and `-0b1`), so the readers agree; the test says so instead of claiming them.
+Test: scripts/codex-install-r2/snapshot-alias-and-signed-numbers.test.sh (4 refused cases and 2 controls); on 209049c every refused case is accepted (rc=1), on 1bf61cc rc=0.
+verify (each test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 22 rc=0, none failing; the FAIL line in the last block is the probe's expected refusal):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:/home/hr/myvscode_linux/attessa/.worktrees/prompts/adv-out/tmp-install/attessa-adv-imp-r18.YjgK/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r23/lockfile-line-breaks.test.sh
+ok: pnpm 10.32.1 (ws-nel): pnpm lists ['.', 'packages/a b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a b', pnpm links x -> '../../a\x85b', a plain folder, under --frozen-lockfile
+ok: pnpm 10.32.1 (ws-ls): pnpm lists ['.', 'packages/a\u2028b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a\u2028b', pnpm links x -> '../../a \u2028 b', a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r23-nel (workspace:*, link:"../attessa-r23<U+0085>n"), PyYAML reads ../attessa-r23 n: refused
+ok: packages/cli dependency attessa-r23-ls (workspace:*, link:"../attessa-r23 <U+2028> l"), PyYAML reads ../attessa-r23<U+2028>l: refused
+ok: packages/cli dependency attessa-r23-nfd (workspace:*, link:../attessa-r23-e<U+0301>), project folder NFC: refused
+ok: packages/cli dependency attessa-r23-nfc (workspace:*, link:../attessa-r23-<U+00E9>), project folder NFD: refused
+ok: control: packages/cli dependency attessa-r23-e (workspace:*, link:../attessa-r23-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r24/lockfile-numeric-names.test.sh
+ok: pnpm 10.32.1: PyYAML reads the dependency as ['1e3'], pnpm links node_modules/1000 -> ../../a (the project named 1e3) under --frozen-lockfile
+ok: packages/cli dependency 1000 (workspace:*), lockfile key 1e3 (link:../attessa-r24-a, project named 1e3): refused
+ok: packages/cli dependency 15 (workspace:*), lockfile key 0o17 (link:../attessa-r24-a, project named 0o17): refused
+ok: packages/cli dependency 8 (workspace:*), lockfile key 08 (link:../attessa-r24-a, project named 08): refused
+ok: control: packages/cli dependency attessa-r24-ctl, lockfile key attessa-r24-ctl, project of that name: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/codex-install-r2/snapshot-alias-and-signed-numbers.test.sh
+ok: snapshot better-sqlite3 dependency prebuild-install: node-addon-api@8.9.2 (an alias): refused
+ok: snapshot better-sqlite3 dependency node-addon-api: 9.9.9 (no such snapshot): refused
+ok: snapshot better-sqlite3 plain transitivePeerDependencies entry +0o17 (a number to YAML 1.2): refused
+ok: snapshot better-sqlite3 plain transitivePeerDependencies entry -0o17 (a number to YAML 1.2): refused
+ok: control: the same entry quoted, '+0o17': accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (Codex r3)
+
+### Install guard Codex r3: SHIP - 2026-11-06
+Codex round 3 reviewed 9909372 in a frozen worktree: no findings. It re-ran every adversary and Codex test and the heavy stage (all RC=0), confirmed the r2 alias and signed-octal fixes fail on 209049c and pass on 9909372, and found CORE12 conservative against pnpm 10.32.1's bundled YAML resolvers.
+```
+Disposition: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/install-allowlist-review-r3.md | verdict: implementation-ready (earlier rounds r1 and r2 ended changes required; archived outside the repo)
