@@ -2191,3 +2191,11 @@ ok: refused
 rc=0
 ```
 reviewed: pending (Codex r3)
+
+### Install guard Codex r3: SHIP - 2026-11-06
+Codex round 3 reviewed 9909372 in a frozen worktree: no findings. It re-ran every adversary and Codex test and the heavy stage (all RC=0), confirmed the r2 alias and signed-octal fixes fail on 209049c and pass on 9909372, and found CORE12 conservative against pnpm 10.32.1's bundled YAML resolvers.
+```
+Disposition: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/install-allowlist-review-r3.md | verdict: implementation-ready (earlier rounds r1 and r2 ended changes required; archived outside the repo)
