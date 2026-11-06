@@ -3633,3 +3633,73 @@ pnpm@10.32.1 install ran no non-allowlisted install script: ok
 reviews ok
 ```
 reviewed: reviews/t21-cli-review-r5.md | verdict: implementation-ready (rounds r1 to r4 ended changes required; archived outside the repo)
+
+### T21a attessa verify - 2026-11-06
+`attessa verify <requestId|settlement tx> [--proof <file|header>] [--response <file>] --network sepolia|mainnet|local --json`: packages/cli/src/commands/verify.ts (wired in index.ts), plus `Chain.releaseStatus` and exports of `Chain`, `Settlement`, `RELEASE_STATUS` in packages/sdk, and a `releases()` read in the SDK's test fake chain. Read-only: no wallet, keychain or ATTESSA_PRIVATE_KEY is read, nothing is signed or sent. Five checks, each with its Celoscan link (sepolia.celoscan.io / celoscan.io): release Approved, signer Active and attested for that release, proof signature, requestId/requestHash/responseHash/paymentId binding, settlement (receipt with AuthorizationUsed + Transfer, or authorization unspent past validBefore + 5). Exit 0 only when all five pass; `not checked` never counts as a pass. Crypto is @attessa/core's (decodeAttestedProof, proofDigest, recoverDigestSigner, responseHash), chain reads the SDK's `Chain`.
+Gap found: the buyer's folder stores no proof header or answer (see OPEN-QUESTIONS), so the proof checks need `--proof`/`--response`.
+Tests: packages/cli/test/verify.test.ts, 20 tests (pass for requestId and for tx, --json object, tx with no record, tx with proof but no record, no proof; refused: release not Approved, release Revoked, signer not Active, signer attested for another release, bad signature, malformed proof, requestId, requestHash, responseHash, never settled before validBefore, settlement tx not this payment; plus not found, bad target, no key/keychain/send/sign). Not-charged after expiry passes the settlement line.
+Note: the TASKS.md verify command as written (`pnpm --filter @attessa/cli test -- -t "verify"`) runs `vitest run -- -t verify`, which ignores the filter and runs all 367 tests; the filtered run `pnpm exec vitest run -t verify` in packages/cli gives `Test Files 1 passed | 87 skipped (88)`, `Tests 20 passed | 347 skipped (367)`.
+
+verify (`flock -w 3600 /home/hr/.cache/attessa-heavy.lock bash -c 'pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/cli test && pnpm --filter @attessa/cli test -- -t "verify"'`, exit 0; per-test lines trimmed):
+```
+Scope: 5 of 6 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 5 of 6 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 5 of 6 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli lint: Done
+
+
+> @attessa/cli@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-t21a/packages/cli
+> vitest run
+ Test Files  88 passed (88)
+      Tests  367 passed (367)
+   Start at  21:14:32
+   Duration  13.87s (transform 2.15s, setup 33.48s, collect 19.13s, tests 106.49s, environment 20ms, prepare 8.75s)
+
+
+> @attessa/cli@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-t21a/packages/cli
+> vitest run -- -t verify
+
+ Test Files  88 passed (88)
+      Tests  367 passed (367)
+   Start at  21:14:46
+   Duration  14.41s (transform 2.26s, setup 35.13s, collect 19.22s, tests 111.50s, environment 28ms, prepare 9.58s)
+
+```
+Real Sepolia run: not possible for a real call. No real paid call through the gateway exists yet (T22 is not done; the T01/T10/T19 entries are the kill test, the registry deploy and a fake-facilitator gateway, none a settlement of a real paid call, and there is no proof saved anywhere). Not fabricated. What was run for real, read-only on the public Forno RPC with no key (built CLI, empty data folder, tx hash = a real Sepolia tx from the T01 entry, which is not an Attessa payment):
+```
+$ ATTESSA_DATA_DIR=<empty temp dir> node packages/cli/dist/bin.js verify 0xb581a2adf816be631abe5e750dee1c2ed0c93be5fc1c1038acc27b403d59e7eb --network sepolia
+No record of 0xb581…eb in /tmp/tmp.ROZbRqUAG0, and no Attessa payment in a transaction with that hash on sepolia.
+Check the id, or pass the settlement transaction hash of the call.
+exit=1
+```
+So "a run against one real Sepolia call" is open: after T22 makes the first real paid call, run `attessa verify <settlement tx> --proof <file> --response <file> --network sepolia` and paste it here. T21a is therefore not ticked in TASKS.md.
+reviewed: pending (Codex r1)
