@@ -3602,3 +3602,34 @@ packages/cli test:       Tests  347 passed (347)
 test=0
 ```
 reviewed: pending (Codex r5)
+
+## T21 Codex r5: SHIP (2026-11-06)
+Codex round 5 reviewed d7297ac in a frozen worktree: no findings.
+```
+REVIEW DECISION: SHIP
+VERDICT: implementation-ready
+```
+Codex's own full test run could not complete in its sandbox: core's oracle tests fail there with `spawnSync cast EPERM` (the sandbox may not start `cast`), and CLI tests hit 20 s timeouts under its load; its focused run of the r4 tests passed 5 of 5. After merging staging (with PR #12, the install guard) into feat/t21-cli, the task's verify command and the full suite on this machine:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+$ pnpm --filter @attessa/cli test
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+cli=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+reviews ok
+```
+reviewed: reviews/t21-cli-review-r5.md | verdict: implementation-ready (rounds r1 to r4 ended changes required; archived outside the repo)
