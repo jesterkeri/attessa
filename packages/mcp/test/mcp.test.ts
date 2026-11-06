@@ -502,31 +502,34 @@ describe('mcp: Codex r1 Minor 2, cancel and open-call paths', () => {
   });
 });
 
-describe('mcp: Codex r2 Major 1, a short configured secret never corrupts a result', () => {
-  it('a one-character secret changes nothing: the result is the same valid JSON, amounts and hashes intact', async () => {
+describe('mcp: Codex r2 Major 1 (r3: refuse, never run with an unredactable secret)', () => {
+  it('a one-character secret is refused with a next action on every tool; nothing is corrupted, nothing runs', async () => {
     w = await world(null);
-    const clean = await w.tool('verify_proof', vectorArgs());
     w.env.DEMO_TOKEN = '0';
-    const withSecret = await w.tool('verify_proof', vectorArgs());
-    expect(withSecret.json).toEqual(clean.json);
-    expect(withSecret.text).toContain(VECTOR_REQUEST_HASH);
-    const paid = await (async () => {
-      await w.close();
-      w = await world();
-      w.env.DEMO_TOKEN = '0';
-      return w.tool('pay_and_verify', { url: w.url, body: w.body });
-    })();
-    expect(paid.json).toMatchObject({ ok: true, outcome: 'verified', amount: '20000' });
+    for (const [name, args] of [['verify_proof', vectorArgs()], ['list_pending', {}], ['status', {}]] as const) {
+      const r = await w.tool(name, args);
+      expect(r.isError).toBe(true);
+      expect(r.json).toMatchObject({ ok: false, error: 'unsafe_secret' });
+      expect(r.json.message).toContain('DEMO_TOKEN');
+      expect(r.json.message).not.toMatch(/value is|"0"|= ?0/);
+      expect(r.json.next).toMatch(/at least 4 characters/);
+    }
+    delete w.env.DEMO_TOKEN;
+    const clean = await w.tool('verify_proof', vectorArgs());
+    expect(clean.json.ok).toBe(true);
+    expect(clean.text).toContain(VECTOR_REQUEST_HASH);
   });
 
-  it('secrets are replaced only inside string values: keys and numbers are never touched, and the minimum is 4 characters', async () => {
+  it('a secret of 4 or more characters is hidden inside strings only; 3 is refused', async () => {
     w = await world();
-    w.env.SHORT_TOKEN = 'abc'; // 3 characters: too short to hide safely, left as is (OPEN-QUESTIONS)
     w.env.LONG_TOKEN = 'abcd';
-    const a = await w.tool('prefix-abc-and-abcd-suffix');
-    expect(a.text).toContain('abc-and-');
+    const a = await w.tool('prefix-abcd-suffix');
     expect(a.text).not.toContain('abcd');
     expect(a.json.error).toBe('unknown_tool');
+    w.env.SHORT_TOKEN = 'abc';
+    const b = await w.tool('prefix-abc-suffix');
+    expect(b.json.error).toBe('unsafe_secret');
+    expect(b.text).not.toContain('abc-suffix');
   });
 });
 
@@ -588,5 +591,114 @@ describe('mcp: Codex r2 Minor 1, status says exactly when it signs', () => {
     } finally {
       spy.restore();
     }
+  });
+});
+
+describe('mcp: Codex r3 Major 1, an unredactable secret stops the server; every encoding is hidden', () => {
+  const deps = (env: Record<string, string | undefined>) => ({
+    env,
+    cwd: '/tmp',
+    rpc: () => {
+      throw new Error('no rpc');
+    },
+    runner: { run: async () => ({ code: 1, stdout: '', stderr: '' }) },
+    fetch,
+    enclave: () => {
+      throw new Error('no enclave');
+    },
+    readFile: (p: string) => readFileSync(p),
+    writeFile: () => {},
+    exists: () => false,
+    readdir: () => [],
+    sleep: async () => {},
+    arch: 'x64',
+  });
+
+  it('createMcpServer refuses to start for a too-short or all-digit secret, naming the variable and a next action, never the value', () => {
+    for (const [name, value] of [['ATTESSA_KEYSTORE_PASSWORD', 'ab'], ['SERVICE_TOKEN', '1234567'], ['DEMO_SECRET', 'x']] as const) {
+      let err: Error | undefined;
+      try {
+        createMcpServer({ deps: deps({ [name]: value }) });
+      } catch (e) {
+        err = e as Error;
+      }
+      expect(err, name).toBeDefined();
+      expect(err!.message).toContain(name);
+      expect(err!.message).not.toContain(`"${value}"`);
+      expect((err as { next?: string }).next).toMatch(/at least 4 characters|digits/);
+    }
+    expect(() => createMcpServer({ deps: deps({ SERVICE_TOKEN: '12345678', KEYBOARD: 'us', AUTHOR: 'x', ATTESSA_NETWORK: 'local' }) })).not.toThrow();
+  });
+
+  it('through the result path: JSON-escaped, mixed-case percent, plus-for-space and encodeURI spellings are hidden', async () => {
+    w = await world();
+    w.env.JSON_TOKEN = 'tok"en\\q';
+    w.env.PCT_SECRET = 'k/e:y!~x';
+    w.env.SPACE_PASSWORD = 'a b+c d';
+    const leaks = [
+      'tok\\"en\\\\q', // the JSON-escaped spelling of JSON_TOKEN
+      'tok"en\\q',
+      'k%2fe%3Ay%21~x', // mixed-case percent escapes
+      'k%2Fe%3ay%21~x',
+      'k%2fe%3ay%21~x',
+      'k/e:y!~x',
+      'k%2Fe%3Ay!~x',
+      'a+b%2Bc+d',
+      'a%20b%2bc%20d',
+      'a b+c d',
+    ];
+    for (const leak of leaks) {
+      const r = await w.tool(`pre-${leak}-post`);
+      expect(r.isError, leak).toBe(true);
+      expect(r.json.error, leak).toBe('unknown_tool');
+      expect(r.text, leak).not.toContain(leak);
+      expect(r.text, leak).not.toContain(JSON.stringify(leak).slice(1, -1));
+      expect(r.text).toContain('pre-');
+    }
+  });
+});
+
+describe('mcp: Codex r3 Major 2, verify_proof says what it skipped even when the call is refused before any check', () => {
+  const cases: Array<[string, Record<string, unknown>, string]> = [
+    ['no proof', { chainId: 11142220 }, 'usage'],
+    ['bad chainId', { proof: 'x', chainId: 'eleven' }, 'usage'],
+    ['bad registry', { proof: 'x', chainId: 11142220, registry: '0x12' }, 'usage'],
+    ['unpinned chain', { proof: 'x', chainId: 31337 }, 'no_registry'],
+    ['bad requestId', { proof: 'x', chainId: 11142220, requestId: '0x12' }, 'usage'],
+    ['bad requestHash', { proof: 'x', chainId: 11142220, requestHash: 'nope' }, 'usage'],
+    ['bad request', { proof: 'x', chainId: 11142220, request: { method: 'POST', pathAndQuery: 'no-slash', body: '' } }, 'usage'],
+  ];
+  for (const [label, args, code] of cases) {
+    it(label, async () => {
+      w = await world(null);
+      const r = await w.tool('verify_proof', args);
+      expect(r.isError).toBe(true);
+      expect(r.json.error).toBe(code);
+      expect(r.json.next).toBeTruthy();
+      expect(r.json.scope).toBe('offline');
+      expect(r.json.notChecked).toEqual(
+        expect.arrayContaining(['signature', 'request_id', 'request_hash', 'lifetime', 'response_hash', 'inputs_hash', 'signer_active_on_chain', 'settlement', 'inputs_block_and_values']),
+      );
+    });
+  }
+});
+
+describe('mcp: Codex r3 Minor 1, get_result says when it signs', () => {
+  it('get_result does not sign for an open call already refused; its description says so', async () => {
+    w = await world();
+    w.gw.behavior = { paid: 'refuse' };
+    const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body, noWait: true });
+    expect(w.pending()[0]).toMatchObject({ requestId: paid.json.requestId, state: 'refused' });
+    const spy = spyPayerSigs();
+    try {
+      await w.tool('get_result', { requestId: paid.json.requestId });
+      expect(spy.seen).toEqual([]);
+    } finally {
+      spy.restore();
+    }
+    const { tools } = await w.client.listTools();
+    const d = tools.find((t) => t.name === 'get_result')!.description!;
+    expect(d).not.toMatch(/for each open call/i);
+    expect(d).toMatch(/already refused/i);
   });
 });
