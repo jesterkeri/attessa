@@ -105,6 +105,20 @@ export class Chain {
     return { agentId: e.agentId, payTo: lc(e.payTo) as Address, operator: lc(e.operator) as Address, status: e.status };
   }
 
+  /** `releases(agentId, releaseId).status` (`RELEASE_STATUS`), as of `blockNumber` when given. */
+  async releaseStatus(agentId: bigint, releaseId: Hex, blockNumber?: bigint): Promise<number> {
+    const r = await rpc('releases()', () =>
+      this.client.readContract({
+        address: this.registry,
+        abi: registryAbi,
+        functionName: 'releases',
+        args: [agentId, releaseId],
+        ...(blockNumber === undefined ? {} : { blockNumber }),
+      }),
+    );
+    return r.status;
+  }
+
   async checkSigner(signer: Address, originHash: Hex, blockNumber?: bigint): Promise<SignerCheck> {
     const [code, s, e] = await rpc('checkSigner()', () =>
       this.client.readContract({

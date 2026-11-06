@@ -378,6 +378,8 @@ export class FakeChain {
       const emptyE: EndpointS = { agentId: 0n, payTo: ZERO, operator: ZERO, status: 0, updatedAt: 0n };
       const emptyS: SignerS = { agentId: 0n, releaseId: `0x${'0'.repeat(64)}`, originHash: `0x${'0'.repeat(64)}`, operator: ZERO, registeredAt: 0n, expiresAt: 0n, status: 0, attestationHash: `0x${'0'.repeat(64)}` };
       switch (functionName) {
+        case 'releases':
+          return enc({ status: st.releases[`${args[0]}:${lc(args[1] as Hex)}`] ?? 0, approvedAt: 0n, statusChangedAt: 0n });
         case 'endpoints':
           return enc(st.endpoints[lc(args[0] as Hex)] ?? emptyE);
         case 'signers':

@@ -3,6 +3,7 @@ import { AttestError } from '@attessa/sdk';
 import { enclaveBuild, enclaveStart } from './commands/enclave.ts';
 import { call, cancel, dataDir, display, evidenceExport, fromSdk, init, readConfig, readConfigForInit, status } from './commands/buyer.ts';
 import { endpointAdd, releaseApprove } from './commands/owner.ts';
+import { verify } from './commands/verify.ts';
 import {
   agentRegister,
   agentSetWallet,
@@ -52,6 +53,7 @@ const COMMANDS: Record<string, { opts: Opts; args: number }> = {
   cancel: { opts: { keystore: { type: 'string' } }, args: 1 },
   status: { opts: { agent: { type: 'string' }, pending: { type: 'boolean', default: false }, keystore: { type: 'string' } }, args: 1 },
   'evidence export': { opts: { format: { type: 'string' } }, args: 0 },
+  verify: { opts: { proof: { type: 'string' }, response: { type: 'string' } }, args: 1 },
   // owner
   'agent register': { opts: { name: { type: 'string' }, description: { type: 'string' }, uri: { type: 'string' } }, args: 0 },
   'agent transfer': { opts: { agent: { type: 'string' }, to: { type: 'string' } }, args: 0 },
@@ -92,7 +94,7 @@ const COMMANDS: Record<string, { opts: Opts; args: number }> = {
 };
 
 /** Buyer commands read the network from `attessa init`'s config when --network is absent (FLOWS J0). */
-const BUYER = new Set(['init', 'call', 'cancel', 'status', 'evidence export']);
+const BUYER = new Set(['init', 'call', 'cancel', 'status', 'evidence export', 'verify']);
 
 const BOOLEAN_FLAGS = new Set(['json', 'yes', 'dry-run', 'help', 'test-build', 'fresh', 'new', 'no-wait', 'pending']);
 
@@ -178,6 +180,8 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
         return finish(await status(g, d, { target: a0, pending: v.pending === true, keystore: str(v, 'keystore') }));
       case 'evidence export':
         return finish(await evidenceExport(g, d, { format: str(v, 'format') }));
+      case 'verify':
+        return finish(await verify(g, d, { target: a0, proof: str(v, 'proof'), response: str(v, 'response') }));
       case 'agent register':
         refuseSecretUrl(str(v, 'uri'), '--uri');
         return finish(await agentRegister(g, d, { name: str(v, 'name'), description: str(v, 'description'), uri: str(v, 'uri') }));
