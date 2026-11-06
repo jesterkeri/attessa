@@ -327,3 +327,61 @@ describe('mcp: Codex r1 Major 1, short and encoded secrets never reach a result'
     expect(out.startsWith('pw ')).toBe(true);
   });
 });
+
+const VECTOR_REQUEST_HASH = '0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00';
+const vectorArgs = () => ({ proof: SEPOLIA_VECTOR.header, chainId: Number(SEPOLIA_VECTOR.chainId), registry: SEPOLIA_VECTOR.verifyingContract });
+
+describe('mcp: Codex r1 Major 2, verify_proof checks the request hash when it is given one', () => {
+  it('an expected requestHash that matches passes as `request_hash`; one that differs is request_mismatch', async () => {
+    w = await world(null);
+    const ok = await w.tool('verify_proof', { ...vectorArgs(), requestHash: VECTOR_REQUEST_HASH });
+    expect(ok.json.ok).toBe(true);
+    expect(ok.json.passed).toContain('request_hash');
+    expect(ok.json.notChecked).not.toContain('request_hash');
+    const bad = await w.tool('verify_proof', { ...vectorArgs(), requestHash: `0x${'ab'.repeat(32)}` });
+    expect(bad.isError).toBe(true);
+    expect(bad.json).toMatchObject({ ok: false, check: 'request_mismatch' });
+  });
+
+  it('request material (method, pathAndQuery, body) is hashed by SPEC §2.2 and compared; a different request is refused', async () => {
+    w = await world(null);
+    const r = await w.tool('verify_proof', { ...vectorArgs(), request: { method: 'POST', pathAndQuery: '/v1/evaluate', body: '{"a":1}' } });
+    expect(r.json).toMatchObject({ ok: false, check: 'request_mismatch' });
+    const junk = await w.tool('verify_proof', { ...vectorArgs(), request: { method: 'POST', pathAndQuery: 'no-slash', body: '{}' } });
+    expect(junk.isError).toBe(true);
+    expect(junk.json.error).toBe('usage');
+  });
+
+  it('without request material or a requestHash the result says the request hash was not checked, and the tool does not claim binding', async () => {
+    w = await world(null);
+    const r = await w.tool('verify_proof', vectorArgs());
+    expect(r.json.notChecked).toContain('request_hash');
+    expect(r.json.passed).not.toContain('request_hash');
+    const { tools } = await w.client.listTools();
+    expect(tools.find((t) => t.name === 'verify_proof')!.description).not.toMatch(/request binding/i);
+  });
+});
+
+describe('mcp: Codex r1 Major 3, notChecked names every skipped check', () => {
+  it('lists the chain, payment, settlement, time-anchor and inputs checks it cannot do offline', async () => {
+    w = await world(null);
+    const r = await w.tool('verify_proof', vectorArgs());
+    expect(r.json.notChecked).toEqual(
+      expect.arrayContaining([
+        'request_id',
+        'request_hash',
+        'response_hash',
+        'inputs_hash',
+        'signer_active_on_chain',
+        'release_approved_on_chain',
+        'endpoint_agent_operator_on_chain',
+        'payment_binding',
+        'settlement',
+        'time_anchors',
+        'expiry_against_now',
+        'inputs_block_and_values',
+      ]),
+    );
+    expect(r.json.scope).toBe('offline');
+  });
+});
