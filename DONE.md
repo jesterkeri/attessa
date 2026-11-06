@@ -1395,3 +1395,89 @@ $ node --test site/test/*.test.mjs (TAP footer)
 # duration_ms 1352.085698
 ```
 reviewed: pending (Codex r2)
+
+### Site Codex r2: the test count, settled by a per-file run - 2026-11-06
+Codex r2 (site-ui-review-r2.md, on dc191dc): REVISE, 1 major: `node --test site/test/*.test.mjs` printed `1..66` / `# tests 66` in Codex's environment (node v22.23.2), where this machine prints `1..190` / `# tests 190` (same node, also under `env -i`). Both are real output of the same command: one environment reports each of the 66 files as one top-level test, the other reports the 190 tests inside them. So the count no longer rests on the globbed footer: `site/test-count.sh` runs each file alone and sums its own footer.
+verify (`./site/test-count.sh`, exit 0; per-file lines then the total):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+For reference, the globbed command on this machine:
+```
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1123.324034
+```
+reviewed: pending (Codex r3)
