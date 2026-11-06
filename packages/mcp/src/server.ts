@@ -130,7 +130,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'status',
     description:
-      'SIGNS A PAYER MESSAGE (no payment, no transaction): shows your spending today against the daily cap and the per-call limit, and decides every open call of this wallet. To decide them the buyer wallet signs a short payer message (an EIP-191 text, not a payment) per open call and asks each gateway for its answer; the chain is read. Needs the buyer wallet. Pays nothing and sends no transaction.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): shows your spending today against the daily cap and the per-call limit, and decides every open call of this wallet. To decide them the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call whose answer can still come, and asks that gateway for it (an open call already refused is only checked against the chain, with no signature); the chain is read. Needs the buyer wallet. Pays nothing and sends no transaction.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -151,36 +151,54 @@ interface ToolResult {
 const SECRET_NAME = /KEY|SECRET|PASSWORD|PASSPHRASE|TOKEN|CREDENTIAL|AUTH/i;
 
 /**
- * Every configured secret, of any length (an empty value has nothing to hide), and the forms it takes once it is put in
- * a URL, a form or a JSON string: percent-encoded in both cases, with `+` for a space, JSON-escaped, and a key without its 0x.
- * Longest first, so a longer form is replaced whole before a shorter one inside it.
+ * Shortest configured secret that is redacted. Under this a value (a `0`, a `1`, `ok`) can't be told from protocol data
+ * (amounts, block numbers, hashes), so replacing it would make results false; a secret this short is left alone (OPEN-QUESTIONS).
+ */
+export const MIN_SECRET_LENGTH = 4;
+
+/**
+ * Every configured secret of at least MIN_SECRET_LENGTH, and the forms it takes once it is put in a URL or a form:
+ * percent-encoded in both cases, with `+` for a space, and a key without its 0x. Longest first, so a longer form is
+ * replaced whole before a shorter one inside it.
  */
 function secretForms(env: Record<string, string | undefined>): string[] {
   const forms = new Set<string>();
   for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || v === '' || !(SECRET_NAME.test(k) || k === 'ATTESSA_PRIVATE_KEY' || k === 'ATTESSA_KEYSTORE_PASSWORD')) continue;
+    if (v === undefined || v.length < MIN_SECRET_LENGTH || !(SECRET_NAME.test(k) || k === 'ATTESSA_PRIVATE_KEY' || k === 'ATTESSA_KEYSTORE_PASSWORD')) continue;
     const bases = [v];
     if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.push(v.slice(2));
     for (const b of bases) {
       const pct = encodeURIComponent(b);
       const strict = pct.replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-      for (const f of [b, JSON.stringify(b).slice(1, -1), pct, strict, pct.replace(/%20/g, '+'), strict.replace(/%20/g, '+'), pct.toLowerCase(), encodeURI(b)]) {
-        if (f !== '') forms.add(f);
-      }
+      for (const f of [b, pct, strict, pct.replace(/%20/g, '+'), strict.replace(/%20/g, '+'), pct.toLowerCase(), encodeURI(b)]) forms.add(f);
     }
   }
   return [...forms].sort((x, y) => y.length - x.length);
 }
 
-/** The last line of defence on every result: configured secrets (any length, any common encoding) and URL userinfo never leave. */
+/** One string with configured secrets (see MIN_SECRET_LENGTH) and URL userinfo removed. */
 export function scrub(text: string, env: Record<string, string | undefined>): string {
   let t = text;
   for (const s of secretForms(env)) t = t.split(s).join('[hidden]');
   return t.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s"'@\\]*@/gi, '$1');
 }
 
+/**
+ * The last line of defence on every result: scrub applied to each string VALUE of the result before it is serialised.
+ * Keys, numbers, booleans and the JSON structure are never touched, so the result stays valid and means what it meant.
+ */
+export function redactResult(v: unknown, env: Record<string, string | undefined>): unknown {
+  const walk = (x: unknown): unknown => {
+    if (typeof x === 'string') return scrub(x, env);
+    if (Array.isArray(x)) return x.map(walk);
+    if (typeof x === 'object' && x !== null) return Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)]));
+    return x;
+  };
+  return walk(v);
+}
+
 const text = (env: Record<string, string | undefined>, v: unknown, isError = false): ToolResult => ({
-  content: [{ type: 'text', text: scrub(jsonOut(v), env) }],
+  content: [{ type: 'text', text: jsonOut(redactResult(v, env)) }],
   ...(isError ? { isError: true } : {}),
 });
 
