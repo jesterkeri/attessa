@@ -5,6 +5,10 @@ export const REGISTRY_ABI = parseAbi([
   'function approveRelease(uint256 agentId, bytes pcr0, bytes pcr1, bytes pcr2, string sourceRef) returns (bytes32)',
   'function addEndpoint(uint256 agentId, string origin, address payTo, address operator) returns (bytes32)',
   'function registerSigner(uint256 agentId, bytes32 originHash, bytes attestation, bytes attestationSigHints) returns (address)',
+  'function setReleaseStatus(uint256 agentId, bytes32 releaseId, uint8 to)',
+  'function retireEndpoint(bytes32 originHash)',
+  'function revokeSigner(address signer)',
+  'function linkSelfAgent(uint256 agentId, uint256 selfAgentId)',
   'function renewSigner(address signer, bytes attestation, bytes attestationSigHints)',
   'function releases(uint256 agentId, bytes32 releaseId) view returns ((uint8 status, uint64 approvedAt, uint64 statusChangedAt))',
   'function endpoints(bytes32 originHash) view returns ((uint256 agentId, address payTo, address operator, uint8 status, uint64 updatedAt))',
@@ -39,7 +43,32 @@ export const REGISTRY_ABI = parseAbi([
   'error Error(string)',
 ]);
 
-export const IDENTITY_ABI = parseAbi(['function ownerOf(uint256 agentId) view returns (address)']);
+/** SPEC §3.3 events the CLI reads (`status --agent`, `revoke release`, `revoke signer`). */
+export const REGISTRY_EVENTS = parseAbi([
+  'event ReleaseApproved(uint256 indexed agentId, bytes32 indexed releaseId, bytes pcr0, bytes pcr1, bytes pcr2, string sourceRef)',
+  'event EndpointAdded(bytes32 indexed originHash, uint256 indexed agentId, string origin, address payTo, address operator)',
+  'event SignerRegistered(address indexed signer, uint256 indexed agentId, bytes32 indexed releaseId, bytes32 originHash, address operator, uint64 expiresAt, bytes32 attestationHash, uint64 attestationTimestamp)',
+]);
+
+/** ERC-8004 IdentityRegistry (an ERC-721 with EIP-712 `setAgentWallet`, EIP-5267 domain). */
+export const IDENTITY_ABI = parseAbi([
+  'function ownerOf(uint256 agentId) view returns (address)',
+  'function register(string agentURI) returns (uint256 agentId)',
+  'function transferFrom(address from, address to, uint256 tokenId)',
+  'function setAgentWallet(uint256 agentId, address newWallet, uint256 deadline, bytes signature)',
+  'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
+  'event Transfer(address indexed from, address indexed to, uint256 indexed tokenId)',
+]);
+
+/** SPEC §8 `agent wallet-sig`: the struct the reference IdentityRegistry hashes. */
+export const AGENT_WALLET_SET_TYPES = {
+  AgentWalletSet: [
+    { name: 'agentId', type: 'uint256' },
+    { name: 'newWallet', type: 'address' },
+    { name: 'owner', type: 'address' },
+    { name: 'deadline', type: 'uint256' },
+  ],
+} as const;
 
 export const VALIDATOR_ABI = parseAbi(['function certManager() view returns (address)']);
 

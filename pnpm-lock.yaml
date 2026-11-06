@@ -23,6 +23,12 @@ importers:
       '@attessa/core':
         specifier: workspace:*
         version: link:../core
+      '@attessa/gateway':
+        specifier: workspace:*
+        version: link:../gateway
+      '@attessa/sdk':
+        specifier: workspace:*
+        version: link:../sdk
       '@attessa/seller-host':
         specifier: workspace:*
         version: link:../seller-host

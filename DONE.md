@@ -2200,6 +2200,87 @@ VERDICT: implementation-ready
 ```
 reviewed: reviews/install-allowlist-review-r3.md | verdict: implementation-ready (earlier rounds r1 and r2 ended changes required; archived outside the repo)
 
+## T21 CLI - 2026-11-02
+commit: af66e32 (builder, Opus; branch feat/t21-cli from 32ad820), entry in the next commit
+built: buyer commands `init`, `call`, `cancel`, `status [<origin>|--agent <id>] [--pending]`, `evidence export` on @attessa/sdk (no payment logic in the CLI); owner commands `agent register|transfer|wallet-sig|set-wallet`, `selflink`, `release deprecate|revoke` / `revoke release`, `revoke signer`, `endpoint retire`; `attessa gateway …` handed to T19's runGatewayCommand. The SDK gained `ClientOptions.onProgress` (the moments the CLI prints a FLOWS §6 line) and a `dry_run` stop before signing. Snapshot tests read FLOWS.md itself and require each §6 sample block to appear contiguous in the CLI transcript (hex placeholders and named slots such as a time of day excepted; a matcher self-test proves a changed word, a dropped line or a reordering fails): J0, J1 (and price above the limit), J2, J2 variant (paid_but_rejected and settled_after_refusal), J1 interrupted (not charged, charged, 202, resume), J3 (seller --help, agent register, enclave build, release approve, endpoint add, enclave start, signer register) and J4 (revoke release) on one chain.
+verified: pnpm --filter @attessa/cli test (plus pnpm -r typecheck, pnpm -r --no-bail test, ./scripts/check-reviews.sh && ./scripts/check-workflows.sh)
+output (file lines and totals verbatim):
+```
+$ pnpm --filter @attessa/cli test
+ ✓ test/flows.test.ts (3 tests) 5ms
+ ✓ test/attestation.test.ts (4 tests) 487ms
+ ✓ test/adversary-t15-r3.test.ts (1 test) 277ms
+ ✓ test/adversary-t15-r4.test.ts (1 test) 728ms
+ ✓ test/review-t15-r1.test.ts (3 tests) 1454ms
+ ✓ test/buyer.test.ts (28 tests) 1554ms
+ ✓ test/enclave.test.ts (8 tests) 1598ms
+ ✓ test/review-t15-r3.test.ts (8 tests) 1619ms
+ ✓ test/review-t15-r4.test.ts (4 tests) 1662ms
+ ✓ test/adversary-t15.test.ts (7 tests) 1949ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 2188ms
+ ✓ test/owner.test.ts (15 tests) 2419ms
+ ✓ test/seller-journeys.test.ts (14 tests) 2967ms
+ ✓ test/signer.test.ts (17 tests) 5812ms
+ Test Files  14 passed (14)
+      Tests  121 passed (121)
+exit=0
+$ pnpm -r typecheck
+packages/core typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck: Done
+exit=0
+$ pnpm -r --no-bail test
+packages/core test:  FAIL  test/adversary-t03-r3.test.ts > adversary: the oracle origin check is not UTS-46 (SPEC §2.1 step 2, INV-18) > oracle exits 0 on a correct U+1F80 vector
+packages/core test:  Test Files  1 failed | 7 passed (8)
+packages/core test:       Tests  1 failed | 67 passed (68)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  15 passed (15)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  14 passed (14)
+packages/cli test:       Tests  121 passed (121)
+exit=1 (only the known core oracle failure, being fixed elsewhere)
+$ ./scripts/check-reviews.sh && ./scripts/check-workflows.sh
+reviews ok
+workflows clean
+exit=0
+```
+adversary: not run yet
+reviewed: pending (adversary, then Codex)
+notes: FLOWS readings, flags SPEC §8 does not give, and two T15 observations are in OPEN-QUESTIONS (From T21). Not built: `release verify` (optional, G6), `call --via buy` (T29). `scripts/check-install-scripts.sh` fails on keys that are all present at the base 32ad820 (the packages' `bin`, sdk `engines`, core `gen:vectors`, seller-host `render-units`, better-sqlite3 integrity); it flags nothing T21 changed.
+
+### T21 adversary r1 fixes - 2026-11-02
+adversary r1 (5c22712, `packages/cli/test/adversary-t21-r1-buyer.test.ts`, 5 failing) fixed in b920198 and 1534d5c:
+- `CHECK_WORDS` is looked up as an own property (`checkWords()`); a `proof_rejected` detail of "constructor", "toString" or "__proto__" gives the fallback words.
+- SDK: a throwing `onProgress` is caught and ignored; outcome, ledger and evidence match the no-handler run (`packages/sdk/test/progress.test.ts`, 4 new tests).
+- `safe()` in `packages/cli/src/copy.ts` escapes C0/C1/DEL as `\xNN` (line separators and bidi controls as `\u{NNNN}`) in every printed sourceRef, gateway detail/code, liveness reason and chain-read origin; printable text, FLOWS' included, is unchanged (`test/safe-text.test.ts`).
+- `evidence export --format csv` prefixes `'` to a cell starting with = + - @ tab or CR; jsonl unchanged.
+- `--daily-cap` removed from `call` (only `init` sets it); over-cap test sets the cap via init, new test shows `call --daily-cap 100` refused and the cap holding; OPEN-QUESTIONS "From T21" updated.
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+      Tests  131 passed (131)
+   Start at  18:01:08
+   Duration  8.58s (transform 1.91s, setup 0ms, collect 17.35s, tests 30.92s, environment 4ms, prepare 2.32s)
+
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  148 passed (148)
+   Start at  18:01:21
+   Duration  31.50s (transform 1.24s, setup 0ms, collect 11.98s, tests 48.13s, environment 3ms, prepare 2.06s)
+```
+
+`pnpm -r typecheck` (exit=0):
+```
+Scope: 5 of 6 workspace projects
+
 ### Site adversary r47 (failing test 4c640f9, fix d5c5f34) - 2026-11-05
 Finding: on use-cases.html at 390px, with Anybody not loaded (Google Fonts blocked, or before `display=swap` lands), "RECOMMENDATIONS" in a 35.2px uppercase `.use h2` is wider than the 350px column; `.beats`' auto grid column grew to it and `main`'s overflow clip cut the line ends of all four uses (site/README.md:109).
 Fix: `.use h2 { overflow-wrap: anywhere; }` (site.css).
@@ -2594,6 +2675,858 @@ packages/core typecheck: Done
 packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
 packages/sdk typecheck$ tsc -p . --noEmit
 packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+```
+adversary: r1 tests pass; r2 not run yet
+reviewed: pending (adversary r2, then Codex)
+
+### T21 adversary r2 fixes - 2026-11-02
+adversary r2 (d3ffd47, `packages/cli/test/adversary-t21-r2.test.ts`, 5 failing) fixed in d462f90 and d0ee4d7:
+- `claimLabel` (`packages/cli/src/commands/buyer.ts`) and `sourceLabel` (`packages/cli/src/copy.ts`, also `status --agent`) pass the GitHub-shaped label through `safe()` too; normal refs print unchanged (J1 FLOWS tests pass).
+- `safe()` escapes the full Bidi_Control set: U+061C, U+200E, U+200F, U+202A to U+202E, U+2066 to U+2069.
+- SDK `loadAccount`/`decryptKeystore` (`packages/sdk/src/keys.ts`) throw only `KeyError` with a fixed reason (no cause, no file field interpolated); the CLI prints "Can't load the wallet from <path>: <reason>." and never another error's text. New tests: `packages/sdk/test/keys.test.ts` (2), `packages/cli/test/buyer.test.ts` (1).
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+ Test Files  17 passed (17)
+      Tests  137 passed (137)
+   Start at  18:19:06
+   Duration  8.12s (transform 1.53s, setup 0ms, collect 13.84s, tests 30.78s, environment 4ms, prepare 2.18s)
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  150 passed (150)
+   Start at  18:19:18
+   Duration  31.56s (transform 1.50s, setup 0ms, collect 12.41s, tests 71.05s, environment 10ms, prepare 1.60s)
+```
+
+`pnpm -r typecheck` (exit=0):
+```
+Scope: 5 of 6 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+```
+adversary: r2 tests pass; r3 not run yet
+reviewed: pending (adversary r3, then Codex)
+
+### T21 adversary r3 fixes - 2026-11-02
+adversary r3 (531b262, `packages/cli/test/adversary-t21-r3.test.ts`, 5 failing) fixed in 351aa26:
+- SDK `loadAccount` (`packages/sdk/src/keys.ts`): a keychain whose `getPassword`/`setPassword` rejects (keytar on headless Linux) is unavailable and returns null, so `init` prints the FLOWS `keychain_unavailable` lines.
+- Reads never load the wallet: `status <origin>` (`packages/cli/src/commands/buyer.ts`), `status --agent` and `enclave start` (`connect(g, deps, { wallet: false })`, `packages/cli/src/context.ts`). `status --pending` still needs the wallet: reconciling signs the payer's fetch-result message.
+- `ClientOptions.dryRun` (`packages/sdk/src/types.ts`, `client.ts`): the SDK stops at `authorizing` before signing whatever `onProgress` does; the CLI passes `--dry-run` there and its print handler no longer answers `'stop'`.
+- Owner/operator `ATTESSA_PRIVATE_KEY` goes through the SDK's exported `keyToAccount` (fixed `KeyError` reason, "Can't load the wallet from ATTESSA_PRIVATE_KEY: not a valid private key."). `run()` maps every unknown error to a fixed `unexpected` CliError (class name and code only), so `--json` prints its `{ok:false}` object; `bin.ts` never prints a raw message.
+- New tests: `packages/cli/test/t21-r3-fix.test.ts` (5), `packages/sdk/test/keys.test.ts` (1), `packages/sdk/test/progress.test.ts` (2).
+
+`pnpm --filter @attessa/cli test` (exit=0):
+```
+ Test Files  19 passed (19)
+      Tests  147 passed (147)
+   Start at  18:30:20
+   Duration  8.32s (transform 1.45s, setup 0ms, collect 15.23s, tests 35.48s, environment 4ms, prepare 2.66s)
+```
+
+`pnpm --filter @attessa/sdk test` (exit=0):
+```
+ Test Files  15 passed (15)
+      Tests  153 passed (153)
+   Start at  18:30:29
+   Duration  31.47s (transform 1.51s, setup 0ms, collect 11.68s, tests 53.35s, environment 3ms, prepare 1.88s)
+```
+
+`pnpm -r typecheck` (exit=0) and `pnpm -r lint` (exit=0): every package `Done` (core, gateway, sdk, seller-host, cli).
+adversary: r3 tests pass; r4 not run yet
+reviewed: pending (adversary r4, then Codex)
+
+### T21 adversary r4 fixes - 2026-11-02
+adversary r4 (6f0aa2a, `packages/cli/test/adversary-t21-r4.test.ts`, 6 failing) fixed in 41304da:
+- `status --pending` and `cancel` printed the generic `unexpected` line for the SDK's `rpc_unavailable` and `network_mismatch`. One mapping (`packages/cli/src/commands/buyer.ts`, `sdkError`/`fromSdk`/`viaSdk`, built from the old `stoppedError`) now serves every buyer command: an AttestError goes to its FLOWS §8 row by code, an SDK RpcError to `rpc_unavailable`, and no error message is printed. `run()` (`packages/cli/src/index.ts`) maps any AttestError a command missed before falling back to `unexpected`.
+- `--dry-run` on an input with an open call resumed it (signed the payer message, fetched `/v1/results`, finalized the ledger entry). With `dryRun`, the SDK's V0 and V6 re-check now stop at an open entry with a `would_resume` event: nothing signed, nothing fetched, ledger unchanged. The CLI line for it is marked not in FLOWS ("...Without --dry-run, attessa resumes it instead of paying again.").
+- New tests: `packages/sdk/test/progress.test.ts` (1), `packages/cli/test/buyer.test.ts` (4).
+- The fixer's bash append of this note was refused by the guard-bash test-deletion pattern (a false positive on the note's wording; nothing was deleted). Claude re-ran the verification and wrote the note with the editor.
+
+verify at 41304da (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  20 passed (20)
+cli:       Tests  157 passed (157)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+Not fixed here, for adversary r5 to judge: seller commands (`packages/cli/src/tx.ts`, `signer.ts`) may still turn a raw RpcUnavailable into the `unexpected` line.
+reviewed: pending (adversary r5, then Codex)
+
+### T21 adversary r5 fixes - 2026-11-02
+adversary r5 (224bce0, `packages/cli/test/adversary-t21-r5.test.ts`, 4 failing): seller and owner chain reads (`gasPrice()` in `write`, `head()` in revoke release and `status --agent`) let a raw RpcUnavailable reach `run()`, which printed the `unexpected` line instead of the FLOWS §8 "rpc unavailable" row. Fixed in a1112e6:
+- `packages/cli/src/tx.ts` `rpcRow` and `chainRead` reuse `read()`'s existing mapping for every read before anything is signed: `head`, `gasPrice`, `send()`'s nonce and tip reads, and `connect`'s `eth_chainId`. A JSON-RPC error reply that is not a revert gets the row too; reverts still reach the caller (`ownerOf` keeps `unknown_agent`). The signer.ts reads are covered through the same helpers.
+- `Chain.url` (`packages/cli/src/context.ts`) so the row names the RPC the user set.
+- Once a transaction is signed, "Nothing was signed" is never printed: FLOWS has no row for a seller transaction whose outcome is unknown, so a drop after signing keeps the existing `unexpected` line. This also removed two older false "Nothing was signed" lines (after step 2's simulation and the read after registering).
+- New tests: `packages/cli/test/t21-r5-fix.test.ts` (16).
+
+verify at a1112e6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  22 passed (22)
+cli:       Tests  177 passed (177)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+reviewed: pending (adversary r6, then Codex)
+
+### T21 adversary r6 fixes - 2026-11-02
+adversary r6 (a0ca8b4, `packages/cli/test/adversary-t21-r6.test.ts`, 4 failing): `simulate` read a rate-limit (-32005) or internal (-32603) JSON-RPC error as a revert and printed the node's reply text; and "Nothing was sent." was printed after an earlier transaction of the same command had been sent. Fixed in b1fc5f0:
+- `packages/cli/src/tx.ts` `simulate`: eth_call and eth_estimateGas go through `chainRead`, so a non-revert error gets the FLOWS §8 rpc_unavailable row; a real revert is still decoded.
+- `packages/cli/src/reverts.ts` `revertToError`: node reply text is never printed; the catch-all row is "The transaction would revert (Name). Nothing was sent."; an ABI-decoded `Error(string)` reason is still shown, escaped by `safe()`.
+- `afterSigning` (tx.ts) also drops a trailing " Nothing was sent." / " Nothing was signed." once an earlier transaction of the command was sent. FLOWS §6 J3 and §8 have no line for a partly completed seller flow, so the line keeps its text without the false clause.
+- New tests: `packages/cli/test/t21-r6-fix.test.ts` (5). 8e11bf8: OPEN-QUESTIONS entry on `{rpc}` printing `--rpc` verbatim, an API key in the URL included (spec question for Joshua).
+
+verify at 8e11bf8 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck Done: 5
+lint Done: 5
+cli:  Test Files  24 passed (24)
+cli:       Tests  186 passed (186)
+sdk:  Test Files  15 passed (15)
+sdk:       Tests  154 passed (154)
+```
+reviewed: pending (adversary r7, then Codex)
+
+### T21 adversary r7 fixes - 2026-11-02
+adversary r7 (c75c27c, `packages/cli/test/adversary-t21-r7.test.ts`, failing): `attessa agent register` from a wallet with no CELO printed "Unexpected error (RpcError)", not FLOWS §5 row 26 `insufficient_gas_funds`. Fixed in b796155, eb7707f and 23549a4:
+- `packages/sdk/src/gas.ts` holds the one gas rule: refuse before signing when the balance is below gas limit x maxFeePerGas, and read a node's "insufficient funds" reply (-32000) as the same error. The CLI's `send()` (tx.ts) and the SDK's `cancelAuthorization` (client.ts) both use it.
+- `ERR.insufficientGasFunds` (copy.ts): "{address} doesn't have enough CELO to pay the gas for {step} (up to {n} CELO). Nothing was signed." (or "Nothing was sent." once something was signed). The next action names faucet.celo.org/celo-sepolia only on chain 11142220; elsewhere, mainnet included, "Add CELO to {address}, then run the command again." FLOWS §8 has no row for this code, so the line is new and marked not in FLOWS; OPEN-QUESTIONS asks Joshua for FLOWS copy.
+- Buyer `attessa cancel` (buyer.ts) gets the same refusal, ending "Nothing was sent." because the cancel permission is already signed. Its OPEN-QUESTIONS entry is ticked.
+- New tests: `packages/cli/test/t21-r7-fix.test.ts`, `packages/cli/test/buyer.test.ts` (cancel), `packages/sdk/test/gas-funds.test.ts`.
+
+verify at 23549a4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  26 passed (26)
+cli:       Tests  203 passed (203)
+sdk:  Test Files  16 passed (16)
+sdk:       Tests  161 passed (161)
+```
+reviewed: pending (adversary r8, then Codex)
+
+### T21 adversary r8 fixes - 2026-11-02
+adversary r8 (59a2933, `packages/cli/test/adversary-t21-r8.test.ts`, failing): when the facilitator settled while a buyer ran `attessa cancel`, the cancel's gas estimate reverted and the buyer saw "Unexpected error (RpcError)" instead of FLOWS §8 "cancel: already used" ("Too late to cancel: the payment went through (tx {h}). Fetching your answer."). Fixed in 5891632:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: a revert in the cancel's `eth_estimateGas` re-reads the authorization. Used meanwhile is `AlreadyUsedError` with the settlement tx when one is found; cancelled meanwhile returns that cancel; any other revert stays an error.
+- `packages/sdk/src/gas.ts`: `isRevertReply` (code 3 or "execution reverted") and `causes` (an error's cause chain, at most 16 deep).
+- The CLI's seller, owner and operator writes already turn a simulate or estimate revert into their own revert line, so they had no such gap.
+- New tests: `packages/sdk/test/cancel-race.test.ts` (4).
+
+verify at 5891632 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  27 passed (27)
+cli:       Tests  204 passed (204)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  165 passed (165)
+```
+reviewed: pending (adversary r9, then Codex)
+
+### T21 adversary r9 fixes - 2026-11-02
+adversary r9 (f932670, `packages/cli/test/adversary-t21-r9.test.ts`, 3 failing): a cancel that reverted while the permission was still unused (a paused token), or raced settlement against an RPC node one block behind, printed "Unexpected error (RpcError)" with no next action; a used permission whose AuthorizationUsed log wasn't returned yet printed "Too late to cancel: the payment went through (tx )" followed by a contradictory "attessa cancel ... voids it now". Fixed in 2616b04:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: one decision, used before the cancel, after its estimate reverts and after a failed receipt. A cancel log means cancelled; a "used" log means paid, with that tx; the token's state flag alone never decides "went through". With no log yet, or still unused after a revert, it re-reads for a few seconds so a lagging node catches up.
+- `packages/cli/src/copy.ts` and `commands/buyer.ts`: `cancelReverted` ("The transaction would revert. Nothing was sent." / "Run attessa status --pending after {t} UTC to confirm whether you were charged.") and `cancelUndecided` ("Your payment permission was already used or cancelled, but Celo doesn't show which yet." / "Run attessa status --pending in a minute to see which."), each with one next action. "Too late to cancel" needs a tx and is never followed by "attessa cancel ... voids it now". The new lines are not in FLOWS; OPEN-QUESTIONS lists them for Joshua.
+- New tests: `packages/cli/test/buyer.test.ts` (cancel rows), `packages/sdk/test/cancel-race.test.ts` (log and lag cases).
+
+verify at 2616b04 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `npx vitest run` in packages/cli and packages/sdk; run by Claude), 2026-11-02:
+```
+build=0
+typecheck packages/cli typecheck: Done
+lint packages/cli lint: Done
+cli:  Test Files  28 passed (28)
+cli:       Tests  209 passed (209)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  168 passed (168)
+```
+reviewed: pending (adversary r10, then Codex)
+
+### T21 adversary r10 fixes - 2026-11-02
+adversary r10 (092dc3e, `packages/cli/test/adversary-t21-r10.test.ts`, failing): `attessa cancel` on an RPC that dropped before signing, or after the cancel was broadcast, printed "Unexpected error" with no next action and no tx. Fixed in 2564603:
+- `packages/sdk/src/client.ts` `cancelAuthorization`: a chain read's RpcError comes back unchanged only before the first signature. After the cancel permission is signed, any other failure is `CancelInterruptedError`, carrying the cancel tx once it may have been sent. The receipt wait is bounded by receiptWaitMs, not viem's 180 s.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`, `tx.ts`: before signing, FLOWS §8's rpc row. Signed but not sent: the rpc row ending "Nothing was sent.". Sent: "Lost the connection to Celo after sending the cancel (tx {hash}); it may still land." / "Run `attessa status --pending` to see whether it landed (with another `--rpc` if this one stays down)." Seller writes use the same lost-connection row with the explorer next action. The new lines are not in FLOWS; the OPEN-QUESTIONS cancel entry lists them.
+- `t21-r5-fix.test.ts` and `cancel-race.test.ts` (fix-round tests, not adversary tests) now expect these exact rows where they expected "Unexpected error". New tests are in `t21-r10-fix.test.ts`, `buyer.test.ts` and `cancel-race.test.ts`.
+
+verify at 2564603 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  30 passed (30)
+cli:       Tests  217 passed (217)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  171 passed (171)
+```
+reviewed: pending (adversary r11 found a defect; see below)
+
+### T21 adversary r11 fixes - 2026-11-02
+adversary r11 (bf4f61c, `packages/cli/test/adversary-t21-r11.test.ts`, failing): re-running `attessa cancel` after an interrupted cancel that landed reported not_charged / cancelled but left the ledger entry `uncertain`, so the reservation stayed counted in today's spend (SPEC §7 "Cancel ... makes `not_charged` immediate on confirmation"; FLOWS §7 reservation released on NotCharged/Cancelled). Fixed in 55cc5e1:
+- `packages/sdk/src/client.ts`: one helper records every decision read from a log. A cancel log sets not_charged / cancelled; a "used" log records the settlement tx before "Too late".
+- A reachable node with the cancel not yet mined now gets "The cancel was sent (tx {hash}) but isn't confirmed yet." / "Run `attessa status --pending` to see whether it landed." instead of "Lost the connection to Celo". Not in FLOWS; the OPEN-QUESTIONS cancel entry lists it.
+- New tests in `packages/sdk/test/cancel-race.test.ts` and `packages/cli/test/buyer.test.ts`; no existing assertion changed.
+
+verify at 55cc5e1 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  31 passed (31)
+cli:       Tests  219 passed (219)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  174 passed (174)
+```
+reviewed: pending (adversary r12 found a defect; see below)
+
+### T21 adversary r12 fixes - 2026-11-02
+adversary r12 (926f3d4, `packages/cli/test/adversary-t21-r12.test.ts`, failing): a second `attessa cancel` on a call the first cancel found paid overwrote the saved `<id>.json` answer with nothing and exited "Unexpected error (TypeError)" with no next action (SPEC §7 getResult never re-pays, so that file is the buyer's only copy; FLOWS §8 one next action). Fixed in d39c438:
+- `packages/cli/src/commands/buyer.ts` `report()`, the only writer of the answer file (call, cancel, status --pending), writes it only when the result carries an answer. A stored verified outcome reported again prints "Already done: you were charged {p} {sym} (tx {h}) and the answer checked out. It was saved when it arrived." and exits 0, needing no signer.
+- `packages/sdk`: a not_charged entry stores the block that decided it (the cancel's log or receipt block; for expiry, the first read past it), so a re-read no longer prints "(block 0)"; older entries omit the block.
+- New tests in `packages/cli/test/buyer.test.ts` and `packages/sdk/test/cancel-race.test.ts`; no existing assertion changed. New lines are in the OPEN-QUESTIONS cancel entry, not FLOWS.
+
+verify at d39c438 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  32 passed (32)
+cli:       Tests  222 passed (222)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  176 passed (176)
+```
+reviewed: pending (adversary r13 found a defect; see below)
+
+### T21 adversary r13 fixes - 2026-11-02
+adversary r13 (461e24a, `packages/cli/test/adversary-t21-r13.test.ts`, failing): with the payment settled on chain but `/v1/results` still answering 202, `status --pending` (and an interrupted `call`) printed "your payment permission expires unused ... attessa cancel <id> voids it now", both false (FLOWS §8 "interrupted, payment found"; FLOWS §7 Uncertain resolves from chain state; FLOWS §9 one next action). Fixed in d5f5fcf:
+- `packages/cli/src/commands/buyer.ts`: one check, `paymentFound()`, decides whether the chain shows the payment settled. If so, call, status --pending and cancel print FLOWS §8 "The payment went through (tx {h}). Fetching your answer…" and one next action, "The answer isn't confirmed yet. attessa status --pending checks again and fetches it.", never "expires unused" or cancel. --json uses the same check (code `uncertain`, suggestion `get_result`).
+- New tests cover status --pending, --json and cancel; no existing assertion changed. The new next-action line is in the OPEN-QUESTIONS cancel entry, not FLOWS.
+
+verify at d5f5fcf (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-02:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  33 passed (33)
+cli:       Tests  225 passed (225)
+sdk:  Test Files  17 passed (17)
+sdk:       Tests  176 passed (176)
+```
+reviewed: pending (adversary r14 found a defect; see below)
+
+### T21 adversary r14 fixes - 2026-11-04
+adversary r14 (f98186b, `packages/cli/test/adversary-t21-r14.test.ts`, failing): a refused call that settled anyway, with the gateway answering `result_not_found`, made `attessa cancel` print "Fetching your answer." and "attessa status --pending checks again and fetches it." instead of the `settled_after_refusal` warning (SPEC §7 "no result and the call was refused → `settled_after_refusal`"; FLOWS §8 row with next action `report_gateway`). Fixed in 66c4929:
+- `packages/sdk/src/client.ts`: the end of `settledPath` is one shared `settledEnd`, which `getResult` now calls too. Refused ends `settled_after_refusal`, uncertain ends `paid_but_rejected{missing_proof}`; the ledger closes, evidence is written, spend counts.
+- `packages/cli/src/commands/buyer.ts`: `paymentFound()` excludes `result_not_found`; `cancel` prints the FLOWS warning and `--json` says `settled_after_refusal`.
+- New tests: `packages/sdk/test/settled-no-result.test.ts` (3) and 2 in `packages/cli/test/buyer.test.ts`; no existing assertion changed. No new copy.
+
+verify at 66c4929 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  34 passed (34)
+cli:       Tests  228 passed (228)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  179 passed (179)
+```
+reviewed: pending (adversary r15 found a defect; see below)
+
+### T21 adversary r15 fixes - 2026-11-04
+adversary r15 (822e357, `packages/cli/test/adversary-t21-r15.test.ts`, failing): with the buyer's RPC lagging the gateway's clock by more than 300 s, the `X-Attest-Payer-Sig` stamp was stale, the gateway answered 404 `result_not_found` (SPEC §2.5), and `getResult` ended a settled call `paid_but_rejected` and lost the answer the gateway still held (SPEC §7: getResult never re-pays, the held answer must stay fetchable). Fixed in 4d5dfc1:
+- `packages/sdk/src/client.ts`: `fetchResult` counts a 404 as "no result" only when the gateway's HTTP Date shows the chain-time stamp was well inside the 300 s window (270 s). Otherwise it signs again at the gateway's Date and asks once more; a 404 it still cannot tell from a stale signature is `unsure`, which `getResult` and the settled path of `reconcilePending` treat as undecided.
+- `packages/sdk/test/fakes/gateway.ts`: the fake gateway sends its own clock as Date. New tests in `packages/sdk/test/settled-no-result.test.ts`; no existing assertion changed. No new copy.
+- `OPEN-QUESTIONS.md`: whether trusting the gateway's Date for the re-sign is acceptable.
+
+verify at 4d5dfc1 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  35 passed (35)
+cli:       Tests  229 passed (229)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  182 passed (182)
+```
+reviewed: pending (adversary r16 found a defect; see below)
+
+### T21 adversary r16 fixes - 2026-11-04
+adversary r16 (e859bcf, `packages/cli/test/adversary-t21-r16.test.ts`, failing): an honest gateway whose clock and Date ran 280 s ahead of the buyer's chain time accepted both payer-signature stamps (SPEC §2.5, within 300 s), and its 404 `result_not_found` was genuine, yet `fetchResult` called it `unsure` (280 > 300 - 30), so a refused call that settled stayed `refused` with no `settled_after_refusal` row (SPEC §7). Fixed in 8fde1e7:
+- `packages/sdk/src/client.ts`: `fetchResult` re-signs once at the midpoint of chain time and the gateway's Date when they are within 2 x 270 s, so the stamp is inside the window by either clock; a 404 to it is "no result" when the new Date still agrees. Further apart, or with no Date, it stays `unsure`. The stamp is never more than 270 s from chain time, whatever Date the gateway sends.
+- New tests in `packages/sdk/test/settled-no-result.test.ts`: Date 400 s ahead ends `settled_after_refusal`; Date 600 s ahead stays `refused`. No existing assertion changed. No new copy.
+
+verify at 8fde1e7 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  36 passed (36)
+cli:       Tests  230 passed (230)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r17 finding judged out of model; see below)
+
+### T21 adversary r17 - 2026-11-04 (no code change)
+adversary r17 on 33e2332 reported one failing test, archived unchanged at `.worktrees/archive/adversary/t21-r17/adversary-t21-r17.test.ts` (not added to the branch): a fake gateway whose HTTP Date runs 150 s behind the clock it judges `X-Attest-Payer-Sig` by, with the buyer's RPC 500 s behind, rejects the midpoint stamp as stale, and the SDK ends a refused call `settled_after_refusal` while the gateway holds an answer. Not fixed, because:
+- the gateway judges the stamp and sends its Date from one clock (`packages/gateway/src/gateway.ts:110` `now`, `:225` the §2.5 check; Date is Node's from the same system clock), so an honest gateway cannot produce it;
+- a gateway that sends a false Date can as well withhold the answer outright, which SPEC.md:57 allows ("can withhold, delay, reorder, deny") and SPEC §7 records as `settled_after_refusal`; THREAT-MODEL TB4 accepts withholding (L4). No clock rule can tell a stale stamp from a missing result when the gateway's clock is outside both clocks the SDK can see.
+The adversary's other attacks all failed: honest gateway at lag 0, 269, 270, 271, 299, 300, 301, 539 and 540 (a genuine 404 decides, a held answer verifies), 541 stays undecided (outside §2.5), midpoint rounding at the boundaries, and the 16 earlier `adversary-t21-r*` files (43 tests) pass.
+reviewed: pending (adversary r18 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r18 fixes - 2026-11-04
+adversary r18 (ab5f86b, `packages/cli/test/adversary-t21-r18.test.ts`, failing): with two pending calls (A settled, its answer still 202; B behind an HTML 502, nothing settled), `attessa status --pending --json` put B's `requestId` at the top level beside A's `settlementTx` and `suggestion: "get_result"`, because `report()` wrote each call's `jsonResult` through `io.data`, which `--json` merges into one object (FLOWS §7 resolve from chain state, never by guessing; FLOWS §8 one next action per row). The `pending[]` rows were right. Fixed in 1311843:
+- `packages/cli/src/commands/buyer.ts`: `status --pending` passes `report()` an `io` without `data`; each call's row is only in `pending`. Human output is unchanged. No existing assertion changed. No new copy.
+- `OPEN-QUESTIONS.md`: the r15 clock entry now describes the r16 midpoint and the r17 judgement; a new item for `pollResults` polling with no wall-clock bound while every RPC read fails (reported by r18 as unproven; predates T21; not changed).
+
+verify at 1311843 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  37 passed (37)
+cli:       Tests  231 passed (231)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r19 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r19 fixes - 2026-11-04
+adversary r19 (f820109, `packages/cli/test/adversary-t21-r19.test.ts`, failing): `attessa call ... --out no-such-dir/result.json` against an honest gateway paid, verified and recorded the call `verified` (terminal), then the `--out` write threw: "Unexpected error" with no next action, `--json` an `unexpected` error merged with the verified result, the paid answer in no file, and a later `cancel <id>` said "It was saved when it arrived" (FLOWS §9 one next action per error row; SPEC §8 --json). Fixed in 3b254be:
+- `packages/cli/src/commands/buyer.ts` (`report()`, verified): a failed `--out` write keeps the answer in `<dataDir>/<requestId>.json` and throws `answer_not_written` with one next action; a later report of the stored outcome names that file when it exists. If the data folder refuses it too, a second `answer_not_written` line says it wasn't saved.
+- `packages/cli/src/copy.ts`: `alreadyVerifiedKept`, `BUYERR.answerNotWritten`, `BUYERR.answerNotKept`, all `// not in FLOWS`, listed in OPEN-QUESTIONS.md. No existing assertion changed. The both-writes-fail line has no test.
+
+verify at 3b254be (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  38 passed (38)
+cli:       Tests  234 passed (234)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r20 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r20 fixes - 2026-11-04
+adversary r20 (12313a1, `packages/cli/test/adversary-t21-r20.test.ts`, failing): with an open call for the same input, `attessa call --dry-run --json` printed the open call's id in its human line but a fresh random `requestId` in the JSON, one no ledger entry has, and wrote a stray `stopped` evidence row under it (SPEC §8 `--json`; an agent running `attessa cancel <requestId>` would be told the request is unknown). Fixed in 5838be3:
+- `packages/sdk/src/client.ts`: `wouldResume` returns `stopped` / `dry_run` with the open call's `requestId` and writes no evidence row. No existing assertion changed. No new copy.
+
+verify at 5838be3 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  39 passed (39)
+cli:       Tests  235 passed (235)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r21 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r21 fixes - 2026-11-04
+adversary r21 (37e1296, `packages/cli/test/adversary-t21-r21.test.ts`, failing): two open calls both answered in one `attessa status --pending` run from a working folder that no longer exists; the first call's `answer_not_written` stopped the loop, and the second call, already `verified` (terminal, never re-fetched), had its answer written nowhere and nothing printed (SPEC §7 getResult never re-pays; SPEC §9 every outcome reported). Fixed in e418018:
+- `packages/cli/src/commands/buyer.ts`: `status --pending` catches a call's CliError from `report()`, prints its message and next action under that call, goes on to the rest, lists them in `--json` `errors`, and exits 1.
+- Same file: `attessa call` refuses an `--out` that resolves inside the data folder before signing (the adversary's unproven lead that `--out ~/.attessa/pending.jsonl` would overwrite the ledger). New test in `packages/cli/test/buyer.test.ts`. Both lines are `// not in FLOWS`, in OPEN-QUESTIONS.md. No existing assertion changed.
+
+verify at e418018 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  40 passed (40)
+cli:       Tests  237 passed (237)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r22 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r22 fixes - 2026-11-04
+adversary r22 (dbd983e, `packages/cli/test/adversary-t21-r22.test.ts`, failing): with open calls to two services whose answers were both released, `attessa status <A> --pending` let `reconcilePending` decide both calls `verified` (terminal, never re-fetched; SPEC §7) and then reported only A's, so B's paid, verified answer was written nowhere, and a later `status --pending` could not recover it. Fixed in 72dc5d4:
+- `packages/cli/src/commands/buyer.ts`: `status [<origin>] --pending` reports every call the run decides, the asked-about service's first; each row already names its host. The `--out` data-folder guard resolves symlinks (the adversary's unproven lead), with a new test in `packages/cli/test/buyer.test.ts`. The scope question is in OPEN-QUESTIONS.md. No existing assertion changed. No new copy.
+
+verify at 72dc5d4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  41 passed (41)
+cli:       Tests  239 passed (239)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r23 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r23 fixes - 2026-11-04
+adversary r23 (aa0b9f2, `packages/cli/test/adversary-t21-r23.test.ts`, failing): `--out answer.json` where answer.json is a symlink to `~/.attessa/evidence.jsonl` passed the data-folder guard (it resolved only the folder of `--out`), the call was paid, and the answer replaced every evidence row (SPEC §9; the guard's own purpose). It also hunted the whole "SDK makes a call terminal, then the CLI loses its answer or line" family (reconcilePending throwing partway, resume, cancel and getResult re-reporting, --json row merge, evidence export) and found nothing else. Fixed in b05d359:
+- `packages/cli/src/commands/buyer.ts`: `intoDataDir()` follows a symlink at `--out` itself (dangling too, one hop), compares the real path with the data folder, and refuses a hard link to any file in it (same device and inode).
+- New test in `packages/cli/test/buyer.test.ts` for a dangling symlink and a hard link. No existing assertion changed. No new copy.
+
+verify at b05d359 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  42 passed (42)
+cli:       Tests  241 passed (241)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r24 found defects; see below; Codex to judge the r17 call above)
+
+### T21 adversary r24 fixes - 2026-11-04
+adversary r24 (54e0e53, `packages/cli/test/adversary-t21-r24.test.ts`, 3 failing): (1) without `--out`, a `./result.json` symlinked to `~/.attessa/evidence.jsonl` took the paid answer over the evidence log (the guard ran only for an explicit `--out`; SPEC §9); (2) a process stopped after the ledger recorded `verified` but before the answer was written left no copy, yet a later `cancel <id>` said "It was saved when it arrived"; (3) the same false line after "it wasn't saved". Fixed in 0f0788e:
+- `packages/cli/src/commands/buyer.ts`: `call` checks the default `result.json` before signing; `report()` checks every answer file (also `<requestId>.json` from `status --pending` and `cancel`) and keeps the answer beside the record if it would land in the data folder. Each answer the CLI writes is recorded in `<dataDir>/saved.txt`; a re-report says "It was saved when it arrived" only with that record, else the new `alreadyVerifiedNotSaved` line.
+- `packages/cli/src/copy.ts`: `alreadyVerifiedNotSaved`, `// not in FLOWS`, in OPEN-QUESTIONS.md. No existing assertion changed.
+
+verify at 0f0788e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  43 passed (43)
+cli:       Tests  244 passed (244)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r25 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r25 fixes - 2026-11-04
+adversary r25 (3db7169, `packages/cli/test/adversary-t21-r25.test.ts`, failing): a truncated `~/.attessa/config.json` (a kill or a full disk during `init`'s write) made every buyer command print "{path} isn't valid JSON. Run attessa init again.", and `attessa init` failed with the same line, so the row's one next action could never work (FLOWS §8/§9). Fixed in 983d9e6:
+- `packages/cli/src/commands/buyer.ts`, `packages/cli/src/index.ts`: `init` reads the config through `readConfigForInit`, which treats an unparseable file as absent, and writes a fresh one; every other command still refuses with the bad-JSON row.
+- Same file: run from inside the data folder, `status --pending` / `cancel` write `<requestId>.json`, which is the kept file itself; that write is allowed instead of being reported as failed (the adversary's unproven lead; no test).
+No existing assertion changed. No new copy.
+
+verify at 983d9e6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  44 passed (44)
+cli:       Tests  245 passed (245)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  184 passed (184)
+```
+reviewed: pending (adversary r26 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r26 fixes - 2026-11-04
+adversary r26 (0a5760f, `packages/cli/test/adversary-t21-r26.test.ts`, failing): an `evidence.jsonl` whose last row was cut short (a full disk or a killed append) made `Ledger.readEvidence` throw a SyntaxError. `status --pending` had already marked every open call `verified` (terminal, never fetched again), and `report()` reads evidence after writing each answer, so the first answer was written, the run ended "Unexpected error" with no next action, and every later paid, verified answer was written nowhere (SPEC §9; FLOWS §8 one next action). Fixed in e24e0e2:
+- `packages/sdk/src/ledger.ts`: `readEvidence` skips a line that doesn't parse instead of failing the whole read; `appendEvidence` starts on a fresh line when the file doesn't end in a newline, so the row after a cut-short one stays whole.
+- `packages/sdk/test/ledger.test.ts`: a cut-short row is skipped and the next append reads back whole.
+- OPEN-QUESTIONS.md: the adversary's unproven lead (USA₮ limits have no `init` flag; a bad `dailyCap` in config.json names a `--daily-cap` flag `call` doesn't take), mainnet only.
+No existing assertion changed. No new copy.
+
+verify at e24e0e2 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  45 passed (45)
+cli:       Tests  246 passed (246)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r27 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r27 fixes - 2026-11-04
+adversary r27 (4e68e2c, `packages/cli/test/adversary-t21-r27.test.ts`, failing): the SDK's `finish()` makes the ledger entry terminal and then appends the evidence row; when that append failed (ENOSPC on evidence.jsonl), `payAndVerify` threw, so the paid, verified answer was in no result, the CLI printed "Unexpected error (Error, ENOSPC)" with no next action, and no later run could fetch it (getResult never re-fetches a terminal entry; SPEC §7 V12, §9). Fixed in c011165:
+- `packages/sdk/src/client.ts`, `types.ts`: a failed evidence append no longer throws away the decided result; it comes back with `evidenceNotWritten: true`. `CallResult.inputsBlock` carries the inputs block, so the CLI no longer re-reads evidence for the "Paid" line.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: a verified result with no evidence row saves the answer as usual, prints "Answer saved to {file}." and ends `record_not_written` (exit 1): "Couldn't add this call to your record at {record}." / "Free up space in {dir}, or make it writable, before your next call." (not in FLOWS; OPEN-QUESTIONS.md).
+- `packages/cli/test/buyer.test.ts`: those lines, with the answer in result.json.
+No existing assertion changed.
+
+verify at c011165 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  46 passed (46)
+cli:       Tests  248 passed (248)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r28 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r28 fixes - 2026-11-04
+adversary r28 (66edc94, `packages/cli/test/adversary-t21-r28.test.ts`, two failing tests): the r27 guard covered only `finish()`. (1) A `paid_but_rejected` call whose evidence row wasn't written still printed "Your record (…) proves the payment and the failed check." (SPEC §9 11a). (2) An honest 503 `enclave_unavailable` after signing wrote its refusal row outside `finish()`; the failed append ended "Unexpected error (Error, ENOSPC)" with no next action and left the call `refused` instead of `not_charged` (SPEC §9 7a). Fixed in a1d2b2c:
+- `packages/sdk/src/client.ts`: every evidence write (`evidence()`, the refusal row before waiting for expiry, resume, `stopped()`) goes through `appendOrMark`, which sets `evidenceNotWritten` instead of throwing; the refusal row's mark is carried to the final result.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: `report()` prints any outcome as usual, then ends `record_not_written` when the row is missing; `paid_but_rejected` and `settled_after_refusal` drop the "Your record … proves" clause then. Limits in OPEN-QUESTIONS.md (two next actions on those two rows; a `stopped` result doesn't mention the missing record).
+No existing assertion changed.
+
+verify at a1d2b2c (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  47 passed (47)
+cli:       Tests  250 passed (250)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r29 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r29 fixes - 2026-11-04
+adversary r29 (d39f20b, `packages/cli/test/adversary-t21-r29.test.ts`, two failing tests): (1) `attessa cancel` that lands while evidence.jsonl can't be appended: `finish()` marked a result that `cancelAuthorization` discarded (it returns only the tx hash), so the CLI printed only "Cancelled (tx …)." and exited 0 with no row recorded (SPEC §9). (2) Over the daily cap with the record unwritable, the line read the price back from the row that failed to write: "today's spend to 0.00 USDC" (FLOWS §8 over_daily_cap). Fixed in b12a23a:
+- `packages/sdk/src/client.ts`, `index.ts`: a landed cancel whose row wasn't written throws `CancelNotRecordedError` (with the tx); a `stopped` result carries `amount` and `asset`.
+- `packages/cli/src/commands/buyer.ts`: `cancel` prints "Cancelled (tx {h})." then ends `record_not_written`; over_daily_cap uses the result's amount and asset; the now unused `lastEvidence` is removed.
+- OPEN-QUESTIONS.md: the new error class and result fields.
+No existing assertion changed. No new copy.
+
+verify at b12a23a (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  48 passed (48)
+cli:       Tests  252 passed (252)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r30 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r30 fixes - 2026-11-04
+adversary r30 (5e11609, `packages/cli/test/adversary-t21-r30.test.ts`, failing): the disk filling after an honest gateway settled made `settleAndVerify`'s first ledger write throw ENOSPC; `attessa call` ended "Unexpected error (Error, ENOSPC)" with no next action after a charge (FLOWS:832 "Every error row has one next action"). The entry stays `signed`, so `status --pending` can finish it. Fixed in 888c75e:
+- `packages/cli/src/copy.ts`, `index.ts`, `commands/buyer.ts`: a buyer command's Node or SQLite disk-write error (list in OPEN-QUESTIONS.md) ends `disk_write_failed`: "Couldn't write a file attessa keeps on this computer ({code})." / "Free up space in {dir}, or make it writable, then run `attessa status --pending` to finish any call in progress." A read-only data folder fails first at the ledger's SQLite lock (SQLITE_CANTOPEN), so SQLite's codes are included.
+- `packages/cli/test/buyer.test.ts`: the two lines for a read-only `~/.attessa`.
+No existing assertion changed.
+
+verify at 888c75e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  49 passed (49)
+cli:       Tests  254 passed (254)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r31 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r31 fixes - 2026-11-04
+adversary r31 (9691d5c, `packages/cli/test/adversary-t21-r31.test.ts`, failing): with a read-only `~/.attessa` that already holds the ledger lock file, SQLite reports SQLITE_READONLY_DIRECTORY, which the SDK's ledger wraps in its own error with the SQLite error as `cause`; `diskError` read only the outer error, so the command still ended "Unexpected error". Fixed in 9aaff7d:
+- `packages/cli/src/copy.ts`: `diskError` checks the wrapped `cause` one level down first, and maps SQLite's extended result codes by their low byte (READONLY_DIRECTORY is READONLY).
+- OPEN-QUESTIONS.md: the disk_write_failed entry says so.
+No existing assertion changed.
+
+verify at 9aaff7d (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  50 passed (50)
+cli:       Tests  256 passed (256)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r32 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r32 fixes - 2026-11-04
+adversary r32 (86b3385, `packages/cli/test/adversary-t21-r32.test.ts`, failing): `sdkError` gave a next action to `network_mismatch` only for the RPC chain-id detail. `attessa call --asset usat` on Celo Sepolia ("usat is not offered on chain 11142220") and a quote naming another network ("network eip155:42220") ended "Wrong network: {detail}. Nothing was signed." with no next action (FLOWS:832 "Every error row has one next action"). Nothing was signed in either case. Fixed in fc37da4:
+- `packages/cli/src/commands/buyer.ts`: that row's next action is "Check `--network` and `--asset`, then retry." (marked not in FLOWS).
+- OPEN-QUESTIONS.md: an entry for the row, for design to approve or replace.
+No existing assertion changed.
+
+verify at fc37da4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  51 passed (51)
+cli:       Tests  258 passed (258)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r33 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r33 fixes - 2026-11-04
+adversary r33 (dca65cd, `packages/cli/test/adversary-t21-r33.test.ts`, failing): both pinned deployments have `enclaveRegistry: null`, and with `ATTESSA_REGISTRY` unset the SDK's `net()` threw a plain Error. `attessa call` and `status --pending` ended "Unexpected error (Error)." with no next action (FLOWS:832), and `status <origin>` printed "Can't reach Celo at {rpc}." about an RPC that had answered (FLOWS:787). Nothing was signed. Fixed in f8bbbd6:
+- `packages/sdk/src/types.ts`, `client.ts`: the SDK throws `AttestError('no_registry', ...)`; `CallCode` gains `no_registry`.
+- `packages/cli/src/commands/buyer.ts`: `sdkError` maps `no_registry` to the seller commands' existing row: "No EnclaveRegistry address is known for {network}." / "Set ATTESSA_REGISTRY to the registry address."
+- OPEN-QUESTIONS.md: an entry for the row on buyer commands.
+No existing assertion changed. Not fixed, unproven (mainnet only, no USA₮ on Sepolia): r33 suspects a resumed USA₮ call reports the `--asset` flag's symbol instead of the entry's.
+
+verify at f8bbbd6 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  52 passed (52)
+cli:       Tests  262 passed (262)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r34 found a defect; see below; Codex to judge the r17 call above)
+
+### T21 adversary r34 fixes - 2026-11-04
+adversary r34 (01c040b, `packages/cli/test/adversary-t21-r34.test.ts`, failing): with two live signers on two approved releases of one origin, liveness answered by signer A (release R1) and the paid answer proven by signer B (release R2), the call ended `verified` with an evidence row pairing `releaseId` R2 with R1's `ownerClaimedSource` (SPEC.md:640, :700), and `attessa call` printed R1 above "The answer came from that approved build" (FLOWS J1). No money at risk: B is an approved, active signer. Fixed in 6c3e698:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): when the proof's release differs from the liveness release, the owner claim recorded is looked up for the proof's release (and dropped if it has none), not carried over.
+- `packages/cli/src/commands/buyer.ts`, `copy.ts`: the release shown at "Runs agent ..." is carried to the report; when the proof's release differs, the paid line reads "Paid {p} {sym}. The answer came from another approved build of this agent (release {r}), for this request, using Celo data from block {b}  (settled: tx {tx}, signer {s})" (marked not in FLOWS).
+- OPEN-QUESTIONS.md: the entry, with the open question whether V10 should instead require the proving signer to equal the liveness signer (`expectedSigner` is stored but never compared).
+No existing assertion changed.
+
+verify at 6c3e698 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  53 passed (53)
+cli:       Tests  264 passed (264)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r35 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r35 fixes - 2026-11-04
+adversary r35 (e31bb39, `packages/cli/test/adversary-t21-r35.test.ts`, failing): an interrupted `--asset usat` call re-run without `--asset` resumed the USA₮ entry (V0, one payment, evidence `asset` the USA₮ token) but printed "Paid 0.02 USDC": `call` took the symbol from this run's flag (FLOWS J1 "Paid {p} {sym}"). Mainnet or a mainnet fork only (Sepolia pins no USA₮). Fixed in 66890ae:
+- `packages/cli/src/commands/buyer.ts`: `call` reports in the asset of the result (`assetOf(r.asset)`), symbol and daily cap both, as `cancel` and `status --pending` already did.
+- `packages/sdk/src/client.ts`: r35 also noted (unproven) that the r34 change could pair a `paid_but_rejected` row's liveness `releaseId` with the proof release's owner claim. Now only a `verified` row (whose `releaseId` is the proof's) takes the proof release's claim; a rejected row keeps the claim that matches its own `releaseId`, as before r34.
+No existing assertion changed.
+
+verify at 66890ae (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-04:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  54 passed (54)
+cli:       Tests  265 passed (265)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r36 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r36 fixes - 2026-11-05
+adversary r36 (db34134, `packages/cli/test/adversary-t21-r36.test.ts`, failing): a gateway answering 200 with a proof and a PAYMENT-RESPONSE tx that never settles on chain made `settleAndVerify` return `uncertain` at once, though `waitForExpiry` is on by default (SPEC.md:635 "by default (`waitForExpiry`) the SDK waits until a block with timestamp > validBefore + 5"; SPEC.md:660 `attessa call` "waits to confirm not-charged unless `--no-wait`"). The call ended "Not confirmed yet" with the amount still reserved. Fixed in de764a5:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): with no settlement found, the entry goes `uncertain` and, by default, through `finalize` (the same expiry wait as a lost connection), ending `not_charged` or the settlement it then finds; with `waitForExpiry: false` it returns `uncertain` as before. The 202 poll and V0 resume paths call the same function.
+- `packages/cli/src/commands/buyer.ts`: r36 also noted (unproven) that `cancel` on a never-signed request ended `nothing_signed` with no next action (FLOWS:832); it now has "Run `attessa status --pending` to see your open calls." (OPEN-QUESTIONS.md entry).
+No existing assertion changed.
+
+verify at de764a5 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  55 passed (55)
+cli:       Tests  266 passed (266)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r37 found a defect; see below; Codex to judge the r17 call and the r34 expectedSigner question above)
+
+### T21 adversary r37 fixes - 2026-11-05
+adversary r37 (eaaa597, `packages/cli/test/adversary-t21-r37.test.ts`, failing): the r36 change set the entry to `uncertain` before the no-settlement wait even when it was `refused`. A refused call resumed into that wait, settled during it with no result left at the gateway, ended `paid_but_rejected{missing_proof}`, where SPEC.md:635 says "no result and the call was `refused` → `settled_after_refusal`". Fixed in 545c7b2:
+- `packages/sdk/src/client.ts` (`settleAndVerify`): a `refused` entry stays `refused` into the wait; other entries go `uncertain` as in r36.
+- `packages/cli/src/commands/buyer.ts`: r37 also noted (unproven) that the r36 wait printed nothing for about two minutes (FLOWS:825 "No silent waits"): the `waiting` progress now prints the confirming line and its next action for an `uncertain` call that hasn't printed "Lost the connection…". OPEN-QUESTIONS.md entry for that copy, and for `finalize`'s unbounded RPC retry, not changed.
+No existing assertion changed.
+
+verify at 545c7b2 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05. The first full run of this code ended `cli: Tests 15 failed | 252 passed (267)`, with no failure detail kept; a CLI-only rerun under the lock right after passed 267, and this second full run passed:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  56 passed (56)
+cli:       Tests  267 passed (267)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r38, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r38 fixes - 2026-11-05
+adversary r38 (010f59a, test `packages/cli/test/adversary-t21-r38.test.ts`, failing first): a re-run that resumed a `signed` call (its first run died after signing) got the gateway's 404 `result_not_found` and waited up to two minutes in `finalize` for the expiry check with no line printed between "Resuming it instead of paying again." and "Not charged: …" (FLOWS:825 "No silent waits"). Fixed in 34d5faf:
+- `packages/cli/src/commands/buyer.ts` (`waiting` progress): the confirming line and its next action print for every wait except a call whose settlement is known and an `uncertain` call that already printed "Lost the connection…". So a resumed `signed` or `settle_pending` call gets it too. The OPEN-QUESTIONS.md entry for that copy now names this case.
+No existing assertion changed.
+
+verify at 34d5faf (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm test` in packages/cli and packages/sdk; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+cli:  Test Files  57 passed (57)
+cli:       Tests  268 passed (268)
+sdk:  Test Files  18 passed (18)
+sdk:       Tests  185 passed (185)
+```
+reviewed: pending (adversary r39, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 staging merge and adversary r39 fix - 2026-11-05
+CI (`ci` and `harness`) had been red on this branch since before r33: it predated staging's fixes (the deferred BLOCKING questions, the nitro pin, the core oracle test). 74ca132 merges staging. Conflicts: the SDK takes staging's pinned-registry-first rule (SPEC §2.6) and keeps the branch's `no_registry` AttestError; DONE.md is staging's file with the T21 section after it; OPEN-QUESTIONS.md keeps staging's deferred blockers plus the T21 entries; TASKS.md takes staging's ticks and keeps T21 ticked. Since T10 pinned the real Sepolia registry, CLI tests use a vitest setup file (`packages/cli/test/pin-fake-registry.ts`) that pins the fake one, `test/fake-chain.ts`'s REGISTRY equals the SDK FakeChain's default, and `adversary-t21-r33.test.ts` (a network with no registry) unpins Sepolia for its own tests. No assertion changed. CI on 74ca132: `ci` success, `harness` success.
+
+adversary r39 (7e4a88e, test `packages/cli/test/adversary-t21-r39.test.ts`, failing first): a refused call resumed with `--no-wait` that got a 200 with no settlement ended `refused` with no code in `--json` and a second evidence row with `code: null` (SPEC.md:620 "refused (+ code)", SPEC.md:640). Fixed in 18210f4: `finish` (packages/sdk/src/client.ts) gives a kept refusal its stored code, as `current()` does for the same entry.
+
+verify at 18210f4 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  58 passed (58)
+packages/cli test:       Tests  270 passed (270)
+```
+reviewed: pending (adversary r40, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r40 fixes - 2026-11-05
+adversary r40 (58a0f07, test `packages/cli/test/adversary-t21-r40.test.ts`, failing first): past validBefore + 5 the chain read the permission as used but the RPC's log index had no AuthorizationUsed yet; after 21 polls `finalize` returned the entry as it stood, and `attessa call` printed "expires unused … unless the gateway used it" and "attessa cancel … voids it now", a next action that can't work (SPEC.md:635, FLOWS.md:832). Fixed in 2cea645:
+- `packages/sdk/src/client.ts` (`finalize`): that exit marks the result `authorizationUsed: true` (new optional `CallResult` field in `packages/sdk/src/types.ts`).
+- `packages/cli/src/commands/buyer.ts`: such a result prints cancel's undecided row ("Your payment permission was already used or cancelled, but Celo doesn't show which yet." / "Run attessa status --pending in a minute to see which."), and `--json` carries `authorizationUsed: true`. OPEN-QUESTIONS.md entry added for the copy.
+No existing assertion changed.
+
+verify at 2cea645 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  59 passed (59)
+packages/cli test:       Tests  271 passed (271)
+```
+reviewed: pending (adversary r41, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r41 fixes - 2026-11-05
+adversary r41 (e156cc0, test `packages/cli/test/adversary-t21-r41.test.ts`, failing first): the r40 flag was set only after 21 waiting polls, so `attessa status --pending` and a `call --no-wait` resume (one `finalize` pass each) still printed "expires unused at {t} UTC … attessa cancel {id} voids it now" for a permission the chain read as used past expiry with no log indexed (SPEC.md:635, FLOWS.md:832). Fixed in 9da450d: `finalize` (packages/sdk/src/client.ts) remembers that read and marks the single-pass result `authorizationUsed` too, so both commands print cancel's undecided row. Round 40's two leads: the `rpc_unavailable` evidence code for a kept refusal was dropped by r41 (SPEC names no code for that pass); a malformed ATTESSA_REGISTRY stopping buyer commands under `--network local` on a Sepolia fork is real but only the message is affected, not fixed here.
+No existing assertion changed. CI on 225b2fc (r40): `ci` success, `harness` success.
+
+verify at 9da450d (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  60 passed (60)
+packages/cli test:       Tests  273 passed (273)
+```
+reviewed: pending (adversary r42, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r42 fixes - 2026-11-05
+adversary r42 (f00e49a, test `packages/cli/test/adversary-t21-r42.test.ts`, failing first): a waiting re-run past expiry of a call whose permission the chain already read as used (no log indexed yet) first printed "Confirming you weren't charged: your payment permission expires unused at {t} UTC (in 0 s). Waiting…" and the `attessa cancel` hint, then ended with the undecided row (SPEC.md:635, FLOWS.md:832). Fixed in fb83434: the SDK's `waiting` progress carries `used: true` in that state (packages/sdk/src/types.ts, client.ts), and the CLI prints "Your payment permission was already used or cancelled; waiting for Celo to show which…  (up to a minute)" instead (packages/cli/src/copy.ts, buyer.ts; noted in OPEN-QUESTIONS.md, not in FLOWS). Round 41's lead (an RpcError on `authorizationState` with wait false) was dropped by r42.
+No existing assertion changed. CI on 704cab7 (r41): `ci` success, `harness` success.
+
+verify at fb83434 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  61 passed (61)
+packages/cli test:       Tests  274 passed (274)
+```
+reviewed: pending (adversary r43, then Codex; Codex to judge the r17 call and the r34 expectedSigner question above, and the r37 flaky full run)
+
+### T21 adversary r43 fixes - 2026-11-05
+adversary r43 (fbc00c1, tests `packages/cli/test/adversary-t21-r43.test.ts` and `adversary-t21-r43-evidence.test.ts`, the second made from its evidence probe; failing first):
+1. A refused call whose permission the chain already read as used before expiry, with no log indexed, printed the confirming line ("expires unused at {t}") and the `attessa cancel` hint on its first wait pass, then ended on the undecided row (SPEC.md:635, FLOWS.md:832). `finalize` read `authorizationState` only past validBefore + 5.
+2. A waiting lost-connection call that ended on the lagging-log exit wrote no evidence row (SPEC.md:700 "Every outcome is in evidence"); with `--no-wait` it did.
+Fixed in 5eac46b: `finalize` (packages/sdk/src/client.ts) reads the permission state on every pass; used with no log counts as lagging and announces `used`, unused decides `not_charged` only past validBefore + 5; the lagging exit writes an `uncertain` row unless the entry is refused (whose row exists).
+That made three SDK tests fail (`packages/sdk/test/outcomes.test.ts`: two INV-20 tests and the confirmNotCharged test), which asserted that no `authorizationState` read happens before validBefore + 5, stricter than INV-20 ("never reports `not_charged` without reading … == false at a block whose timestamp > validBefore + 5"). Joshua chose (2026-11-05) to narrow them to INV-20's wording: a2423af asserts the deciding (last) read is past validBefore + 5, and keeps every other assertion, including `confirmedAtBlock` past validBefore + 5.
+
+verify at a2423af (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  63 passed (63)
+packages/cli test:       Tests  277 passed (277)
+```
+reviewed: pending (adversary r44, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r44 fixes - 2026-11-05
+adversary r44 (a7186c1, test `packages/cli/test/adversary-t21-r44.test.ts`, failing first): when the first `authorizationState` read of a wait threw an RpcError, `finalize` still announced the wait from that pass, without `used`, so the CLI printed the confirming line ("expires unused") and the `attessa cancel` hint for a permission the chain already read as used (SPEC.md:635, FLOWS.md:832). Fixed in 2b8a56e: the wait is announced only from a pass whose state read succeeded (packages/sdk/src/client.ts). Known trade-off, already in the OPEN-QUESTIONS.md entry on `finalize`'s unbounded RPC retry: if every state read fails while the head answers, the wait now prints nothing until a read succeeds.
+No existing assertion changed. CI on 11a4a35 (r43): `ci` success, `harness` success.
+
+verify at 2b8a56e (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  64 passed (64)
+packages/cli test:       Tests  278 passed (278)
+```
+reviewed: pending (adversary r45, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r45 fixes - 2026-11-05
+adversary r45 (6f6ee3c, test `packages/cli/test/adversary-t21-r45.test.ts`, failing first):
+1. `attessa status --agent` listed a signer whose release was revoked or whose endpoint was retired as `Active`, and `--json` `.signer` picked it (FLOWS §7 signer statechart: "Active --> Inert … Checks evaluate signer AND release AND endpoint").
+2. `invalid_transition` and `signer_not_active` ended with no next action (FLOWS.md:832); `self_disabled` had the same gap.
+Fixed in 50e4126: `status --agent` derives `Inert` for an active, unexpired signer whose release isn't Approved or whose endpoint isn't Active or has another operator (packages/cli/src/commands/registry.ts); the `revoke release` prompt no longer counts such signers as live; the three rows get a next action (packages/cli/src/copy.ts; OPEN-QUESTIONS.md entry, not in FLOWS).
+No existing assertion changed. CI on 9782b3f (r44): `ci` success, `harness` success.
+
+verify at 50e4126 (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  65 passed (65)
+packages/cli test:       Tests  282 passed (282)
+```
+reviewed: pending (adversary r46, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r46 fixes - 2026-11-05
+adversary r46 (1f577e0, test `packages/cli/test/adversary-t21-r46.test.ts`, failing first): the `revoke release` (J4) prompt still counted as live a signer of a Deprecated release, and a signer whose origin another agent now holds, while `status --agent` showed both `Inert` (FLOWS.md:698, :706; checkSigner AGENT_MISMATCH and RELEASE_NOT_APPROVED, SPEC.md:288, :290). Fixed in 247ddfe (packages/cli/src/commands/registry.ts): no live signers unless the release is Approved, and a live signer's endpoint must belong to this agent. Its unproven lead, the deprecate prompt's "You can approve it again later" with no CLI path to re-approve, is in OPEN-QUESTIONS.md for design. Round 45's CSV suspicion was dropped by r46 (an export of the evidence record, not terminal text).
+No existing assertion changed. CI on c6c0a4a (r45): `ci` success, `harness` success.
+
+verify at 247ddfe (`pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint`, `pnpm -r test`; run by Claude under the heavy lock), 2026-11-05:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  66 passed (66)
+packages/cli test:       Tests  284 passed (284)
+```
+reviewed: pending (adversary r47, then Codex; Codex to judge the r17 call, the r34 expectedSigner question, the r37 flaky full run and the r43 narrowing of the INV-20 test assertions)
+
+### T21 adversary r47 (failing test 581b89e, fix f38735f)
+Finding: after `endpoint retire` and `endpoint add` with a new operator, the running key's signer keeps the old operator (Inert, SPEC §3.4). `signer renew` from the new operator said that wallet "isn't the operator", and `signer register --fresh` sent it back to `signer renew`; neither could pass (FLOWS.md:832).
+Fix: renew splits the wrong-wallet check from the operator-changed check and gives the latter `operator_mismatch` with "Restart with `attessa enclave start`, then `attessa signer register`."; register's signer_exists row gives that restart line whenever renew can't extend the signer (expired, revoked or old operator). Copy logged in OPEN-QUESTIONS (not in FLOWS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
 packages/site typecheck$ tsc -p . --noEmit
 packages/site typecheck: Done
 packages/seller-host typecheck: Done
@@ -2722,6 +3655,20 @@ packages/core test:  Test Files  9 passed (9)
 packages/core test:       Tests  69 passed (69)
 packages/seller-host test:  Test Files  8 passed (8)
 packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  67 passed (67)
+packages/cli test:       Tests  286 passed (286)
+```
+reviewed: pending (adversary r48, then Codex)
+
+### T21 adversary r48 (failing test 2cc909b, fix f265c7c)
+Finding: with live signers on two Approved releases for one origin, `revoke release R1` said "risk.example refuses calls until you approve and register another build", but R2's signer keeps serving it (FLOWS.md:833, SPEC §3.4 checkSigner per release).
+Fix: releaseStatus walks every SignerRegistered for the agent and leaves out of the prompt any origin a live signer on another Approved release still serves; when none is left the prompt says "another approved build still serves its endpoints" (not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
 packages/site test: # tests 255
 packages/site test: # pass 255
 packages/site test: # fail 0
@@ -2885,6 +3832,479 @@ verify (under the heavy lock):
 build=0
 typecheck=0
 lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  68 passed (68)
+packages/cli test:       Tests  289 passed (289)
+```
+reviewed: pending (adversary r49, then Codex)
+
+### T21 adversary r49 (failing test c205614, fix 1ceb6ff)
+Findings: (1) `status --agent 999` for an agent the identity registry doesn't know printed "No releases yet. Approve one with `attessa release approve`.", whose action then ends unknown_agent (FLOWS.md:832). (2) `revoke signer` on an Expired signer, or one Inert because its release was revoked, still said "This stops signer … within 60 s" while `status --agent` lists it Expired or Inert (FLOWS.md:833).
+Fix: agentStatus calls ownerOf first (unknown_agent, as the owner commands); a shared `notLive` (registry.ts) derives Expired/Inert as checkSigner does and is used by `revoke release` and `revoke signer`, whose prompt says the signer "is already {Expired|Inert} and signs nothing" (not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  69 passed (69)
+packages/cli test:       Tests  293 passed (293)
+```
+reviewed: pending (adversary r50, then Codex)
+
+### T21 adversary r50 (failing test a95e1d0, fix 2ce4d83)
+Finding: `attessa cancel <id>` without `--yes` showed a bare confirm; declined, or with stdin not a TTY (bin.ts answers false), it exited 1 printing nothing (`--json`: `{"ok":false,"lines":[]}`), and the permission stayed open. FLOWS.md:833: "Cancel no longer prompts"; FLOWS.md:832 one next action.
+Fix: the confirm is removed from cancel (buyer.ts).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  70 passed (70)
+packages/cli test:       Tests  296 passed (296)
+```
+reviewed: pending (adversary r51, then Codex)
+
+### T21 adversary r51 (failing test a611992, fix 788fa22)
+Finding: a call paid from wallet A and interrupted after settlement, then `status --pending` run with `ATTESSA_PRIVATE_KEY` set to wallet B: B's results request got the gateway's 404 (SPEC §6: only the payer's signature fetches), the SDK took it as no result and ended the call `paid_but_rejected{missing_proof}`, final, so wallet A's later run never fetched the answer the gateway held (FLOWS.md:624, 640).
+Fix: the SDK's `fetchResult` returns `unsure` without signing when the loaded wallet isn't the entry's payer, so only chain state can decide such a call; the CLI's next line for it names the paying wallet ("only the wallet that paid can fetch it. Run attessa status --pending with {payer}."; not in FLOWS, logged in OPEN-QUESTIONS).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  71 passed (71)
+packages/cli test:       Tests  298 passed (298)
+```
+reviewed: pending (adversary r52, then Codex)
+
+### T21 adversary r52 (failing test 9b62a62, fix cd009ab)
+Finding: `attessa cancel <id>` from a wallet that didn't pay, on a call already settled, printed "Too late to cancel" and then "attessa status --pending checks again and fetches it", which that wallet can never do (FLOWS.md:832; SPEC §6.1). r51 gave `call` and `status --pending` the paying-wallet line but not cancel. Lead taken too: for such a wallet the settled path still retried the fetch five times with a POLL_MS sleep each, a silent wait of up to 15 s (FLOWS.md:825).
+Fix: cancel's report context carries the loaded wallet, so it prints `answerOtherWallet`; the SDK's settledPath makes no fetch attempts when the loaded wallet isn't the payer (`notPayer`, shared with fetchResult).
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  72 passed (72)
+packages/cli test:       Tests  300 passed (300)
+```
+reviewed: pending (adversary r53, then Codex)
+
+### T21 adversary r53 (failing test 0eafffb, fix 5dfad32)
+Finding: for an open, unsettled call signed by wallet A, `status --pending` and a resumed waiting `call` run with wallet B offered "attessa cancel {id} voids it now" / "To void it right now instead: attessa cancel {id}", but the SDK signs CancelAuthorization for `authorizer: entry.payer` with B's key, which the token refuses, so the cancel reverted (FLOWS.md:832).
+Fix: for a call another wallet signed, the open-call line (`stillOpenOther`) and the waiting void hint (`voidHintOther`) name the signing wallet instead of offering cancel (not in FLOWS, logged in OPEN-QUESTIONS). An up-front refusal in `cancel` itself was tried and dropped: it hid the "Too late to cancel" report r52's test requires for a settled call.
+verify (`flock ... pnpm -r build; typecheck; lint; test`):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  73 passed (73)
+packages/cli test:       Tests  303 passed (303)
+```
+reviewed: pending (adversary r54, then Codex)
+
+### T21 adversary r54 (failing test 78be856, fix 86ac770) - 2026-11-05
+Finding: a signed `attessa call` refused with HTTP 402 `payment_invalid{insufficient_funds}` (the facilitator's /verify: the wallet can't cover the price) printed the "Not paid" line and "Not charged" and exited 1, but never FLOWS §8 "payment invalid"'s one next action, "Add at least {n} USDC to {address}." (FLOWS:832 "Every error row has one next action").
+Fix (buyer.ts, copy.ts `BUY.addFunds`): after "Not charged" the call prints "Add at least {price} {asset} to {wallet}." when the refusal was `payment_invalid` / `insufficient_funds`. {n} is the price, which covers the call whatever the balance; the CLI does not read the token balance to show the exact shortfall.
+Leads from the adversary, not proven and left for r55: `agent register` writes docs/agent.json before it simulates or prompts; `attessa status` may not show spend today against the cap (FLOWS:851, :881).
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  74 passed (74)
+packages/cli test:       Tests  304 passed (304)
+```
+reviewed: pending (adversary r55, then Codex)
+
+### T21 adversary r55 (failing test f8e874e, fix 224e24f) - 2026-11-05
+Finding: `attessa agent register` wrote docs/agent.json with `registrations: []` before it simulated or asked, so a `--dry-run` or a cancel at `[register/cancel]` after a landed register erased the agent id and registry from the file (FLOWS:846 "Preview replaces undo"; FLOWS:833).
+Fix (registry.ts `agentRegister`): with a key the file is written only in `done`, after the register lands; without a key (the register is signed elsewhere) and not on `--dry-run`, the unregistered file is written only if the file doesn't already list a registration.
+Lead for r56, unproven: a resumed call (V0) refused with `payment_invalid{insufficient_funds}` may end without `BUY.addFunds`, since the price comes from this run's `authorizing` event.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  75 passed (75)
+packages/cli test:       Tests  306 passed (306)
+```
+reviewed: pending (adversary r56, then Codex)
+
+### T21 adversary r56 (failing test 90a0465, fix 39ec216) - 2026-11-05
+Findings: (1) plain `attessa status` printed only "No calls in progress." (`--json` `{"pending":[],"ok":true}`) after a verified 0.02 USDC call, never spend today against the cap or the per-call limit (FLOWS:851, :881 "`attessa status` shows spend today vs cap"); (2) a call refused with `payment_invalid{insufficient_funds}` under `--no-wait` ended on the open-call line without FLOWS §8's "Add at least {n} USDC to {address}." (FLOWS:832).
+Fix (buyer.ts, copy.ts `BUY.spentToday`): plain `attessa status` (not `--pending`, whose rows and the r13 test's exact lines stay as they were) ends with "Spent today: {spent} of your {cap} {asset} daily cap (at most {per} per call). It resets at 00:00 UTC." for USDC, and for USA₮ once it has spend, with `--json` `limits`; the refused end prints the add-funds line after the open-call line. New copy recorded in OPEN-QUESTIONS (r56 entry), including that "recent verdicts" are not shown beyond the calls status decides in that run.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  76 passed (76)
+packages/cli test:       Tests  309 passed (309)
+```
+reviewed: pending (adversary r57, then Codex)
+
+### T21 adversary r57 (failing test 2b69a96, fix 709684c) - 2026-11-05
+Findings: (1) the r56 "Spent today" line summed every asset address `assetOf()` maps to USDC, so a mainnet USDC call in the same ~/.attessa ledger was added to the Sepolia figure (1.01 shown of a 1.00 cap while `call` on that network, which counts only its own token, still paid): SPEC.md:604 and :627 (V6) count per asset; (2) `attessa evidence export --format csv` printed seller-written text (sourceRef) with raw terminal control characters (ESC, CR), against the code's never-print-raw rule (copy.ts `safe()`, KNOWN-LIMITS L20).
+Fix: the SDK gains `assetAddress(key)` (the pinned token on the RPC's network); `spendLines` counts `spendToday` for that address only and skips an asset the network doesn't offer; `csvCell` passes every cell through `safe()`.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  77 passed (77)
+packages/cli test:       Tests  312 passed (312)
+```
+reviewed: pending (adversary r58, then Codex)
+
+### T21 adversary r58 (failing test 59b58e6, fix 4a48277) - 2026-11-05
+Findings: (1) with the key in ATTESSA_PRIVATE_KEY and no `init`, `call` refuses without `--max-amount` (FLOWS:788 max_amount_required) but plain `attessa status` said "(at most 0.10 per call)" and `--json` gave `maxAmountPerCall: "0.10"`, a limit nothing enforced (FLOWS:851, :881); (2) `evidence export --format jsonl` printed seller text (sourceRef) with raw C1 (U+009B CSI) and bidi (U+202E) characters, which JSON.stringify leaves unescaped (copy.ts `safe()`, KNOWN-LIMITS L20).
+Fix: `spendLines` reads the saved limits as `limitsFor` does: no saved per-call limit shows "(no per-call limit is set)" and `maxAmountPerCall: null`; the daily cap is the saved one `??` 1.00. A new `jsonOut()` in copy.ts escapes C1, U+2028/9 and the Bidi_Control set as `\uNNNN` (lossless JSON) for jsonl rows and every `--json` result. OPEN-QUESTIONS r56 entry notes the new wording.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock; a doc-comment typo in copy.ts was fixed after this run):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  78 passed (78)
+packages/cli test:       Tests  314 passed (314)
+```
+reviewed: pending (adversary r59, then Codex)
+
+### T21 adversary r59 (failing test bf1cee5, fix 531cda5) - 2026-11-05
+Finding: with `--json` and no `--yes`, an owner or operator write (`revoke release` in the test; every `write`/`planOrSend` command shares the path) asked for the typed verb while its prompt ("... Revoking is permanent.  [revoke/cancel]", or the CELO cost) was still held in the `--json` buffer, so the consequence was never shown before the permanent transaction could be confirmed (FLOWS.md:833, "Each prompt names the consequence and uses the verb as the button").
+Fix: under `--json`, `run()` wraps `io.confirm`: the lines held so far go to stderr before the confirm is asked (they stay in the JSON `lines` too). bin.ts asks its "Type {verb} to continue" question on stderr, so stdout holds only the JSON object.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  79 passed (79)
+packages/cli test:       Tests  316 passed (316)
+```
+reviewed: pending (adversary r60, then Codex)
+
+### T21 adversary r60 (failing test be67d35, fix 83f910f) - 2026-11-05
+Finding: an owner or operator write whose confirm got anything but its verb, which is always the case with a non-TTY stdin (bin.ts answers no without asking), exited 1 with a bare `{"ok":false,"lines":[...]}` under `--json`, no `error` and no `next`, and with no closing line without `--json` (FLOWS.md:832 "Every error row has one next action"; FLOWS.md:833 `--yes` for non-interactive agents).
+Fix: `planOrSend` throws `ERR.cancelled(verb)`: code `not_confirmed`, "Cancelled: nothing was sent.", next "Run it again and type {verb}, or add --yes to send without asking." Its callers (owner, signer, registry) lose the dead `'cancelled'` branch. OPEN-QUESTIONS gains an r60 entry for the copy.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  80 passed (80)
+packages/cli test:       Tests  317 passed (317)
+```
+reviewed: pending (adversary r61, then Codex)
+
+### T21 adversary r61 (failing test 0202c88, fix 8b4fe47) - 2026-11-05
+Finding: `attessa gateway pause --network=mainnet` paused the Sepolia gateway, printed "Gateway paused: ..." and exited 0 while mainnet kept taking calls (`resume`, `status` and `export` alike): the gateway pass-through hands argv as given to `runGatewayCommand`, whose `flag()` matched only `--network mainnet`, so the `=` spelling that every other command accepts through parseArgs fell back to sepolia (SPEC.md:653, :688).
+Fix: packages/gateway/src/cli.ts `flag()` reads `--name=value` as well as `--name value`, and a flag with no value is '' so `--network` alone is refused ("--network must be mainnet or sepolia") instead of defaulting.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/cli test:  Test Files  81 passed (81)
+packages/cli test:       Tests  319 passed (319)
+```
+reviewed: pending (adversary r62, then Codex)
+
+### T21 adversary r62 (failing test 88a94bb, fix 759e5e2) - 2026-11-05
+Findings, all in the `attessa gateway` pass-through: (1) `pause --network sepolia --network mainnet` paused Sepolia and reported success (the r61 `flag()` kept the first value; parseArgs, which the rest of the CLI uses, keeps the last; SPEC.md:653, :688); (2) `pause --dry-run` paused the live gateway (SPEC.md:653, FLOWS.md:846); (3) `export --since yesterday` ended on the generic "Unexpected error" line with no next action (FLOWS.md:832).
+Fix: packages/gateway/src/cli.ts reads its flags with node:util parseArgs (`--x v` or `--x=v`, last wins, an unknown flag refused with the usage line, exit 2); `pause`/`resume --dry-run` print what would happen and change nothing; a bad `--since` and an unreadable config each end with a message and a next action (only the error code of a config read failure is shown). OPEN-QUESTIONS gains an r62 entry for the new lines.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  82 passed (82)
+packages/cli test:       Tests  323 passed (323)
+```
+reviewed: pending (adversary r63, then Codex)
+
+### T21 adversary r63 (failing test 4db718b, fix below) - 2026-11-05
+Finding: after r62, `attessa gateway` refused the SPEC §8 global flags `--yes` and `--json` as unknown options (exit 2), so `attessa gateway pause --network mainnet --yes` left mainnet taking calls and `attessa gateway status --json` printed no status (SPEC.md:653, :688; FLOWS.md:438). Unproven lead from the same round, fixed with it: `resume --dry-run` said "Would resume" without the `/supported` check the real resume makes (SPEC.md:562).
+Fix: packages/gateway/src/cli.ts takes `--yes`, `--rpc` (both change nothing here) and `--json` (one JSON object per outcome on stdout, errors included, with `error`, `message` and `next`); `resume --dry-run` runs `resumeCheck` (packages/gateway/src/admin.ts, the check `resume` now calls) and refuses as resume would. New tests: packages/gateway/test/cli-flags.test.ts (6). OPEN-QUESTIONS gains an r63 entry for the JSON shapes and error codes.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  22 passed (22)
+packages/gateway test:       Tests  160 passed (160)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  83 passed (83)
+packages/cli test:       Tests  326 passed (326)
+test=0
+```
+reviewed: pending (adversary r64, then Codex)
+
+### T21 adversary r64 (failing test 5326086, fix below) - 2026-11-05
+Finding: a refused `attessa gateway resume` (and `resume --dry-run`) ended on "Not resumed: ..." with no next action, under --json with no `next` field (FLOWS.md:832 "Every error row has one next action"; SPEC.md:562).
+Fix: both refusals carry "Next: check FACILITATOR_API_KEY in this shell and the facilitator credit, then run attessa gateway resume --network {network} again." (packages/gateway/src/cli.ts). Last adversary round: Joshua stopped adversary rounds on 2026-11-05 to save API budget; Codex reviews from here.
+verify (gateway tests touched by r63/r64; the full `pnpm -r test` run was cut off by a session end after build=0, typecheck=0, lint=0, so Codex runs it):
+```
+ Test Files  3 passed (3)
+      Tests  13 passed (13)
+```
+reviewed: pending (Codex r1)
+
+### T21 Codex r1 fixes - 2026-11-05
+Codex r1 (reviews/t21-cli-review-r1.md, on 0861286): REVISE, 3 major. (1) An RPC URL was printed verbatim, provider keys included: every line naming the RPC now shows scheme://host[:port] only. (2) `attessa gateway export --json` wrote raw CSV/JSONL: it is now one `{ok, rows}` object. (3) Errors without a next action: each named row has its own; `CliError` falls back by code and never has `next` null; rows whose FLOWS line already holds the action are marked inline (printed once, `next` set for --json). Tests: packages/cli/test/codex-t21-r1.test.ts (5), packages/gateway/test/cli-flags.test.ts (+1); six existing tests that pinned output without a next action now expect it.
+Codex's own full run failed on its side (core failed, cli suites timed out); the same commands on 0861286 on this machine, idle: core 69, seller-host 81, gateway 163, sdk 191, cli 326 passed, exit 0.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  84 passed (84)
+packages/cli test:       Tests  331 passed (331)
+test=0
+```
+reviewed: pending (Codex r2)
+
+### T21 Codex r2 fixes - 2026-11-05
+Codex r2 (reviews/t21-cli-review-r2.md, on 4262186): REVISE, 2 major, 2 minor.
+- M1: the seller-host URL, a non-GitHub `--source` and an unparsable git remote could print credentials. Seller-host lines now show scheme://host[:port] only (the request still uses the full URL); `sourceLabel` drops userinfo, query and fragment (`withoutCredentials`); `repoLabel` shows owner/repo or "your git remote", never the raw remote.
+- M2: `release_exists` was marked inline though its line does not hold the action; it now prints "Nothing to do; `attessa status --agent {a}` shows it." as its own line (the owner test asserts the rendered text).
+- m1: the binary's last-resort handler prints the fallback next action too (`lastResortLines`).
+- m2: correction to the "T21 Codex r1 fixes" entry above: five existing tests (two in t21-r3-fix.test.ts, three in t21-r6-fix.test.ts) were changed to expect the next line, not six. One more existing test changes here (owner.test.ts, release_exists).
+Tests: packages/cli/test/codex-t21-r2.test.ts (7).
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  85 passed (85)
+packages/cli test:       Tests  338 passed (338)
+test=0
+```
+reviewed: pending (Codex r3)
+
+### T21 Codex r3 fixes - 2026-11-06
+Codex r3 (reviews/t21-cli-review-r3.md, on d4567fc): REVISE, 2 major.
+- M1: a dry run (or a run with no wallet) prints the calldata of `release approve --source` and `agent register --uri`, which holds the URL as given. The CLI now refuses a URL with a user name, password, query or fragment before anything is read, encoded or signed (`secret_in_url`), since it would be published on Celo for good.
+- M2: `status --agent` printed and returned on-chain source refs and endpoint origins raw. Source refs are cleaned (no userinfo, query or fragment) and origins shown as scheme://host[:port], in text and --json alike. URL paths stay visible; OPEN-QUESTIONS records why and asks Joshua.
+Tests: packages/cli/test/codex-t21-r3.test.ts (4); all 4 fail on d4567fc and pass here.
+Codex's own r3 run failed in its environment (core tests failed with no test named; CLI tests timed out at 20 s); the same commands pass here, below.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  86 passed (86)
+packages/cli test:       Tests  342 passed (342)
+test=0
+```
+reviewed: pending (Codex r4)
+
+### T21 Codex r4 fixes - 2026-11-06
+Codex r4 (reviews/t21-cli-review-r4.md, on a49ffa1): REVISE, 2 major, 1 minor.
+- M1: `--source`/`--uri` text that is not a URL but holds `?` or `#` passed `refuseSecretUrl` and reached printed calldata. Non-URL text is now refused for `//user@`, `?` or `#` too.
+- M2: `originOf` (registry.ts, behind `revoke signer` and `revoke release`) and `originFor` (signer.ts, behind `signer register` and `signer renew`) returned the raw EndpointAdded origin. Both readers now return scheme://host[:port] (their result is used only in messages and copy; the endpoint is identified by its hash). Command-level tests cover the revoke flows; the signer flows share the same reader and are covered only through it.
+- m1 (correction to the "T21 Codex r3 fixes" entry): "all 4 fail on d4567fc" was measured by copying the new test file onto d4567fc, where `refuseSecretUrl` did not exist, so the first test failed on a missing function rather than an assertion. This round's tests were run the reproducible way: packages/cli/test/codex-t21-r4.test.ts copied onto a49ffa1 with `refuseSecretUrl` read through a namespace import (`import * as copy`), so a missing export fails at the assertion, not the import:
+```
+on a49ffa1:  Tests  5 failed (5)
+on the fix:  Tests  5 passed (5)
+```
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+```
+reviewed: pending (Codex r5)
+
+## T21 Codex r5: SHIP (2026-11-06)
+Codex round 5 reviewed d7297ac in a frozen worktree: no findings.
+```
+REVIEW DECISION: SHIP
+VERDICT: implementation-ready
+```
+Codex's own full test run could not complete in its sandbox: core's oracle tests fail there with `spawnSync cast EPERM` (the sandbox may not start `cast`), and CLI tests hit 20 s timeouts under its load; its focused run of the r4 tests passed 5 of 5. After merging staging (with PR #12, the install guard) into feat/t21-cli, the task's verify command and the full suite on this machine:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+$ pnpm --filter @attessa/cli test
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+cli=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+reviews ok
+```
+reviewed: reviews/t21-cli-review-r5.md | verdict: implementation-ready (rounds r1 to r4 ended changes required; archived outside the repo)
+
 node v22.23.2: 75 files, 268 tests, 0 failed
 site=0
 FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first

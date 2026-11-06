@@ -54,6 +54,8 @@ export class RpcFailure extends Error {
 }
 
 export class FakeChain {
+  /** CELO (wei) of an account with no `setAccount` state: funded, so a buyer can pay a cancel's gas. */
+  unlistedBalance = 10n ** 24n;
   readonly chainId: number;
   readonly registry: Address;
   readonly asset: Address;
@@ -346,7 +348,7 @@ export class FakeChain {
         const n = this.resolveTag(params[1]);
         if (method === 'eth_getTransactionCount' && params[1] === 'pending') return '0x0';
         this.historical(n);
-        const a = this.stateAt(n).accounts[lc(params[0] as string)] ?? { code: '0x', nonce: 0n, balance: 0n };
+        const a = this.stateAt(n).accounts[lc(params[0] as string)] ?? { code: '0x', nonce: 0n, balance: this.unlistedBalance };
         return method === 'eth_getCode' ? a.code : numberToHex(method === 'eth_getBalance' ? a.balance : a.nonce);
       }
       case 'eth_call': {

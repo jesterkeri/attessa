@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { bytesToHex, concat, hexToBytes, keccak256, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { decryptKeystore, KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, loadAccount, type Keychain } from '../src/keys.ts';
+import { decryptKeystore, KEYCHAIN_ACCOUNT, KEYCHAIN_SERVICE, KeyError, loadAccount, type Keychain } from '../src/keys.ts';
 
 // SPEC §7 key storage. Every key here is generated in the test.
 
@@ -74,11 +74,54 @@ describe('key storage', () => {
     expect(await loadAccount({ env: {}, keychain: null, create: true })).toBeNull();
   });
 
+  // keytar on a headless Linux host loads but every call rejects (no Secret Service): that is no keychain too.
+  it('a keychain whose calls reject is unavailable: null, nothing created, no error', async () => {
+    const reject = async () => {
+      throw new Error('Cannot autolaunch D-Bus without X11 $DISPLAY');
+    };
+    expect(await loadAccount({ env: {}, keychain: { getPassword: reject, setPassword: reject }, create: true })).toBeNull();
+    expect(await loadAccount({ env: {}, keychain: { getPassword: reject, setPassword: reject } })).toBeNull();
+    const writeFails = { getPassword: async () => null, setPassword: reject };
+    expect(await loadAccount({ env: {}, keychain: writeFails, create: true })).toBeNull();
+  });
+
   it('a malformed key is refused without echoing it', async () => {
     const secretish = `0x${'ab'.repeat(31)}`;
     const err = await loadAccount({ env: { ATTESSA_PRIVATE_KEY: secretish }, keychain: null }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(Error);
     expect((err as Error).message).not.toContain(secretish.slice(2));
+  });
+
+  // Adversary T21 r2: a parser's message quotes its input (V8's JSON.parse prints the start of the file, viem quotes
+  // bad hex), and a file passed as --keystore may hold a bare key. Only fixed reasons may come out.
+  it('--keystore pointing at a non-keystore file: a fixed reason, nothing of the file in the error', async () => {
+    dir = mkdtempSync(join(tmpdir(), 'attessa-keys-'));
+    const key = generatePrivateKey();
+    const ks = JSON.parse(keystore(generatePrivateKey(), 'pw', 'pbkdf2'));
+    const cases: Array<[string, string, string]> = [
+      ['bare hex key', `${key.slice(2)}\n`, 'not a V3 keystore'],
+      ['0x hex key', key, 'not a V3 keystore'],
+      ['JSON with the key', JSON.stringify({ privateKey: key }), 'not a V3 keystore'],
+      ['bad hex in ciphertext', JSON.stringify({ ...ks, crypto: { ...ks.crypto, ciphertext: `zz${key.slice(2)}` } }), 'not a V3 keystore'],
+      ['key in the cipher field', JSON.stringify({ ...ks, crypto: { ...ks.crypto, cipher: key } }), 'unsupported cipher'],
+      ['key in the kdf field', JSON.stringify({ ...ks, crypto: { ...ks.crypto, kdf: key } }), 'unsupported kdf'],
+    ];
+    for (const [name, body, reason] of cases) {
+      const path = join(dir, `${name.replace(/\W/g, '-')}.txt`);
+      writeFileSync(path, body);
+      const err = await loadAccount({ env: {}, keystore: { path, password: 'pw' }, keychain: null }).catch((e: unknown) => e);
+      expect(err, name).toBeInstanceOf(KeyError);
+      expect((err as KeyError).source, name).toBe('keystore');
+      expect((err as KeyError).reason, name).toBe(reason);
+      expect((err as KeyError).message, name).toBe(`keystore: ${reason}`);
+      expect((err as KeyError).cause, name).toBeUndefined();
+    }
+  });
+
+  it('--keystore pointing at a missing file: a fixed reason', async () => {
+    const err = await loadAccount({ env: {}, keystore: { path: '/nonexistent/attessa/ks.json', password: 'pw' }, keychain: null }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(KeyError);
+    expect((err as KeyError).message).toBe("keystore: can't read the file");
   });
 
   it('decryptKeystore round-trips the exact key bytes', () => {

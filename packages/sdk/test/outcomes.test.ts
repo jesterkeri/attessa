@@ -45,7 +45,9 @@ describe('refused → final (SPEC §7)', () => {
     const vb = BigInt(e.validBefore);
     expect(w.chain.blockAt(r.confirmedAtBlock!)!.timestamp).toBeGreaterThan(vb + 5n);
     expect(reads.length).toBeGreaterThan(0);
-    for (const t of reads) expect(t).toBeGreaterThan(vb + 5n);
+    // INV-20: the read that decides not_charged (the last, == false) is past validBefore + 5. Earlier reads may
+    // see the permission used before expiry (Joshua, 2026-11-05, T21 adversary r43).
+    expect(reads.at(-1)).toBeGreaterThan(vb + 5n);
     expect(e.state).toBe('not_charged');
     // The refusal and the confirmation are both in evidence, in order.
     expect(evidence(w.dataDir).map((x) => x.outcome)).toEqual(['refused', 'not_charged']);
@@ -72,7 +74,9 @@ describe('refused → final (SPEC §7)', () => {
     const r = await w.client.payAndVerify(w.url, { body: w.body });
     expect(r.outcome).toBe('not_charged');
     const vb = BigInt(entries(w.dataDir)[0].validBefore);
-    for (const t of reads) expect(t).toBeGreaterThan(vb + 5n);
+    // INV-20: the read that decides not_charged (the last, == false) is past validBefore + 5. Earlier reads may
+    // see the permission used before expiry (Joshua, 2026-11-05, T21 adversary r43).
+    expect(reads.at(-1)).toBeGreaterThan(vb + 5n);
     expect(w.chain.blockAt(r.confirmedAtBlock!)!.timestamp).toBeGreaterThan(vb + 5n);
   });
 
@@ -183,7 +187,8 @@ describe('confirmNotCharged, cancelAuthorization, reconcilePending', () => {
     const r = await w.client.confirmNotCharged(r0.requestId);
     expect(r.outcome).toBe('not_charged');
     const vb = BigInt(entries(w.dataDir)[0].validBefore);
-    expect(reads.every((t) => t > vb + 5n)).toBe(true);
+    // INV-20: the deciding read is past validBefore + 5 (earlier reads allowed since T21 adversary r43, Joshua 2026-11-05).
+    expect(reads.at(-1)).toBeGreaterThan(vb + 5n);
     expect(w.chain.blockAt(r.confirmedAtBlock!)!.timestamp).toBeGreaterThan(vb + 5n);
   });
 

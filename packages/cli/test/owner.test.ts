@@ -79,7 +79,11 @@ describe('seller: attessa release approve (FLOWS §6 J3)', () => {
   it('refuses a build that is already approved (release_exists)', async () => {
     w.chain.releases.set(`${AGENT}:${w.rid}`, 1);
     expect(await approve()).toBe(1);
-    expect(w.err).toEqual([`This build is already approved for agent 412 (release ${w.rid.slice(0, 6)}…${w.rid.slice(-2)}).`]);
+    // FLOWS.md:800: the row's action ("nothing to do; `attessa status` shows it") is its own line (Codex T21 r2 M2).
+    expect(w.err).toEqual([
+      `This build is already approved for agent 412 (release ${w.rid.slice(0, 6)}…${w.rid.slice(-2)}).`,
+      'Nothing to do; `attessa status --agent 412` shows it.',
+    ]);
   });
 
   it('refuses a measurements file that is not nitro-cli output (invalid_pcr)', async () => {

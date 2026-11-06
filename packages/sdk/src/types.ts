@@ -43,7 +43,52 @@ export interface ClientOptions {
   httpTimeoutMs?: number;
   /** How long V11 polls the settlement receipt, ms. SPEC §7: 10 s. */
   receiptWaitMs?: number;
+  /**
+   * Called at the points of `payAndVerify` where the CLI prints a line (FLOWS §6). Returning `'stop'` from
+   * `authorizing` ends the call before anything is signed (`--dry-run`): the reservation is released and
+   * the result is `stopped` with code `dry_run`.
+   */
+  onProgress?: (e: Progress) => void | 'stop';
+  /**
+   * `--dry-run`: every call ends at `authorizing`, before anything is signed, as if `onProgress` returned `'stop'`.
+   * With an open entry for the same input it ends at V0 instead (`would_resume`): no payer signature, no
+   * `/v1/results` request, and the ledger is left as it was.
+   * It does not depend on `onProgress` at all, so a handler that throws (a closed stdout) can't turn a dry run
+   * into a payment.
+   */
+  dryRun?: boolean;
 }
+
+/** Not in SPEC §7: the moments a caller shows progress for (FLOWS §6 J1, J2, interrupted). */
+export type Progress =
+  /** V0: an open ledger entry for the same input is being resumed instead of paying again. */
+  | { kind: 'resuming'; entry: PendingEntry }
+  /**
+   * V0 under `dryRun`: an open ledger entry for the same input that a real run would resume. A dry run stops here:
+   * resuming signs the payer message and asks the gateway for the result, and a preview signs and sends nothing.
+   */
+  | { kind: 'would_resume'; entry: PendingEntry }
+  /** After V7, before V8 signs: everything checked so far. `quoteMs` is the round trip of the 402 that carried the liveness proof. */
+  | {
+      kind: 'authorizing';
+      endpoint: ResolvedEndpoint;
+      amount: bigint;
+      asset: Address;
+      maxAmount: bigint;
+      signer: Address;
+      releaseId: Hex;
+      ownerClaimedSource?: string;
+      quoteMs: number;
+    }
+  /** V9: the gateway refused a signed payment with a §10 body. */
+  | { kind: 'refused'; entry: PendingEntry; code: CallCode; detail?: string }
+  /** V9: no usable answer after signing (timeout, drop, a non-2xx without a §10 body, 202 polling ran out). */
+  | { kind: 'uncertain'; entry: PendingEntry }
+  /** V9: 202 `settle_pending`; `tx` from `PAYMENT-RESPONSE` when the gateway knows it. */
+  | { kind: 'settle_pending'; entry: PendingEntry; tx: Hash | null }
+  /** Refused or uncertain → final: about to wait for the chain, with the chain time it read. Once per call. */
+  /** `used`: past expiry the chain already reads the permission used (or cancelled); only its log is awaited. */
+  | { kind: 'waiting'; entry: PendingEntry; chainNow: bigint; used?: true };
 
 /** SPEC §7. */
 export type Outcome =
@@ -57,7 +102,7 @@ export type Outcome =
   | 'uncertain';
 
 /** Codes the SDK adds to SPEC §10's: `in_progress` reuse, and the V7 detail. */
-export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce';
+export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run' | 'no_registry';
 
 export interface CallResult {
   outcome: Outcome;
@@ -79,6 +124,12 @@ export interface CallResult {
   inputsChecked?: boolean;
   /** Block whose timestamp was past validBefore + 5 when `not_charged` was confirmed. */
   confirmedAtBlock?: bigint;
+  /** The evidence row couldn't be written (full disk, permissions). The outcome stands; the ledger entry is already decided. */
+  evidenceNotWritten?: true;
+  /** V10: the block the inputs were read at, on a verified result. */
+  inputsBlock?: bigint;
+  /** Past expiry the chain reads the permission used (or cancelled), but neither log has appeared yet: it can't expire unused. */
+  authorizationUsed?: true;
 }
 
 export interface ResolvedEndpoint {
@@ -152,6 +203,11 @@ export interface PendingEntry {
   state: LedgerState;
   code: string | null;
   settlementTx: Hash | null;
+  /**
+   * `not_charged` only: the block that decided it (the cancel's log or receipt, or the first read past expiry), so a
+   * later report of the stored outcome names the same block. Absent on entries written before it existed.
+   */
+  confirmedAtBlock?: string | null;
   createdAt: string;
 }
 
