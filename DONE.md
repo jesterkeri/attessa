@@ -1557,3 +1557,11 @@ node v22.23.2: 66 files, 190 tests, 0 failed
 ```
 Mutant check: one assertion in site/test/built-state-consistent.test.mjs made to fail, then restored: `node v22.23.2: 66 files, 190 tests, 1 failed`, exit 1.
 reviewed: pending (Codex r4)
+
+### Site Codex r4 fix: a nonzero exit is a failure - 2026-11-06
+Codex r4 (site-ui-review-r4.md, on 8600d5d): REVISE, 1 major: a module that printed a clean TAP footer (`# fail 0`) but exited nonzero (`process.exitCode = 1`) was counted as passing, and the script exited 0. Fix: test-count.sh counts a nonzero exit as one failure whenever the footer reports none; a footer with failures is counted as before, once.
+Mutant (Codex's): `process.exitCode = 1;` prepended to built-state-consistent.test.mjs, then restored: `4 tests, 1 failed, exit 1` for that module, `node v22.23.2: 66 files, 190 tests, 1 failed`, exit 1. Clean run:
+```
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+reviewed: pending (Codex r5)
