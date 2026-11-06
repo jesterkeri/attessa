@@ -2919,3 +2919,6 @@ VERDICT: implementation-ready
 ```
 Two commits follow 48fdee6 (9034aab, a44b9b1): packages/site/test-count.sh counts a nonzero module exit as a failure (the same change Codex reviews on feat/site-ui as round 5) and its DONE notes. They change no site source: `packages/site/build.mjs` at 48fdee6 and at a44b9b1 produce identical output (`diff -r` of the two builds: no difference).
 reviewed: reviews/site-finish-review-r3.md | verdict: implementation-ready (rounds r1 and r2 ended changes required; archived outside the repo)
+
+### Website deployed to GitHub Pages (Joshua's "deploy") - 2026-11-06
+Built from feat/site-finish 52b6234 (site output identical to the SHIP'd 48fdee6) and pushed as the only content of the gh-pages branch (commit ea10c5b) by .worktrees/prompts/deploy-gh-pages.sh. GitHub Pages: source gh-pages /, custom domain attessa.xyz (from the CNAME file), first build status "built". DNS for attessa.xyz still points at GoDaddy parking (3.33.130.190, 15.197.148.33) until Joshua changes the records; HTTPS is enforced after GitHub issues the certificate.
