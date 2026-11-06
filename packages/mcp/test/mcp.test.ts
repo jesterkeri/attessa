@@ -303,3 +303,27 @@ describe('mcp: no secret in any output', () => {
     expect(out).toContain('https://rpc.example/v3/x');
   });
 });
+
+describe('mcp: Codex r1 Major 1, short and encoded secrets never reach a result', () => {
+  it('through the result path: a short password, a URL-encoded value and a JSON-escaped value are all hidden', async () => {
+    w = await world();
+    w.env.ATTESSA_KEYSTORE_PASSWORD = 'abc123';
+    w.env.FACILITATOR_API_KEY = 'p@ss w/rd&1';
+    w.env.SERVICE_TOKEN = 'x"y\\zzz';
+    // An unknown tool's error names the tool, so what the caller types comes back through the real result path.
+    for (const leak of ['abc123', 'p@ss w/rd&1', encodeURIComponent('p@ss w/rd&1'), 'x"y\\zzz']) {
+      const r = await w.tool(`prefix-${leak}-suffix`);
+      expect(r.isError).toBe(true);
+      expect(r.text).not.toContain(leak);
+      expect(r.text).not.toContain(JSON.stringify(leak).slice(1, -1));
+      expect(r.text).toContain('prefix-');
+    }
+  });
+
+  it('scrub: short secrets, encodings and an empty value (nothing to hide, nothing mangled)', () => {
+    const env = { ATTESSA_KEYSTORE_PASSWORD: 'abc123', EMPTY_SECRET: '', FACILITATOR_API_KEY: 'a b&c' };
+    const out = scrub(`pw abc123 enc ${encodeURIComponent('a b&c')} plus a+b%26c raw a b&c`, env);
+    expect(out).not.toMatch(/abc123|a b&c|a%20b%26c/);
+    expect(out.startsWith('pw ')).toBe(true);
+  });
+});
