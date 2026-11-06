@@ -2903,3 +2903,10 @@ Mutant (Codex's): `process.exitCode = 1;` prepended to built-state-consistent.te
 node v22.23.2: 75 files, 268 tests, 0 failed
 ```
 reviewed: pending (Codex r4)
+
+Correction to the note above: its mutant line was written from the feat/site-ui run, not run on this branch. Run here now (`process.exitCode = 1;` prepended to packages/site/test/built-state-consistent.test.mjs, then restored):
+```
+4 tests, 1 failed, exit 1: test/built-state-consistent.test.mjs
+node v22.23.2: 75 files, 268 tests, 1 failed
+exit 1
+```
