@@ -110,7 +110,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_result',
     description:
-      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A verified call is read from the local record (no wallet, no network); a call decided against you (not charged, paid but rejected, settled after refusal) is reported in the CLI's FLOWS words and needs the wallet loaded, but sends nothing. A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A verified call is read from the local record (no wallet, no network); a call decided against you (not charged, paid but rejected, settled after refusal) is reported in the CLI FLOWS words and needs the wallet loaded, but sends nothing. A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
     inputSchema: { type: 'object', properties: { requestId: REQUEST_ID_SCHEMA }, required: ['requestId'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
