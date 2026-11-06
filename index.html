@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Attessa</title>
+<meta name="description" content="A check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script src="assets/network.js"></script>
+<script src="assets/site.js" defer></script>
+</head>
+<body class="home">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="how-it-works.html" data-scramble>How it works</a>
+      <a href="explorer.html" data-scramble>Explorer</a>
+      <a href="use-cases.html" data-scramble>Use cases</a>
+      <a href="docs/index.html" data-scramble>Docs</a>
+      <a href="security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="how-it-works.html" style="--i:0">How it works</a>
+    <a href="explorer.html" style="--i:1">Proof explorer</a>
+    <a href="use-cases.html" style="--i:2">Use cases</a>
+    <a href="docs/index.html" style="--i:3">Docs</a>
+    <a href="security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<section class="hero" data-hero>
+  <div class="wrap hero-inner">
+    <div class="hero-copy">
+      <h1 data-split data-intro>Pay only for<br> <span class="ol">answers you</span><br> can prove.</h1>
+      <div class="hero-sub">
+        <p class="lede" data-intro>You pay a service for an answer, it comes back wrong, and you can't tell whether the code the seller stands behind actually ran, or something else did.</p>
+        <div class="btn-row" data-intro>
+          <a class="btn btn-primary" href="explorer.html">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+          <a class="btn btn-ghost" href="docs/tutorial.html">Use it from your agent</a>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="wrap readout-wrap">
+    <div class="console" data-console data-intro role="img" aria-label="Example: four checks run before a call is paid. A clean answer is verified and paid; a tampered one is rejected, and not charged once Celo shows its permission expired unused.">
+      <p class="con-title" aria-hidden="true"><i class="con-dot"></i>Example call</p>
+      <ol class="con-lines" data-con-lines aria-hidden="true"></ol>
+    </div>
+  </div>
+</section>
+<div class="hero-tags" data-tags aria-hidden="true">
+  <svg class="tag-lines"><line data-tag-line></line><line data-tag-line></line><line data-tag-line></line></svg>
+  <span class="tag" data-tag><i class="tag-dot"></i>Approved build</span>
+  <span class="tag" data-tag><i class="tag-dot"></i>Sealed machine</span>
+  <span class="tag" data-tag><i class="tag-dot"></i>Signed answer</span>
+</div>
+
+<section class="statement-sec" aria-label="What Attessa is" data-statement>
+  <div class="wrap">
+    <div class="statement-block">
+      <p class="statement">It's a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.</p>
+      <p class="statement-body" data-fade>A seller runs their service in a sealed machine and approves that exact build on Celo. <span class="key">Your agent pays only when an answer comes back signed by that build</span>, and anyone can check its payment on Celo later.</p>
+    </div>
+  </div>
+</section>
+
+<section class="story" data-story aria-label="How a call is checked">
+  <!-- tabindex: at 200% zoom this box scrolls, and nothing in it takes focus, so the keyboard needs a stop on it. -->
+  <div class="story-sticky" tabindex="0" role="group" aria-label="How a call is checked">
+    <div class="wrap story-grid">
+      <div class="story-copy">
+        <ol class="story-steps">
+          <li data-step class="is-on">
+            <h2>The seller approves one exact build.</h2>
+            <p>They publish its fingerprint on Celo. From then on, buyers only pay for answers from a build the seller approved.</p>
+            <p class="term">release, measured as PCR0 to PCR2</p>
+          </li>
+          <li data-step>
+            <h2>It runs in a sealed machine.</h2>
+            <p>A cloud computer its operator can't log into or change. AWS attests to exactly which build is running.</p>
+            <p class="term">AWS Nitro enclave, attestation</p>
+          </li>
+          <li data-step>
+            <h2>Every answer comes back signed.</h2>
+            <p>The machine signs the request, the answer, the Celo data it read and the payment, all together.</p>
+            <p class="term">EIP-712 proof</p>
+          </li>
+          <li data-step>
+            <h2>You pay only if the proof checks out.</h2>
+            <p>Your agent's payment permission moves no money by itself. The gateway uses it only after all four checks pass.</p>
+            <p class="term">x402 quote, EIP-3009 permission</p>
+          </li>
+          <li data-step>
+            <h2>A tampered answer is caught.</h2>
+            <p>If the answer doesn't match what was signed, an honest gateway refuses to settle: the permission expires unused, and once Celo shows that, you're not charged. If the gateway itself changed it and settled anyway, you're charged, and the SDK reports it as paid but rejected, with a record that proves it.</p>
+            <p class="term">response_hash_mismatch, not_charged, paid_but_rejected</p>
+          </li>
+        </ol>
+        <div class="rail" data-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+        <div class="story-stage" data-story-stage aria-hidden="true"></div>
+
+      <aside class="hud glass" data-hud data-mode="checking" aria-label="Checklist for this call">
+        <div class="hud-head"><span class="label">Proof checklist</span><span class="hud-verdict" data-hud-verdict>Checking</span></div>
+        <ol class="hud-rows">
+          <li data-check data-state="wait"><span class="hud-icon"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-circle-dashed" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></svg></span><span class="hud-name">Approved build</span><span class="hud-word" data-word>Checking</span></li>
+          <li data-check data-state="wait"><span class="hud-icon"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-circle-dashed" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></svg></span><span class="hud-name">Sealed machine</span><span class="hud-word" data-word>Checking</span></li>
+          <li data-check data-state="wait"><span class="hud-icon"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-circle-dashed" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></svg></span><span class="hud-name">This exact request and answer</span><span class="hud-word" data-word>Checking</span></li>
+          <li data-check data-state="wait"><span class="hud-icon"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-circle-dashed" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></svg></span><span class="hud-name">Real Celo data</span><span class="hud-word" data-word>Checking</span></li>
+          <li data-check data-state="wait"><span class="hud-icon"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg><svg class="ph ph-circle-dashed" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M96.26,37.05A8,8,0,0,1,102,27.29a104.11,104.11,0,0,1,52,0,8,8,0,0,1-2,15.75,8.15,8.15,0,0,1-2-.26,88.09,88.09,0,0,0-44,0A8,8,0,0,1,96.26,37.05ZM53.79,55.14a104.05,104.05,0,0,0-26,45,8,8,0,0,0,15.42,4.27,88,88,0,0,1,22-38.09A8,8,0,0,0,53.79,55.14ZM43.21,151.55a8,8,0,1,0-15.42,4.28,104.12,104.12,0,0,0,26,45,8,8,0,0,0,11.41-11.22A88.14,88.14,0,0,1,43.21,151.55ZM150,213.22a88,88,0,0,1-44,0,8,8,0,1,0-4,15.49,104.11,104.11,0,0,0,52,0,8,8,0,0,0-4-15.49ZM222.65,146a8,8,0,0,0-9.85,5.58,87.91,87.91,0,0,1-22,38.08,8,8,0,1,0,11.42,11.21,104,104,0,0,0,26-45A8,8,0,0,0,222.65,146Zm-9.86-41.54a8,8,0,0,0,15.42-4.28,104,104,0,0,0-26-45,8,8,0,1,0-11.41,11.22A88,88,0,0,1,212.79,104.45Z"/></svg></span><span class="hud-name">Payment</span><span class="hud-word" data-word>Checking</span></li>
+        </ol>
+      </aside>
+      </div>
+
+      <div class="callouts" aria-hidden="true">
+        <div class="callout glass" data-callout>
+          <p class="label">Approved build</p>
+          <dl class="kv">
+            <div><dt>PCR0</dt><dd>9c4e07b2…41a1</dd></div>
+            <div><dt>PCR1</dt><dd>4b1d8e60…0c3f</dd></div>
+            <div><dt>PCR2</dt><dd>e72a51c9…b88d</dd></div>
+          </dl>
+          <p class="callout-foot">Approved on Celo by the seller. Sample values.</p>
+        </div>
+        <div class="callout glass" data-callout>
+          <p class="label">AWS attestation</p>
+          <dl class="kv">
+            <div><dt>Operator login</dt><dd>blocked</dd></div>
+            <div><dt>Code changes</dt><dd>blocked</dd></div>
+            <div><dt>Debug mode</dt><dd>refused</dd></div>
+          </dl>
+          <p class="callout-foot">Signing key made inside the machine</p>
+        </div>
+        <div class="callout glass" data-callout>
+          <p class="label">Signed proof</p>
+          <pre class="struct"><span class="k">ExecutionProof</span> {
+  request   bound
+  answer    bound
+  inputs    bound
+  payment   bound
+  release   bound
+}</pre>
+          <p class="callout-foot">One EIP-712 signature over all five</p>
+        </div>
+        <div class="callout glass" data-callout>
+          <p class="label">Payment permission</p>
+          <dl class="kv">
+            <div><dt>value</dt><dd>0.02 USDC</dd></div>
+            <div><dt>to</dt><dd>registered pay-to</dd></div>
+            <div><dt>expires in</dt><dd><span data-timer-text>120</span> s</dd></div>
+          </dl>
+          <i class="drain"><b data-timer></b></i>
+          <p class="callout-foot">EIP-3009. Moves no money until the gateway settles it.</p>
+        </div>
+        <div class="callout glass is-fail" data-callout>
+          <p class="label">Tampered answer</p>
+          <dl class="kv">
+            <div><dt>signed hash</dt><dd>0x4be1…7d09</dd></div>
+            <div><dt>received hash</dt><dd>0x4be1…<span class="x">3a6f</span></dd></div>
+          </dl>
+          <div class="verdict-row"><span class="v-fail"><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Rejected</span><span class="v-ok"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Not charged</span></div>
+          <p class="callout-foot">Sample values, after Celo showed the permission expired unused.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Pinned scenes: the page holds while the particles form an object in the slot beside the text,
+     the text plays out around it, then both leave together. scene.js reads each scene's progress. -->
+<section class="scene-sec outcomes-sec" data-scene-sec="outcomes" style="--len: 3.4" aria-labelledby="outcomes">
+  <div class="scene-sticky" tabindex="0" role="group" aria-labelledby="outcomes">
+    <div class="wrap scene-grid">
+      <div class="scene-copy">
+        <h2 id="outcomes" data-split>Three ways a call can end</h2>
+        <p class="sec-lede" data-fade>These are the three outcomes in the demo, and what each one leaves on Celo. <span class="key">Celo shows a settled payment or an unused permission. Whether a call was verified takes the proof, which your agent checks.</span></p>
+        <ol class="beats">
+          <li class="beat is-on" data-beat>
+            <h3>Verified and paid</h3>
+            <p>Every check passes, so the payment goes through. Celo shows the payment settled; your agent's SDK checks the proof itself, which is what makes the call verified.</p>
+            <ol class="track" aria-hidden="true"><li class="tk" data-state="pass"><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Build</b></span></li><li class="tk" data-state="pass"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Machine</b></span></li><li class="tk" data-state="pass"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Request</b></span></li><li class="tk" data-state="pass"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Celo data</b></span></li><li class="tk tk-end" data-state="pass"><i class="seg"></i><span class="end-pill" data-end="paid"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Paid</span></li></ol>
+            <span class="scan-slot" title="Celoscan link: fills in when live">See it on Celoscan <span class="sample-tag">sample</span></span>
+          </li>
+          <li class="beat" data-beat>
+            <h3>Tampered and refused</h3>
+            <p>The answer doesn't match what the sealed machine signed, so the gateway doesn't settle. There is no transaction: the payment permission expires unused, which anyone can read on Celo (<code>authorizationState</code>).</p>
+            <ol class="track" aria-hidden="true"><li class="tk" data-state="pass"><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Build</b></span></li><li class="tk" data-state="pass"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg></i><b>Machine</b></span></li><li class="tk" data-state="fail"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-x" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></i><b>Request</b></span></li><li class="tk" data-state="na"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></i><b>Celo data</b></span></li><li class="tk tk-end" data-state="na"><i class="seg"></i><span class="end-pill" data-end="free"><svg class="ph ph-x-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M165.66,101.66,139.31,128l26.35,26.34a8,8,0,0,1-11.32,11.32L128,139.31l-26.34,26.35a8,8,0,0,1-11.32-11.32L116.69,128,90.34,101.66a8,8,0,0,1,11.32-11.32L128,116.69l26.34-26.35a8,8,0,0,1,11.32,11.32ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Not charged</span></li></ol>
+            <span class="scan-slot" title="Celoscan link: fills in when live">Check it on Celo <span class="sample-tag">sample</span></span>
+          </li>
+          <li class="beat" data-beat>
+            <h3>Unapproved build</h3>
+            <p>The machine runs a build the seller never approved on Celo, so the registry refuses to register its key and it can't sell a single call. The demo shows this on a local copy of Celo, so nothing reaches Celo.</p>
+            <ol class="track" aria-hidden="true"><li class="tk" data-state="fail"><span class="nd"><i class="node"><svg class="ph ph-x" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M205.66,194.34a8,8,0,0,1-11.32,11.32L128,139.31,61.66,205.66a8,8,0,0,1-11.32-11.32L116.69,128,50.34,61.66A8,8,0,0,1,61.66,50.34L128,116.69l66.34-66.35a8,8,0,0,1,11.32,11.32L139.31,128Z"/></svg></i><b>Build</b></span></li><li class="tk" data-state="na"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></i><b>Machine</b></span></li><li class="tk" data-state="na"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></i><b>Request</b></span></li><li class="tk" data-state="na"><i class="seg"></i><span class="nd"><i class="node"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg></i><b>Celo data</b></span></li><li class="tk tk-end" data-state="na"><i class="seg"></i><span class="end-pill" data-end="stopped"><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Nothing signed</span></li></ol>
+          </li>
+        </ol>
+        <div class="rail rail-3" data-scene-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i></div>
+      </div>
+      <div class="scene-slot" data-slot aria-hidden="true"></div>
+    </div>
+  </div>
+</section>
+
+<section class="scene-sec explore-sec" data-scene-sec="explore" style="--len: 2" aria-labelledby="explore">
+  <div class="scene-sticky">
+    <div class="wrap scene-grid explore">
+      <div class="scene-copy">
+        <h2 id="explore" data-split>Check any settlement, once live. No wallet, no payment.</h2>
+        <p class="sec-lede" data-fade><span class="key">Anyone can check a past call's payment from public Celo data.</span> <span class="muted">Planned:</span> the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.</p>
+        <form class="recheck" action="explorer.html" method="get" role="search" data-fade>
+          <label class="sr-only" for="q">Settlement transaction</label>
+          <svg class="ph ph-magnifying-glass" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
+          <input id="q" name="q" type="text" autocomplete="off" spellcheck="false" placeholder="Settlement tx">
+          <button class="bracket-link" type="submit">Check</button>
+        </form>
+      </div>
+      <div class="scene-slot" data-slot aria-hidden="true"></div>
+    </div>
+  </div>
+</section>
+<!-- Labels pinned to points on the globe; scene.js turns them with it and hides the ones round the back -->
+<div class="globe-pins" data-pins aria-hidden="true">
+  <span class="tag" data-pin="-0.55,0.62,0.56"><i class="tag-dot"></i>Request hash</span>
+  <span class="tag" data-pin="0.7,0.25,0.67"><i class="tag-dot"></i>Settlement tx</span>
+  <span class="tag" data-pin="-0.2,-0.55,0.81"><i class="tag-dot"></i>Approved build</span>
+  <span class="tag" data-pin="0.5,-0.7,-0.5"><i class="tag-dot"></i>Celo block</span>
+</div>
+
+<section class="scene-sec limits-sec" data-scene-sec="limits" style="--len: 2.8" aria-labelledby="limits">
+  <div class="scene-sticky">
+    <div class="wrap">
+      <div class="limits-head">
+        <div class="sec-head">
+          <h2 id="limits" data-split>Your agent can't overspend.</h2>
+        </div>
+        <div class="limits-side" data-fade>
+          <p><span class="key">It signs a payment permission, never a blank cheque.</span> These are the defaults <code>attessa init</code> sets, and you can change them. <span class="muted">Coming.</span> <code>attessa init</code> isn't built yet.</p>
+          <p><strong>Give it to your agent.</strong> <span class="muted">Coming.</span> An MCP server with nine tools keeps the same limits. It isn't built yet.</p>
+          <div class="cmd"><code><span class="p">$</span> node /path/to/attessa/packages/mcp/dist/bin.js</code><button type="button" class="copy-btn" data-copy="node /path/to/attessa/packages/mcp/dist/bin.js"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></div>
+        </div>
+      </div>
+      <div class="orbit">
+        <dl class="spec">
+          <div data-at="0.06"><dt>Most it pays per call</dt><dd>0.10<small>USDC</small></dd></div>
+          <div data-at="0.24"><dt>Most it pays per day</dt><dd>1.00<small>USDC</small></dd></div>
+          <div data-at="0.42"><dt>An unused permission expires after</dt><dd>120<small>seconds</small></dd></div>
+          <div data-at="0.6"><dt>Checks that must all pass first</dt><dd>4<small>checks</small></dd></div>
+        </dl>
+        <div class="scene-slot" data-slot aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="sec" aria-labelledby="try">
+  <div class="wrap try">
+    <div class="try-copy">
+      <h2 id="try" data-split>Try it on Celo Sepolia</h2>
+      <p class="sec-lede" data-fade><span class="key">Celo's test network, so nothing here costs real money.</span> Get gas at <a href="https://faucet.celo.org/celo-sepolia">faucet.celo.org/celo-sepolia</a> and test USDC at <a href="https://faucet.circle.com">faucet.circle.com</a> (choose Celo Sepolia). <span class="muted">Coming.</span> The buyer commands below aren't built yet.</p>
+      <ol class="try-steps">
+        <li data-row><span>Install from source (<a href="docs/tutorial.html#install">steps</a>), then set up</span><code>attessa init</code></li>
+        <li data-row><span>Call a service</span><code>attessa call https://&lt;service&gt; --body input.json --max-amount 0.05</code></li>
+        <li data-row><span>Re-check it later, with no wallet</span><code>attessa verify &lt;requestId&gt;</code></li>
+      </ol>
+    </div>
+    <div class="term-card glass" data-terminal>
+      <figure class="code is-output">
+  <figcaption><span class="label">Terminal / attessa call</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+  <pre><code><span class="p">$ </span><span class="c">attessa call https://risk.example/v1/evaluate --body tx.json</span>
+<span class="k">→</span> Checking risk.example before paying
+  Runs agent 412's approved build in a sealed machine the seller can't change  <span class="m">(release 0x9c4e…a1, Nitro enclave)</span>
+  Owner says it's built from github.com/acme/risk @ a1b2c3d  <span class="m">(not checked by attessa)</span>
+<span class="k">→</span> It's up and answering for this address right now  <span class="m">(liveness check, 0.4 s)</span>
+<span class="k">→</span> Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  <span class="m">(EIP-3009 authorization)</span>
+<span class="s">→</span> Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118  <span class="m">(settled: tx 0xabc…, signer 0x7f3b…22)</span>
+<span class="k">→</span> Answer saved to result.json. Record: ~/.attessa/evidence.jsonl</code></pre>
+  <p class="code-note">Example output. <code>risk.example</code> and the hashes above are illustrative.</p>
+</figure>
+
+    </div>
+  </div>
+</section>
+
+<section class="scene-sec proves-sec" data-scene-sec="proves" style="--len: 2.8" aria-labelledby="proves">
+  <div class="scene-sticky">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="proves" data-split>What this proves, and what it doesn't</h2>
+        <p class="sec-lede" data-fade><span class="key">A proof records which code produced an answer.</span> That's narrower than "the answer is right", and we say so. The <a href="security.html">security page</a> lists the main limits and links to all of them.</p>
+      </div>
+      <div class="split">
+        <div class="proves">
+  <div data-side="left">
+    <h3><span class="tile"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg></span>What a proof shows</h3>
+    <ul class="claims">
+      <li data-at="0.04"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which approved build answered</strong>, for this request, with these inputs.</span></li>
+      <li data-at="0.1"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>That it ran in a sealed machine</strong>, attested by AWS, with its key registered on Celo.</span></li>
+      <li data-at="0.16"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which Celo data it used</strong>, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.</span></li>
+      <li data-at="0.22"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which payment it answers for.</strong> The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.</span></li>
+    </ul>
+  </div>
+  <div data-side="right">
+    <h3><span class="tile"><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg></span>What it doesn't show</h3>
+    <ul class="claims">
+      <li data-at="0.38"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the answer is correct.</strong> A bad answer is a rules problem you can read in the source.</span></li>
+      <li data-at="0.45"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the service is available.</strong> An operator can still withhold or delay answers.</span></li>
+      <li data-at="0.52"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the build matches its source.</strong> That link is the owner's claim, shown as "Owner says it's built from github.com/… @ commit" until someone reproduces the build.</span></li>
+      <li data-at="0.59"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That requests are private.</strong> Request bodies are visible to the service's gateway and to the server the sealed machine runs on.</span></li>
+      <li data-at="0.66"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>Protection when paying through buy.</strong> buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.</span></li>
+      <li data-at="0.73"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>An instant "not charged".</strong> After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.</span></li>
+    </ul>
+  </div>
+</div>
+
+        <div class="scene-slot" data-slot aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="built" aria-label="What it runs on">
+  <div class="wrap built-line">
+    <p class="label">Built on</p>
+    <p>Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. It pays in USDC on Celo Sepolia, and will pay in USDC and USA&#x20AE; on mainnet after launch.</p>
+  </div>
+</section>
+
+<section class="sec cta-sec" aria-labelledby="cta" data-cta data-scene-sec="cta">
+  <div class="wrap" data-slot>
+    <h2 id="cta" data-split>Check a call<br> <span class="ol">yourself.</span></h2>
+    <p class="sec-lede" data-fade>Preview the explorer, which will check a settlement transaction once live, or wire the check into your agent.</p>
+    <div class="btn-row" data-fade>
+      <a class="btn btn-primary" href="explorer.html">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+      <a class="btn btn-ghost" href="docs/tutorial.html">Use it from your agent</a>
+    </div>
+  </div>
+</section>
+
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="use-cases.html">Use cases</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="explorer.html">Explorer</a>
+      <a href="security.html">Security</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href=".well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="assets/motion.js"></script>
+<script type="module" src="assets/scene.js"></script>
+</body>
+</html>

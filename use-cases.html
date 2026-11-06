@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Use cases | Attessa</title>
+<meta name="description" content="Where paying only for attested answers matters: DeFi risk checks, yield and route recommendations, payment-risk checks, and agents buying data.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script src="assets/network.js"></script>
+<script src="assets/site.js" defer></script>
+</head>
+<body class="uses-page">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="how-it-works.html" data-scramble>How it works</a>
+      <a href="explorer.html" data-scramble>Explorer</a>
+      <a href="use-cases.html" aria-current="page" data-scramble>Use cases</a>
+      <a href="docs/index.html" data-scramble>Docs</a>
+      <a href="security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="how-it-works.html" style="--i:0">How it works</a>
+    <a href="explorer.html" style="--i:1">Proof explorer</a>
+    <a href="use-cases.html" style="--i:2">Use cases</a>
+    <a href="docs/index.html" style="--i:3">Docs</a>
+    <a href="security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<section class="hero page-hero">
+  <div class="wrap hero-inner page-head">
+    <div>
+      <h1 data-split data-intro>Where a proof<br> changes what<br> you pay for</h1>
+      <div class="hero-sub">
+        <p class="lede" data-intro>Attessa fits any paid API whose answer an agent acts on. The seller's service runs in a sealed machine that signs every answer. <span class="key">The agent signs a payment permission that moves no money by itself, and the gateway uses it only after the answer's signature checks out against the build the seller approved on Celo.</span> These are the four uses we built it around.</p>
+      </div>
+    </div>
+    <nav class="page-index" aria-label="On this page" data-intro>
+      <p class="label">The four uses</p>
+      <a href="#uses" data-beat-jump="0">DeFi risk checks</a>
+      <a href="#uses" data-beat-jump="1">Yield or route recommendations</a>
+      <a href="#uses" data-beat-jump="2">Payment-risk checks</a>
+      <a href="#uses" data-beat-jump="3">Agents buying data</a>
+      <a href="#who">Who it's for</a>
+    </nav>
+  </div>
+</section>
+
+<!-- Pinned scene: one use case at a time. The particles form an object for each beside the text and
+     burst back into dust between them. scene.js reads the progress. -->
+<section class="scene-sec uses-sec" id="uses" data-scene-sec="uses" style="--len: 5.2" aria-label="Four uses">
+  <!-- tabindex: at 200% zoom this box scrolls, and nothing in it takes focus, so the keyboard needs a stop on it. -->
+  <div class="scene-sticky" tabindex="0" role="group" aria-label="Four uses">
+    <div class="wrap scene-grid">
+      <div class="scene-copy">
+        <ol class="beats uses">
+          <li class="beat use is-on" data-beat>
+            <h2>DeFi risk checks before lending</h2>
+            <p>A lending agent asks a risk service to score a borrower's address before it lends.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>The score came from the risk model the seller approved, run on Celo data read at a stated block, and not from different code the operator swapped in.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Yield or route recommendations</h2>
+            <p>An agent asks which pool or route to use for a deposit or a swap.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>Each recommendation is tied to the approved build and the block it read, so the logic behind it is the build the seller approved, and anyone can check the call's payment on Celo later, in the proof explorer once live.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Payment-risk checks before sending stablecoins</h2>
+            <p>Before an agent sends USDC or USA₮, it asks a service whether the recipient looks risky.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>If the answer was changed after the sealed machine signed it, the agent never acts on it. An honest gateway refuses it without using the agent's payment permission; if the gateway itself made the change and settled anyway, the agent is charged and Attessa reports paid_but_rejected, with a record that proves it.</p>
+          </li>
+          <li class="beat use" data-beat>
+            <h2>Agents buying data or decisions</h2>
+            <p>Any agent that pays per call for a computed answer.</p>
+            <p class="adds"><span class="adds-k">What the proof adds</span>The agent's rule becomes "pay only for answers that carry a valid proof", inside a per-call limit and a daily cap it can't exceed. The one exception is buying through buy, Celo's marketplace of pay-per-call APIs, which takes payment before the service runs: there Attessa can only record what came back, after the payment.</p>
+          </li>
+        </ol>
+        <div class="rail rail-4" data-scene-rail aria-hidden="true"><i><b></b></i><i><b></b></i><i><b></b></i><i><b></b></i></div>
+      </div>
+      <div class="scene-slot" data-slot aria-hidden="true"></div>
+    </div>
+  </div>
+</section>
+
+<section class="uses-note" aria-label="What a proof shows">
+  <div class="wrap">
+    <p class="uses-note-text" data-fade>A proof shows which approved build produced an answer. It doesn't show the answer is correct: a bad answer is a rules problem you can read in the source. <a href="docs/explanation.html">What it proves, and what it doesn't</a>.</p>
+  </div>
+</section>
+
+<section class="who" aria-labelledby="who">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="who" data-split>Who it's for</h2>
+    </div>
+    <dl class="cast-list who-list" data-fade>
+      <div><dt>Buyer agents and their developers</dt><dd>One SDK call, or one CLI command (<span class="muted">Coming</span>). Spending stays inside a limit per call and a cap per day.</dd></div>
+      <div><dt>Sellers of paid APIs</dt><dd>Run your service in a sealed machine, approve the build on Celo, and buyers can check every answer you sell.</dd></div>
+      <div><dt>Marketplaces like buy</dt><dd>buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before calling the API today; Attessa's gateway can check first.</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="next-sec" aria-label="Where to go next">
+  <div class="wrap next-links">
+    <a class="next-link" href="how-it-works.html"><span class="next-k">Step by step, both sides</span><span class="next-t">How it works</span><span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+    <a class="next-link" href="explorer.html"><span class="next-k">Explorer preview</span><span class="next-t">Open the explorer</span><span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+  </div>
+</section>
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="use-cases.html">Use cases</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="explorer.html">Explorer</a>
+      <a href="security.html">Security</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href=".well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="assets/motion.js"></script>
+<script type="module" src="assets/scene.js"></script>
+</body>
+</html>

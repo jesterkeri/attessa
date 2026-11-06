@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>What a proof shows | Attessa</title>
+<meta name="description" content="What attested execution provenance proves and doesn't, the threat model in plain words, and the known limits.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="../assets/fonts.css">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/config.js"></script>
+<script src="../assets/network.js"></script>
+<script src="../assets/site.js" defer></script>
+</head>
+<body class="docs-page">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="../index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="../how-it-works.html" data-scramble>How it works</a>
+      <a href="../explorer.html" data-scramble>Explorer</a>
+      <a href="../use-cases.html" data-scramble>Use cases</a>
+      <a href="../docs/index.html" aria-current="page" data-scramble>Docs</a>
+      <a href="../security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="../explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="../how-it-works.html" style="--i:0">How it works</a>
+    <a href="../explorer.html" style="--i:1">Proof explorer</a>
+    <a href="../use-cases.html" style="--i:2">Use cases</a>
+    <a href="../docs/index.html" style="--i:3">Docs</a>
+    <a href="../security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="../explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<div class="wrap docs">
+  <aside class="docs-nav" aria-label="Docs">
+  <details open>
+    <summary>Docs menu</summary>
+    <div class="docs-nav-body">
+      <h2>Start</h2>
+      <ul><li><a href="../docs/index.html">Overview</a></li></ul>
+      <h2>Tutorial</h2>
+      <ul><li><a href="../docs/tutorial.html">Pay-if-verified in 10 minutes <span class="muted">Coming</span></a></li></ul>
+      <h2>How-tos</h2>
+      <ul>
+        <li><a href="../docs/how-to.html">All how-tos</a></li>
+        <li><a href="../docs/how-to.html#run-a-seller">Run a seller</a></li>
+        <li><a href="../docs/how-to.html#revoke">Revoke a build or a signer <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#mcp">Use it from an MCP agent <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#buy">Use it with buy <span class="muted">Optional, not built yet</span></a></li>
+      </ul>
+      <h2>Reference</h2>
+      <ul>
+        <li><a href="../docs/reference.html">Reference</a></li>
+        <li><a href="../docs/reference.html#cli">CLI commands</a></li>
+        <li><a href="../docs/reference.html#tools">Agent tools <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/reference.html#sdk">SDK payAndVerify</a></li>
+        <li><a href="../docs/reference.html#refusals">Refusal codes</a></li>
+      </ul>
+      <h2>Explanation</h2>
+      <ul>
+        <li><a href="../docs/explanation.html" aria-current="page">What it proves</a></li>
+        <li><a href="../docs/explanation.html#threats">Threat model</a></li>
+        <li><a href="../docs/explanation.html#limits">Known limits</a></li>
+      </ul>
+    </div>
+  </details>
+</aside>
+
+  <article class="docs-main">
+    <span class="mode">Explanation</span>
+    <h1>What a proof shows, and what it doesn't</h1>
+    <p>Attessa gives you <strong>attested execution provenance</strong>: a signed statement of which approved build produced an answer, for which request, with which inputs, and for which payment permission. The proof is signed before anything is paid; whether the payment settled is read from Celo. That is a narrower claim than "the answer is right". This page explains where the line sits.</p>
+
+    <h2 id="proves">The claim, in full</h2>
+    <div class="proves">
+  <div data-side="left">
+    <h3><span class="tile"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg></span>What a proof shows</h3>
+    <ul class="claims">
+      <li data-at="0.04"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which approved build answered</strong>, for this request, with these inputs.</span></li>
+      <li data-at="0.1"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>That it ran in a sealed machine</strong>, attested by AWS, with its key registered on Celo.</span></li>
+      <li data-at="0.16"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which Celo data it used</strong>, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.</span></li>
+      <li data-at="0.22"><svg class="ph ph-check" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,77.66l-128,128a8,8,0,0,1-11.32,0l-56-56a8,8,0,0,1,11.32-11.32L96,188.69,218.34,66.34a8,8,0,0,1,11.32,11.32Z"/></svg><span><strong>Which payment it answers for.</strong> The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.</span></li>
+    </ul>
+  </div>
+  <div data-side="right">
+    <h3><span class="tile"><svg class="ph ph-minus-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M176,128a8,8,0,0,1-8,8H88a8,8,0,0,1,0-16h80A8,8,0,0,1,176,128Zm56,0A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg></span>What it doesn't show</h3>
+    <ul class="claims">
+      <li data-at="0.38"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the answer is correct.</strong> A bad answer is a rules problem you can read in the source.</span></li>
+      <li data-at="0.45"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the service is available.</strong> An operator can still withhold or delay answers.</span></li>
+      <li data-at="0.52"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That the build matches its source.</strong> That link is the owner's claim, shown as "Owner says it's built from github.com/… @ commit" until someone reproduces the build.</span></li>
+      <li data-at="0.59"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>That requests are private.</strong> Request bodies are visible to the service's gateway and to the server the sealed machine runs on.</span></li>
+      <li data-at="0.66"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>Protection when paying through buy.</strong> buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.</span></li>
+      <li data-at="0.73"><svg class="ph ph-minus" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M224,128a8,8,0,0,1-8,8H40a8,8,0,0,1,0-16H216A8,8,0,0,1,224,128Z"/></svg><span><strong>An instant "not charged".</strong> After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.</span></li>
+    </ul>
+  </div>
+</div>
+
+
+    <h2 id="threats">The threat model, in plain words</h2>
+    <p>Who could cheat, and what stops them.</p>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th scope="col">If someone tries to</th><th scope="col">What happens</th></tr></thead>
+      <tbody>
+        <tr><td>Swap in different code</td><td>Unless the agent's owner approves the new build, the sealed machine's measurements match no approved build, so its key can't be registered and its proofs are rejected. The owner can approve any build, including a bad one: the proof then names that build, and the link to its source stays the owner's claim.</td></tr>
+        <tr><td>Edit an answer after signing</td><td>The answer's hash no longer matches the proof. If the edit happens before the gateway, the gateway refuses it and nothing settles. If the gateway itself makes the edit, it can still settle: you are charged, and the SDK reports <code>paid_but_rejected</code> with a record that proves it.</td></tr>
+        <tr><td>Pose as a registered service</td><td>The buyer only pays the address registered for that origin, and checks the agent it claims to be. A mismatch stops the call before anything is signed.</td></tr>
+        <tr><td>Keep selling from a revoked build</td><td>Gateways and SDKs stop accepting its signers within 60 seconds.</td></tr>
+        <tr><td>Take the money despite a refusal</td><td>This is possible for a dishonest gateway, and can't be reversed on chain. The buyer's record proves the payment and the failed check, so it can be reported.</td></tr>
+        <tr><td>Feed the buyer false chain data</td><td>A malicious RPC can lie, as it can to any app. Choose the RPC you use.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="limits">Known limits</h2>
+    <p>These are accepted for now, written down so nobody has to discover them.</p>
+    <ul>
+      <li><strong>The demo gateway is run by the seller.</strong> So paying through it doesn't protect you from a dishonest seller. Your protection is the short payment window, cancel, the registered pay-to address, your own re-check, and the on-chain "not charged" confirmation.</li>
+      <li><strong>Paying through buy has no payment protection.</strong> buy settles before it calls the service; Attessa can only check afterwards.</li>
+      <li><strong>A proof shows which code ran, not that the service is available.</strong> An operator can withhold, delay or reorder answers.</li>
+      <li><strong>Request bodies are visible to the gateway and to the server the sealed machine runs on.</strong> Today's requests are public chain addresses.</li>
+      <li><strong>The source link is the owner's claim.</strong> It stays "owner says" until the build is reproduced.</li>
+      <li><strong>Checks answer "valid now".</strong> Whether a build was approved at the time of an old call is rebuilt from Celo events off chain.</li>
+      <li><strong>Every restart costs a registration.</strong> The signing key never leaves the machine, so a restart makes a new one.</li>
+      <li><strong>USA₮ settles on mainnet only.</strong> Test payments on Celo Sepolia use USDC.</li>
+      <li><strong>Confirming "not charged" takes time.</strong> Up to about two minutes after a refusal, or cancel sooner for a little gas.</li>
+      <li><strong>The ERC-8004 identity registry is upgradeable.</strong> Whoever holds its keys could change who owns an agent. Attessa's own registry is immutable and can't be more trustworthy than that.</li>
+    </ul>
+    <p>The full list, with when each one will be revisited, is in <a href="https://github.com/jesterkeri/attessa/blob/main/KNOWN-LIMITS.md">KNOWN-LIMITS.md on GitHub</a>.</p>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#proves">The claim, in full</a></li>
+    <li><a href="#threats">Threat model</a></li>
+    <li><a href="#limits">Known limits</a></li>
+  </ol></nav>
+</div>
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="../how-it-works.html">How it works</a>
+      <a href="../use-cases.html">Use cases</a>
+      <a href="../docs/index.html">Docs</a>
+      <a href="../explorer.html">Explorer</a>
+      <a href="../security.html">Security</a>
+      <a href="../privacy.html">Privacy</a>
+      <a href="../terms.html">Terms</a>
+      <a href="../.well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="../assets/motion.js"></script>
+<script type="module" src="../assets/scene.js"></script>
+</body>
+</html>

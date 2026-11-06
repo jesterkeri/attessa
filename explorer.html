@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Proof explorer | Attessa</title>
+<meta name="description" content="A preview of the explorer that, when live, checks the on-chain part of any past Attessa call from public Celo data, with no wallet and no payment.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script src="assets/network.js"></script>
+<script src="assets/site.js" defer></script>
+</head>
+<body class="explorer-page">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="how-it-works.html" data-scramble>How it works</a>
+      <a href="explorer.html" aria-current="page" data-scramble>Explorer</a>
+      <a href="use-cases.html" data-scramble>Use cases</a>
+      <a href="docs/index.html" data-scramble>Docs</a>
+      <a href="security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="how-it-works.html" style="--i:0">How it works</a>
+    <a href="explorer.html" style="--i:1">Proof explorer</a>
+    <a href="use-cases.html" style="--i:2">Use cases</a>
+    <a href="docs/index.html" style="--i:3">Docs</a>
+    <a href="security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<div data-explorer>
+  <section class="hero page-hero explorer-hero">
+    <div class="wrap hero-inner page-head">
+      <div>
+      <h1 data-split data-intro>Check a<br> settlement</h1>
+      <div class="explorer-sub">
+        <p class="lede" data-intro>Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and <span class="key">when live, the explorer checks its on-chain part from public Celo data</span>: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. <span class="muted">Planned:</span> looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.</p>
+        <form class="recheck" data-explorer-form novalidate role="search">
+          <label class="sr-only" for="q">Paste a settlement transaction</label>
+          <svg class="ph ph-magnifying-glass" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M229.66,218.34l-50.07-50.06a88.11,88.11,0,1,0-11.31,11.31l50.06,50.07a8,8,0,0,0,11.32-11.32ZM40,112a72,72,0,1,1,72,72A72.08,72.08,0,0,1,40,112Z"/></svg>
+          <input id="q" name="q" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Settlement tx" aria-describedby="q-help q-error">
+          <button class="bracket-link" type="submit">Check</button>
+        </form>
+        <p class="field-help" id="q-help">0x and 64 hex characters. When live, it checks against <span data-network-name>Celo Sepolia</span>. Celo mainnet comes after launch.</p>
+        <p class="field-error" id="q-error" data-field-error hidden><svg class="ph ph-warning" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M236.8,188.09,149.35,36.22h0a24.76,24.76,0,0,0-42.7,0L19.2,188.09a23.51,23.51,0,0,0,0,23.72A24.35,24.35,0,0,0,40.55,224h174.9a24.35,24.35,0,0,0,21.33-12.19A23.51,23.51,0,0,0,236.8,188.09ZM222.93,203.8a8.5,8.5,0,0,1-7.48,4.2H40.55a8.5,8.5,0,0,1-7.48-4.2,7.59,7.59,0,0,1,0-7.72L120.52,44.21a8.75,8.75,0,0,1,15,0l87.45,151.87A7.59,7.59,0,0,1,222.93,203.8ZM120,144V104a8,8,0,0,1,16,0v40a8,8,0,0,1-16,0Zm20,36a12,12,0,1,1-12-12A12,12,0,0,1,140,180Z"/></svg><span data-field-error-text></span></p>
+      </div>
+      </div>
+      <div class="page-index" data-intro>
+        <p class="label">The five checks it runs</p>
+        <ol>
+          <li>Approved build<span>registry, planned</span></li>
+          <li>Sealed machine<span>AWS attestation, planned</span></li>
+          <li>This exact request and answer<span>signed hashes, planned</span></li>
+          <li>Real Celo data<span>block read, planned</span></li>
+          <li>Payment<span>settlement</span></li>
+        </ol>
+        <p class="muted">When live, it runs the payment check. The other four are planned.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="explorer-results" aria-label="Result">
+    <div class="wrap">
+      <div class="preview-bar">
+        <p><span class="preview-k">UI preview</span>Sample states, not a check of any transaction: pick one to see how each result looks, with sample slots. Nothing is read from Celo yet for the rejected states: they need request-ID lookup and the call's proof, which are planned.</p>
+        <label class="sr-only" for="preview">Preview state</label>
+        <select id="preview" data-preview>
+          <option value="settled">Settled on Celo</option>
+          <option value="tampered">Rejected: tampered answer</option>
+          <option value="unapproved">Rejected: approval withdrawn</option>
+          <option value="unattested">Unattested</option>
+          <option value="loading">Loading</option>
+          <option value="notfound">Not found</option>
+          <option value="malformed">Malformed tx</option>
+          <option value="rpc">Celo unreachable</option>
+        </select>
+      </div>
+      <!-- The particles form the seal in the slot beside the checklist: a lime check when verified, red and
+           breaking when rejected, grey with no mark when unattested. scene.js reads data-verdict. -->
+      <div class="result-grid" data-scene-sec="explorer" data-verdict="idle">
+        <div class="scene-slot" data-slot aria-hidden="true"></div>
+        <div class="result" data-result>
+          <noscript><p class="muted">The check and this preview need JavaScript. You can run the same check with <code>attessa verify &lt;requestId&gt;</code>. <span class="muted">Coming.</span> It isn't built yet.</p></noscript>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="feed-sec" aria-labelledby="recent">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2 id="recent" data-split>Recent calls</h2>
+        <p class="sec-lede" data-fade>When live, it lists the latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: <code>attessa status</code> shows your recent verdicts (<span class="muted">Coming</span>). <span class="muted">Planned:</span> looking it up here by its request ID. The rows below are samples until the explorer reads Celo.</p>
+      </div>
+      <table class="feed" data-fade>
+        <thead><tr><th scope="col">Time (UTC)</th><th scope="col">Paid to</th><th scope="col">Outcome</th><th scope="col">Amount</th><th scope="col"><span class="sr-only">Checklist</span></th></tr></thead>
+        <tbody>
+          <tr>
+            <td data-label="Time (UTC)"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{callTime}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{callTime}" aria-label="Copy {callTime}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Paid to"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{payTo}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{payTo}" aria-label="Copy {payTo}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Settled</span></td>
+            <td data-label="Amount"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{amount}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{amount}" aria-label="Copy {amount}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{asset}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{asset}" aria-label="Copy {asset}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td><button type="button" class="bracket-link" data-open-state="settled">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{callTime}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{callTime}" aria-label="Copy {callTime}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Paid to"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{payTo}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{payTo}" aria-label="Copy {payTo}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Settled</span></td>
+            <td data-label="Amount"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{amount}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{amount}" aria-label="Copy {amount}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{asset}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{asset}" aria-label="Copy {asset}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td><button type="button" class="bracket-link" data-open-state="settled">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{callTime}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{callTime}" aria-label="Copy {callTime}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Paid to"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{payTo}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{payTo}" aria-label="Copy {payTo}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Settled</span></td>
+            <td data-label="Amount"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{amount}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{amount}" aria-label="Copy {amount}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{asset}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{asset}" aria-label="Copy {asset}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td><button type="button" class="bracket-link" data-open-state="settled">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{callTime}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{callTime}" aria-label="Copy {callTime}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Paid to"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{payTo}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{payTo}" aria-label="Copy {payTo}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Settled</span></td>
+            <td data-label="Amount"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{amount}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{amount}" aria-label="Copy {amount}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{asset}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{asset}" aria-label="Copy {asset}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td><button type="button" class="bracket-link" data-open-state="settled">Open checklist</button></td>
+          </tr>
+          <tr>
+            <td data-label="Time (UTC)"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{callTime}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{callTime}" aria-label="Copy {callTime}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Paid to"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{payTo}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{payTo}" aria-label="Copy {payTo}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td data-label="Outcome"><span class="badge" data-verdict="settled"><svg class="ph ph-check-circle" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M173.66,98.34a8,8,0,0,1,0,11.32l-56,56a8,8,0,0,1-11.32,0l-24-24a8,8,0,0,1,11.32-11.32L112,148.69l50.34-50.35A8,8,0,0,1,173.66,98.34ZM232,128A104,104,0,1,1,128,24,104.11,104.11,0,0,1,232,128Zm-16,0a88,88,0,1,0-88,88A88.1,88.1,0,0,0,216,128Z"/></svg>Settled</span></td>
+            <td data-label="Amount"><span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{amount}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{amount}" aria-label="Copy {amount}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{asset}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{asset}" aria-label="Copy {asset}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span></td>
+            <td><button type="button" class="bracket-link" data-open-state="settled">Open checklist</button></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+<!-- The live payment check. Not deferred, so it is defined before site.js (deferred) runs a ?q= check. -->
+<script src="assets/explorer.js"></script>
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="use-cases.html">Use cases</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="explorer.html">Explorer</a>
+      <a href="security.html">Security</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href=".well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="assets/motion.js"></script>
+<script type="module" src="assets/scene.js"></script>
+</body>
+</html>

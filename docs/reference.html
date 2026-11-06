@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Reference | Attessa</title>
+<meta name="description" content="Attessa CLI commands, the nine agent tools, SDK payAndVerify options, and every refusal code with its next step.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="../assets/fonts.css">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/config.js"></script>
+<script src="../assets/network.js"></script>
+<script src="../assets/site.js" defer></script>
+</head>
+<body class="docs-page">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="../index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="../how-it-works.html" data-scramble>How it works</a>
+      <a href="../explorer.html" data-scramble>Explorer</a>
+      <a href="../use-cases.html" data-scramble>Use cases</a>
+      <a href="../docs/index.html" aria-current="page" data-scramble>Docs</a>
+      <a href="../security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="../explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="../how-it-works.html" style="--i:0">How it works</a>
+    <a href="../explorer.html" style="--i:1">Proof explorer</a>
+    <a href="../use-cases.html" style="--i:2">Use cases</a>
+    <a href="../docs/index.html" style="--i:3">Docs</a>
+    <a href="../security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="../explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<div class="wrap docs">
+  <aside class="docs-nav" aria-label="Docs">
+  <details open>
+    <summary>Docs menu</summary>
+    <div class="docs-nav-body">
+      <h2>Start</h2>
+      <ul><li><a href="../docs/index.html">Overview</a></li></ul>
+      <h2>Tutorial</h2>
+      <ul><li><a href="../docs/tutorial.html">Pay-if-verified in 10 minutes <span class="muted">Coming</span></a></li></ul>
+      <h2>How-tos</h2>
+      <ul>
+        <li><a href="../docs/how-to.html">All how-tos</a></li>
+        <li><a href="../docs/how-to.html#run-a-seller">Run a seller</a></li>
+        <li><a href="../docs/how-to.html#revoke">Revoke a build or a signer <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#mcp">Use it from an MCP agent <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#buy">Use it with buy <span class="muted">Optional, not built yet</span></a></li>
+      </ul>
+      <h2>Reference</h2>
+      <ul>
+        <li><a href="../docs/reference.html" aria-current="page">Reference</a></li>
+        <li><a href="../docs/reference.html#cli">CLI commands</a></li>
+        <li><a href="../docs/reference.html#tools">Agent tools <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/reference.html#sdk">SDK payAndVerify</a></li>
+        <li><a href="../docs/reference.html#refusals">Refusal codes</a></li>
+      </ul>
+      <h2>Explanation</h2>
+      <ul>
+        <li><a href="../docs/explanation.html">What it proves</a></li>
+        <li><a href="../docs/explanation.html#threats">Threat model</a></li>
+        <li><a href="../docs/explanation.html#limits">Known limits</a></li>
+      </ul>
+    </div>
+  </details>
+</aside>
+
+  <article class="docs-main">
+    <span class="mode">Reference</span>
+    <h1>Reference</h1>
+    <p>Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.</p>
+
+    <h2 id="cli">CLI commands</h2>
+    <p>Rows marked <span class="muted">Coming</span> are planned but not built yet. Rows marked <span class="muted">Optional</span> may not ship.</p>
+    <h3 id="cli-buyer">Buyer</h3>
+    <div class="table-wrap" tabindex="0"><table class="table">
+      <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>attessa init</code></td><td><span class="muted">Coming.</span> Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>.</td></tr>
+        <tr><td><code>attessa call &lt;url&gt;</code></td><td><span class="muted">Coming.</span> Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. <code>--body</code>, <code>--max-amount</code>, <code>--asset usdc|usat</code>, <code>--new</code>, <code>--no-wait</code>, <code>--dry-run</code> (stops before signing), <code>--json</code>.</td></tr>
+        <tr><td><code>attessa call --via buy &lt;url&gt;</code></td><td><span class="muted">Optional, not built yet.</span> Buys through buy and records what came back. No payment protection. <code>--accept-unprotected</code> skips the prompt for agents.</td></tr>
+        <tr><td><code>attessa verify &lt;requestId&gt;</code></td><td><span class="muted">Coming.</span> Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.</td></tr>
+        <tr><td><code>attessa cancel &lt;requestId&gt;</code></td><td><span class="muted">Coming.</span> Voids an unused payment permission on chain, for a little gas.</td></tr>
+        <tr><td><code>attessa status</code></td><td><span class="muted">Coming.</span> Spend today against your cap, pending permissions, recent verdicts. <code>--pending</code>, <code>--agent &lt;id&gt;</code>, or an origin.</td></tr>
+        <tr><td><code>attessa evidence export</code></td><td><span class="muted">Coming.</span> Exports your call records.</td></tr>
+        <tr><td><code>attessa release verify</code></td><td><span class="muted">Optional, not built yet.</span> Rebuilds a release from the source you name and compares its measurements.</td></tr>
+      </tbody>
+    </table></div>
+    <h3 id="cli-seller">Seller</h3>
+    <div class="table-wrap" tabindex="0"><table class="table">
+      <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
+      <tbody>
+        <tr><td><code>attessa agent register</code></td><td><span class="muted">Coming.</span> Creates your agent's ERC-8004 identity from this wallet.</td></tr>
+        <tr><td><code>attessa agent transfer</code>, <code>wallet-sig</code>, <code>set-wallet</code></td><td><span class="muted">Coming.</span> Moves your agent to a cold owner wallet, then sets the agent wallet from it.</td></tr>
+        <tr><td><code>attessa enclave build</code></td><td>Builds the sealed machine image and writes its measurements. Refuses a dirty tree.</td></tr>
+        <tr><td><code>attessa release approve</code></td><td>Approves a build for your agent, with the source you claim it came from.</td></tr>
+        <tr><td><code>attessa release deprecate</code></td><td><span class="muted">Coming.</span> Marks an approved build deprecated. It can be approved again later.</td></tr>
+        <tr><td><code>attessa release revoke</code></td><td><span class="muted">Coming.</span> Permanently revokes a build. Its signers stop working within 60 s.</td></tr>
+        <tr><td><code>attessa endpoint add</code></td><td>Registers the origin buyers call and the address they pay.</td></tr>
+        <tr><td><code>attessa endpoint retire</code></td><td><span class="muted">Coming.</span> Stops selling at an origin.</td></tr>
+        <tr><td><code>attessa enclave start</code></td><td>Starts the sealed machine and writes AWS's attestation to <code>att.bin</code>. <code>attessa signer register --fresh</code> gets a new one.</td></tr>
+        <tr><td><code>attessa signer register</code></td><td>Registers the machine's key on Celo. <code>--fresh</code>, <code>--dry-run</code> (estimates gas).</td></tr>
+        <tr><td><code>attessa signer renew</code></td><td>Renews a running signer without a restart.</td></tr>
+        <tr><td><code>attessa revoke signer &lt;addr&gt;</code></td><td><span class="muted">Coming.</span> Permanently revokes a signer. Takes effect within 60 s.</td></tr>
+        <tr><td><code>attessa selflink</code></td><td><span class="muted">Coming.</span> Links a Self Agent ID to your agent. Informational only.</td></tr>
+        <tr><td><code>attessa gateway pause|resume|status|export</code></td><td><span class="muted">Coming.</span> Stops and restarts new paid calls at your gateway, shows its state, and exports its records.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="tools">Agent tools</h2>
+    <p><span class="muted">Coming.</span> The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.</p>
+    <div class="table-wrap" tabindex="0"><table class="table">
+      <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th><th scope="col">Side effect</th></tr></thead>
+      <tbody>
+        <tr><td><code>resolve_endpoint</code></td><td>Looks a service up in the registry: agent, approved builds, pay-to address.</td><td>None</td></tr>
+        <tr><td><code>check_liveness</code></td><td>Checks the sealed machine is answering at this address.</td><td>None</td></tr>
+        <tr><td><code>quote</code></td><td>Gets the price without signing anything.</td><td>None</td></tr>
+        <tr><td><code>pay_and_verify</code></td><td>Signs a payment within your bounds and returns the answer only if its proof checks out.</td><td><strong>Signs a payment</strong></td></tr>
+        <tr><td><code>verify_proof</code></td><td>Checks a proof against the registry.</td><td>None</td></tr>
+        <tr><td><code>get_result</code></td><td>Fetches a stored answer by request ID.</td><td>None</td></tr>
+        <tr><td><code>list_pending</code></td><td>Lists payment permissions not yet settled or expired.</td><td>None</td></tr>
+        <tr><td><code>cancel_authorization</code></td><td>Voids an unused payment permission on chain.</td><td><strong>Sends a transaction</strong></td></tr>
+        <tr><td><code>status</code></td><td>Spend today against your cap, pending items, recent verdicts.</td><td>None</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="sdk">SDK: <code>payAndVerify</code></h2>
+    <figure class="code">
+      <figcaption><span>TypeScript</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+      <pre tabindex="0"><code>payAndVerify(url: string, req: {
+  body: Uint8Array | string;
+  requestId?: Hex;
+  maxAmount?: bigint;
+  asset?: AssetKey;
+  newRequest?: boolean;
+}): Promise&lt;CallResult&gt;</code></pre>
+    </figure>
+    <div class="table-wrap" tabindex="0"><table class="table">
+      <thead><tr><th scope="col">Option</th><th scope="col">Meaning</th></tr></thead>
+      <tbody>
+        <tr><td><code>maxAmount</code></td><td>The most this call may cost, in the asset's atomic units. The SDK uses the lower of this and your configured limit per call. Over it, nothing is signed: <code>over_max_amount</code>.</td></tr>
+        <tr><td><code>dailyCap</code></td><td>Set in <code>Limits</code>. Today's settled plus reserved spend, per asset, per UTC day. Over it, nothing is signed: <code>over_daily_cap</code>.</td></tr>
+        <tr><td><code>asset</code></td><td>Which stablecoin to pay in: USDC, or USA₮ on mainnet.</td></tr>
+        <tr><td><code>requestId</code></td><td>Your own ID for this call: 32 random bytes, fresh for every new call. Never reuse one after its call has ended; the gateway answers <code>request_id_conflict</code>. To resume an interrupted call, send the same request again: the SDK finds it in its ledger and never pays twice.</td></tr>
+        <tr><td><code>newRequest</code></td><td>Force a fresh request ID.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h2 id="refusals">Refusal codes</h2>
+    <p>A refusal is the product working: a named check failed, and the gateway shouldn't use your payment permission. If you had signed one, the SDK checks on Celo whether it was used, unless you passed <code>--no-wait</code>, and reports <code>not_charged</code> or <code>settled_after_refusal</code>. Codes marked <strong>R</strong> are refusals; the rest are conditions with a next step.</p>
+    <div class="table-wrap" tabindex="0"><table class="table">
+      <thead><tr><th scope="col">Code</th><th scope="col">What it means</th><th scope="col">Next step</th></tr></thead>
+      <tbody>
+        <tr><td><code>proof_rejected</code> R</td><td>A check in the proof failed. The reason names it: <code>response_hash_mismatch</code>, <code>request_mismatch</code>, <code>inputs_hash_mismatch</code>, <code>signer_not_active</code>, <code>release_not_approved</code>, <code>proof_expired</code> and others.</td><td>Wait for your permission to expire, or cancel it now.</td></tr>
+        <tr><td><code>payto_mismatch</code> R</td><td>The service asked to be paid somewhere other than its registered address. It may be an impostor.</td><td>Don't retry. Report it where you found the link.</td></tr>
+        <tr><td><code>origin_agent_mismatch</code></td><td>The service claims to be a different agent than the registry says.</td><td>Don't retry. Report it.</td></tr>
+        <tr><td><code>over_max_amount</code> R</td><td>The price is above your limit per call.</td><td><span class="muted">Coming:</span> raise <code>--max-amount</code> if that's fine.</td></tr>
+        <tr><td><code>over_daily_cap</code> R</td><td>This call would take today's spend past your cap.</td><td>Wait until 00:00 UTC. <span class="muted">Coming:</span> raise <code>--daily-cap</code>.</td></tr>
+        <tr><td><code>endpoint_not_registered</code></td><td>The origin isn't an attested endpoint.</td><td>Ask the seller to register. <span class="muted">Optional, not built yet:</span> pay without protection with <code>--via buy</code>.</td></tr>
+        <tr><td><code>endpoint_retired</code></td><td>The owner stopped selling at this origin. Nothing was signed.</td><td><span class="muted">Coming:</span> <code>attessa status --agent &lt;id&gt;</code> lists current endpoints.</td></tr>
+        <tr><td><code>liveness_failed</code></td><td>The sealed machine didn't answer a fresh check.</td><td>Retry later. <span class="muted">Coming:</span> <code>attessa status &lt;origin&gt;</code> shows when it last answered.</td></tr>
+        <tr><td><code>payment_invalid</code></td><td>The payment permission was refused, for example for insufficient funds.</td><td>Add funds to your address.</td></tr>
+        <tr><td><code>authorization_expiring</code> R</td><td>Your permission expires in under 10 s, too close to settle safely.</td><td>Retry; the SDK signs a fresh 120 s window.</td></tr>
+        <tr><td><code>authorization_window_too_short</code></td><td>Your permission expires too soon for this service, usually a slow clock or network.</td><td>Call again.</td></tr>
+        <tr><td><code>execution_timeout</code></td><td>The service didn't respond in 20 s.</td><td>Retry with a new request.</td></tr>
+        <tr><td><code>enclave_unavailable</code></td><td>The service is offline.</td><td>Retry later.</td></tr>
+        <tr><td><code>gateway_paused</code></td><td>The service can't take payments right now.</td><td>Retry later.</td></tr>
+        <tr><td><code>gateway_busy</code></td><td>The service is busy, so the call was refused before it ran. If you had signed a payment permission, the SDK checks on Celo whether it was used, unless you passed <code>--no-wait</code>, and reports <code>not_charged</code> or <code>settled_after_refusal</code>.</td><td>Try again shortly.</td></tr>
+        <tr><td><code>rate_limited</code></td><td>Too many requests from you, or too many of your paid calls to this service ended without settling in the last hour. The call was refused before it ran. If you had signed a payment permission, the SDK checks on Celo whether it was used, unless you passed <code>--no-wait</code>, and reports <code>not_charged</code> or <code>settled_after_refusal</code>.</td><td>Try again after the time the service gives.</td></tr>
+        <tr><td><code>settle_pending</code></td><td>Payment sent and confirming, usually under 5 s.</td><td>None: the CLI keeps checking.</td></tr>
+        <tr><td><code>settle_failed</code></td><td>The payment didn't go through, so the answer was withheld.</td><td>Retry with a new request.</td></tr>
+        <tr><td><code>uncertain</code></td><td>The connection dropped after you signed. Attessa checks Celo for up to 2 minutes.</td><td>None: it resolves to paid or not charged.</td></tr>
+        <tr><td><code>not_charged</code></td><td>Confirmed on Celo: your permission expired unused.</td><td>None: done.</td></tr>
+        <tr><td><code>paid_but_rejected</code></td><td>You paid, but the answer didn't check out. On-chain payments can't be reversed.</td><td>Report the gateway to the marketplace, with your record.</td></tr>
+        <tr><td><code>settled_after_refusal</code></td><td>The service refused, but your permission was used anyway. The gateway is at fault.</td><td>Report the gateway, with your record.</td></tr>
+        <tr><td><code>already_used</code></td><td>Too late to cancel: the payment went through.</td><td>None: Attessa fetches your answer.</td></tr>
+        <tr><td><code>payment_reused</code>, <code>request_id_conflict</code></td><td>This request ID or permission was already used for a different call.</td><td><span class="muted">Coming:</span> call again with <code>--new</code>.</td></tr>
+        <tr><td><code>in_progress</code></td><td>This call is already running.</td><td>None: it checks again in 2 s.</td></tr>
+        <tr><td><code>result_not_found</code></td><td>No stored result for this request ID. Results expire after 24 hours.</td><td><span class="muted">Coming:</span> <code>attessa status --pending</code>.</td></tr>
+        <tr><td><code>bad_request</code></td><td>The service can't read this input.</td><td>Fix the input and call again.</td></tr>
+        <tr><td><code>quote_unavailable</code>, <code>quote_malformed</code></td><td>The service didn't ask for payment in a form Attessa can read.</td><td>Check the URL, or update the CLI.</td></tr>
+        <tr><td><code>network_mismatch</code></td><td>Your RPC is on a different chain than the registry.</td><td>Set <code>--rpc</code> for the right network.</td></tr>
+        <tr><td><code>rpc_unavailable</code></td><td>Can't reach Celo. Before signing, the call stops and nothing is signed. While checking a paid call, the call stays <code>uncertain</code> until Celo can be read; an RPC error never fails a check.</td><td>Retry or set another <code>--rpc</code>.</td></tr>
+        <tr><td><code>max_amount_required</code></td><td>No limit per call is set, so nothing was signed.</td><td><span class="muted">Coming:</span> run <code>attessa init</code> or pass <code>--max-amount</code>.</td></tr>
+        <tr><td><code>no_wallet</code></td><td>No wallet set up yet.</td><td><span class="muted">Coming:</span> run <code>attessa init</code>.</td></tr>
+        <tr><td><code>attestation_stale</code> R</td><td>Seller: the machine's report is over 30 minutes old.</td><td><code>attessa signer register --fresh</code>.</td></tr>
+        <tr><td><code>release_not_approved</code> R</td><td>Seller: the machine runs a build the agent hasn't approved.</td><td>Approve it, or run the approved build.</td></tr>
+        <tr><td><code>debug_pcrs</code> R</td><td>Seller: the machine is in debug mode.</td><td>Restart without <code>--debug-mode</code>.</td></tr>
+        <tr><td><code>binding_mismatch</code> R</td><td>Seller: the report was made for another agent, chain or origin.</td><td>Re-attest with the right config.</td></tr>
+        <tr><td><code>cert_expired</code></td><td>Seller: the report's certificates have expired.</td><td><code>attessa signer register --fresh</code>.</td></tr>
+        <tr><td><code>not_owner</code> R</td><td>Seller: only the agent's owner can do this.</td><td>Run it from the owner wallet.</td></tr>
+        <tr><td><code>not_operator</code> R</td><td>Seller: this address isn't the operator for the origin.</td><td>Run it from the operator wallet.</td></tr>
+        <tr><td><code>origin_taken</code> R</td><td>Seller: the origin is registered to another agent.</td><td>Use another origin, or ask that owner to retire it.</td></tr>
+        <tr><td><code>invalid_origin</code> R</td><td>Seller: the origin isn't just a scheme and host.</td><td>Use just the scheme and host, like https://risk.example (no path, lowercase).</td></tr>
+        <tr><td><code>invalid_pcr</code> R</td><td>Seller: the build measurements file can't be read. It should be the JSON that <code>nitro-cli build-enclave</code> prints.</td><td>Pass the file nitro-cli wrote.</td></tr>
+        <tr><td><code>release_exists</code> R</td><td>Seller: this build is already approved for the agent.</td><td>None. <span class="muted">Coming:</span> <code>attessa status</code> shows it.</td></tr>
+        <tr><td><code>endpoint_inactive</code> R</td><td>Seller: the origin isn't an active endpoint for the agent.</td><td>Add it with <code>attessa endpoint add</code>.</td></tr>
+        <tr><td><code>signer_not_active</code>, <code>signer_mismatch</code>, <code>release_mismatch</code> R</td><td>Seller: <code>attessa signer renew</code> refused, for example because the signer already expired or the report is from a different key.</td><td>Expired: restart with <code>attessa enclave start</code>, then <code>attessa signer register</code>. Otherwise: run <code>attessa signer renew</code> on the machine that holds this key.</td></tr>
+        <tr><td><code>self_link_invalid</code> R</td><td>Seller: the Self Agent ID must be held by this wallet (Self's linked mode) and have a current human proof.</td><td><span class="muted">Coming:</span> check it in the Self app, then run <code>attessa selflink</code> again.</td></tr>
+        <tr><td><code>nsm_unavailable</code></td><td>Seller: the machine couldn't get a signed report from AWS.</td><td>Use an instance with enclaves enabled.</td></tr>
+      </tbody>
+    </table></div>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#cli">CLI commands</a></li>
+    <li><a href="#tools">Agent tools</a></li>
+    <li><a href="#sdk">SDK payAndVerify</a></li>
+    <li><a href="#refusals">Refusal codes</a></li>
+  </ol></nav>
+</div>
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="../how-it-works.html">How it works</a>
+      <a href="../use-cases.html">Use cases</a>
+      <a href="../docs/index.html">Docs</a>
+      <a href="../explorer.html">Explorer</a>
+      <a href="../security.html">Security</a>
+      <a href="../privacy.html">Privacy</a>
+      <a href="../terms.html">Terms</a>
+      <a href="../.well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="../assets/motion.js"></script>
+<script type="module" src="../assets/scene.js"></script>
+</body>
+</html>

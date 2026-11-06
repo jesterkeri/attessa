@@ -1,0 +1,4 @@
+Contact: mailto:attessa7@gmail.com
+Expires: 2027-11-05T00:00:00Z
+Preferred-Languages: en
+Canonical: https://attessa.xyz/.well-known/security.txt

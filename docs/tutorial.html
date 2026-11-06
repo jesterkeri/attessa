@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tutorial: pay-if-verified on Celo Sepolia | Attessa</title>
+<meta name="description" content="Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: the buyer commands aren't built yet.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="../assets/fonts.css">
+<link rel="stylesheet" href="../assets/site.css">
+<script src="../assets/config.js"></script>
+<script src="../assets/network.js"></script>
+<script src="../assets/site.js" defer></script>
+</head>
+<body class="docs-page">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="../index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="../how-it-works.html" data-scramble>How it works</a>
+      <a href="../explorer.html" data-scramble>Explorer</a>
+      <a href="../use-cases.html" data-scramble>Use cases</a>
+      <a href="../docs/index.html" aria-current="page" data-scramble>Docs</a>
+      <a href="../security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="../explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="../how-it-works.html" style="--i:0">How it works</a>
+    <a href="../explorer.html" style="--i:1">Proof explorer</a>
+    <a href="../use-cases.html" style="--i:2">Use cases</a>
+    <a href="../docs/index.html" style="--i:3">Docs</a>
+    <a href="../security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="../explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<div class="wrap docs">
+  <aside class="docs-nav" aria-label="Docs">
+  <details open>
+    <summary>Docs menu</summary>
+    <div class="docs-nav-body">
+      <h2>Start</h2>
+      <ul><li><a href="../docs/index.html">Overview</a></li></ul>
+      <h2>Tutorial</h2>
+      <ul><li><a href="../docs/tutorial.html" aria-current="page">Pay-if-verified in 10 minutes <span class="muted">Coming</span></a></li></ul>
+      <h2>How-tos</h2>
+      <ul>
+        <li><a href="../docs/how-to.html">All how-tos</a></li>
+        <li><a href="../docs/how-to.html#run-a-seller">Run a seller</a></li>
+        <li><a href="../docs/how-to.html#revoke">Revoke a build or a signer <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#mcp">Use it from an MCP agent <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/how-to.html#buy">Use it with buy <span class="muted">Optional, not built yet</span></a></li>
+      </ul>
+      <h2>Reference</h2>
+      <ul>
+        <li><a href="../docs/reference.html">Reference</a></li>
+        <li><a href="../docs/reference.html#cli">CLI commands</a></li>
+        <li><a href="../docs/reference.html#tools">Agent tools <span class="muted">Coming</span></a></li>
+        <li><a href="../docs/reference.html#sdk">SDK payAndVerify</a></li>
+        <li><a href="../docs/reference.html#refusals">Refusal codes</a></li>
+      </ul>
+      <h2>Explanation</h2>
+      <ul>
+        <li><a href="../docs/explanation.html">What it proves</a></li>
+        <li><a href="../docs/explanation.html#threats">Threat model</a></li>
+        <li><a href="../docs/explanation.html#limits">Known limits</a></li>
+      </ul>
+    </div>
+  </details>
+</aside>
+
+  <article class="docs-main">
+    <span class="mode">Tutorial</span>
+    <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
+    <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
+    <div class="doc-note"><p><span class="muted">Coming.</span> <strong>The buyer commands aren't built yet.</strong> <code>attessa init</code>, <code>attessa call</code> and <code>attessa verify</code> are coming; until then, this tutorial shows what they will do.</p></div>
+    <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
+
+    <ol class="doc-steps">
+      <li>
+        <h2 id="install">Install</h2>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">git clone https://github.com/jesterkeri/attessa -b staging</span>
+<span class="p">$ </span><span class="c">cd attessa</span>
+<span class="p">$ </span><span class="c">pnpm install --frozen-lockfile &amp;&amp; pnpm -r build</span>
+<span class="p">$ </span><span class="c">cd packages/cli &amp;&amp; pnpm link --global</span></code></pre>
+        </figure>
+        <p>Attessa isn't on npm. Until launch the code is on the <code>staging</code> branch. This builds it from source and puts <code>attessa</code> on your PATH. If pnpm says there is no global bin directory, run <code>pnpm setup</code>, open a new terminal, and run the last line again.</p>
+      </li>
+      <li>
+        <h2 id="init">Set up with <code>attessa init</code></h2>
+        <p>This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.</p>
+        <figure class="code">
+          <figcaption><span>Example output</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa init</span>
+<span class="k">→</span> attessa checks which build a service runs before you pay it, and only pays if the answer checks out.
+<span class="k">→</span> Network: Celo Sepolia (test money). Use --network mainnet for real payments.
+<span class="k">→</span> Wallet: none found. Created one for this computer: 0x51c2…9e <span class="m">(key stored in your OS keychain, never printed)</span>
+<span class="k">→</span> Fund it: CELO for gas at faucet.celo.org/celo-sepolia, test USDC at faucet.circle.com (choose Celo Sepolia)
+<span class="k">→</span> Spending limits: at most 0.10 USDC per call and 1.00 USDC per day, unless you pass --max-amount / set --daily-cap.
+<span class="k">→</span> Next: attessa call https://&lt;service&gt; --body input.json --max-amount 0.05</code></pre>
+        </figure>
+        <p>Already have a key? Set <code>ATTESSA_PRIVATE_KEY</code> or pass <code>--keystore &lt;file&gt;</code> and Attessa uses it instead.</p>
+      </li>
+      <li>
+        <h2 id="funds">Get test funds</h2>
+        <ul>
+          <li>Gas: <a href="https://faucet.celo.org/celo-sepolia">faucet.celo.org/celo-sepolia</a></li>
+          <li>Test USDC: <a href="https://faucet.circle.com">faucet.circle.com</a>, then choose Celo Sepolia</li>
+        </ul>
+        <p>Paste the address <code>attessa init</code> printed into both. The test USDC pays for calls. The CELO is for gas only if you ever cancel a payment permission on chain yourself; signing a permission is free.</p>
+      </li>
+      <li>
+        <h2 id="call">Make a call with <code>attessa call</code></h2>
+        <p>Point it at an attested service and give it the request body. Attessa checks the seller, shows the price, and signs a payment permission within your limits. Money only moves if the answer's proof checks out.</p>
+        <p>The demo service is a payment check: send it the address you're about to pay and it answers allow, review or deny, with reasons. Its address is <span class="hash is-slot" title="Sample slot: filled from Celo or the gateway when live"><span class="hash-val">{demoServiceUrl}</span><span class="sample-tag">sample</span><button type="button" class="hash-copy" data-copy="{demoServiceUrl}" aria-label="Copy {demoServiceUrl}"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg></button></span> once it's live. Save this as <code>tx.json</code> (any name works), with the address you want checked in <code>payTo</code>, in lowercase:</p>
+        <figure class="code">
+          <figcaption><span>tx.json</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code>{
+  <span class="k">"chainId"</span>: "11142220",
+  <span class="k">"payTo"</span>: "0x<span class="m">&lt;40 lowercase hex characters&gt;</span>",
+  <span class="k">"asset"</span>: "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+  <span class="k">"amount"</span>: "1000000"
+}</code></pre>
+          <p class="code-note"><code>11142220</code> is Celo Sepolia, <code>asset</code> is its test USDC, and <code>amount</code> is in USDC's six-decimal units, so 1000000 is 1 USDC.</p>
+        </figure>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa call {demoServiceUrl}/v1/evaluate --body tx.json</span></code></pre>
+        </figure>
+        <p>Here is what a successful call prints, against an illustrative service:</p>
+        <figure class="code is-output">
+  <figcaption><span class="label">Terminal / attessa call</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+  <pre><code><span class="p">$ </span><span class="c">attessa call https://risk.example/v1/evaluate --body tx.json</span>
+<span class="k">→</span> Checking risk.example before paying
+  Runs agent 412's approved build in a sealed machine the seller can't change  <span class="m">(release 0x9c4e…a1, Nitro enclave)</span>
+  Owner says it's built from github.com/acme/risk @ a1b2c3d  <span class="m">(not checked by attessa)</span>
+<span class="k">→</span> It's up and answering for this address right now  <span class="m">(liveness check, 0.4 s)</span>
+<span class="k">→</span> Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  <span class="m">(EIP-3009 authorization)</span>
+<span class="s">→</span> Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118  <span class="m">(settled: tx 0xabc…, signer 0x7f3b…22)</span>
+<span class="k">→</span> Answer saved to result.json. Record: ~/.attessa/evidence.jsonl</code></pre>
+  <p class="code-note">Example output. <code>risk.example</code> and the hashes above are illustrative.</p>
+</figure>
+
+        <p>The answer lands in <code>result.json</code> in the folder you ran the command from.</p>
+        <p>If the answer had been tampered with, you would see this instead, ending once Celo shows your permission expired unused:</p>
+        <figure class="code is-output">
+  <figcaption><span>Example output when the answer was tampered with. Illustrative values.</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+  <pre><code><span class="x">→</span> Refused: the answer doesn't match what the sealed machine signed  <span class="m">(response hash differs from the proof)</span>
+<span class="k">→</span> Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…
+<span class="s">→</span> Not charged: confirmed on Celo, your payment permission expired unused  <span class="m">(block 31,204,245)</span></code></pre>
+</figure>
+
+      </li>
+      <li>
+        <h2 id="verify">Re-check it with <code>attessa verify</code></h2>
+        <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn"><svg class="ph ph-copy" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M216,32H88a8,8,0,0,0-8,8V80H40a8,8,0,0,0-8,8V216a8,8,0,0,0,8,8H168a8,8,0,0,0,8-8V176h40a8,8,0,0,0,8-8V40A8,8,0,0,0,216,32ZM160,208H48V96H160Zm48-48H176V88a8,8,0,0,0-8-8H96V48H208Z"/></svg><span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
+        </figure>
+        <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>
+      </li>
+    </ol>
+
+    <h2 id="next">What you did</h2>
+    <p>You paid a service only after its answer was signed by the build its owner approved, and you re-checked on Celo that the build your record names was approved when the call settled. The link from that build to its source code stays the owner's claim until someone reproduces the build.</p>
+    <div class="doc-cards">
+      <a href="how-to.html#mcp"><strong>Give it to your agent</strong><span>Add the Attessa MCP server. Coming: it isn't built yet.</span></a>
+      <a href="explanation.html"><strong>Understand the limits</strong><span>What a proof shows, and what it doesn't.</span></a>
+    </div>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#init">Set up</a></li>
+    <li><a href="#funds">Get test funds</a></li>
+    <li><a href="#call">Make a call</a></li>
+    <li><a href="#verify">Re-check it</a></li>
+    <li><a href="#next">What you did</a></li>
+  </ol></nav>
+</div>
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="../how-it-works.html">How it works</a>
+      <a href="../use-cases.html">Use cases</a>
+      <a href="../docs/index.html">Docs</a>
+      <a href="../explorer.html">Explorer</a>
+      <a href="../security.html">Security</a>
+      <a href="../privacy.html">Privacy</a>
+      <a href="../terms.html">Terms</a>
+      <a href="../.well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="../assets/motion.js"></script>
+<script type="module" src="../assets/scene.js"></script>
+</body>
+</html>

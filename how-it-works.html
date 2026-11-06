@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en" class="no-js">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'sha256-dFqnkix/KyuQ/tR3B/FYwRtcbWXrtRW7VdscV/VFsmc=' 'sha256-WwVN4VqvAyAV2FH/4gZ2gXhTtazj2muGqSTzQ/TzmcM='; style-src 'self'; style-src-attr 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src https://forno.celo-sepolia.celo-testnet.org; base-uri 'none'; form-action 'none'; object-src 'none'">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How it works | Attessa</title>
+<meta name="description" content="How a paid call is checked before the buyer's money moves, from the buyer's side and the seller's.">
+<meta name="theme-color" content="#030304">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script>document.documentElement.classList.remove('no-js')</script>
+<link rel="stylesheet" href="assets/fonts.css">
+<link rel="stylesheet" href="assets/site.css">
+<script src="assets/config.js"></script>
+<script src="assets/network.js"></script>
+<script src="assets/site.js" defer></script>
+</head>
+<body class="how">
+<a class="skip" href="#main">Skip to content</a>
+<div class="guides" aria-hidden="true"><div class="wrap"><i></i><i></i><i></i><i></i></div></div>
+<div class="nav-wrap" data-nav>
+  <header class="nav">
+    <a class="brand" href="index.html" aria-label="Attessa home"><svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M13.25 3.09A9 9 0 0 1 20.09 8.05"/><path d="M20.86 10.44A9 9 0 0 1 18.25 18.47"/><path d="M16.23 19.95A9 9 0 0 1 7.77 19.95"/><path d="M5.75 18.47A9 9 0 0 1 3.14 10.44"/><path d="M3.91 8.05A9 9 0 0 1 10.75 3.09"/><circle cx="12" cy="12" r="3"/></svg><span class="brand-word" aria-hidden="true">Attessa</span><span class="brand-tag" aria-hidden="true">A check your agent runs<br>before paying for a service</span></a>
+    <nav class="nav-links" aria-label="Main" data-nav-links>
+      <span class="nav-ind" aria-hidden="true"></span>
+      <a href="how-it-works.html" aria-current="page" data-scramble>How it works</a>
+      <a href="explorer.html" data-scramble>Explorer</a>
+      <a href="use-cases.html" data-scramble>Use cases</a>
+      <a href="docs/index.html" data-scramble>Docs</a>
+      <a href="security.html" data-scramble>Security</a>
+    </nav>
+    <div class="nav-right">
+      <a class="net-chip" href="#network" title="Change the network in the footer"><span class="net-dot" aria-hidden="true"></span><span data-network-label>Celo Sepolia</span></a>
+      <a class="nav-cta" href="explorer.html">Explorer preview</a>
+      <button class="icon-btn menu-btn" type="button" aria-expanded="false" aria-controls="menu" aria-label="Open menu"><span class="burger" aria-hidden="true"><i></i><i></i></span></button>
+    </div>
+  </header>
+</div>
+<div class="menu" id="menu" hidden>
+  <nav aria-label="Menu">
+    <a href="how-it-works.html" style="--i:0">How it works</a>
+    <a href="explorer.html" style="--i:1">Proof explorer</a>
+    <a href="use-cases.html" style="--i:2">Use cases</a>
+    <a href="docs/index.html" style="--i:3">Docs</a>
+    <a href="security.html" style="--i:4">Security and limits</a>
+  </nav>
+  <a class="btn btn-primary" href="explorer.html" style="--i:5">Explorer preview<span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+</div>
+<main id="main" tabindex="-1">
+<section class="hero page-hero">
+  <div class="wrap hero-inner page-head">
+    <div>
+      <h1 data-split data-intro>How a call<br> gets checked<br> before you pay</h1>
+      <div class="hero-sub">
+        <p class="lede" data-intro>A seller runs their service in a sealed machine and approves that exact build on Celo. <span class="key">A buyer pays only after the answer comes back signed by that build and the signature checks out.</span> Here is each step, with the line the CLI prints for it.</p>
+      </div>
+    </div>
+    <nav class="page-index" aria-label="On this page" data-intro>
+      <p class="label">On this page</p>
+      <a href="#involved">Who's involved<span>4 parts</span></a>
+      <a href="#panel-buyer" data-view="tab-buyer">The buyer's steps<span>7 steps</span></a>
+      <a href="#panel-seller" data-view="tab-seller">The seller's steps<span>6 steps</span></a>
+      <a href="#objects">Records on Celo<span>4 records</span></a>
+    </nav>
+  </div>
+</section>
+
+<!-- The walkthrough: pick a side, then each step lights up with its terminal output as you scroll to it. -->
+<section class="walk" aria-label="Steps">
+  <div class="wrap">
+    <div class="cast">
+      <h2 class="cast-title" id="involved" data-fade>Why it's needed, and who's involved</h2>
+      <p class="cast-problem" data-fade>Without a check, you pay first. If the answer is wrong, you can't tell whether the code the seller stands behind ran, or whether the program was swapped or the answer changed on its way to you. Four parts make the check work.</p>
+      <div class="flow" data-fade>
+        <div class="flow-phase">
+          <p class="label">Before any call</p>
+          <ol>
+            <li><b>Seller</b><p>Runs a paid service inside a sealed machine and approves that exact build on Celo, from the wallet that owns their agent.</p></li>
+          </ol>
+        </div>
+        <div class="flow-phase">
+          <p class="label">On every call</p>
+          <ol>
+            <li><b>Buyer</b><p>You, or your agent. Asks for an answer and signs a payment permission. The Attessa CLI or SDK on your side checks every proof again on its own.</p></li>
+            <li><b>Gateway</b><p>Sits in front of the sealed machine and takes the payment, but settles only once the proof checks out against the registry on Celo. A marketplace such as buy would run it; in this demo the seller's side runs it too, one of our <a href="security.html">known limits</a>.</p></li>
+            <li><b>Sealed machine</b><p>An AWS Nitro enclave. Its running code is measured, its operator can't log in or change it, and it signs every answer with a key that never leaves it.</p></li>
+          </ol>
+        </div>
+      </div>
+    </div>
+
+    <div class="view-switch" id="views" role="tablist" aria-label="Whose view">
+      <button type="button" role="tab" id="tab-buyer" aria-controls="panel-buyer" aria-selected="true">Buyer's view</button>
+      <button type="button" role="tab" id="tab-seller" aria-controls="panel-seller" aria-selected="false">Seller's view</button>
+    </div>
+
+    <div id="panel-buyer" role="tabpanel" aria-labelledby="tab-buyer" tabindex="0">
+      <h2 class="sr-only">Buyer's view</h2>
+      <ol class="walk-steps" data-walk>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">01</span>
+          <div class="walk-copy"><h3>You ask for an answer</h3><p>Your agent, or you, calls a paid API through Attessa instead of calling it directly.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa call https://risk.example/v1/evaluate --body tx.json</span></span>
+<span class="ln"><span class="k">→</span> Checking risk.example before paying</span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">02</span>
+          <div class="walk-copy"><h3>Attessa reads who is selling</h3><p>It looks the service up in the Attessa registry on Celo: which agent owns it (an on-chain identity, agent 412 here), which build the owner approved (a release, named by the build's fingerprint), and the source code the owner says it came from, which is their claim, not something Attessa checks. If the service isn't registered, it stops here and nothing is signed.</p></div>
+          <figure class="term"><pre><code><span class="ln">  Runs agent 412's approved build in a sealed machine the seller can't change  <span class="m">(release 0x9c4e…a1, Nitro enclave)</span></span>
+<span class="ln">  Owner says it's built from github.com/acme/risk @ a1b2c3d  <span class="m">(not checked by attessa)</span></span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">03</span>
+          <div class="walk-copy"><h3>It checks the sealed machine is answering</h3><p>A quick check that the registered machine is up at this address before anything is signed.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="k">→</span> It's up and answering for this address right now  <span class="m">(liveness check, 0.4 s)</span></span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">04</span>
+          <div class="walk-copy"><h3>You see the price and sign a payment permission</h3><p>The price arrives as an x402 quote. If it's within your limits (0.10 USDC a call by default, set by <code>attessa init</code>), you sign a permission to pay it, in USDC, or USA₮ on mainnet. Signing moves no money, and the permission expires in about 120 seconds.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="k">→</span> Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.</span>
+<span class="ln">  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  <span class="m">(EIP-3009 authorization)</span></span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">05</span>
+          <div class="walk-copy"><h3>The gateway checks the proof, then you pay</h3><p>The sealed machine computes the answer from Celo data at a stated block and signs a proof that binds this request, this answer, those inputs and this payment to the approved build. The gateway checks it against the registry and only then settles. Attessa on your side, the CLI or the SDK, checks the same proof again on its own once the payment has settled, and records a failure as paid but rejected.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="s">→</span> Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118  <span class="m">(settled: tx 0xabc…, signer 0x7f3b…22)</span></span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">06</span>
+          <div class="walk-copy"><h3>You keep a record</h3><p>The answer and the evidence are saved locally. For 24 hours you can fetch the stored answer again from the gateway, with your wallet's signature. Anyone can check the payment on Celo, with no wallet and no payment.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="k">→</span> Answer saved to result.json. Record: ~/.attessa/evidence.jsonl</span></code></pre></figure>
+        </li>
+        <li class="walk-step is-fail" data-walk-step>
+          <span class="walk-n" aria-hidden="true">07</span>
+          <div class="walk-copy"><h3>If the proof fails, nothing settles</h3><p>If any check fails (a tampered answer, a revoked build, a wrong signer), the gateway refuses before it settles, so it shouldn't use your permission. Attessa shows which check failed, waits for the permission to expire, and checks on Celo whether it was used: not charged if it wasn't, or <code>settled_after_refusal</code> if the gateway used it anyway. You can cancel it sooner, on chain, for a little gas.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="x">→</span> Refused: the answer doesn't match what the sealed machine signed  <span class="m">(response hash differs from the proof)</span></span>
+<span class="ln"><span class="k">→</span> Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…</span>
+<span class="ln"><span class="s">→</span> Not charged: confirmed on Celo, your payment permission expired unused  <span class="m">(block 31,204,245)</span></span></code></pre></figure>
+        </li>
+      </ol>
+      <p class="walk-note">Example output. <code>risk.example</code> and the hashes in it are illustrative. <span class="muted">Coming.</span> <code>attessa init</code> and <code>attessa call</code> aren't built yet.</p>
+    </div>
+
+    <div id="panel-seller" role="tabpanel" aria-labelledby="tab-seller" tabindex="0">
+      <h2 class="sr-only">Seller's view</h2>
+      <ol class="walk-steps" data-walk>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">01</span>
+          <div class="walk-copy"><h3>Register your agent</h3><p>Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. <span class="muted">Coming.</span> <code>attessa agent register</code> isn't built yet; the other five commands are.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa agent register --name "Acme risk check"</span></span>
+<span class="ln"><span class="k">→</span> This creates your agent's public identity (ERC-8004) from this wallet. One transaction, about 0.05 CELO.  <span class="m">[register/cancel]</span></span>
+<span class="ln"><span class="s">→</span> Registered: agent 412  <span class="m">(tx 0x…)</span>. Next: attessa enclave build.</span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">02</span>
+          <div class="walk-copy"><h3>Build the sealed machine image</h3><p>On an AWS EC2 machine with Nitro enclaves turned on, in your service's repo at the commit you'll publish. The build packs your service into a sealed machine image and writes the three measurements, fingerprints of that image, that identify it.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="m"># on the EC2 host, in your service's repo at the commit you'll publish</span></span>
+<span class="ln"><span class="p">$ </span><span class="c">attessa enclave build</span></span>
+<span class="ln"><span class="s">→</span> Built build/risk.eif from acme/risk @ a1b2c3d. Measurements written to build/measurements.json.  Next: attessa release approve.</span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">03</span>
+          <div class="walk-copy"><h3>Approve that exact build on Celo</h3><p>An approved build is a release, identified by its measurements PCR0 to PCR2. Buyers see the source you name as your claim, not as something Attessa checked.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa release approve --agent 412 --from-build build/measurements.json --source https://github.com/acme/risk/commit/a1b2c3d</span></span>
+<span class="ln"><span class="k">→</span> Approving the build made from acme/risk @ a1b2c3d for agent 412  <span class="m">(release 0x9c4e…a1; PCR0-2 read from the build output)</span></span>
+<span class="ln">  Buyers will see "owner says it's built from acme/risk @ a1b2c3d" (attessa can't check that claim). One transaction, about 0.03 CELO.  <span class="m">[approve/cancel]</span></span>
+<span class="ln"><span class="s">→</span> Approved <span class="m">(tx 0x…)</span>. Next: attessa endpoint add.</span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">04</span>
+          <div class="walk-copy"><h3>Add your endpoint</h3><p>The endpoint is your service's web address and the address buyers pay, which is the gateway's. Buyers only pay the address you register here.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa endpoint add --agent 412 --origin https://risk.example --pay-to 0xGATE…01</span></span>
+<span class="ln"><span class="k">→</span> Buyers of risk.example will pay 0xGATE…01 and only accept answers from agent 412's approved builds. One transaction, about 0.03 CELO.  <span class="m">[add/cancel]</span></span>
+<span class="ln"><span class="s">→</span> Added <span class="m">(tx 0x…)</span>.</span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">05</span>
+          <div class="walk-copy"><h3>Start the sealed machine</h3><p>It makes a fresh signing key inside, and AWS signs a report of exactly what is running.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="m"># on the EC2 host</span></span>
+<span class="ln"><span class="p">$ </span><span class="c">attessa enclave start --agent 412 --origin https://risk.example</span></span>
+<span class="ln"><span class="k">→</span> Starting the sealed machine from build/risk.eif… running <span class="m">(Nitro enclave, 1 vCPU, 1 GiB)</span></span>
+<span class="ln"><span class="s">→</span> It made a fresh signing key and AWS signed a report of what's running  <span class="m">(attestation written to att.bin; register within 30 minutes, or get a fresh one any time with --fresh)</span></span></code></pre></figure>
+        </li>
+        <li class="walk-step" data-walk-step>
+          <span class="walk-n" aria-hidden="true">06</span>
+          <div class="walk-copy"><h3>Register the signer</h3><p>The registry checks AWS's report on chain and records the machine's key as a signer for your approved build. From then on, anyone can check its proofs.</p></div>
+          <figure class="term"><pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa signer register --agent 412 --attestation att.bin</span></span>
+<span class="ln"><span class="k">→</span> This publishes the machine's key on Celo so buyers can check it. Up to 5 transactions, about 8 CELO at today's price (3 of 4 certificates already cached, so 2 transactions, about 4 CELO).  <span class="m">[register/cancel]</span></span>
+<span class="ln"><span class="k">→</span> [1/2] Certificate cached  <span class="m">(tx 0x…)</span></span>
+<span class="ln"><span class="s">→</span> [2/2] Signer 0x7f3b…22 is live for risk.example, running agent 412's approved build  <span class="m">(tx 0x…)</span></span>
+<span class="ln"><span class="k">→</span> Valid until Oct 26 14:00 UTC, or until the machine restarts. To renew without a restart: attessa signer renew. After a restart (new key): attessa enclave start, then attessa signer register (about 4–6 CELO, up to 8 if no certificates are cached).</span>
+<span class="ln"><span class="s">→</span> Liveness check passed. Buyers can check this seller now.</span></code></pre></figure>
+        </li>
+      </ol>
+      <p class="walk-note">Example output. Each transaction shows its CELO cost and asks before it sends. <a href="docs/how-to.html#run-a-seller">Full seller guide</a>.</p>
+    </div>
+  </div>
+</section>
+
+<section class="records" aria-labelledby="objects">
+  <div class="wrap">
+    <div class="sec-head">
+      <h2 id="objects" data-split>The records on Celo, and how they link</h2>
+      <p class="sec-lede" data-fade>An agent owns an approved release. A signer is proven to run that release. An endpoint is where it sells and gets paid. A proof is checked against all of them.</p>
+    </div>
+    <figure class="diagram" data-fade>
+      <svg class="d-wide" viewBox="0 0 800 360" role="img" aria-labelledby="d-wide-title d-wide-desc">
+        <title id="d-wide-title">How the on-chain records link</title>
+        <desc id="d-wide-desc">The agent owns and approves a release. A signer is proven by AWS to run that release. The endpoint belongs to the agent; the signer answers for it, and buyers pay its registered address.</desc>
+        <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-arrow" d="M0 0L10 5L0 10z"/></marker></defs>
+        <rect class="d-box" x="10" y="30" width="210" height="104"/>
+        <text class="d-title" x="28" y="64">Agent</text>
+        <text class="d-text" x="28" y="90">ERC-8004 identity,</text>
+        <text class="d-text" x="28" y="108">held by the owner's wallet</text>
+
+        <rect class="d-box d-box-key" x="295" y="30" width="210" height="104"/>
+        <text class="d-title" x="313" y="64">Approved release</text>
+        <text class="d-text" x="313" y="90">a build, by its measurements</text>
+        <text class="d-mono" x="313" y="110">PCR0, PCR1, PCR2</text>
+
+        <rect class="d-box" x="580" y="30" width="210" height="104"/>
+        <text class="d-title" x="598" y="64">Signer</text>
+        <text class="d-text" x="598" y="90">a key made inside the</text>
+        <text class="d-text" x="598" y="108">sealed machine, with expiry</text>
+
+        <rect class="d-box" x="295" y="236" width="210" height="104"/>
+        <text class="d-title" x="313" y="270">Endpoint</text>
+        <text class="d-text" x="313" y="296">where it sells and gets paid:</text>
+        <text class="d-text" x="313" y="314">an origin and a pay-to address</text>
+
+        <path class="d-line" d="M220 82H293" marker-end="url(#ah)"/>
+        <text class="d-label" x="257" y="72" text-anchor="middle">owns</text>
+        <path class="d-line" d="M580 82H507" marker-end="url(#ah)"/>
+        <text class="d-label" x="543" y="72" text-anchor="middle">runs</text>
+        <text class="d-text" x="543" y="156" text-anchor="middle">proven by an</text>
+        <text class="d-text" x="543" y="172" text-anchor="middle">AWS attestation</text>
+        <path class="d-line" d="M115 134V288H293" marker-end="url(#ah)"/>
+        <text class="d-label" x="125" y="278">sells at</text>
+        <path class="d-line" d="M685 134V288H507" marker-end="url(#ah)"/>
+        <text class="d-label" x="675" y="278" text-anchor="end">answers for</text>
+      </svg>
+      <svg class="d-tall" viewBox="0 0 340 520" role="img" aria-labelledby="d-tall-title d-tall-desc">
+        <title id="d-tall-title">How the on-chain records link</title>
+        <desc id="d-tall-desc">The agent owns and approves a release. A signer is proven by AWS to run that release and answers for the endpoint, which belongs to the agent.</desc>
+        <defs><marker id="ah2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse"><path class="d-arrow" d="M0 0L10 5L0 10z"/></marker></defs>
+        <rect class="d-box" x="40" y="10" width="260" height="84"/>
+        <text class="d-title" x="58" y="42">Agent</text>
+        <text class="d-text" x="58" y="66">ERC-8004 identity, held by</text>
+        <text class="d-text" x="58" y="82">the owner's wallet</text>
+        <path class="d-line" d="M170 94V146" marker-end="url(#ah2)"/>
+        <text class="d-label" x="182" y="126">owns</text>
+        <rect class="d-box d-box-key" x="40" y="148" width="260" height="84"/>
+        <text class="d-title" x="58" y="180">Approved release</text>
+        <text class="d-mono" x="58" y="206">PCR0, PCR1, PCR2</text>
+        <path class="d-line" d="M170 284V234" marker-end="url(#ah2)"/>
+        <text class="d-label" x="182" y="256">runs</text>
+        <text class="d-text" x="182" y="272">proven by AWS</text>
+        <rect class="d-box" x="40" y="286" width="260" height="84"/>
+        <text class="d-title" x="58" y="318">Signer</text>
+        <text class="d-text" x="58" y="342">a key made inside the sealed</text>
+        <text class="d-text" x="58" y="358">machine, with expiry</text>
+        <path class="d-line" d="M170 370V422" marker-end="url(#ah2)"/>
+        <text class="d-label" x="182" y="402">answers for</text>
+        <rect class="d-box" x="40" y="424" width="260" height="84"/>
+        <text class="d-title" x="58" y="456">Endpoint</text>
+        <text class="d-text" x="58" y="480">where it sells and gets paid:</text>
+        <text class="d-text" x="58" y="496">an origin and a pay-to address</text>
+        <path class="d-line" d="M40 52H14V466H38" marker-end="url(#ah2)"/>
+        <text class="d-label" transform="translate(30 260) rotate(-90)" text-anchor="middle">sells at</text>
+      </svg>
+    </figure>
+    <ul class="legend-list" data-fade>
+      <li><strong>Approved build</strong><span>In the code this is a release: the build's three measurements, approved by the agent's owner. Revoking it stops every signer that runs it within 60 seconds.</span></li>
+      <li><strong>Signer</strong><span>The key a sealed machine makes when it starts. It never leaves the machine. Every restart makes a new one.</span></li>
+      <li><strong>Proof</strong><span>An EIP-712 signature by the signer over the request, the answer, the inputs and the payment. AWS's report is the attestation; the proof is Attessa's.</span></li>
+    </ul>
+  </div>
+</section>
+
+<section class="next-sec" aria-label="Where to go next">
+  <div class="wrap next-links">
+    <a class="next-link" href="explorer.html"><span class="next-k">Explorer preview</span><span class="next-t">Open the explorer</span><span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+    <a class="next-link" href="docs/tutorial.html"><span class="next-k">Ten minutes on Celo Sepolia</span><span class="next-t">Try the tutorial</span><span class="arrow" aria-hidden="true"><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg><svg class="ph ph-arrow-up-right" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false"><path d="M200,64V168a8,8,0,0,1-16,0V83.31L69.66,197.66a8,8,0,0,1-11.32-11.32L172.69,72H88a8,8,0,0,1,0-16H192A8,8,0,0,1,200,64Z"/></svg></span></a>
+  </div>
+</section>
+
+
+</main>
+<footer class="footer">
+  <div class="wrap footer-top">
+    <p class="footer-mark" aria-hidden="true">Attessa</p>
+  </div>
+  <div class="wrap footer-grid">
+    <div class="footer-brand">
+      <p>A check your agent runs before paying for a service. Built for Celo.</p>
+    </div>
+    <nav class="footer-links" aria-label="Footer">
+      <a href="https://github.com/jesterkeri/attessa">GitHub</a>
+      <a href="how-it-works.html">How it works</a>
+      <a href="use-cases.html">Use cases</a>
+      <a href="docs/index.html">Docs</a>
+      <a href="explorer.html">Explorer</a>
+      <a href="security.html">Security</a>
+      <a href="privacy.html">Privacy</a>
+      <a href="terms.html">Terms</a>
+      <a href=".well-known/security.txt">security.txt</a>
+    </nav>
+    <fieldset class="net-switch" id="network">
+      <legend>Network</legend>
+      <label><input type="radio" name="network" value="sepolia" checked> Celo Sepolia <span class="muted">test money</span></label>
+      <label class="is-disabled"><input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span></label>
+    </fieldset>
+  </div>
+  <div class="footer-land" data-land aria-hidden="true"></div>
+</footer>
+<div class="sr-only" aria-live="polite" data-announce></div>
+<!-- Every page shares the scene: star dust behind the top of the page and the mountains under the footer.
+     The homepage adds its own acts on top (cubes, story, scenes). -->
+<canvas class="scene" data-scene aria-hidden="true"></canvas>
+<div class="scene-fallback" aria-hidden="true"></div>
+<script>document.documentElement.classList.add('motion-pending');setTimeout(function(){document.documentElement.classList.remove('motion-pending')},2500)</script>
+<script src="assets/motion.js"></script>
+<script type="module" src="assets/scene.js"></script>
+</body>
+</html>
