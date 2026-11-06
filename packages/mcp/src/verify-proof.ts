@@ -57,55 +57,56 @@ const ALWAYS_NOT_CHECKED = [
   'inputs_block_and_values', // the inputs block's hash and age, and the state re-read at it
 ];
 
+/** The checks this tool can make, in the order it makes them; each runs only for its own argument (the first two always). */
+const OFFLINE_CHECKS = ['signature', 'request_id', 'request_hash', 'lifetime', 'response_hash', 'inputs_hash'];
+
 export function registryFor(chainId: number): string | undefined {
   return Object.values(DEPLOYMENTS).find((d) => d.chainId === chainId)?.enclaveRegistry?.toLowerCase() ?? undefined;
 }
 
 export async function verifyProof(i: VerifyProofInput, registry: string): Promise<VerifyProofOutput> {
-  const optional: string[] = [];
-  const notChecked = (): string[] => [...optional, ...ALWAYS_NOT_CHECKED];
   const passed: string[] = [];
+  /** Every check of this tool that did not pass and is not the one being reported as failed, then the ones it never makes. */
+  const notChecked = (failed?: string): string[] => [...OFFLINE_CHECKS.filter((n) => n !== failed && !passed.includes(n)), ...ALWAYS_NOT_CHECKED];
   let decoded;
   try {
     decoded = decodeAttestedProof(i.proof);
   } catch {
-    return { ok: false, check: 'bad_signature', passed, scope: 'offline', notChecked: notChecked() };
+    return { ok: false, check: 'bad_signature', passed, scope: 'offline', notChecked: notChecked('signature') };
   }
   const { proof } = decoded;
   const fields = proofToJson(proof);
-  const fail = (check: ProofCheckName, signer?: string): VerifyProofOutput => ({ ok: false, check, passed, ...(signer ? { signer } : {}), proof: fields, scope: 'offline', notChecked: notChecked() });
+  const fail = (check: ProofCheckName, name: string, signer?: string): VerifyProofOutput => ({ ok: false, check, passed, ...(signer ? { signer } : {}), proof: fields, scope: 'offline', notChecked: notChecked(name) });
   const domain = eip712Domain(BigInt(i.chainId), registry as `0x${string}`);
   const r = await recoverDigestSigner(proofDigest(domain, proof), decoded.signature);
-  if (r === null || r !== decoded.signer.toLowerCase()) return fail('bad_signature');
+  if (r === null || r !== decoded.signer.toLowerCase()) return fail('bad_signature', 'signature');
   passed.push('signature');
-  if (i.requestId !== undefined && proof.requestId !== i.requestId.toLowerCase()) return fail('request_mismatch', r);
+  if (i.requestId !== undefined && proof.requestId !== i.requestId.toLowerCase()) return fail('request_mismatch', 'request_id', r);
   if (i.requestId !== undefined) passed.push('request_id');
   const expectedHashes: string[] = [];
   if (i.requestHash !== undefined) expectedHashes.push(i.requestHash.toLowerCase());
   if (i.request !== undefined) expectedHashes.push(computeRequestHash(i.request.method, i.request.pathAndQuery, new TextEncoder().encode(i.request.body)));
-  if (expectedHashes.some((h) => h !== proof.requestHash)) return fail('request_mismatch', r);
+  if (expectedHashes.some((h) => h !== proof.requestHash)) return fail('request_mismatch', 'request_hash', r);
   if (expectedHashes.length > 0) passed.push('request_hash');
-  if (proof.expiresAt !== proof.issuedAt + PROOF_TTL) return fail('proof_expired', r);
+  if (proof.expiresAt !== proof.issuedAt + PROOF_TTL) return fail('proof_expired', 'lifetime', r);
   passed.push('lifetime');
   if (i.response !== undefined) {
     const bytes = new TextEncoder().encode(i.response);
-    if (proof.responseHash !== responseHash(bytes)) return fail('response_hash_mismatch', r);
+    if (proof.responseHash !== responseHash(bytes)) return fail('response_hash_mismatch', 'response_hash', r);
     passed.push('response_hash');
     let rawInputs: unknown;
     try {
       const body: unknown = JSON.parse(i.response);
       rawInputs = typeof body === 'object' && body !== null ? (body as { inputs?: unknown }).inputs : undefined;
     } catch {
-      return fail('inputs_hash_mismatch', r);
+      return fail('inputs_hash_mismatch', 'inputs_hash', r);
     }
     try {
-      if (rawInputs === undefined || proof.inputsHash !== inputsHash(rawInputs)) return fail('inputs_hash_mismatch', r);
+      if (rawInputs === undefined || proof.inputsHash !== inputsHash(rawInputs)) return fail('inputs_hash_mismatch', 'inputs_hash', r);
     } catch {
-      return fail('inputs_hash_mismatch', r);
+      return fail('inputs_hash_mismatch', 'inputs_hash', r);
     }
     passed.push('inputs_hash');
-  } else optional.push('response_hash', 'inputs_hash');
-  if (expectedHashes.length === 0) optional.unshift('request_hash');
-  if (i.requestId === undefined) optional.unshift('request_id');
+  }
   return { ok: true, passed, signer: r, proof: fields, scope: 'offline', notChecked: notChecked() };
 }
