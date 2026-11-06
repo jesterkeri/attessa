@@ -14,7 +14,7 @@ import { decodeAbiParameters, encodeFunctionData, parseAbiItem, size, toEventSel
 import { CERT_MANAGER_ABI, ENDPOINT_STATUS, REGISTRY_ABI, RELEASE_STATUS, SIGNER_STATUS, VALIDATOR_ABI } from '../abi.ts';
 import { hintPlan, parseAttestation, type ParsedAttestation } from '../attestation.ts';
 import { SELLER_HOST_URL, connect, type Chain, type Deps, type Global } from '../context.ts';
-import { COPY, CliError, ERR, RENEW, celo, host, short, utcShort } from '../copy.ts';
+import { COPY, CliError, ERR, RENEW, celo, host, rpcShownSafe, short, utcShort } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Simulation, type Step } from '../tx.ts';
 import { parseAgent } from './owner.ts';
@@ -38,6 +38,8 @@ export function sellerHostUrl(g: Global, flag: string | undefined): string {
 
 /** `POST /internal/attest` on the local seller-host: a fresh attestation for the running key (no restart). */
 export async function fetchAttestation(deps: Deps, url: string): Promise<Buffer> {
+  // Messages name scheme://host[:port] only: a --seller-host URL can carry credentials in its userinfo, path or query.
+  const shown = rpcShownSafe(url, 'the --seller-host URL');
   let res: Response;
   try {
     res = await deps.fetch(`${url}/internal/attest`, {
@@ -47,14 +49,14 @@ export async function fetchAttestation(deps: Deps, url: string): Promise<Buffer>
       signal: AbortSignal.timeout(15_000),
     });
   } catch {
-    throw new CliError('seller_host_unreachable', `Can't reach the seller-host at ${url}.`, 'Check `systemctl status attessa-seller@<network>` on this host.');
+    throw new CliError('seller_host_unreachable', `Can't reach the seller-host at ${shown}.`, 'Check `systemctl status attessa-seller@<network>` on this host.');
   }
   const json = (await res.json().catch(() => null)) as { attestation?: unknown; error?: unknown } | null;
   if (res.status !== 200 || typeof json?.attestation !== 'string') {
     if (json?.error === 'enclave_unavailable' || json?.error === 'not_configured') {
-      throw new CliError('enclave_unavailable', `The seller-host at ${url} has no running, configured enclave (${String(json.error)}).`, 'Run `attessa enclave start` first.');
+      throw new CliError('enclave_unavailable', `The seller-host at ${shown} has no running, configured enclave (${String(json.error)}).`, 'Run `attessa enclave start` first.');
     }
-    throw new CliError('seller_host_error', `The seller-host at ${url} answered HTTP ${res.status}.`, null);
+    throw new CliError('seller_host_error', `The seller-host at ${shown} answered HTTP ${res.status}.`, 'Check that seller-host is running on this machine, then run the command again.');
   }
   return Buffer.from(json.attestation, 'base64');
 }
@@ -117,7 +119,8 @@ async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boo
     const last = logs.at(-1);
     if (last) {
       const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
-      if (hashOrigin(o) === oh) return o;
+      // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
+      if (hashOrigin(o) === oh) return rpcShownSafe(o, short(oh));
     }
   } catch {
     // Some RPCs cap log ranges; fall back to the hash.
@@ -268,7 +271,12 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
   const field = bindingField(binding, c, agentId, oh);
   if (field !== null) throw ERR.bindingMismatch(bindingWords(binding)(field), String(field));
   const existing = await read(c, c.registry, REGISTRY_ABI, 'signers', [chk.signer]);
-  if (SIGNER_STATUS[existing.status as number] !== 'None') throw ERR.signerExists(chk.signer);
+  const est = SIGNER_STATUS[existing.status as number];
+  if (est !== 'None') {
+    // renewSigner needs an Active, unexpired signer whose operator is still the endpoint's (SPEC §3.4).
+    const renewable = est === 'Active' && now < (existing.expiresAt as bigint) && (existing.operator as string).toLowerCase() === operator;
+    throw ERR.signerExists(chk.signer, renewable);
+  }
 
   const certs = await certSteps(c, a, from, now);
   const register: Step = {
@@ -286,7 +294,7 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
   const price = await gasPrice(c);
   const maxTxs = certs.total + 1;
   deps.io.out(COPY.registerPrompt(certs.cached, certs.total, steps.length, celo(quote(sims) * price), celo(BigInt(maxTxs) * GAS_PER_UNESTIMATED_TX * price)));
-  const r = await planOrSend(c, g, deps, { yesWord: 'register', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
+  await planOrSend(c, g, deps, { yesWord: 'register', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
     if (i < steps.length - 1) return deps.io.out(COPY.certCached(i + 1, steps.length, sent.hash));
     deps.io.out(COPY.signerLive(i + 1, steps.length, chk.signer, host(origin), agent, sent.hash));
     const s = await read(c, c.registry, REGISTRY_ABI, 'signers', [chk.signer]);
@@ -295,7 +303,7 @@ export async function signerRegister(g: Global, deps: Deps, o: RegisterOptions):
     if (lurl && (await livenessOk(c, deps, lurl, chk.signer, oh))) deps.io.out(COPY.livenessOk);
     else deps.io.out(`  (liveness not confirmed from this machine; check it with attessa status ${host(origin)})`);
   });
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }
 
 export async function signerRenew(g: Global, deps: Deps, o: { attestation?: string; sellerHost?: string }): Promise<number> {
@@ -319,7 +327,9 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const origin = await originFor(c, oh, undefined, g.network === 'local');
   const { operator } = await checkEndpoint(c, oh, agentId, origin, RENEW);
   const from = (c.account?.address.toLowerCase() as Address | undefined) ?? operator;
-  if (from !== operator || operator !== (s.operator as string).toLowerCase()) throw RENEW.notOperator(from, origin);
+  if (from !== operator) throw RENEW.notOperator(from, origin);
+  // The endpoint's operator changed since registration: the signer is Inert and renewSigner can never pass (SPEC §3.4).
+  if (operator !== (s.operator as string).toLowerCase()) throw ERR.renewRefused('operator_mismatch', "the endpoint's operator changed after this signer was registered", true);
   // renewSigner repeats registerSigner steps 2-7 (SPEC §3.4), so the same checks run before any certificate is cached.
   const { rid, ageMinutes, binding } = await checkAttestation(c, a, agentId, now, true);
   const field = bindingField(binding, c, agentId, oh);
@@ -339,10 +349,10 @@ export async function signerRenew(g: Global, deps: Deps, o: { attestation?: stri
   const steps = [...certs.steps, renew];
   const sims = [...certs.simulations, renewSim];
   deps.io.out(COPY.renewPrompt(signer, certs.cached, certs.total, steps.length, celo(quote(sims) * (await gasPrice(c)))));
-  const r = await planOrSend(c, g, deps, { yesWord: 'renew', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
+  await planOrSend(c, g, deps, { yesWord: 'renew', steps, from, simulations: sims }, (rv, m) => revertToError(rv, m, rc), async (i, sent) => {
     if (i < steps.length - 1) return deps.io.out(COPY.certCached(i + 1, steps.length, sent.hash));
     const after = await read(c, c.registry, REGISTRY_ABI, 'signers', [signer]);
     deps.io.out(COPY.renewed(i + 1, steps.length, signer, utcShort(after.expiresAt as bigint), sent.hash));
   });
-  return r === 'cancelled' ? 1 : 0;
+  return 0;
 }

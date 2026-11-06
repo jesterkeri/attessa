@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { TcpEnclaveTransport } from '@attessa/seller-host';
-import { run, type Deps, type RunResult } from './index.ts';
+import { lastResortLines, run, type Deps, type RunResult } from './index.ts';
 import { HttpRpc } from './rpc.ts';
 
 /** `attessa` / `attest`: real process wiring for `run`. */
@@ -13,7 +14,7 @@ const deps: Deps = {
     err: (l) => process.stderr.write(`${l}\n`),
     async confirm(yesWord) {
       if (!process.stdin.isTTY) return false;
-      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const rl = createInterface({ input: process.stdin, output: process.stderr }); // stdout stays the --json object
       const a = await rl.question(`Type ${yesWord} to continue, anything else cancels: `);
       rl.close();
       return a.trim() === yesWord;
@@ -42,12 +43,16 @@ const deps: Deps = {
   readdir: (p) => readdirSync(p),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
   arch: process.arch,
+  home: homedir(),
+  // Loaded only for `attessa gateway …`: it opens the gateway's SQLite file and needs nothing else of the CLI.
+  gateway: async (args, out, err) => (await import('@attessa/gateway')).runGatewayCommand(args, out, err),
 };
 
 run(process.argv.slice(2), deps).then(
   (code) => process.exit(code),
   (e: unknown) => {
-    process.stderr.write(`${(e as Error).message}\n`);
+    // run() reports its own errors; this is a last resort, and still never prints a raw message (it could quote a key).
+    process.stderr.write(lastResortLines(e));
     process.exit(1);
   },
 );

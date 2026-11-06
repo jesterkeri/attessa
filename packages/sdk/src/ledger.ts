@@ -1,4 +1,4 @@
-import { appendFileSync, chmodSync, closeSync, mkdirSync, openSync, readFileSync, renameSync, truncateSync, writeSync } from 'node:fs';
+import { appendFileSync, chmodSync, closeSync, fstatSync, mkdirSync, openSync, readFileSync, readSync, renameSync, truncateSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import type { Address, Hex } from 'viem';
@@ -172,18 +172,44 @@ export class Ledger {
 
   /** Evidence is append-only. */
   appendEvidence(row: EvidenceRow): void {
-    appendFileSync(this.evidencePath, JSON.stringify(row) + '\n', { mode: 0o600 });
+    // A cut-short append (full disk, kill) leaves no newline; start on a fresh line so this row stays whole.
+    appendFileSync(this.evidencePath, (this.endsTorn() ? '\n' : '') + JSON.stringify(row) + '\n', { mode: 0o600 });
   }
 
+  /** Rows that parse; a line cut short by a failed append is skipped, never fatal to the rest. */
   readEvidence(): EvidenceRow[] {
     try {
       return readFileSync(this.evidencePath, 'utf8')
         .split('\n')
         .filter((l) => l.trim() !== '')
-        .map((l) => JSON.parse(l) as EvidenceRow);
+        .flatMap((l) => {
+          try {
+            return [JSON.parse(l) as EvidenceRow];
+          } catch {
+            return [];
+          }
+        });
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code === 'ENOENT') return [];
       throw e;
+    }
+  }
+
+  private endsTorn(): boolean {
+    let fd: number;
+    try {
+      fd = openSync(this.evidencePath, 'r');
+    } catch {
+      return false;
+    }
+    try {
+      const size = fstatSync(fd).size;
+      if (size === 0) return false;
+      const last = Buffer.alloc(1);
+      readSync(fd, last, 0, 1, size - 1);
+      return last[0] !== 0x0a;
+    } finally {
+      closeSync(fd);
     }
   }
 

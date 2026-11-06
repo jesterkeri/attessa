@@ -177,9 +177,17 @@ export class Chain {
   }
 
   /** `AuthorizationUsed(payer, nonce)` and `AuthorizationCanceled(payer, nonce)` logs from `asset` in `[from, to]`. */
-  async authorizationLogs(asset: Address, payer: Address, nonce: Hex, from: bigint, to: bigint): Promise<{ used: Hash[]; canceled: Hash[] }> {
+  /** `canceledBlocks[i]` is the block of `canceled[i]`: the block that decided a cancelled authorization. */
+  async authorizationLogs(
+    asset: Address,
+    payer: Address,
+    nonce: Hex,
+    from: bigint,
+    to: bigint,
+  ): Promise<{ used: Hash[]; canceled: Hash[]; canceledBlocks: bigint[] }> {
     const used: Hash[] = [];
     const canceled: Hash[] = [];
+    const canceledBlocks: bigint[] = [];
     for (let start = from; start <= to; start += LOG_CHUNK) {
       const end = start + LOG_CHUNK - 1n < to ? start + LOG_CHUNK - 1n : to;
       for (const event of [tokenAbi[2], tokenAbi[3]] as const) {
@@ -188,11 +196,15 @@ export class Chain {
         );
         for (const l of logs) {
           if (lc(l.args.authorizer) !== lc(payer) || lc(l.args.nonce) !== lc(nonce)) continue;
-          (event.name === 'AuthorizationUsed' ? used : canceled).push(l.transactionHash);
+          if (event.name === 'AuthorizationUsed') used.push(l.transactionHash);
+          else {
+            canceled.push(l.transactionHash);
+            canceledBlocks.push(l.blockNumber);
+          }
         }
       }
     }
-    return { used, canceled };
+    return { used, canceled, canceledBlocks };
   }
 
   /**

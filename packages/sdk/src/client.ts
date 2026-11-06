@@ -1,11 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import {
   bytesToHex,
-  createWalletClient,
-  defineChain,
+  keccak256,
+  encodeFunctionData,
   http,
   parseEventLogs,
   parseSignature,
+  TransactionReceiptNotFoundError,
   type Address,
   type Hash,
   type Hex,
@@ -29,6 +30,7 @@ import {
 } from '@attessa/core';
 import { EIP3009_TYPES, ENDPOINT_STATUS, tokenAbi } from './abi.ts';
 import { Chain, RpcError, type Settlement } from './chain.ts';
+import { InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
 import { Ledger, isTerminal } from './ledger.ts';
 import {
   decodePaymentRequired,
@@ -52,6 +54,7 @@ import type {
   LivenessResult,
   Outcome,
   PendingEntry,
+  Progress,
   ProofCheck,
   ResolvedEndpoint,
   StatusReport,
@@ -65,6 +68,17 @@ export const EXPIRY_MARGIN = 5n;
 /** V9: 202 polling ends at validBefore + 60. */
 export const POLL_UNTIL = 60n;
 export const POLL_MS = 3000;
+/** SPEC §2.5: the gateway accepts `X-Attest-Payer-Sig` within 300 s of its own clock. */
+const PAYER_SIG_WINDOW_S = 300;
+/** Slack for the HTTP Date's one-second resolution and the request's time in flight. */
+const PAYER_SIG_MARGIN_S = 30;
+
+/** The gateway's clock from its HTTP Date header, in unix seconds, or null when it sent none that parses. */
+function gatewayTime(res: Response): number | null {
+  const d = res.headers.get('date');
+  const ms = d ? Date.parse(d) : NaN;
+  return Number.isFinite(ms) ? Math.floor(ms / 1000) : null;
+}
 /** V0: how long to wait for another process's `reserved` entry to become `signed`. */
 export const RESERVED_WAIT_MS = 30_000;
 
@@ -80,6 +94,79 @@ export class AlreadyUsedError extends Error {
     super(`authorization already used${tx ? ` in ${tx}` : ''}`);
     this.name = 'AlreadyUsedError';
     this.tx = tx;
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when the cancel reverts while the authorization still reads as unused after
+ * polling (for example, the token is paused). `tx` is the reverted cancel when it was sent (a revert at the
+ * receipt); absent when the estimate reverted and nothing was sent. The payment permission stays open until
+ * `validBefore`.
+ */
+export class CancelRevertedError extends Error {
+  readonly tx: Hash | undefined;
+  readonly validBefore: bigint;
+  constructor(validBefore: bigint, tx?: Hash) {
+    super(tx ? `the cancel reverted in ${tx}` : 'the cancel would revert');
+    this.name = 'CancelRevertedError';
+    this.tx = tx;
+    this.validBefore = validBefore;
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when `authorizationState` reads true (used or cancelled; the token keeps one flag
+ * for both) but no AuthorizationUsed or AuthorizationCanceled log for it appeared while polling, so which one
+ * happened is not known yet.
+ */
+export class CancelUndecidedError extends Error {
+  constructor() {
+    super('authorization used or cancelled, but no log shows which yet');
+    this.name = 'CancelUndecidedError';
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when the cancel transaction was sent and the node answers, but has no receipt for it
+ * within `receiptWaitMs`: not mined yet. It may still land.
+ */
+/** The cancel landed and the call is `not_charged`, but its evidence row couldn't be written (full disk, permissions). */
+export class CancelNotRecordedError extends Error {
+  readonly tx: Hash;
+  constructor(tx: Hash) {
+    super(`the cancel ${tx} landed but its evidence row wasn't written`);
+    this.name = 'CancelNotRecordedError';
+    this.tx = tx;
+  }
+}
+
+export class CancelUnconfirmedError extends Error {
+  readonly tx: Hash;
+  constructor(tx: Hash) {
+    super(`the cancel ${tx} isn't mined yet`);
+    this.name = 'CancelUnconfirmedError';
+    this.tx = tx;
+  }
+}
+
+/**
+ * Thrown by `cancelAuthorization` when the chain couldn't be read or reached after the cancel permission was signed.
+ * `tx` is the cancel transaction once it may have been broadcast (it may still land); absent when nothing was sent.
+ */
+export class CancelInterruptedError extends Error {
+  readonly tx: Hash | undefined;
+  constructor(tx: Hash | undefined, options?: { cause?: unknown }) {
+    super(tx ? `lost the chain after sending the cancel ${tx}` : 'lost the chain before sending the cancel', options);
+    this.name = 'CancelInterruptedError';
+    this.tx = tx;
+  }
+}
+
+/** Internal: the cancel's eth_estimateGas reverted, so nothing was signed or sent; `cancelAuthorization` re-reads the state. */
+class CancelWouldRevert extends Error {
+  constructor() {
+    super('the cancel would revert');
+    this.name = 'CancelWouldRevert';
   }
 }
 
@@ -115,6 +202,15 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   const httpTimeout = opts.httpTimeoutMs ?? 60_000;
   const receiptWaitMs = opts.receiptWaitMs ?? 10_000;
   const waitForExpiry = cfg.waitForExpiry ?? true;
+  // A caller's handler only observes the call: if it throws, the payment flow carries on as if it were absent
+  // (after signing, the ledger, evidence and the wait for "not charged" must not depend on it).
+  const progress = (e: Progress): void | 'stop' => {
+    try {
+      return opts.onProgress?.(e);
+    } catch {
+      return undefined;
+    }
+  };
   const ledger = new Ledger(cfg.dataDir, now);
   const payer = lc(cfg.account.address);
   const transport: Transport =
@@ -146,7 +242,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       }
       // SPEC §2.6: the SDK uses only the pinned addresses; options.registry fills in only where nothing is deployed yet.
       const registry = deployment.enclaveRegistry ?? opts.registry;
-      if (!registry) throw new Error(`no EnclaveRegistry is deployed for chain ${chainId}; pass options.registry`);
+      if (!registry) throw new AttestError('no_registry', `no EnclaveRegistry is deployed for chain ${chainId}; pass options.registry`);
       return { chain: new Chain(transport, lc(registry)), chainId, deployment, registry: lc(registry), x402Network: deployment.x402Network };
     })();
     return netPromise;
@@ -276,7 +372,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       inputsChecked: r.inputsChecked ?? null,
       via: 'gateway',
     };
-    ledger.appendEvidence(row);
+    appendOrMark(row, r);
+  }
+
+  /** SPEC §9: every outcome is in evidence. A failed append (full disk, permissions) must not throw away a decided call. */
+  function appendOrMark(row: EvidenceRow, r: CallResult): void {
+    try {
+      ledger.appendEvidence(row);
+    } catch {
+      r.evidenceNotWritten = true;
+    }
   }
 
   function baseResult(entry: PendingEntry, outcome: Outcome, meta: CallMeta = {}): CallResult {
@@ -319,11 +424,15 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         state: ledgerState,
         code: keepRefusal ? stored.code : fields.code ? codeString(fields.code, fields.detail ?? fields.check) : entry.code,
         ...(fields.settlementTx ? { settlementTx: fields.settlementTx } : {}),
+        ...(ledgerState === 'not_charged' && fields.confirmedAtBlock !== undefined ? { confirmedAtBlock: fields.confirmedAtBlock.toString() } : {}),
       });
       // Another process decided this call first (V12): report its outcome, not this one's.
       if (e.state !== ledgerState) return current(e, meta);
     }
-    const r = { ...baseResult(e, outcome, meta), ...fields };
+    const r: CallResult = { ...baseResult(e, outcome, meta), ...fields };
+    // The kept refusal reports its stored code, as current() does for the same entry.
+    if (keepRefusal && !r.code && stored.code) r.code = parseCode(stored.code);
+    if (ev.inputsBlock !== undefined) r.inputsBlock = ev.inputsBlock;
     evidence(e, r, { ...ev, ...(meta.releaseId ? { releaseId: meta.releaseId } : {}) });
     return r;
   }
@@ -335,6 +444,78 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const s = await n.chain.settlementIn(tx, entry.asset, entry.payer, entry.payTo, BigInt(entry.amount), entry.nonce!);
       if (s || i >= tries) return s;
       await sleep(1000);
+    }
+  }
+
+  /**
+   * The receipt of `hash`, polled once a second up to `receiptWaitMs` (not viem's 180 s default). A missing receipt
+   * and a failed read are both retried; the last failure is thrown when time runs out.
+   */
+  async function receiptOf(n: Net, hash: Hash) {
+    const tries = Math.max(1, Math.ceil(receiptWaitMs / 1000));
+    for (let i = 1; ; i++) {
+      try {
+        return await n.chain.client.getTransactionReceipt({ hash });
+      } catch (e) {
+        // The node answered "no receipt" on the last read: sent, not mined yet, not a lost connection.
+        if (i >= tries) throw e instanceof TransactionReceiptNotFoundError ? new CancelUnconfirmedError(hash) : e;
+      }
+      await sleep(1000);
+    }
+  }
+
+  /**
+   * Signs and broadcasts the payer's cancel transaction (value 0) with the shared gas terms (`gasTerms`). Refuses
+   * before signing when the balance can't cover them, and maps the node's "insufficient funds" refusal of the
+   * broadcast to the same error: either way nothing was sent. Reads that fail are RpcError; the node's text of a
+   * funds refusal is not kept.
+   */
+  async function sendCancel(n: Net, to: Address, data: Hex, sent: { hash?: Hash }): Promise<Hash> {
+    const from = cfg.account.address;
+    const read = async (method: string, params: unknown[]): Promise<bigint> => {
+      try {
+        return BigInt((await n.chain.client.request({ method, params } as never)) as string);
+      } catch (e) {
+        throw new RpcError(`${method}: ${(e as Error).message?.split('\n')[0] ?? String(e)}`, { cause: e });
+      }
+    };
+    const estimateGas = async (): Promise<bigint> => {
+      try {
+        return await read('eth_estimateGas', [{ from, to, data }]);
+      } catch (e) {
+        if (causes(e).some((c) => isRevertReply(c.code, c.details) || isRevertReply(c.code, c.message))) throw new CancelWouldRevert();
+        throw e;
+      }
+    };
+    const [estimate, price, tip, nonce, balance] = await Promise.all([
+      estimateGas(),
+      read('eth_gasPrice', []),
+      read('eth_maxPriorityFeePerGas', []),
+      read('eth_getTransactionCount', [from, 'pending']),
+      read('eth_getBalance', [from, 'latest']),
+    ]);
+    const t = gasTerms(estimate, price, tip);
+    if (!canPayGas(balance, t)) throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, false);
+    const raw = await cfg.account.signTransaction({
+      type: 'eip1559',
+      chainId: n.chainId,
+      nonce: Number(nonce),
+      to,
+      data,
+      value: 0n,
+      gas: t.gas,
+      maxFeePerGas: t.maxFeePerGas,
+      maxPriorityFeePerGas: t.maxPriorityFeePerGas,
+    });
+    // From here the cancel may reach the chain even if the broadcast's reply is lost: the caller reports its hash.
+    sent.hash = keccak256(raw);
+    try {
+      return (await n.chain.client.request({ method: 'eth_sendRawTransaction', params: [raw] } as never)) as Hash;
+    } catch (e) {
+      if (causes(e).some((c) => isInsufficientFundsReply(c.code, c.details) || isInsufficientFundsReply(c.code, c.message))) {
+        throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, true);
+      }
+      throw e;
     }
   }
 
@@ -372,7 +553,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!(e instanceof RpcError)) throw e;
       return finish(entry, 'uncertain', meta, { code: 'rpc_unavailable' });
     }
-    if (!settlement) return finish(entry, 'uncertain', meta, {});
+    if (!settlement) {
+      // An answer with no settlement on chain (V11) is unknown: by default wait for the expiry check (SPEC §7 uncertain to final).
+      // A refused call stays refused until the chain decides it (settled_after_refusal, not missing_proof).
+      const e = entry.state === 'refused' ? entry : ledger.update(entry.requestId, { state: 'uncertain' });
+      return waitForExpiry ? finalize(n, e, meta, true) : finish(e, 'uncertain', meta, {});
+    }
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
 
     let v: VerifyResult;
@@ -386,10 +572,14 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       meta.ownerClaimedSource ?? (v.proof ? await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId) : undefined);
     const m: CallMeta = { ...meta, ...(source !== undefined ? { ownerClaimedSource: source } : {}) };
     if (v.ok) {
+      // A verified row names the proving release, so its owner claim is that release's: another live signer may
+      // answer on another approved release than the one liveness showed. A rejected row keeps meta's release and claim.
+      const { ownerClaimedSource: _shown, ...rest } = meta;
+      const own = v.proof.releaseId === meta.releaseId ? source : await n.chain.sourceRef(v.proof.agentId, v.proof.releaseId);
       return finish(
         entry,
         'verified',
-        { ...m, signer: v.signer, releaseId: v.proof.releaseId },
+        { ...rest, ...(own !== undefined ? { ownerClaimedSource: own } : {}), signer: v.signer, releaseId: v.proof.releaseId },
         { settlementTx: settlement.tx, response, proof: v.proof, signer: v.signer, inputsChecked: v.inputsChecked },
         { responseHash: v.responseHash, inputsHash: v.inputsHash, inputsBlock: v.inputsBlock },
       );
@@ -404,30 +594,53 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     | { kind: 'result'; response: Uint8Array; proofHeader: string | null; paymentResponse: string | null }
     | { kind: 'pending' }
     | { kind: 'none'; status: number }
+    | { kind: 'unsure' }
     | { kind: 'error' };
 
-  /** `GET /v1/results/:requestId` with `X-Attest-Payer-Sig` over chain time. */
+  /**
+   * `GET /v1/results/:requestId` with `X-Attest-Payer-Sig`. The gateway accepts the signature within
+   * PAYER_SIG_WINDOW_S of its own clock (SPEC §2.5) and answers a stale one with the same 404
+   * `result_not_found` as a missing result. So the first stamp is chain time, and a 404 counts as "no result"
+   * (`none`) only when the gateway's HTTP Date shows that stamp was well inside the window. Otherwise, if the two
+   * clocks are within twice that, the request is signed again at their midpoint, which is inside the window by
+   * either clock, and sent once more; a 404 to it is `none` when the new Date still agrees. Anything else (no Date,
+   * clocks further apart, a Date that moved) is `unsure`, which decides nothing (a later getResult can still fetch
+   * and verify the answer). The stamp never strays more than the window from chain time, whatever Date says.
+   */
+  // The gateway answers 404 to any signature but the payer's (SPEC §6), so another wallet's fetch decides nothing.
+  const notPayer = (entry: PendingEntry) => !!entry.payer && cfg.account.address.toLowerCase() !== entry.payer.toLowerCase();
+
   async function fetchResult(n: Net, entry: PendingEntry): Promise<Fetched> {
+    if (notPayer(entry)) return { kind: 'unsure' };
     try {
-      const ts = Number((await n.chain.latest()).timestamp);
-      const sig = await cfg.account.signMessage({ message: payerSigMessage(entry.requestId, ts) });
-      const res = await httpRequest(`${entry.origin}/v1/results/${entry.requestId}`, {
-        method: 'GET',
-        headers: { [HEADER.payerSig]: `${ts}.${sig}` },
-      });
-      const bytes = new Uint8Array(await res.arrayBuffer());
-      if (res.status === 200)
-        return {
-          kind: 'result',
-          response: bytes,
-          proofHeader: res.headers.get(HEADER.attestedProof),
-          paymentResponse: res.headers.get(HEADER.paymentResponse),
-        };
-      if (res.status === 202) return { kind: 'pending' };
-      // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
-      const err = parseErrorBody(new TextDecoder().decode(bytes));
-      if (res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId) return { kind: 'none', status: res.status };
-      return { kind: 'error' };
+      const chainTs = Number((await n.chain.latest()).timestamp);
+      const ok = PAYER_SIG_WINDOW_S - PAYER_SIG_MARGIN_S;
+      let ts = chainTs;
+      for (let attempt = 0; ; attempt++) {
+        const sig = await cfg.account.signMessage({ message: payerSigMessage(entry.requestId, ts) });
+        const res = await httpRequest(`${entry.origin}/v1/results/${entry.requestId}`, {
+          method: 'GET',
+          headers: { [HEADER.payerSig]: `${ts}.${sig}` },
+        });
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        if (res.status === 200)
+          return {
+            kind: 'result',
+            response: bytes,
+            proofHeader: res.headers.get(HEADER.attestedProof),
+            paymentResponse: res.headers.get(HEADER.paymentResponse),
+          };
+        if (res.status === 202) return { kind: 'pending' };
+        // Only the gateway's own §10 404 says there is no result. A proxy page or a 5xx says nothing.
+        const err = parseErrorBody(new TextDecoder().decode(bytes));
+        if (!(res.status === 404 && err?.error === 'result_not_found' && err.requestId === entry.requestId)) return { kind: 'error' };
+        // Decisive only when the stamp is inside the window by both clocks: chain time and the gateway's Date.
+        const gwTime = gatewayTime(res);
+        if (gwTime === null) return { kind: 'unsure' };
+        if (Math.abs(gwTime - ts) <= ok && Math.abs(chainTs - ts) <= ok) return { kind: 'none', status: res.status };
+        if (attempt > 0 || Math.abs(gwTime - chainTs) > 2 * ok) return { kind: 'unsure' };
+        ts = Math.floor((chainTs + gwTime) / 2);
+      }
     } catch {
       return { kind: 'error' };
     }
@@ -437,13 +650,15 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * The authorization was used on chain (`settlement`). First call getResult (INV-23): a result
    * that passes V10 → verified, one that fails → paid_but_rejected, none → settled_after_refusal
    * for a refused call or paid_but_rejected{missing_proof} for an uncertain one. "None" is the
-   * gateway's `result_not_found`: while /v1/results is unreachable a refused or uncertain call keeps
+   * gateway's `result_not_found` to a signature it accepted (fetchResult): while /v1/results is
+   * unreachable, or its 404 can't be told from a stale signature, a refused or uncertain call keeps
    * its state (settlement recorded), so getResult / reconcilePending can still verify it (INV-13).
    */
   async function settledPath(n: Net, entry: PendingEntry, settlement: Settlement, meta: CallMeta): Promise<CallResult> {
     entry = ledger.update(entry.requestId, { settlementTx: settlement.tx });
     let noResult = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
+    // Another wallet's fetch can never succeed: no retries, no silent wait.
+    for (let attempt = 0; attempt < (notPayer(entry) ? 0 : 5); attempt++) {
       const f = await fetchResult(n, entry);
       if (f.kind === 'result') return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, meta, settlement);
       if (f.kind === 'none') {
@@ -452,13 +667,23 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       }
       await sleep(POLL_MS);
     }
+    return settledEnd(entry, settlement.tx, meta, noResult);
+  }
+
+  /**
+   * The end of the settled path once the result fetch gave no result: `noResult` is the gateway's own
+   * `result_not_found`. A refused call ends settled_after_refusal, an uncertain one paid_but_rejected{missing_proof}
+   * (SPEC §7); without that answer either keeps its state with the settlement recorded. getResult ends here too, so
+   * a fetch that finds nothing for a settled call decides the same way as reconcilePending.
+   */
+  function settledEnd(entry: PendingEntry, tx: Hash, meta: CallMeta, noResult: boolean): CallResult {
     if (entry.state === 'refused') {
-      const f: Partial<CallResult> = { settlementTx: settlement.tx };
+      const f: Partial<CallResult> = { settlementTx: tx };
       if (entry.code) f.code = parseCode(entry.code);
       return finish(entry, noResult ? 'settled_after_refusal' : 'refused', meta, f);
     }
-    if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: settlement.tx });
-    return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: settlement.tx });
+    if (!noResult) return finish(entry, 'uncertain', meta, { settlementTx: tx });
+    return finish(entry, 'paid_but_rejected', meta, { code: 'proof_rejected', check: 'missing_proof', settlementTx: tx });
   }
 
   /**
@@ -470,9 +695,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   async function finalize(n: Net, entry: PendingEntry, meta: CallMeta, wait: boolean): Promise<CallResult> {
     const vb = BigInt(entry.validBefore!);
     let lagging = 0;
+    // Past expiry the chain read the permission used (or cancelled) with no log yet: it can't expire unused.
+    let usedNoLog = false;
+    let chainNow: bigint | undefined;
+    let announced = false;
     for (;;) {
+      // The wait is announced only from a pass that read the permission state: before that it may already be used.
+      let stateRead = false;
       try {
         const head = await n.chain.latest();
+        chainNow = head.timestamp;
         const from = BigInt(entry.signedAtBlock ?? '0');
         const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, entry.nonce!, from, head.number);
         for (const tx of logs.used) {
@@ -480,19 +712,30 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           if (s) return settledPath(n, entry, s, meta);
         }
         if (logs.canceled.length > 0) {
-          return finish(entry, 'not_charged', meta, { code: 'cancelled', confirmedAtBlock: head.number });
+          return finish(entry, 'not_charged', meta, { code: 'cancelled', confirmedAtBlock: logs.canceledBlocks[0]! });
         }
-        if (head.timestamp > vb + EXPIRY_MARGIN) {
-          const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
-          if (!used) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
-          // Used, but no matching log yet: the log index lags. Ask again.
-          if (++lagging > 20) return current(entry, meta);
+        // Read every pass, not only past expiry: a permission already used has nothing left to expire.
+        const used = await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce!, head.number);
+        stateRead = true;
+        if (!used && head.timestamp > vb + EXPIRY_MARGIN) return finish(entry, 'not_charged', meta, { confirmedAtBlock: head.number });
+        if (used) {
+          // Used (or cancelled), but no matching log yet: the log index lags. Ask again.
+          usedNoLog = true;
+          if (++lagging > 20) {
+            // Every outcome is in evidence (SPEC §7): a refusal already wrote its row; any other call writes `uncertain`.
+            const r = ledger.get(entry.requestId)?.state === 'refused' ? current(entry, meta) : finish(entry, 'uncertain', meta);
+            return { ...r, authorizationUsed: true };
+          }
         }
       } catch (e) {
         if (!(e instanceof RpcError)) throw e;
         if (!wait) return current(entry, meta, 'rpc_unavailable');
       }
-      if (!wait) return current(entry, meta);
+      if (!wait) return usedNoLog ? { ...current(entry, meta), authorizationUsed: true } : current(entry, meta);
+      if (!announced && stateRead && chainNow !== undefined) {
+        announced = true;
+        progress({ kind: 'waiting', entry: ledger.get(entry.requestId) ?? entry, chainNow, ...(usedNoLog ? { used: true as const } : {}) });
+      }
       await sleep(POLL_MS);
     }
   }
@@ -506,6 +749,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     // A paid_but_rejected entry keeps its check in `proof_rejected{check}` (INV-13: the specific ProofCheck).
     const check = e.state === 'paid_but_rejected' && e.code?.startsWith('proof_rejected{') ? e.code.slice('proof_rejected{'.length, -1) : undefined;
     if (check) r.check = check as ProofCheck;
+    // The stored outcome names the block that decided it, as the first report did (never a made-up 0).
+    if (e.state === 'not_charged' && e.confirmedAtBlock) r.confirmedAtBlock = BigInt(e.confirmedAtBlock);
     return r;
   }
 
@@ -539,7 +784,11 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     if (res.status === 200) {
       return settleAndVerify(n, entry, bytes, res.headers.get(HEADER.attestedProof), res.headers.get(HEADER.paymentResponse), meta);
     }
-    if (res.status === 202) return pollResults(n, entry, meta);
+    if (res.status === 202) {
+      const pr = decodePaymentResponse(res.headers.get(HEADER.paymentResponse));
+      progress({ kind: 'settle_pending', entry, tx: pr?.transaction ? (lc(pr.transaction) as Hash) : null });
+      return pollResults(n, entry, meta);
+    }
 
     const err = parseErrorBody(new TextDecoder().decode(bytes));
     if (res.status === 409 && err?.error === 'in_progress' && err.requestId === entry.requestId) return pollResults(n, entry, meta);
@@ -548,9 +797,13 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const e = ledger.update(entry.requestId, { state: 'refused', code: codeString(code, err.detail ?? undefined) });
       const r: Partial<CallResult> = { code };
       if (err.detail) r.detail = err.detail;
+      progress(err.detail ? { kind: 'refused', entry: e, code, detail: err.detail } : { kind: 'refused', entry: e, code });
       if (!waitForExpiry) return finish(e, 'refused', meta, r);
-      evidence(e, { ...baseResult(e, 'refused', meta), ...r });
-      return finalize(n, e, meta, true);
+      const refusedRow: CallResult = { ...baseResult(e, 'refused', meta), ...r };
+      evidence(e, refusedRow);
+      const out = await finalize(n, e, meta, true);
+      if (refusedRow.evidenceNotWritten) out.evidenceNotWritten = true;
+      return out;
     }
     // A proxy 502, an HTML page, a missing body: not a refusal (INV-23).
     return afterUnknown(n, entry, meta);
@@ -577,6 +830,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
 
   async function afterUnknown(n: Net, entry: PendingEntry, meta: CallMeta): Promise<CallResult> {
     const e = ledger.update(entry.requestId, { state: 'uncertain' });
+    progress({ kind: 'uncertain', entry: e });
     if (!waitForExpiry) return finish(e, 'uncertain', meta, {});
     return finalize(n, e, meta, true);
   }
@@ -601,6 +855,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       }
     }
     if (isTerminal(entry)) return current(entry, {});
+    progress({ kind: 'resuming', entry });
     const f = await fetchResult(n, entry);
     if (f.kind === 'result') return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, {});
     return finalize(n, entry, {}, waitForExpiry);
@@ -622,13 +877,23 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const stopped = (code: CallCode, detail?: string): CallResult => {
       const r: CallResult = { outcome: 'stopped', code, requestId };
       if (detail) r.detail = detail;
-      ledger.appendEvidence({
+      if (known.amount !== undefined) r.amount = known.amount;
+      if (known.asset) r.asset = known.asset;
+      appendOrMark({
         v: '1', ts: String(Math.floor(now() / 1000)), requestId, origin: known.origin ?? url, agentId: known.agentId?.toString() ?? null,
         outcome: 'stopped', code, check: null, amount: known.amount?.toString() ?? null, asset: known.asset ?? null,
         payTo: known.payTo ?? null, settlementTx: null, signer: null, releaseId: null, ownerClaimedSource: null, selfVerifiedOwner: null,
         requestHash: known.requestHash ?? null, responseHash: null, inputsHash: null, inputsBlock: null, inputsChecked: null, via: 'gateway',
-      });
+      }, r);
       return r;
+    };
+    /**
+     * `dryRun` with an open entry for this input: say so and stop, leaving that entry untouched. The result names the
+     * open call, and no evidence row is written under its id (that call's outcome isn't decided yet).
+     */
+    const wouldResume = (open: PendingEntry): CallResult => {
+      progress({ kind: 'would_resume', entry: open });
+      return { outcome: 'stopped', code: 'dry_run', requestId: open.requestId };
     };
 
     let n: Net;
@@ -644,6 +909,8 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (!req.newRequest) {
         const open = ledger.list().find((e) => e.originHash === oh && e.requestHash === rh && !isTerminal(e));
         if (open) {
+          // A dry run previews; resuming would sign the payer message and fetch the result (FLOWS §9 "stops before signing").
+          if (opts.dryRun === true) return wouldResume(open);
           const resumed = await resume(n, open);
           if (resumed) return resumed;
         }
@@ -660,13 +927,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     // V2
     const challenge = random32();
     let pr;
+    let quoteMs = 0;
     try {
+      const t0 = now();
       const res = await httpRequest(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', [HEADER.requestId]: requestId, [HEADER.challenge]: challenge },
         body: body as Uint8Array<ArrayBuffer>,
       });
       const text = await res.text();
+      quoteMs = now() - t0;
       if (res.status !== 402) {
         const err = parseErrorBody(text);
         if (err && (err.error === 'gateway_paused' || err.error === 'bad_request' || err.error === 'rate_limited' || err.error === 'gateway_busy'))
@@ -734,6 +1004,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (got === 'over_daily_cap') return stopped('over_daily_cap');
       if (got === 'request_id_conflict') return stopped('request_id_conflict', 'requestId already in the ledger');
       // V0 again, under the lock: another process opened the same input after our first V0 check.
+      if (opts.dryRun === true) return wouldResume(got.open);
       const resumed = await resume(n, got.open);
       if (resumed) return resumed;
       if (attempt >= 2) return stopped('in_progress', 'the same request kept starting in another process');
@@ -755,6 +1026,21 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
     const meta: CallMeta = { selfVerifiedOwner: ep.selfVerifiedOwner, releaseId: live.releaseId };
     const source = await n.chain.sourceRef(ep.agentId, live.releaseId);
     if (source !== undefined) meta.ownerClaimedSource = source;
+    const go = progress({
+      kind: 'authorizing',
+      endpoint: ep,
+      amount,
+      asset: pin.address,
+      maxAmount: max,
+      signer: live.signer,
+      releaseId: live.releaseId,
+      ...(source !== undefined ? { ownerClaimedSource: source } : {}),
+      quoteMs,
+    });
+    if (opts.dryRun === true || go === 'stop') {
+      ledger.removeIfUnchanged(entry);
+      return stopped('dry_run');
+    }
 
     // V8: the window comes from chain time, never the local clock.
     let head;
@@ -809,6 +1095,10 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
   }
 
   return {
+    /** The pinned token address of `key` on the RPC's network: the asset the daily cap counts (SPEC §7 V6). */
+    async assetAddress(key: AssetKey): Promise<Address> {
+      return pinFor(await net(), key).address;
+    },
     async resolveEndpoint(url: string): Promise<ResolvedEndpoint> {
       return (await resolve(url)).ep;
     },
@@ -859,8 +1149,12 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       if (f.kind === 'result') {
         return settleAndVerify(n, entry, f.response, f.proofHeader, f.paymentResponse, {});
       }
+      // The gateway holds no result, and the chain showed the settlement (the SDK stores `settlementTx` only from
+      // chain evidence): decided, exactly as reconcilePending's settled path decides it.
+      if (f.kind === 'none' && entry.settlementTx) return settledEnd(entry, entry.settlementTx, {}, true);
       const r = current(entry, {});
-      r.code = f.kind === 'pending' ? 'settle_pending' : f.kind === 'none' ? 'result_not_found' : 'rpc_unavailable';
+      // `unsure`: a 404 the SDK can't tell from a stale signature. Nothing is decided, and no code claims otherwise.
+      if (f.kind !== 'unsure') r.code = f.kind === 'pending' ? 'settle_pending' : f.kind === 'none' ? 'result_not_found' : 'rpc_unavailable';
       return r;
     },
 
@@ -878,11 +1172,46 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       const n = await net();
       const entry = await entryOf(lc(requestId));
       if (entry.nonce === null) throw new Error('nothing was signed for this request');
-      const head = await n.chain.latest();
-      const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, entry.nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
-      if (logs.canceled.length > 0) return logs.canceled[0]!;
-      if (logs.used.length > 0 || (await n.chain.authorizationState(entry.asset, entry.payer, entry.nonce, head.number)))
-        throw new AlreadyUsedError(logs.used[0]);
+      const vb = BigInt(entry.validBefore ?? '0');
+      const nonce = entry.nonce;
+      /**
+       * What the chain says about the authorization, by its logs: cancelled (that tx), used (the settlement tx), or
+       * neither. `authorizationState` is true for both used and cancelled, so it alone never says "went through":
+       * true with no log yet is `unlogged`. Polls (once a second, up to `receiptWaitMs`) while `unlogged`, and while
+       * `open` too when `untilDecided` (after a revert, a node behind the one that estimated may not show the
+       * settlement yet).
+       */
+      const decide = async (untilDecided: boolean): Promise<{ canceled: Hash; block: bigint } | { used: Hash } | 'open' | 'unlogged'> => {
+        const tries = Math.max(1, Math.ceil(receiptWaitMs / 1000));
+        for (let i = 1; ; i++) {
+          const head = await n.chain.latest();
+          const logs = await n.chain.authorizationLogs(entry.asset, entry.payer, nonce, BigInt(entry.signedAtBlock ?? '0'), head.number);
+          if (logs.canceled.length > 0) return { canceled: logs.canceled[0]!, block: logs.canceledBlocks[0]! };
+          if (logs.used.length > 0) return { used: logs.used[0]! };
+          const state = (await n.chain.authorizationState(entry.asset, entry.payer, nonce, head.number)) ? 'unlogged' : 'open';
+          if ((state === 'open' && !untilDecided) || i >= tries) return state;
+          await sleep(1000);
+        }
+      };
+      /**
+       * A decision that ends the cancel, recorded the way finalize records it, whichever read found it: a cancel log
+       * is `not_charged` / `cancelled` at once (SPEC §7; FLOWS §7 releases the reservation) and returns that tx; a
+       * used log whose receipt holds the Transfer records the settlement tx (as settledPath does) and throws
+       * AlreadyUsedError, so getResult fetches the answer; no log yet throws CancelUndecidedError. `open` is the
+       * caller's.
+       */
+      const ended = async (d: Exclude<Awaited<ReturnType<typeof decide>>, 'open'>): Promise<Hash> => {
+        if (d === 'unlogged') throw new CancelUndecidedError();
+        if ('used' in d) {
+          const settlement = await n.chain.settlementIn(d.used, entry.asset, entry.payer, entry.payTo, BigInt(entry.amount), nonce);
+          if (settlement && ledger.get(entry.requestId)) ledger.update(entry.requestId, { settlementTx: settlement.tx });
+          throw new AlreadyUsedError(d.used);
+        }
+        if (finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: d.block }).evidenceNotWritten) throw new CancelNotRecordedError(d.canceled);
+        return d.canceled;
+      };
+      const before = await decide(false);
+      if (before !== 'open') return await ended(before);
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
@@ -890,32 +1219,51 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
         domain: { name: pin.name, version: pin.version, chainId: n.chainId, verifyingContract: entry.asset },
         types: { CancelAuthorization: EIP3009_TYPES.CancelAuthorization },
         primaryType: 'CancelAuthorization',
-        message: { authorizer: entry.payer, nonce: entry.nonce },
+        message: { authorizer: entry.payer, nonce },
       });
       const { r, s, v, yParity } = parseSignature(sig);
-      const chain = defineChain({
-        id: n.chainId,
-        name: `chain-${n.chainId}`,
-        nativeCurrency: { name: 'CELO', symbol: 'CELO', decimals: 18 },
-        rpcUrls: { default: { http: [] } },
-      });
-      const wallet = createWalletClient({ account: cfg.account, chain, transport });
-      const hash = await wallet.writeContract({
-        address: entry.asset,
-        abi: tokenAbi,
-        functionName: 'cancelAuthorization',
-        args: [entry.payer, entry.nonce, Number(v ?? BigInt(yParity + 27)), r, s],
-      });
-      const receipt = await n.chain.client.waitForTransactionReceipt({ hash, pollingInterval: 1000 });
-      const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
-        (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === entry.nonce,
-      );
-      if (receipt.status !== 'success' || !canceled) {
-        const found = await findSettlement(n, entry);
-        throw new AlreadyUsedError(found?.tx);
+      // The cancel permission is signed: from here a failed chain read can't say "Nothing was signed". Every error
+      // that isn't one of the cancel's own outcomes is CancelInterruptedError, with the cancel tx once it may be sent.
+      const sent: { hash?: Hash } = {};
+      try {
+        let hash: Hash;
+        try {
+          hash = await sendCancel(n, entry.asset, encodeFunctionData({
+            abi: tokenAbi,
+            functionName: 'cancelAuthorization',
+            args: [entry.payer, nonce, Number(v ?? BigInt(yParity + 27)), r, s],
+          }), sent);
+        } catch (e) {
+          // The cancel's estimate reverts when the authorization was used or cancelled after the check above (the
+          // facilitator settled meanwhile): read the state again. Any other revert stays the revert.
+          if (!(e instanceof CancelWouldRevert)) throw e;
+          const after = await decide(true);
+          if (after === 'open') throw new CancelRevertedError(vb);
+          return await ended(after);
+        }
+        const receipt = await receiptOf(n, hash);
+        const canceled = parseEventLogs({ abi: tokenAbi, logs: receipt.logs.filter((l) => lc(l.address) === entry.asset), eventName: 'AuthorizationCanceled' }).some(
+          (ev) => lc(ev.args.authorizer) === entry.payer && lc(ev.args.nonce) === nonce,
+        );
+        if (receipt.status !== 'success' || !canceled) {
+          const after = await decide(true);
+          if (after === 'open') throw new CancelRevertedError(vb, hash);
+          return await ended(after);
+        }
+        if (finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber }).evidenceNotWritten) throw new CancelNotRecordedError(hash);
+        return hash;
+      } catch (e) {
+        if (
+          e instanceof AlreadyUsedError ||
+          e instanceof CancelNotRecordedError ||
+          e instanceof CancelRevertedError ||
+          e instanceof CancelUndecidedError ||
+          e instanceof CancelUnconfirmedError ||
+          e instanceof InsufficientGasFundsError
+        )
+          throw e;
+        throw new CancelInterruptedError(sent.hash, { cause: e });
       }
-      finish(entry, 'not_charged', {}, { code: 'cancelled', confirmedAtBlock: receipt.blockNumber });
-      return hash;
     },
 
     async listPending(): Promise<PendingEntry[]> {

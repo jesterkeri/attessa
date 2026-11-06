@@ -1,5 +1,7 @@
 import { encodeUserData, originHash as hashOrigin, releaseId as computeReleaseId, signerFromPublicKey } from '@attessa/core';
 import {
+  encodeEventTopics,
+  recoverTypedDataAddress,
   decodeFunctionData,
   parseAbiItem,
   encodeAbiParameters,
@@ -16,7 +18,7 @@ import {
   type Hex,
   type TransactionSerialized,
 } from 'viem';
-import { CERT_MANAGER_ABI, IDENTITY_ABI, REGISTRY_ABI, VALIDATOR_ABI } from '../src/abi.ts';
+import { CERT_MANAGER_ABI, IDENTITY_ABI, REGISTRY_ABI, REGISTRY_EVENTS, VALIDATOR_ABI } from '../src/abi.ts';
 import { hintPlan, parseAttestation } from '../src/attestation.ts';
 import { RpcError, RpcUnavailable, type Rpc } from '../src/rpc.ts';
 
@@ -26,7 +28,7 @@ import { RpcError, RpcUnavailable, type Rpc } from '../src/rpc.ts';
  * request, including `eth_sendRawTransaction`, stays in this object, and `sent` records them.
  */
 
-export const REGISTRY = '0x00000000000000000000000000000000000000e1' as Address;
+export const REGISTRY = '0x5fbdb2315678afecb367f032d93f642f64180aa3' as Address;
 export const IDENTITY = '0x8004a818bfb912233c491871b3d84c89a494bd9e' as Address;
 export const VALIDATOR = '0x00000000000000000000000000000000000000e2' as Address;
 export const CERT_MANAGER = '0x00000000000000000000000000000000000000e3' as Address;
@@ -58,11 +60,27 @@ export class FakeChain implements Rpc {
   logs: Array<{ address: Address; topics: Hex[]; data: Hex }> = [];
   readonly sent: Hex[] = [];
   readonly calls: Array<{ method: string; params: unknown[] }> = [];
-  private receipts = new Map<Hex, { status: string; blockNumber: string; gasUsed: string }>();
+  private receipts = new Map<Hex, { status: string; blockNumber: string; gasUsed: string; logs: Array<{ address: Address; topics: Hex[]; data: Hex }> }>();
   nonces = new Map<string, number>();
+  /** CELO balance (wei) by lowercase address; anyone not listed has `defaultBalance`. */
+  balances = new Map<string, bigint>();
+  defaultBalance = 10n ** 24n;
   down = false;
   /** Gas each write costs in eth_estimateGas. */
-  gasFor = (fn: string) => (fn === 'approveRelease' || fn === 'addEndpoint' ? 200_000n : 10_000_000n);
+  gasFor = (fn: string) =>
+    fn === 'approveRelease' || fn === 'addEndpoint'
+      ? 200_000n
+      : fn === 'register'
+        ? 2_000_000n
+        : ['setReleaseStatus', 'retireEndpoint', 'revokeSigner', 'linkSelfAgent', 'transferFrom', 'setAgentWallet'].includes(fn)
+          ? 100_000n
+          : 10_000_000n;
+  /** ERC-8004 identity: the next id `register` mints, and each agent's wallet. */
+  nextAgentId = 1n;
+  agentWallets = new Map<bigint, Address>();
+  /** Self Agent IDs whose `linkSelfAgent` passes the Self registry checks. */
+  selfOk = new Set<bigint>();
+  selfLinks = new Map<bigint, bigint>();
 
   async request(method: string, params: unknown[]): Promise<unknown> {
     this.calls.push({ method, params });
@@ -85,6 +103,8 @@ export class FakeChain implements Rpc {
         return toHex(this.gasPrice);
       case 'eth_maxPriorityFeePerGas':
         return toHex(1_000_000_000n);
+      case 'eth_getBalance':
+        return toHex(this.balances.get(String(params[0]).toLowerCase()) ?? this.defaultBalance);
       case 'eth_getTransactionCount':
         return toHex(this.nonces.get(String(params[0]).toLowerCase()) ?? 0);
       case 'eth_call': {
@@ -114,16 +134,22 @@ export class FakeChain implements Rpc {
     if (tx.chainId !== this.chainId) throw new Error('fake chain: wrong chain id');
     const hash = keccak256(raw);
     // Sender recovery is async in viem; the receipt is written once it resolves (before the CLI polls).
-    this.pending = recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized }).then((from) => {
+    this.pending = recoverTransactionAddress({ serializedTransaction: raw as TransactionSerialized }).then(async (from) => {
       const f = from.toLowerCase();
+      if (tx.to!.toLowerCase() === IDENTITY && !(await this.checkAgentWallet(f as Address, tx.data!))) {
+        this.receipts.set(hash, { status: '0x0', blockNumber: toHex(this.blockNumber + 1n), gasUsed: toHex(100_000n), logs: [] });
+        return;
+      }
       this.nonces.set(f, (this.nonces.get(f) ?? 0) + 1);
       this.blockNumber++;
       this.timestamp += 2n;
+      const before = this.logs.length;
       try {
         this.exec(f as Address, tx.to!.toLowerCase() as Address, tx.data!, true);
-        this.receipts.set(hash, { status: '0x1', blockNumber: toHex(this.blockNumber), gasUsed: toHex(100_000n) });
+        this.receipts.set(hash, { status: '0x1', blockNumber: toHex(this.blockNumber), gasUsed: toHex(100_000n), logs: this.logs.slice(before) });
       } catch {
-        this.receipts.set(hash, { status: '0x0', blockNumber: toHex(this.blockNumber), gasUsed: toHex(100_000n) });
+        this.logs.length = before;
+        this.receipts.set(hash, { status: '0x0', blockNumber: toHex(this.blockNumber), gasUsed: toHex(100_000n), logs: [] });
       }
     });
     return hash;
@@ -135,12 +161,7 @@ export class FakeChain implements Rpc {
   }
 
   exec(from: Address | undefined, to: Address, data: Hex, write: boolean): { out: Hex; gas: bigint } {
-    if (to === IDENTITY) {
-      const { args } = decodeFunctionData({ abi: IDENTITY_ABI, data });
-      const o = this.owners.get(args[0] as bigint);
-      if (!o) throw reason('ERC721NonexistentToken');
-      return { out: this.result(IDENTITY_ABI, 'ownerOf', o), gas: 30_000n };
-    }
+    if (to === IDENTITY) return this.identity(from, data, write);
     if (to === VALIDATOR) return { out: this.result(VALIDATOR_ABI, 'certManager', CERT_MANAGER), gas: 30_000n };
     if (to === CERT_MANAGER) return this.certManager(data, write);
     if (to !== REGISTRY) throw new Error(`fake chain: call to ${to}`);
@@ -167,11 +188,11 @@ export class FakeChain implements Rpc {
         return ret(s ?? { agentId: 0n, releaseId: zero, originHash: zero, operator: '0x0000000000000000000000000000000000000000', registeredAt: 0n, expiresAt: 0n, status: 0, attestationHash: zero });
       }
       case 'approveRelease': {
-        const [agentId, p0, p1, p2] = a as [bigint, Hex, Hex, Hex];
+        const [agentId, p0, p1, p2, src] = a as [bigint, Hex, Hex, Hex, string];
         if (this.owners.get(agentId) !== from) throw custom('NotOwner');
         const rid = computeReleaseId(p0, p1, p2);
         if (this.releases.has(`${agentId}:${rid}`)) throw custom('ReleaseExists');
-        if (write) this.releases.set(`${agentId}:${rid}`, 1);
+        if (write) this.approveRelease(agentId, rid, src, [p0, p1, p2]);
         return ret(rid);
       }
       case 'addEndpoint': {
@@ -185,9 +206,128 @@ export class FakeChain implements Rpc {
       case 'registerSigner':
       case 'renewSigner':
         return this.signer(functionName, from!, a, write, gas);
+      case 'setReleaseStatus': {
+        const [agentId, rid, next] = a as [bigint, Hex, number];
+        if (this.owners.get(agentId) !== from) throw custom('NotOwner');
+        const cur = this.releases.get(`${agentId}:${rid}`) ?? 0;
+        const ok = (cur === 1 && (next === 2 || next === 3)) || (cur === 2 && (next === 1 || next === 3));
+        if (!ok) throw custom('InvalidTransition');
+        if (write) this.releases.set(`${agentId}:${rid}`, next);
+        return ret(undefined);
+      }
+      case 'retireEndpoint': {
+        const e = this.endpoints.get((a[0] as Hex).toLowerCase() as Hex);
+        if (!e || this.owners.get(e.agentId) !== from) throw custom('NotOwner');
+        if (e.status !== 1) throw custom('EndpointNotActive');
+        if (write) e.status = 2;
+        return ret(undefined);
+      }
+      case 'revokeSigner': {
+        const s = this.signers.get((a[0] as string).toLowerCase() as Address);
+        if (!s || this.owners.get(s.agentId) !== from) throw custom('NotOwner');
+        if (s.status !== 1) throw custom('SignerNotActive');
+        if (write) s.status = 2;
+        return ret(undefined);
+      }
+      case 'linkSelfAgent': {
+        const [agentId, sid] = a as [bigint, bigint];
+        if (this.owners.get(agentId) !== from) throw custom('NotOwner');
+        if (!this.selfOk.has(sid)) throw custom('SelfLinkInvalid');
+        if (write) this.selfLinks.set(agentId, sid);
+        return ret(undefined);
+      }
       default:
         throw new Error(`fake chain: registry.${functionName}`);
     }
+  }
+
+  /** ERC-8004 identity registry: ownerOf, register, transferFrom, EIP-5267 domain, setAgentWallet. */
+  private identity(from: Address | undefined, data: Hex, write: boolean): { out: Hex; gas: bigint } {
+    const { functionName, args } = decodeFunctionData({ abi: IDENTITY_ABI, data });
+    const a = args as readonly any[];
+    const gas = this.gasFor(functionName);
+    const ret = (v: unknown) => ({ out: this.result(IDENTITY_ABI, functionName, v), gas });
+    const transfer = (f: Address, t: Address, id: bigint) =>
+      this.logs.push({ address: IDENTITY, topics: encodeEventTopics({ abi: IDENTITY_ABI, eventName: 'Transfer', args: { from: f, to: t, tokenId: id } }) as Hex[], data: '0x' });
+    switch (functionName) {
+      case 'ownerOf': {
+        const o = this.owners.get(a[0] as bigint);
+        if (!o) throw reason('ERC721NonexistentToken');
+        return ret(o);
+      }
+      case 'register': {
+        const id = this.nextAgentId;
+        if (write) {
+          this.nextAgentId++;
+          this.owners.set(id, from!);
+          transfer('0x0000000000000000000000000000000000000000', from!, id);
+        }
+        return ret(id);
+      }
+      case 'transferFrom': {
+        const [f, t, id] = a as [Address, Address, bigint];
+        if (this.owners.get(id) !== from || f.toLowerCase() !== from) throw reason('ERC721InsufficientApproval');
+        if (write) {
+          this.owners.set(id, t.toLowerCase() as Address);
+          this.agentWallets.delete(id);
+          transfer(f, t, id);
+        }
+        return ret(undefined);
+      }
+      case 'setAgentWallet': {
+        const [id, wallet, deadline] = a as [bigint, Address, bigint];
+        if (this.owners.get(id) !== from) throw reason('NotAuthorized');
+        if (deadline < this.timestamp || deadline > this.timestamp + 300n) throw reason('DeadlineInvalid');
+        if (write) this.agentWallets.set(id, wallet.toLowerCase() as Address);
+        return ret(undefined);
+      }
+      case 'eip712Domain':
+        return ret(['0x0f', 'ERC8004IdentityRegistry', '1', BigInt(this.chainId), IDENTITY, `0x${'00'.repeat(32)}`, []]);
+      default:
+        throw new Error(`fake chain: identity.${functionName}`);
+    }
+  }
+
+  /** setAgentWallet needs an async signature check, so it is checked here, before exec. */
+  async checkAgentWallet(from: Address, data: Hex): Promise<boolean> {
+    const { functionName, args } = decodeFunctionData({ abi: IDENTITY_ABI, data });
+    if (functionName !== 'setAgentWallet') return true;
+    const [agentId, wallet, deadline, sig] = args as [bigint, Address, bigint, Hex];
+    const owner = this.owners.get(agentId);
+    if (owner !== from || deadline < this.timestamp || deadline > this.timestamp + 300n) return false;
+    const signer = await recoverTypedDataAddress({
+      domain: { name: 'ERC8004IdentityRegistry', version: '1', chainId: this.chainId, verifyingContract: IDENTITY },
+      types: { AgentWalletSet: [{ name: 'agentId', type: 'uint256' }, { name: 'newWallet', type: 'address' }, { name: 'owner', type: 'address' }, { name: 'deadline', type: 'uint256' }] },
+      primaryType: 'AgentWalletSet',
+      message: { agentId, newWallet: wallet, owner, deadline },
+      signature: sig,
+    });
+    return signer.toLowerCase() === wallet.toLowerCase();
+  }
+
+  /** State and `ReleaseApproved` log of a successful approveRelease. */
+  approveRelease(agentId: bigint, rid: Hex, sourceRef: string, pcrs: [Hex, Hex, Hex] = [`0x${'11'.repeat(48)}`, `0x${'22'.repeat(48)}`, `0x${'33'.repeat(48)}`]): void {
+    this.releases.set(`${agentId}:${rid}`, 1);
+    this.logs.push({
+      address: REGISTRY,
+      topics: encodeEventTopics({ abi: REGISTRY_EVENTS, eventName: 'ReleaseApproved', args: { agentId, releaseId: rid } }) as Hex[],
+      data: encodeAbiParameters([{ type: 'bytes' }, { type: 'bytes' }, { type: 'bytes' }, { type: 'string' }], [...pcrs, sourceRef]),
+    });
+  }
+
+  /** State and `SignerRegistered` log of a successful registerSigner. */
+  addSigner(signer: Address, s: { agentId: bigint; releaseId: Hex; originHash: Hex; operator: Address; attestationHash?: Hex }): void {
+    const expiresAt = this.timestamp + 604800n;
+    const attestationHash = s.attestationHash ?? (`0x${'00'.repeat(32)}` as Hex);
+    this.signers.set(signer.toLowerCase() as Address, { ...s, attestationHash, registeredAt: this.timestamp, expiresAt, status: 1 });
+    this.logs.push({
+      address: REGISTRY,
+      topics: encodeEventTopics({ abi: REGISTRY_EVENTS, eventName: 'SignerRegistered', args: { signer, agentId: s.agentId, releaseId: s.releaseId } }) as Hex[],
+      data: encodeAbiParameters(
+        [{ type: 'bytes32' }, { type: 'address' }, { type: 'uint64' }, { type: 'bytes32' }, { type: 'uint64' }],
+        [s.originHash, s.operator, expiresAt, attestationHash, this.timestamp],
+      ),
+    });
   }
 
   /** State and `EndpointAdded` log of a successful addEndpoint. */
@@ -260,9 +400,7 @@ export class FakeChain implements Rpc {
     const signer = signerFromPublicKey(att.publicKey!);
     if (fn === 'registerSigner') {
       if (this.signers.has(signer)) throw custom('SignerExists');
-      if (write) {
-        this.signers.set(signer, { agentId, releaseId: rid, originHash: oh, operator: from, registeredAt: this.timestamp, expiresAt: this.timestamp + 604800n, status: 1, attestationHash: keccak256(doc) });
-      }
+      if (write) this.addSigner(signer, { agentId, releaseId: rid, originHash: oh, operator: from, attestationHash: keccak256(doc) });
       return { out: this.result(REGISTRY_ABI, fn, signer), gas };
     }
     if (signer !== (a[0] as string).toLowerCase()) throw custom('SignerMismatch');

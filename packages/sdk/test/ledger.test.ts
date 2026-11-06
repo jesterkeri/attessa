@@ -179,3 +179,17 @@ describe('a crash between V6 and V8 holds the reservation at most 10 minutes', (
     expect(Date.now() - t).toBeLessThan(1000);
   });
 });
+
+describe('evidence.jsonl survives an append cut short', () => {
+  it('skips the torn line and keeps the next row whole', () => {
+    dir = mkdtempSync(join(tmpdir(), 'attessa-ev-'));
+    const ledger = new Ledger(dir);
+    const row = (n: string) => ({ v: '1', requestId: `0x${n.repeat(32)}`, outcome: 'verified' }) as unknown as Parameters<Ledger['appendEvidence']>[0];
+    ledger.appendEvidence(row('01'));
+    const p = join(dir, 'evidence.jsonl');
+    writeFileSync(p, readFileSync(p, 'utf8') + JSON.stringify(row('02')).slice(0, 20), { flag: 'w' });
+    expect(ledger.readEvidence().map((r) => r.requestId)).toEqual([`0x${'01'.repeat(32)}`]);
+    ledger.appendEvidence(row('03'));
+    expect(ledger.readEvidence().map((r) => r.requestId)).toEqual([`0x${'01'.repeat(32)}`, `0x${'03'.repeat(32)}`]);
+  });
+});
