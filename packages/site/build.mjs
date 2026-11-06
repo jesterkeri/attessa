@@ -13,11 +13,16 @@
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, cpSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildSync } from 'esbuild';
+import { csp } from './csp.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = join(here, 'src');
 const out = process.env.SITE_OUT ?? join(here, 'dist');
 const layout = readFileSync(join(src, 'layout.html'), 'utf8');
+// Joshua owns this domain (OPEN-QUESTIONS). The site is served by GitHub Pages at https://attessa.xyz.
+const SITE_ORIGIN_HOST = 'attessa.xyz';
+const phDir = join(here, 'node_modules', '@phosphor-icons', 'core', 'assets', 'regular');
 
 const walk = dir => readdirSync(dir).flatMap(name => {
   const p = join(dir, name);
@@ -76,17 +81,30 @@ const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable
   Array.from({ length: SEGMENTS }, (_, i) => `<path d="${arc(12, 12, 9, i * 72 + 8, (i + 1) * 72 - 8)}"/>`).join('') +
   `<circle cx="12" cy="12" r="3"/></svg>`;
 
-// Icons come from Phosphor (regular weight, loaded in layout.html). Status icons differ in shape, not only colour.
+// Icons are Phosphor (regular weight, @phosphor-icons/core, exact version in package.json), inlined as SVG so the
+// pages load no icon font. The class names stay (ph, ph-<name>): site.css and the status rules key off them.
+// Status icons differ in shape, not only colour.
 const icons = {
   pass: 'check-circle', fail: 'x-circle', na: 'minus-circle', wait: 'circle-dashed',
   yes: 'check', no: 'minus', x: 'x', alert: 'warning', arrow: 'arrow-up-right', right: 'arrow-right',
   search: 'magnifying-glass', seal: 'seal-check', terminal: 'terminal-window', clock: 'clock',
   coins: 'coins', shield: 'shield-check', copy: 'copy', github: 'github-logo', cube: 'cube',
 };
+// The inner markup of one Phosphor icon (every file is `<svg ... viewBox="0 0 256 256" fill="currentColor">...</svg>`).
+const phInner = name => {
+  const p = join(phDir, `${name}.svg`);
+  if (!existsSync(p)) throw new Error(`missing Phosphor icon ${name}: run pnpm install`);
+  const m = /^<svg [^>]*viewBox="0 0 256 256"[^>]*>([\s\S]*)<\/svg>\s*$/.exec(readFileSync(p, 'utf8'));
+  if (!m) throw new Error(`unexpected Phosphor icon file ${name}.svg`);
+  return m[1];
+};
+const phSvg = (name, inner) => `<svg class="ph ph-${name}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false">${inner}</svg>`;
 const icon = n => {
   if (!icons[n]) throw new Error(`unknown icon ${n}`);
-  return `<i class="ph ph-${icons[n]}" aria-hidden="true"></i>`;
+  return phSvg(icons[n], phInner(icons[n]));
 };
+// The icons scripts add at run time (motion.js's hero console), handed to the bundle as a constant.
+const SCRIPT_ICONS = Object.fromEntries(['check', 'x', 'minus'].map(n => [n, phInner(n)]));
 
 const copyIcon = icon('copy');
 // Two stacked arrows: on hover the first slides out and the second slides in.
@@ -142,6 +160,20 @@ rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync(join(src, 'static'), out, { recursive: true });
 
+// Third-party code is bundled, never loaded from a CDN. motion.js gets gsap and ScrollTrigger (as the globals it
+// already reads); scene.js gets three. Output replaces the copied source files.
+const bundle = (entry, outfile, extra = {}) => buildSync({
+  entryPoints: [entry], outfile, bundle: true, minify: true, legalComments: 'none', target: 'es2022', logLevel: 'error', ...extra,
+});
+bundle(join(src, 'entry', 'motion.entry.js'), join(out, 'assets', 'motion.js'), {
+  format: 'iife', define: { __PH_ICONS__: JSON.stringify(SCRIPT_ICONS) },
+});
+bundle(join(src, 'static', 'assets', 'scene.js'), join(out, 'assets', 'scene.js'), { format: 'esm', nodePaths: [join(here, 'node_modules')] });
+
+// GitHub Pages serves this folder as is: CNAME names the domain, .nojekyll stops Jekyll processing.
+writeFileSync(join(out, 'CNAME'), `${SITE_ORIGIN_HOST}\n`);
+writeFileSync(join(out, '.nojekyll'), '');
+
 const pagesDir = join(src, 'pages');
 let count = 0;
 for (const file of walk(pagesDir)) {
@@ -171,6 +203,8 @@ for (const file of walk(pagesDir)) {
     .replace(/\[\[slot:(\w+)\]\]/g, (_, n) => slotChip(n))
     .replace(/\[\[hash:(0x[0-9a-fA-F]+)\]\]/g, (_, h) => hashChip(h))
     .replace(/\{\{root\}\}/g, () => (depth ? '../'.repeat(depth) : ''));
+
+  html = html.replace('{{csp}}', () => csp(html));
 
   const leftover = html.match(/\{\{[^}]*\}\}|\[\[[^\]]*\]\]/);
   if (leftover) throw new Error(`${rel}: unexpanded ${leftover[0]}`);

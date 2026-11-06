@@ -78,10 +78,12 @@ and a few shorthands are expanded.
 - `assets/motion.js`: GSAP text and section reveals.
 - `assets/scene.js`: the three.js particle scene (below).
 
-Loaded from CDNs, versions pinned in `layout.html`: GSAP 3.12.5 and ScrollTrigger (cdnjs), three 0.160.0
-(jsDelivr, via an import map), Phosphor icons 2.1.1 (unpkg), Google Fonts (Anybody, Geist, Geist Mono).
-These sit outside the repo's lockfile and supply-chain rules, so the production frontend should self-host or
-pin them with integrity hashes.
+Nothing loads from a third-party origin. esbuild bundles GSAP 3.12.5 with ScrollTrigger (into `assets/motion.js`) and
+three 0.160.0 (into `assets/scene.js`); the Phosphor icons (`@phosphor-icons/core` 2.1.1) are inlined as SVG at build
+time; the fonts are woff2 files in `assets/fonts/` (re-fetch with `scripts/fetch-fonts.mjs`; `SHA256SUMS` is their
+manifest). Every page carries its Content-Security-Policy as a `<meta http-equiv>` tag, with the sha256 of each
+inline script computed at build time (`csp.mjs`). GitHub Pages cannot send headers, so `frame-ancestors` and
+reporting are not set. The build also writes `CNAME` (`attessa.xyz`) and an empty `.nojekyll` into `dist/`.
 
 ## The 3D scene
 
@@ -132,6 +134,5 @@ phone or tablet.
   lookup), the recent-calls feed from Celo events, and every other slot from chain data, the deploy record and
   the SDK. The payment check reads Celo Sepolia today.
 - Celo mainnet in the explorer at Gate 5 (USDC and USA₮), and the registry addresses the network switch implies.
-- Self-host or pin the CDN scripts and fonts with integrity hashes.
 - Final Privacy and Terms wording, and the real `security.txt` contact.
 - A real-device pass (tap feel, safe areas, keyboard, particle performance on older phones).

@@ -26,7 +26,9 @@ export function pageText(html) {
   if (body === undefined) throw new Error('page has no <body>');
   const text = body
     .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/<(script|style|svg)\b[\s\S]*?<\/\1\s*>/gi, NL)
+    .replace(/<(script|style)\b[\s\S]*?<\/\1\s*>/gi, NL)
+    // Inline SVG (icons) adds no words and no line break, as the icon font's <i> did before the icons were inlined.
+    .replace(/<svg\b[\s\S]*?<\/svg\s*>/gi, '')
     // Line breaks inside <pre> are content (terminal output), so each becomes its own line.
     .replace(/<pre\b[^>]*>([\s\S]*?)<\/pre\s*>/gi, (_, inner) => NL + inner.replace(/\r?\n/g, NL) + NL)
     .replace(/<\/?([a-z][a-z0-9-]*)\b[^>]*>/gi, (_, tag) => (BLOCK.test(tag) ? NL : ''));

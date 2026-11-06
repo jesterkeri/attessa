@@ -61,6 +61,8 @@
   // Hero console: prints a call being checked line by line, alternating a clean call with a tampered one.
   const conLines = $('[data-con-lines]');
   const ICON = { pass: 'check', fail: 'x', skip: 'minus' };
+  // __PH_ICONS__ is set by build.mjs: the Phosphor icons this script draws, inlined (no icon font is loaded).
+  const phIcon = n => `<svg class="ph ph-${n}" viewBox="0 0 256 256" fill="currentColor" aria-hidden="true" focusable="false">${__PH_ICONS__[n]}</svg>`;
   const RUNS = [
     [
       ['pass', 'approved build'], ['pass', 'sealed machine'], ['pass', 'request and answer'], ['pass', 'celo data'],
@@ -76,7 +78,7 @@
     const li = document.createElement('li');
     if (kind.startsWith('verdict')) { li.className = `is-verdict ${kind.split(' ')[1]}`; li.textContent = text; return li; }
     li.className = `is-${kind}`;
-    li.innerHTML = `<i class="ph ph-${ICON[kind]}" aria-hidden="true"></i><span>${text}</span>${note ? `<span class="note">(${note})</span>` : ''}`;
+    li.innerHTML = `${phIcon(ICON[kind])}<span>${text}</span>${note ? `<span class="note">(${note})</span>` : ''}`;
     return li;
   };
   const cmdLine = () => {
