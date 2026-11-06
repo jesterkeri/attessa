@@ -2876,3 +2876,17 @@ EXIT=0
 ```
 
 reviewed: pending (Codex r2)
+
+### Website finish Codex r2 fix - 2026-11-06
+Codex r2 (site-finish-review-r2.md, on 081a402): REVISE, 1 major: the explorer checked that the Transfer log named this transaction but not the AuthorizationUsed log, so a forged RPC receipt could splice an authorization from another transaction onto a real transfer (SPEC §6.2 V11 is one transaction). r1 M2 and m1 were recorded as fixed.
+Fix (explorer.js readReceipt): every pinned-token AuthorizationUsed or Transfer log must carry this transaction's hash, and its block hash when given must be the receipt's; otherwise the whole answer is refused as unreadable. Test (failing first, 63f6c9b): five cases in packages/site/test/explorer-live-errors.test.mjs (authorization from another transaction, with no transaction hash, from another block; transfer with no transaction hash, from another block). Codex's reproduction now prints `badanswer`.
+verify (under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+node v22.23.2: 75 files, 268 tests, 0 failed
+site=0
+FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first
+```
+reviewed: pending (Codex r3)

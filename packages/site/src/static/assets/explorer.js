@@ -99,7 +99,14 @@
       if (typeof log.address !== 'string' || !ADDR.test(lower(log.address))) throw bad('a log has no address');
       const token = net.tokens.find(t => t.address === lower(log.address));
       if (!token || !Array.isArray(log.topics) || log.removed === true) continue;
-      if (lower(log.topics[0]) === AUTH_USED) {
+      // V11 is one transaction: every log of the pinned token this check uses must name this transaction and, when it
+      // says, this block. A log without them, or from elsewhere, makes the whole answer unreadable (a forged splice).
+      const topic0 = lower(log.topics[0]);
+      if (topic0 === AUTH_USED || topic0 === TRANSFER) {
+        if (lower(log.transactionHash) !== hash) throw bad('a log is not from this transaction');
+        if (log.blockHash != null && lower(log.blockHash) !== lower(receipt.blockHash)) throw bad('a log is not from this block');
+      }
+      if (topic0 === AUTH_USED) {
         // Only the pinned token's own event counts, and only with its two indexed fields (authorizer, nonce).
         if (log.topics.length === 3) authorizers.push({ token, authorizer: wordToAddress(log.topics[1], 'authorizer') });
         continue;
@@ -107,7 +114,6 @@
       if (lower(log.topics[0]) !== TRANSFER) continue;
       if (log.topics.length !== 3) throw bad('a Transfer log has the wrong topics');
       if (typeof log.data !== 'string' || !WORD.test(lower(log.data))) throw bad('a Transfer amount is not one word');
-      if (log.transactionHash != null && lower(log.transactionHash) !== hash) throw bad('a log is from another transaction');
       transfers.push({
         token,
         payer: wordToAddress(log.topics[1], 'from'),
