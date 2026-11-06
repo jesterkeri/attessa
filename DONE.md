@@ -2910,3 +2910,12 @@ Correction to the note above: its mutant line was written from the feat/site-ui 
 node v22.23.2: 75 files, 268 tests, 1 failed
 exit 1
 ```
+
+## Website finish Codex r3: SHIP (2026-11-06)
+Codex round 3 reviewed 48fdee6 in a frozen worktree: the r2 log-splicing finding is fixed, the new tests pass, and the real recorded settlement still verifies.
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+Two commits follow 48fdee6 (9034aab, a44b9b1): packages/site/test-count.sh counts a nonzero module exit as a failure (the same change Codex reviews on feat/site-ui as round 5) and its DONE notes. They change no site source: `packages/site/build.mjs` at 48fdee6 and at a44b9b1 produce identical output (`diff -r` of the two builds: no difference).
+reviewed: reviews/site-finish-review-r3.md | verdict: implementation-ready (rounds r1 and r2 ended changes required; archived outside the repo)
