@@ -60,6 +60,9 @@ const ALWAYS_NOT_CHECKED = [
 /** The checks this tool can make, in the order it makes them; each runs only for its own argument (the first two always). */
 const OFFLINE_CHECKS = ['signature', 'request_id', 'request_hash', 'lifetime', 'response_hash', 'inputs_hash'];
 
+/** Every check this tool names as not made: all its own and every chain, ledger and clock check, for a call refused before any ran. */
+export const allSkipped = (): string[] => [...OFFLINE_CHECKS, ...ALWAYS_NOT_CHECKED];
+
 export function registryFor(chainId: number): string | undefined {
   return Object.values(DEPLOYMENTS).find((d) => d.chainId === chainId)?.enclaveRegistry?.toLowerCase() ?? undefined;
 }

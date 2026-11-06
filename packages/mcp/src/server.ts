@@ -17,7 +17,7 @@ import {
   type Deps,
 } from '@attessa/cli';
 import { Ledger, TERMINAL_STATES, type AssetKey } from '@attessa/sdk';
-import { registryFor, verifyProof } from './verify-proof.ts';
+import { allSkipped, registryFor, verifyProof } from './verify-proof.ts';
 
 /** The MCP agent tools (FLOWS §11 "Agent surface"). Payment logic, bounds and copy are the CLI's and the SDK's. */
 
@@ -110,7 +110,7 @@ export const TOOLS: Tool[] = [
   {
     name: 'get_result',
     description:
-      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A verified call is read from the local record (no wallet, no network); a call decided against you (not charged, paid but rejected, settled after refusal) is reported in the CLI FLOWS words and needs the wallet loaded, but sends nothing. A call still open is decided now: the buyer wallet signs a short payer message (an EIP-191 text, not a payment) for each open call of this wallet and asks its gateway for the answer, and the chain is read. Never pays again and sends no transaction.',
+      'SIGNS A PAYER MESSAGE (no payment, no transaction): reports what happened to an earlier call by request id. A verified call is read from the local record (no wallet, no network); a call decided against you (not charged, paid but rejected, settled after refusal) is reported in the CLI FLOWS words and needs the wallet loaded, but sends nothing. A call still open is decided now: if its answer can still come, the buyer wallet signs a short payer message (an EIP-191 text, not a payment) and asks its gateway for it; an open call already refused is only checked against the chain, with no signature. The chain is read. Never pays again and sends no transaction.',
     inputSchema: { type: 'object', properties: { requestId: REQUEST_ID_SCHEMA }, required: ['requestId'], additionalProperties: false },
     annotations: { readOnlyHint: false, destructiveHint: false },
   },
@@ -147,45 +147,70 @@ interface ToolResult {
   isError?: boolean;
 }
 
-/** Names whose values are secrets whatever they look like; the key and keystore password are always included. */
-const SECRET_NAME = /KEY|SECRET|PASSWORD|PASSPHRASE|TOKEN|CREDENTIAL|AUTH/i;
-
-/**
- * Shortest configured secret that is redacted. Under this a value (a `0`, a `1`, `ok`) can't be told from protocol data
- * (amounts, block numbers, hashes), so replacing it would make results false; a secret this short is left alone (OPEN-QUESTIONS).
- */
-export const MIN_SECRET_LENGTH = 4;
-
-/**
- * Every configured secret of at least MIN_SECRET_LENGTH, and the forms it takes once it is put in a URL or a form:
- * percent-encoded in both cases, with `+` for a space, and a key without its 0x. Longest first, so a longer form is
- * replaced whole before a shorter one inside it.
- */
-function secretForms(env: Record<string, string | undefined>): string[] {
-  const forms = new Set<string>();
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || v.length < MIN_SECRET_LENGTH || !(SECRET_NAME.test(k) || k === 'ATTESSA_PRIVATE_KEY' || k === 'ATTESSA_KEYSTORE_PASSWORD')) continue;
-    const bases = [v];
-    if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.push(v.slice(2));
-    for (const b of bases) {
-      const pct = encodeURIComponent(b);
-      const strict = pct.replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
-      for (const f of [b, pct, strict, pct.replace(/%20/g, '+'), strict.replace(/%20/g, '+'), pct.toLowerCase(), encodeURI(b)]) forms.add(f);
-    }
-  }
-  return [...forms].sort((x, y) => y.length - x.length);
+/** An environment variable is a secret when a word of its name is, or ends in, KEY, SECRET, PASSWORD, PASSPHRASE, TOKEN or CREDENTIAL(S), or is AUTH (so KEYBOARD and AUTHOR are not). */
+function isSecretName(name: string): boolean {
+  return name === 'ATTESSA_PRIVATE_KEY' || name === 'ATTESSA_KEYSTORE_PASSWORD' || name.split('_').some((w) => /(KEY|SECRET|PASSWORD|PASSPHRASE|TOKEN|CREDENTIALS?)$/i.test(w) || /^AUTH$/i.test(w));
 }
 
-/** One string with configured secrets (see MIN_SECRET_LENGTH) and URL userinfo removed. */
+/** Shortest secret that can be told from protocol data (amounts, block numbers, hash digits) and so hidden without changing a result. */
+export const MIN_SECRET_LENGTH = 4;
+/** A secret made only of digits collides with amounts and block numbers unless it is this long. */
+export const MIN_DIGIT_SECRET_LENGTH = 8;
+
+/** Names of secret variables whose value can't be redacted safely: the server won't run with them. Never their values. */
+export function unsafeSecrets(env: Record<string, string | undefined>): string[] {
+  return Object.entries(env)
+    .filter(([k, v]) => v !== undefined && v !== '' && isSecretName(k) && (v.length < MIN_SECRET_LENGTH || (/^\d+$/.test(v) && v.length < MIN_DIGIT_SECRET_LENGTH)))
+    .map(([k]) => k);
+}
+
+export function unsafeSecretError(name: string): CliError {
+  return new CliError(
+    'unsafe_secret',
+    `${name} is set to a value too short to hide safely, so the MCP server won't run with it.`,
+    `Use a value of at least ${MIN_SECRET_LENGTH} characters (at least ${MIN_DIGIT_SECRET_LENGTH} if it is only digits) for ${name}, or unset it, then start the server again.`,
+  );
+}
+
+const escRe = (x: string): string => x.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
+const UNRESERVED = /^[A-Za-z0-9\-_.~]$/;
+const URI_LITERAL = ";,/?:@&=+$#!'()*";
+
+/** A pattern for `b` as it appears raw, JSON-escaped, or URL-encoded in any mix of upper and lower case hex, with `+` for a space, and reserved characters left literal (encodeURI). */
+function secretPattern(b: string): RegExp {
+  const pct = [...b]
+    .map((ch) => {
+      if (UNRESERVED.test(ch)) return escRe(ch);
+      const enc = [...Buffer.from(ch, 'utf8')].map((by) => `%${by.toString(16).toUpperCase().padStart(2, '0').replace(/[A-F]/g, (c) => `[${c}${c.toLowerCase()}]`)}`).join('');
+      return `(?:${[enc, ...(ch === ' ' ? ['\\+'] : []), ...(URI_LITERAL.includes(ch) ? [escRe(ch)] : [])].join('|')})`;
+    })
+    .join('');
+  return new RegExp(`${pct}|${escRe(JSON.stringify(b).slice(1, -1))}|${escRe(b)}`, 'g');
+}
+
+/** One pattern per safe configured secret (and a key without its 0x), the longest first. */
+function secretPatterns(env: Record<string, string | undefined>): RegExp[] {
+  const unsafe = new Set(unsafeSecrets(env));
+  const bases = new Set<string>();
+  for (const [k, v] of Object.entries(env)) {
+    if (v === undefined || v === '' || unsafe.has(k) || !isSecretName(k)) continue;
+    bases.add(v);
+    if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.add(v.slice(2));
+  }
+  return [...bases].sort((x, y) => y.length - x.length).map(secretPattern);
+}
+
+/** One string with configured secrets (raw, JSON-escaped and URL-encoded) and URL userinfo removed. */
 export function scrub(text: string, env: Record<string, string | undefined>): string {
   let t = text;
-  for (const s of secretForms(env)) t = t.split(s).join('[hidden]');
+  for (const re of secretPatterns(env)) t = t.replace(re, '[hidden]');
   return t.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s"'@\\]*@/gi, '$1');
 }
 
 /**
  * The last line of defence on every result: scrub applied to each string VALUE of the result before it is serialised.
  * Keys, numbers, booleans and the JSON structure are never touched, so the result stays valid and means what it meant.
+ * Secrets too short to hide safely never get here: the server refuses to run with them (unsafeSecrets).
  */
 export function redactResult(v: unknown, env: Record<string, string | undefined>): unknown {
   const walk = (x: unknown): unknown => {
@@ -233,6 +258,8 @@ function bodyText(a: Record<string, unknown>): string {
 
 export function createMcpServer(opts: ServerOptions): Server {
   const env = opts.deps.env;
+  const unsafe = unsafeSecrets(env)[0];
+  if (unsafe !== undefined) throw unsafeSecretError(unsafe);
   const server = new Server({ name: 'attessa', version: '0.0.0' }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -240,6 +267,9 @@ export function createMcpServer(opts: ServerOptions): Server {
     const name = req.params.name;
     const args = (req.params.arguments ?? {}) as Record<string, unknown>;
     try {
+      // The environment is read live: a secret that became unsafe after start stops every tool, not just the next start.
+      const bad = unsafeSecrets(env)[0];
+      if (bad !== undefined) return failure(env, unsafeSecretError(bad));
       return await call(name, args);
     } catch (e) {
       if (e instanceof CliError) return failure(env, e);
@@ -317,6 +347,32 @@ export function createMcpServer(opts: ServerOptions): Server {
     return ['--max-amount', asked ?? saved!, '--asset', asset];
   }
 
+  async function verifyProofTool(a: Record<string, unknown>): Promise<ToolResult> {
+    const proof = str(a, 'proof');
+    if (!proof) throw ERR.usage('proof is required: the X-Attested-Proof header value.');
+    const chainId = a.chainId;
+    if (typeof chainId !== 'number' || !Number.isInteger(chainId) || chainId <= 0) throw ERR.usage('chainId must be a positive integer, like 11142220.');
+    const given = str(a, 'registry');
+    if (given !== undefined && !ADDRESS.test(given)) throw ERR.usage('registry must be an address.');
+    const registry = given?.toLowerCase() ?? registryFor(chainId);
+    if (!registry) throw new CliError('no_registry', `No EnclaveRegistry is pinned for chain ${chainId}.`, 'Pass the registry address you expect as `registry`.');
+    const requestId = str(a, 'requestId')?.toLowerCase();
+    if (requestId !== undefined && !REQUEST_ID.test(requestId)) throw ERR.usage('requestId must be 0x followed by 64 hex characters.');
+    const requestHash = str(a, 'requestHash')?.toLowerCase();
+    if (requestHash !== undefined && !REQUEST_ID.test(requestHash)) throw ERR.usage('requestHash must be 0x followed by 64 hex characters.');
+    let request: { method: string; pathAndQuery: string; body: string } | undefined;
+    if (a.request !== undefined) {
+      const q = a.request as Record<string, unknown>;
+      if (typeof q !== 'object' || q === null || typeof q.method !== 'string' || typeof q.pathAndQuery !== 'string' || typeof q.body !== 'string' || !q.pathAndQuery.startsWith('/'))
+        throw ERR.usage('request needs a method, a pathAndQuery that starts with /, and a body (all text).');
+      request = { method: q.method, pathAndQuery: q.pathAndQuery, body: q.body };
+    }
+    const res = await verifyProof({ proof, chainId, registry, response: str(a, 'response'), requestId, requestHash, request }, registry);
+    if (res.ok) return text(env, res);
+    const words = CHECK_WORDS[res.check!]?.[0] ?? res.check;
+    return text(env, { ...res, error: 'proof_rejected', message: `The proof failed a check: ${safe(words ?? 'unnamed')}.`, next: "Don't use this answer. If you paid for it, run `get_result` with its request id to see what was charged." }, true);
+  }
+
   async function call(name: string, a: Record<string, unknown>): Promise<ToolResult> {
     switch (name) {
       case 'resolve_endpoint':
@@ -340,31 +396,14 @@ export function createMcpServer(opts: ServerOptions): Server {
         const response = r.answers.get('answer.json');
         return text(env, { ...r.json, ...(response !== undefined ? { response } : {}) }, r.json.ok !== true);
       }
-      case 'verify_proof': {
-        const proof = str(a, 'proof');
-        if (!proof) throw ERR.usage('proof is required: the X-Attested-Proof header value.');
-        const chainId = a.chainId;
-        if (typeof chainId !== 'number' || !Number.isInteger(chainId) || chainId <= 0) throw ERR.usage('chainId must be a positive integer, like 11142220.');
-        const given = str(a, 'registry');
-        if (given !== undefined && !ADDRESS.test(given)) throw ERR.usage('registry must be an address.');
-        const registry = given?.toLowerCase() ?? registryFor(chainId);
-        if (!registry) throw new CliError('no_registry', `No EnclaveRegistry is pinned for chain ${chainId}.`, 'Pass the registry address you expect as `registry`.');
-        const requestId = str(a, 'requestId')?.toLowerCase();
-        if (requestId !== undefined && !REQUEST_ID.test(requestId)) throw ERR.usage('requestId must be 0x followed by 64 hex characters.');
-        const requestHash = str(a, 'requestHash')?.toLowerCase();
-        if (requestHash !== undefined && !REQUEST_ID.test(requestHash)) throw ERR.usage('requestHash must be 0x followed by 64 hex characters.');
-        let request: { method: string; pathAndQuery: string; body: string } | undefined;
-        if (a.request !== undefined) {
-          const q = a.request as Record<string, unknown>;
-          if (typeof q !== 'object' || q === null || typeof q.method !== 'string' || typeof q.pathAndQuery !== 'string' || typeof q.body !== 'string' || !q.pathAndQuery.startsWith('/'))
-            throw ERR.usage('request needs a method, a pathAndQuery that starts with /, and a body (all text).');
-          request = { method: q.method, pathAndQuery: q.pathAndQuery, body: q.body };
+      case 'verify_proof':
+        try {
+          return await verifyProofTool(a);
+        } catch (e) {
+          // Refused before any check ran: still say that none of them did.
+          if (e instanceof CliError) return text(env, { ok: false, error: e.code, message: e.message, next: e.next, scope: 'offline', notChecked: allSkipped() }, true);
+          throw e;
         }
-        const res = await verifyProof({ proof, chainId, registry, response: str(a, 'response'), requestId, requestHash, request }, registry);
-        if (res.ok) return text(env, res);
-        const words = CHECK_WORDS[res.check!]?.[0] ?? res.check;
-        return text(env, { ...res, error: 'proof_rejected', message: `The proof failed a check: ${safe(words ?? 'unnamed')}.`, next: "Don't use this answer. If you paid for it, run `get_result` with its request id to see what was charged." }, true);
-      }
       case 'get_result': {
         const id = requireId(a);
         const dir = buyerDataDir(opts.deps as Deps);
