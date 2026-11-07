@@ -4519,3 +4519,63 @@ Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.
 status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
+
+### T21a Codex r1 fixes - 2026-11-07
+Codex r1 (reviews/t21a-verify-review-r1.md, REVISE). Merged origin/staging first (both sides of DONE.md and OPEN-QUESTIONS.md kept). Failing tests committed alone (6b09d35: 9 failing), then the fix:
+- Major 1: `verified` stood on a subset of V10. verify now also runs the SDK's own `verifyPaid` (exported from @attessa/sdk) as a sixth row `timing_and_inputs` (expiresAt = issuedAt + 600, time anchors, agent, inputsHash, inputs grammar, inputs block hash/timestamp/age, account values at the inputs block); `verified` needs all six rows plus settlement. Without the record, the answer or a settlement it prints `not checked` (exit 1). Account values the RPC no longer keeps are a pass with that said (SPEC §7 V10: not a failure). Tests: expiresAt + 601, altered inputsHash, account values off the chain, clock skew, another agent.
+- Major 2: an unreadable `--response` value is no longer echoed ("Can't read the file given to --response."); text and --json tested with a sentinel credential.
+- Minor 1: skipped rows carry their Celoscan link (registry address, or the settlement tx); tested.
+- Minor 2: `--network local` never selects a public explorer, even on a fork with Sepolia's chain id; it prints "No public explorer for --network local: links are left out."; tested. The existing tests now run verify with `--network sepolia` (the fake chain is Sepolia's id with the pinned fake registry); calls still use `--network local` (the fake gateway is http://localhost).
+- Existing assertions only grew: the five-row JSON list and the "not run" count now include the new row (4 to 5).
+
+verify (`flock -w 3600 /home/hr/.cache/attessa-heavy.lock bash -c 'pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/cli test'`, exit 0; per-test lines trimmed):
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli lint: Done
+> @attessa/cli@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-t21a/packages/cli
+> vitest run
+ RUN  v3.2.7 /home/hr/myvscode_linux/attessa/.worktrees/build-t21a/packages/cli
+ Test Files  88 passed (88)
+      Tests  375 passed (375)
+   Start at  08:54:01
+   Duration  18.66s (transform 2.40s, setup 35.31s, collect 21.17s, tests 103.35s, environment 22ms, prepare 9.43s)
+```
+reviewed: pending (Codex r2)
