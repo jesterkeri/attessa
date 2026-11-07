@@ -1220,6 +1220,986 @@ lint=0
 ```
 - Adversary r1 on 133c133: CLEAN. Weakening check: 5 gateway mutants (cap 17, cap 15, the 17th call executed and settled, two re-sends per row, ticks run one after the other) fail both the old and the new form of the tests. 3 more pass both forms (existing blind spots, none added by this change). Flake check: the two files on one core with 8 busy loops failed in the old form 3 runs of 3 (7, 9 and 10 of 16 calls got 200; the ticks test timed out at 20 s). In the new form they passed 4 of 4, and 5 of 5 with 4 busy loops. `taskset -c 0,1 pnpm -r test` twice: gateway 154/154. The other `holdable` tests pass with the new `release()`. Its side-by-side test and scripts are archived outside the repo.
 reviewed: reviews/gateway-ci-timing-review-r1.md | verdict: implementation-ready | C0 M0 m0
+
+## Install-scripts allow-list for bin, engines and two scripts - 2026-11-02
+commit: 724d652 (this entry adds only DONE.md)
+why: `./scripts/check-install-scripts.sh` failed on staging with 7 lines from T15, T19 and T20 (bin in cli, gateway and seller-host; engines in sdk; scripts gen:vectors in core and render-units in seller-host; better-sqlite3@13.0.3 without a pinned integrity). T39 needs the check to pass.
+changed (scripts/check-install-scripts.sh, workspace manifests only; the root manifest rules are unchanged):
+- bin: a map of command names (`[a-z0-9][a-z0-9-]*`) to .js files under the package's dist/; a string, an absolute path, a `.`/`..` or hidden component, or a path outside dist/ fails.
+- engines: a node range only (`>=`, `^` or `~` and up to three numbers); any other engine fails.
+- scripts gen:vectors and render-units: only as `node [--experimental-strip-types] scripts/<file>.(ts|js|mjs)` where that file is a tracked regular file of the same package. Neither runs at install; preinstall, install, postinstall and prepare are still refused (test cases below).
+- PINNED gets better-sqlite3@13.0.3. pnpm-lock.yaml and the registry agree:
+```
+lock: sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+npm:  sha512-RbOBxmLBG8uvFUc15X9+9SFemKcQ0WBuISBVkpuiaUB2qblC8UWlHEjdWVoZ8AdhSwmoEgsiXKfopX0CQxaACQ==
+integrity_match
+```
+test: scripts/check-install-scripts.allowlist.test.sh. Each case changes one thing in a scratch copy of HEAD and the probe must print exactly that one FAIL line, so none of the 7 original lines may appear (the old guard fails all 16 cases).
+verified at 724d652:
+```
+$ flock -w 3600 /home/hr/.cache/attessa-heavy.lock ./scripts/check-install-scripts.sh; echo "probe_rc=$?"
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+probe_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh; echo "test_rc=$?"
+ok: bin outside dist/
+ok: bin with .. out of dist/
+ok: bin absolute
+ok: bin as a string
+ok: bin command name with a path
+ok: engines beyond node
+ok: engines node not a range
+ok: extra unknown key
+ok: preinstall script
+ok: install script
+ok: postinstall script
+ok: prepare script
+ok: gen:vectors running more than node
+ok: gen:vectors in the root manifest
+ok: render-units on an untracked file
+ok: wrong better-sqlite3 integrity
+16 cases, rc=0
+test_rc=0
+```
+The T02 install-guard adversary tests, run at 724d652 under flock:
+```
+scripts/adversary-t02-codex-r2/install-probe-dirty-checkout.sh rc=0
+scripts/adversary-t02-r12/install-probe-core-worktree.sh rc=0
+scripts/adversary-t02-r12/install-probe-git-env.sh rc=0
+scripts/adversary-t02-r13/install-probe-archive-filter.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch-tree.sh rc=0
+scripts/adversary-t02-r14/install-probe-lazy-fetch.sh rc=0
+scripts/adversary-t02-r4/install-probe-false-clean.sh rc=0
+scripts/adversary-t02-r5/install-probe-keytar-dir.sh rc=0
+scripts/adversary-t02-r6/install-probe-pnpmfile.sh rc=0
+scripts/adversary-t02-r7/install-probe-npx-local-bin.sh rc=0
+scripts/adversary-t02-r7/install-probe-xdg-config.sh rc=0
+scripts/adversary-t02-r7/install-static-nonascii-path.sh rc=0
+scripts/adversary-t02-r8/install-probe-manifest-dir.sh rc=0
+scripts/adversary-t02-r8/install-static-alt-manifest.sh rc=0
+scripts/adversary-t02-r9/install-probe-lockfile-tarball.sh rc=0
+scripts/adversary-t02-r9/install-probe-pm-downgrade.sh rc=0
+```
+adversary r1 (6f950c0): no defect. Bins named node, sh, prebuild-install, node-gyp and tsc ran nothing at install (`probe_rc=0`); traversal, absolute, symlink and non-regular bin targets, flagged or chained scripts, root gen:vectors, extra engines keys, JSON5/YAML manifests and a wrong integrity were all refused. Its unproven suspicion, that a bin named node or tsc would shadow that tool in other packages' scripts after install, is closed in 996e559: bin names must be `attest` or `attessa[-name]` (today: attessa, attest, attessa-gateway-server, attessa-seller-host), with three cases added.
+
+verify at 996e559 (`./scripts/check-install-scripts.sh`, then `./scripts/check-install-scripts.allowlist.test.sh`; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+19 cases, rc=0
+```
+adversary r2 (0448791): one defect. Python's `\d` matches non-ASCII digits, so engines.node "２２" and ">=٢٢.١٣.٠" passed as node ranges, though semver rejects them (nothing runs: pnpm only warns on engines). Fixed in 4ea81d9: every `\d` in the guard's patterns is now `[0-9]`, with one case added to the allow-list test. The adversary's script is archived at .worktrees/archive/adversary/install-r2-engines-nonascii-digits.sh and passes. Bin names with a trailing newline, upper case, a Cyrillic look-alike or dotless i were refused. Its unproven suspicion, that a registry dependency's own bin named node would still shadow node, is outside this guard (registry packages are lockfile- and integrity-pinned; none today has such a bin).
+
+verify at 4ea81d9 (guard, allow-list test, adversary r2 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+20 cases, rc=0
+ok: engines.node ２２ refused
+ok: engines.node >=٢٢.١٣.٠ refused
+```
+adversary r3 (fb5ce94): one defect, failing closed. The snapshot accepts tracked 100755 files, but the later script check looked only at 100644 blobs, so `chmod +x packages/core/scripts/gen-vectors.ts` was refused as "not a tracked regular file". Fixed in 6c88a6e: a script file may be 100644 or 100755 (node runs it either way); one accepting case added. Its other 25 cases (newlines, upper case, dotless i, the Kelvin sign, non-string types, compound ranges, tabs, doubled extensions, Arabic-Indic digits, `pre` hooks, fullwidth versions) were all refused as they should be. Its script is archived at .worktrees/archive/adversary/install-r3-allowlist-semantics.sh.
+
+verify at 6c88a6e (guard, allow-list test, adversary r3 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r3_rc=0
+26 ok lines, 0 FAIL
+```
+adversary r4 (c5416d7): one defect in the allow-list test, not the guard. The executable-file case counted any refusal without a "FAIL path:" line (a pnpm fetch failure, a failed install) as accepted. Fixed in 22bf312: the case passes only on probe exit 0 and the guard's ok line. A manifest, lockfile or workspace file at 100755, and a script target that is a gitlink, symlink, directory or dotted name, were all refused. Its script is archived at .worktrees/archive/adversary/install-r4-allowlist-accept-ignores-refusal.sh.
+
+verify at 22bf312 (guard, allow-list test, adversary r4 script; run by Claude under the heavy lock), 2026-11-02:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+r4_rc=0
+ok: the accepting case does not count a refused probe as accepted
+```
+adversary r5 (2eb7a4a): no defect. Of 23 one-line guard mutants, 13 were caught and 2 are equivalent (the guard crashes and still refuses); 8 (m01 bin not .js, m10 engines with 4+ parts, m12 any node option, m13 script outside scripts/, m14 any extension, m15 another package's file, m16 a gitlink, m23 Unicode digits in dependency versions) passed all 21 cases. Its gap test is added unchanged as `scripts/check-install-scripts.allowlist-gaps.test.sh` in ac9bd19, and the executable-file case now asserts its commit recorded mode 100755. Mutants and scripts archived at .worktrees/archive/adversary/install-r5/.
+
+verify at ac9bd19 (guard, allow-list test, gap test; run by Claude under the heavy lock), 2026-11-04:
+```
+guard_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+allow_rc=0
+ok: gen:vectors on a tracked executable file accepted
+21 cases, rc=0
+gaps_rc=0
+10 ok lines, 0 FAIL
+```
+Correction to the r5 note above (adversary r6): the 8 surviving mutants were run against the allow-list test's 20 static cases, not the full-probe executable case, so "passed all 21 cases" should read "passed all 20 static cases"; and the archive at .worktrees/archive/adversary/install-r5/mut/ holds 16 of the 23 mutants (m02 to m08 are not there), so those 7 can't be re-checked from it.
+
+adversary r6 (aa2b635): no defect. In all 10 gaps-test cases the matched `FAIL <manifest>:` line is the check the case targets, not the integrity line; the gaps test catches each of the 8 surviving mutants with that mutant's own case; the executable precondition sets rc=1 when chmod or the commit fails; the allow-list test passes 21 cases; scripts as a list or string, a null bin, `__proto__`, BOM or UTF-16 manifests, nested script paths and gitlink or directory targets are all refused. Its scripts are archived at .worktrees/archive/adversary/install-r6/.
+reviewed: Codex r1 REVISE (three false evidence claims, no code finding); corrected below; pending Codex r2
+
+Codex r1 corrections (DONE.md is append-only, so the earlier lines stand and these replace them):
+- The bin rule at 724d652 above ("command names (`[a-z0-9][a-z0-9-]*`)") overstates it. `scripts/check-install-scripts.sh:189` admits only `attest`, `attessa` and `attessa-<part>[-<part>…]` with lowercase ASCII letters and digits (`re.fullmatch(r"atte(st|ssa(-[a-z0-9]+)*)")`); `node`, `tsc`, `sh`, `npx` or `tool` fail.
+- "the probe must print exactly that one FAIL line" should read "the probe must print the case's expected FAIL line(s)": the root-manifest case (`scripts/check-install-scripts.allowlist.test.sh:64`) expects two.
+- `scripts/check-install-scripts.allowlist-gaps.test.sh`'s header said the surviving mutants pass "the allow-list test's 21 cases"; it now says the 20 static cases, as the adversary r6 correction above records.
+
+adversary r7 (b4097ab): no guard defect; one false comment and two narrow descriptions. `scripts/check-install-scripts.allowlist.test.sh:4-5` still said "exactly that one FAIL line"; it now says the case's expected FAIL line(s), two for the root-manifest case. The bin targets above say ".js files": the rule at `scripts/check-install-scripts.sh:189` also admitted `.cjs` and `.mjs` under dist/ (adversary r8: now `.js` only, as the guard's header and its error line say; every workspace bin is `dist/*.js`). The engines rule above says "`>=`, `^` or `~`": the operator is optional, so a bare version such as `22` also passes. None of these admitted shapes runs a script at install (r7 checked).
+
+adversary r9 (366ee41, `scripts/adversary-install-r9/`, failing before the fix): two fail-closed defects, no admitted install script. (1) The guard refused what its header allowed: script files in a sub-folder of scripts/, with a dot in the name or a `.cjs` extension, and node ranges such as `>22.12.0`, `>=22.13.0 <25` and `22.x`; and the gaps test's header called `node scripts/gen.sh` forbidden by the header, which named no extension. (2) A false evidence claim in the adversary r6 note above: a manifest with `"scripts": ["test"]` or `""`, and one saved with a UTF-8 BOM, passed (the whole probe exited 0 with both). Fixed in 6f4f999:
+- `scripts/check-install-scripts.sh` header: engines are a node semver range (ASCII digits or x/*, at most major.minor.patch, `<` `<=` `>` `>=` `=` `^` `~`, hyphen ranges, `||`); the two scripts run `node` on a tracked `.ts`, `.js`, `.mjs` or `.cjs` file under the package's scripts/ (sub-folders allowed, no hidden or `..` component); each manifest is a UTF-8 JSON object with no BOM, with object `scripts`, `dependencies` and `devDependencies`. The code now matches each of these.
+- Correction to the adversary r6 note above: before 6f4f999, scripts as a list or string and a BOM manifest were accepted, not refused; "nested script paths are refused" is no longer true, since the header now allows them. The adversary r7 note's engines description is superseded by the grammar above.
+No existing assertion changed.
+
+checks at 6f4f999 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r10 found a defect; see below; then Codex r2)
+
+adversary r10 (a55742d, `scripts/adversary-install-r10/path-inside-tree.test.sh`, failing before the fix): the header said "Nothing is resolved from the tree under test", but PATH kept every absolute entry, so an entry inside the checkout (such as the `$PWD/node_modules/.bin` that direnv's `layout node` adds) let the tree's own `git` run at `rev-parse --show-toplevel`, before any check. The PATH filter itself also ran `tr`, `grep` and `paste` through the unfiltered PATH. Fixed in 237d5c0:
+- `scripts/check-install-scripts.sh`: PATH keeps only absolute entries whose `cd -P` target lies outside the checked folder, computed with bash builtins alone before any command is looked up; the header says so.
+- r10's unproven note on the node range grammar: it no longer accepts leading zeros or a `v` prefix, and accepts a space after an operator (`>= 22`), as node-semver does; the header says "ASCII digits with no leading zero, or x/X/*".
+No existing assertion changed.
+
+checks at 237d5c0 (run by Claude, heavy ones under the lock), 2026-11-04:
+```
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r11 found a defect; see below; then Codex r2)
+
+adversary r11 (42b97df, `scripts/adversary-install-r11/path-bash-shebang.test.sh`, failing before the fix): the guard's `#!/usr/bin/env bash` made env look `bash` up on the unfiltered PATH, so a tracked `bin/bash` with `$root/bin` on PATH, or a tracked `./bash` with an empty PATH entry, ran the whole guard. The adversary r10 note above ("computed with bash builtins alone before any command is looked up") was therefore not true: the interpreter was looked up first. Fixed in ca3cf57:
+- `scripts/check-install-scripts.sh`: the shebang is `#!/bin/bash`, so no PATH lookup happens before the filter; the comment says so. r11's unproven note on a relative TMPDIR: TMPDIR is now ignored unless absolute, so `$tmp` can't resolve inside the snapshot after the probe changes folder.
+No existing assertion changed.
+
+checks at ca3cf57 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+r11_rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10_rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r12 found a defect; see below; then Codex r2)
+
+adversary r12 (d1ef492, `scripts/adversary-install-r12/empty-path.test.sh`, failing before the fix): when no PATH entry lies outside the checked folder (only `$root/bin`, or only `.`), the filter set `PATH=` to the empty string, which bash reads as the current folder, the checkout; the tree's own `grep` then ran at `compgen -e | grep '^GIT_'`, and `git` after it. Fixed in adfa749:
+- `scripts/check-install-scripts.sh`: an empty filtered PATH stops the guard with "FAIL: no PATH entry outside the checked folder". r12's unproven note on BASH_ENV: the shebang is now `#!/bin/bash -p`, so bash sources no BASH_ENV and imports no functions from the environment.
+No existing assertion changed.
+
+checks at adfa749 (run by Claude, heavy ones under the lock), 2026-11-05:
+```
+$ scripts/adversary-install-r12/empty-path.test.sh "$PWD"
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+r12 rc=0
+$ scripts/adversary-install-r11/path-bash-shebang.test.sh "$PWD"  # 2 ok lines
+r11 rc=0
+$ scripts/adversary-install-r10/path-inside-tree.test.sh "$PWD"   # 2 ok lines
+r10 rc=0
+$ scripts/adversary-install-r9/header-vs-guard.test.sh "$PWD"     # 8 ok lines
+r9static_rc=0
+$ ./scripts/check-install-scripts.allowlist-gaps.test.sh "$PWD"   # 10 ok lines
+gaps_rc=0
+$ ./scripts/check-install-scripts.sh
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+$ ./scripts/check-install-scripts.allowlist.test.sh
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+$ scripts/adversary-install-r9/done-r6-full-probe.test.sh "$PWD"
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r13, then Codex r2)
+
+### Install allow-list adversary r13 follow-up - 2026-11-05
+adversary r13 on 0230768 reported no defect, but it ran static reads only (it could not run git or the tests), so it is not a clean round. Its one lead, git reading user config through a relative path, is closed anyway in 6608dbe: `scripts/check-install-scripts.sh` unsets a relative `XDG_CONFIG_HOME` and refuses a relative `HOME` ("FAIL: HOME must be an absolute path"), so `$XDG_CONFIG_HOME/git/config` and `$HOME/.gitconfig` can't resolve inside the checkout.
+
+verify at 6608dbe (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock; then the guard run with `HOME=rel`), run by Claude, 2026-11-05:
+```
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+FAIL: HOME must be an absolute path
+```
+reviewed: pending (adversary r14 with tests run, then Codex r2)
+
+### Install allow-list adversary r14 - 2026-11-05
+adversary r14 on d645889 (tests run) reported:
+- Finding, not taken as a defect: the allow-list refuses a tracked nested package.json (for example a test fixture under packages/core/test/fixtures/) that pnpm never reads, while the header named only "workspace manifests". The guard stays strict on purpose: no nested manifest is needed, and loosening a supply-chain check for a file that doesn't exist is the riskier change. 6379949 makes the header say so ("These rules hold for every tracked package.json at any depth"). Its test is archived in .worktrees/archive/adversary/install-r14/nested-manifest.test.sh, not committed, since it asserts the looser rule. For Codex to judge.
+- Lead, closed: PyYAML reads YAML 1.1, so `ignoreScripts: yes` (or `on`) passed the pnpm-workspace.yaml check, while pnpm's YAML 1.2 parser reads it as a string. Test 523581c (`scripts/adversary-install-r14/yaml-bool.test.sh`, 3 FAIL lines before the fix); fix 6379949 requires exactly one plain `ignoreScripts: true` line.
+
+verify at 6379949 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+r14yaml_rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9static_rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r15, then Codex r2)
+
+### Install allow-list adversary r15 - 2026-11-05
+adversary r15 on af856ef: a pnpm-workspace.yaml with two `<<` merge keys (`<<: {ignoreScripts: false}` then a flow mapping holding a plain `ignoreScripts: true` line) passed the guard, since PyYAML lets the later merge win, while pnpm 10.32.1's @zkochan/js-yaml lets the earlier win; offline, pnpm ran a root postinstall with it, and the full guard run ended "ok". Its lead, the same split in pnpm-lock.yaml, holds too (merge keys, anchors, aliases and tags all passed).
+Tests 5022ffb: `scripts/adversary-install-r15/yaml-merge.test.sh` (the adversary's) and `scripts/adversary-install-r15/lock-merge.test.sh` (merge key, anchor and alias, tag in the lockfile), all failing before the fix. Fix 3928332: the guard scans both YAML files' tokens and refuses anchors, aliases, tags, directives and `<<` keys (pnpm never writes them), and pnpm-workspace.yaml, past its comment lines, must be one exact text (replacing the r14 one-line check).
+
+verify at 3928332 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r16, then Codex r2)
+
+### Install allow-list adversary r16 - 2026-11-05
+adversary r16 on a732336: pnpm 10.32.1 builds each package as the lockfile snapshot merged with `packages[key minus its peer suffix]`, so a snapshot with no packages entry keeps its own `resolution`. A snapshot-only `keytar@7.9.0: {resolution: {directory: vendor/keytar, type: directory}}` passed the guard (it checked resolution only under packages), and pnpm, offline with --frozen-lockfile, installed keytar from vendor/keytar in the tree into node_modules/.pnpm/keytar@7.9.0/node_modules/keytar, the path the lifecycle check trusts as a registry copy.
+Test fa1c8aa (`scripts/adversary-install-r16/lock-snapshot-resolution.test.sh`, failing before the fix); fix 70edca9: every snapshot needs a packages entry for its key minus the "(peers)" suffix, and may hold only dependencies, optionalDependencies, transitivePeerDependencies and optional.
+
+verify at 70edca9 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r17, then Codex r2)
+
+### Install allow-list adversary r17 - 2026-11-05
+(The first r17 run stopped before testing anything and is not counted; this is the second.) adversary r17 on 134a85b: pnpm 10.32.1 builds each package as `Object.assign(snapshot, packages[id])`, so a `packages` entry's own fields win, `dependencies` included, and the guard checked only its key and resolution. Adding `dependencies: {punycode: link:vendor/punycode}` to the `tr46@5.1.1` packages entry passed the full guard, and a real `--frozen-lockfile` install linked tr46's punycode to vendor/punycode in the tree (no integrity). The same goes for other entry fields (`version`, `id`), and the adversary left top-level keys (overrides, patchedDependencies, catalogs) unchecked.
+Tests b99b5f9: `scripts/adversary-install-r17/lock-package-dependencies.test.sh` (the adversary's) and `scripts/adversary-install-r17/lock-keys.test.sh` (a packages entry's own `version`, a top-level `overrides`), failing before the fix. Fix 237550c: packages entries may hold only resolution, engines, os, cpu, libc, hasBin, peerDependencies, peerDependenciesMeta and deprecated, and the lockfile only its five top-level keys.
+
+verify at 237550c (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r17/lock-package-dependencies rc=0
+r17/lock-keys rc=0
+r16/lock-snapshot-resolution rc=0
+r15/yaml-merge rc=0
+r15/lock-merge rc=0
+r14/yaml-bool rc=0
+r12/empty-path rc=0
+r11/path-bash-shebang rc=0
+r10/path-inside-tree rc=0
+r9/header-vs-guard rc=0
+gaps_rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard_rc=0
+21 cases, rc=0
+allowlist_rc=0
+ok: refused
+r9full_rc=0
+```
+reviewed: pending (adversary r18, then Codex r2)
+
+### Install allow-list adversary r18 - 2026-11-05
+adversary r18 on e151ac7: pnpm 10.32.1 under `--frozen-lockfile` compares an importer's specifier with package.json and links or installs its `version` as written, and the guard checked only that a `link:` version had a `workspace:` specifier. So `viem: workspace:*` linked to `link:../../vendor/viem` (a tree folder that is no workspace project), `@attessa/core` linked to `link:/opt/...` (outside the repository), and `viem: 2.57.13` with version `typescript@5.9.3` (another registry package) all passed the guard; the adversary showed pnpm installing each.
+Test 9d8a2a3: `scripts/adversary-install-r18/importer-versions.test.sh` (the adversary's), failing before the fix. Fix ef3b7f1: each importer is `.` or a tracked `packages/<dir>`; each dependency is either the workspace project of that name (`workspace:` specifier, `link:` resolving to that project's folder) or a snapshot keyed by its own name and version; package names in `packages` keys may not start with `.` or `_`. The r14 to r17 tests now stop when mktemp fails (the adversary's r18 test caught that flaw; without a scratch folder they ran git reset in the cwd). The r13 glob has no test files (rc=127 below is that empty glob, as in earlier runs).
+
+verify at ef3b7f1 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r13/* rc=127
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r19, then Codex r2)
+
+### Install allow-list adversary r19 - 2026-11-05
+adversary r19 on 5f583c0: PyYAML (YAML 1.1) reads an unquoted lockfile key `null` or `~` as None, while pnpm 10.32.1 reads it as the string "null". With `"null": "workspace:*"` in packages/cli/package.json and `null: {specifier: workspace:*, version: link:../../vendor/null}` in the lockfile, the r18 rule compared `proj.get(<not a project>)` (None) with the name (None) and accepted the link; pnpm linked node_modules/null to vendor/null (the adversary ran it), and the `~` case to a folder outside the repository.
+Test 77bdbab: `scripts/adversary-install-r19/importer-null-name.test.sh` (the adversary's), failing before the fix. Fix c9aba0f: every mapping key in pnpm-lock.yaml must be a string, and only a workspace project with a string name can be a link target.
+
+verify at c9aba0f (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r20, then Codex r2)
+
+### Install allow-list adversary r20 - 2026-11-05
+(The first r20 run was stopped by a safety check before it ran anything and is not counted; this is the second.) adversary r20 on 76ba3a3: the guard checked dependency values but never dependency names, and kept any string workspace project name. pnpm 10.32.1 links each dependency at `path.join(<project>/node_modules, name)`, so a project named `../../../.git/hooks` with a tracked executable `pre-commit`, depended on as `"../../../.git/hooks": "workspace:*"`, passed the guard, and pnpm (run offline by the adversary on a scratch workspace) replaced .git/hooks with a link to the tree folder, moving the real one aside; the next `git commit` would run the tree's hook. A name like `../../../../attessa-r20-outside` linked outside the checkout.
+Test 35a3cd9: `scripts/adversary-install-r20/dependency-name-path.test.sh` (the adversary's), failing before the fix. Fix 4e15bb2: every dependency name in package.json files, lockfile importers and snapshots, and every workspace project name, must be an npm package name (`(@scope/)?name`, no `/` beyond the scope, no leading `.`).
+The first verify run's real `pnpm install` stalled on the registry (no log line for 29 minutes, sockets idle) and was stopped; the heavy stage was rerun with a 30-minute timeout per step. The real repository's .git/hooks is untouched (no .git/.ignored_hooks).
+
+verify at 4e15bb2 (static tests without the lock; the guard, the allow-list cases and the r9 full probe under the heavy lock), run by Claude, 2026-11-05:
+```
+r9/header-vs-guard rc=0
+r10/path-inside-tree rc=0
+r11/path-bash-shebang rc=0
+r12/empty-path rc=0
+r14/yaml-bool rc=0
+r15/lock-merge rc=0
+r15/yaml-merge rc=0
+r16/lock-snapshot-resolution rc=0
+r17/lock-keys rc=0
+r17/lock-package-dependencies rc=0
+r18/importer-versions rc=0
+r19/importer-null-name rc=0
+r20/dependency-name-path rc=0
+allowlist-gaps rc=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard-rc=0
+21 cases, rc=0
+allowlist-rc=0
+ok: refused
+probe-rc=0
+```
+reviewed: pending (adversary r21, then Codex r2)
+
+### Install guard adversary r21 (failing test 256c323, fix 6334bdc) - 2026-11-05
+Finding: the guard counted any tracked `packages/<dir>/package.json` as a workspace project, so a lockfile importer dependency `workspace:*` with `version: link:../.x` (a dot folder) or `link:../bower_components` was accepted, while pnpm 10.32.1's `packages/*` glob (tinyglobby without `dot`, ignoring `**/bower_components/**`) does not list those folders and links them under `--frozen-lockfile` as plain folders with no integrity check (the guard's own comments at the lockfile and importer rules).
+Fix: a tracked `packages/.<name>/package.json` or `packages/bower_components/package.json` is refused ("pnpm does not list this folder as a workspace project"); `node_modules` was already refused.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 18 rc=0, no FAIL line):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:$SCRATCH/tmp-install/attessa-adv-imp-r18.Zun3/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r22, then Codex r2)
+
+### Install guard adversary r22 (failing test 5569022, fix b6abed9) - 2026-11-05
+Finding: a tracked `packages/<name>/package.json` whose folder name is not valid UTF-8 (byte ff) became the project `packages/a\udcff` through `os.fsdecode`, and a lockfile `link:"../a\udcff"` (a YAML escape PyYAML accepts) matched it, while pnpm 10.32.1 decodes folder names as UTF-8 with U+FFFD, lists no such project, and links the dependency to the plain folder `packages/a<ef bf bd>` with no manifest and no integrity check (the guard's lockfile and importer rule comments).
+Fix: any tracked path that is not valid UTF-8 is refused ("not allowed (a path that is not UTF-8)") before any other rule reads it.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 19 rc=0, no FAIL line):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:$SCRATCH/tmp-install/attessa-adv-imp-r18.HJgA/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r23, then Codex r2)
+
+### Install guard adversary r23 (failing test 8949dfb, fix 8b5a937) - 2026-11-05
+Finding: U+0085 (NEL) or U+2028 (LS) inside a quoted lockfile `link:` reads as a line break to PyYAML (YAML 1.1) and as a plain character to pnpm 10.32.1 (YAML 1.2), so the guard matched the link to a workspace project while pnpm linked the dependency to a plain folder with no manifest and no integrity check (the guard's lockfile and importer rule comments).
+Fix: U+0085, U+2028 and U+2029 are refused anywhere in pnpm-workspace.yaml and pnpm-lock.yaml and in any tracked path.
+verify (each adversary test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; run again on 8b5a937 in a later session, since the first run's session ended before recording it; 20 rc=0, no failing rc; the FAIL line in the last block is the probe's expected refusal):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:/home/hr/myvscode_linux/attessa/.worktrees/prompts/adv-out/tmp-install/attessa-adv-imp-r18.joBn/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r23/lockfile-line-breaks.test.sh
+ok: pnpm 10.32.1 (ws-nel): pnpm lists ['.', 'packages/a b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a b', pnpm links x -> '../../a\x85b', a plain folder, under --frozen-lockfile
+ok: pnpm 10.32.1 (ws-ls): pnpm lists ['.', 'packages/a\u2028b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a\u2028b', pnpm links x -> '../../a \u2028 b', a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r23-nel (workspace:*, link:"../attessa-r23<U+0085>n"), PyYAML reads ../attessa-r23 n: refused
+ok: packages/cli dependency attessa-r23-ls (workspace:*, link:"../attessa-r23 <U+2028> l"), PyYAML reads ../attessa-r23<U+2028>l: refused
+ok: packages/cli dependency attessa-r23-nfd (workspace:*, link:../attessa-r23-e<U+0301>), project folder NFC: refused
+ok: packages/cli dependency attessa-r23-nfc (workspace:*, link:../attessa-r23-<U+00E9>), project folder NFD: refused
+ok: control: packages/cli dependency attessa-r23-e (workspace:*, link:../attessa-r23-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (adversary r24, then Codex r2)
+
+### Install guard adversary r24 (failing test 4fc7740, fix f750739) - 2026-11-05
+Finding: a plain lockfile key that PyYAML (YAML 1.1) reads as a string and pnpm 10.32.1 (YAML 1.2 core) as a number, printed back as another name (`1e3` -> 1000, `0o17` -> 15, `08` -> 8), let an importer dependency `1000` link to the workspace project named `1e3` while the guard saw "the workspace project of that name" (the importer rule comment).
+Fix: any plain scalar in pnpm-lock.yaml that PyYAML resolves as a string but that has a YAML 1.2 core number, null or bool form is refused (pnpm quotes such values when it writes them).
+Last adversary round: Joshua stopped adversary rounds on 2026-11-05 to save API budget; Codex reviews from here.
+verify (`bash scripts/adversary-install-r24/lockfile-numeric-names.test.sh "$PWD" HEAD` at f750739; the full suite was cut off by a session end after the first 11 runs, all rc=0, so Codex runs it):
+```
+ok: packages/cli dependency 1000 (workspace:*), lockfile key 1e3 (link:../attessa-r24-a, project named 1e3): refused
+ok: packages/cli dependency 15 (workspace:*), lockfile key 0o17 (link:../attessa-r24-a, project named 0o17): refused
+ok: packages/cli dependency 8 (workspace:*), lockfile key 08 (link:../attessa-r24-a, project named 08): refused
+ok: control: packages/cli dependency attessa-r24-ctl, lockfile key attessa-r24-ctl, project of that name: accepted
+ok: the committed lockfile: accepted
+rc=0
+```
+reviewed: pending (Codex r2)
+
+### Install guard Codex r2 fixes (failing test 639181b, fix 0627c29, test cases 1bf61cc) - 2026-11-05
+Codex r2 (install-allowlist-review-r2.md, on 209049c): REVISE, 1 major, 1 minor.
+- Major: a snapshot dependency `prebuild-install: node-addon-api@8.9.2` is an alias to pnpm (it installs node-addon-api under that name); the guard only refused a ":" in the value. Fix: every snapshot `dependencies`/`optionalDependencies` entry must be the snapshot `name@ref` of its own name (peer suffix included), the rule importers already follow.
+- Minor: CORE12 missed signed octal (`+0o17`, `-0o17`): a string to PyYAML, a number to pnpm. Fix: `[-+]?` on the 0o/0x/0b forms. Signed hex and binary are no gap: PyYAML reads them as integers too (`yaml.safe_load` gives int for `+0x1F` and `-0b1`), so the readers agree; the test says so instead of claiming them.
+Test: scripts/codex-install-r2/snapshot-alias-and-signed-numbers.test.sh (4 refused cases and 2 controls); on 209049c every refused case is accepted (rc=1), on 1bf61cc rc=0.
+verify (each test with the repo root, then the heavy stage under the lock; TMPDIR and PNPM_CJS set; 22 rc=0, none failing; the FAIL line in the last block is the probe's expected refusal):
+```
+== scripts/adversary-install-r9/header-vs-guard.test.sh
+ok: accepted os.makedirs("packages/core/scripts/vectors"); shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/vectors/gen.ts"); m["scripts"]["gen:vectors"] = "node scripts/vectors/gen.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen.vectors.ts"); m["scripts"]["gen:vectors"] = "node scripts/gen.vectors.ts"
+ok: accepted shutil.copy("packages/core/scripts/gen-vectors.ts", "packages/core/scripts/gen-vectors.cjs"); m["scripts"]["gen:vectors"] = "node scripts/gen-vectors.cjs"
+ok: accepted m["engines"]["node"] = ">22.12.0"
+ok: accepted m["engines"]["node"] = ">=22.13.0 <25"
+ok: accepted m["engines"]["node"] = "22.x"
+ok: refused m["scripts"] = ["test"]
+ok: refused m["scripts"] = ""
+rc=0
+== scripts/adversary-install-r10/path-inside-tree.test.sh
+ok: PATH entry $root/node_modules/.bin: the tree's node_modules/.bin/git never ran (guard exit 1)
+ok: PATH entry $root/bin: the tree's bin/git never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r11/path-bash-shebang.test.sh
+ok: PATH entry $root/bin: the tree's bin/bash never ran (guard exit 1)
+ok: empty PATH entry: the tree's ./bash never ran (guard exit 1)
+rc=0
+== scripts/adversary-install-r12/empty-path.test.sh
+ok: only PATH entry $root/bin: no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+ok: only PATH entry ".": no tool of the tree ran (guard exit 1): FAIL: no PATH entry outside the checked folder
+rc=0
+== scripts/adversary-install-r14/yaml-bool.test.sh
+ok: ignoreScripts: yes: refused
+ok: ignoreScripts: on: refused
+ok: flow mapping with yes: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r15/lock-merge.test.sh
+ok: a << merge key in settings: refused
+ok: an anchor and alias: refused
+ok: a tag: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r15/yaml-merge.test.sh
+ok: pnpm 10.32.1 reads the two-merge file as ignoreScripts false (postinstall ran)
+ok: two << merge keys, false first: refused
+ok: the committed file: accepted
+rc=0
+== scripts/adversary-install-r16/lock-snapshot-resolution.test.sh
+ok: pnpm 10.32.1 installs the snapshot-only keytar@7.9.0 from vendor/keytar in the tree
+ok: snapshot-only keytar@7.9.0 resolved from vendor/keytar: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-keys.test.sh
+ok: a packages entry with its own version: refused
+ok: a top-level overrides key: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r17/lock-package-dependencies.test.sh
+ok: pnpm 10.32.1 gives the registry copy of probe-parent@1.0.0 the probe-child in vendor/probe-child, from its packages entry's dependencies
+ok: tr46@5.1.1 packages entry with dependencies punycode: link:vendor/punycode: refused
+ok: tr46@5.1.1 snapshot with dependencies punycode: link:vendor/punycode (control): refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r18/importer-versions.test.sh
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:../../vendor/b (from-the-tree)
+ok: pnpm 10.32.1 links the workspace:* dependency b to link:/home/hr/myvscode_linux/attessa/.worktrees/prompts/adv-out/tmp-install/attessa-adv-imp-r18.YjgK/outside/b (outside-the-project)
+ok: pnpm 10.32.1 links the workspace:* dependency viem to link:../../vendor/viem (from-the-tree)
+ok: pnpm installs probe-other@1.0.0 as the dependency probe-parent (manifest 1.0.0) from the importer version probe-other@1.0.0
+ok: packages/cli viem workspace:* linked to link:../../vendor/viem, a tree folder that is no workspace project: refused
+ok: packages/cli @attessa/core linked to link:/opt/attessa-r18-outside, outside the repository: refused
+ok: packages/cli viem 2.57.13 with importer version typescript@5.9.3, another registry package: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r19/importer-null-name.test.sh
+ok: PyYAML 6.0.1 reads the lockfile dependency key null as None
+ok: pnpm 10.32.1 links the workspace:* dependency "null" (lockfile key null) to link:../../vendor/null, no project
+ok: packages/cli lockfile key null (manifest "null": "workspace:*") linked to link:../../vendor/null, a tree folder that is no workspace project: refused
+ok: packages/cli lockfile key ~ (manifest "null": "workspace:*") linked to link:/opt/attessa-r19-outside, outside the repository: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r20/dependency-name-path.test.sh
+ok: pnpm 10.32.1 links the dependency "../../../.git/hooks" of packages/a over .git/hooks (../packages/evil), outside node_modules
+ok: packages/cli dependency "../../../.git/hooks" (workspace:*, link:../hooks, project packages/hooks of that name): refused
+ok: packages/cli dependency "../../../../attessa-r20-outside" (workspace:*, link:../hooks), a link outside the checkout: refused
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r21/workspace-project-glob.test.sh
+ok: pnpm 10.32.1 lists only '. packages/a packages/b' as workspace projects, yet links hid -> packages/.x and bow -> packages/bower_components under --frozen-lockfile
+ok: packages/cli dependency attessa-r21-hidden (workspace:*, link:../.attessa-r21), a dot folder pnpm does not list: refused
+ok: packages/cli dependency attessa-r21-bower (workspace:*, link:../bower_components), a folder pnpm ignores: refused
+ok: control: packages/cli dependency attessa-r21 (workspace:*, link:../attessa-r21), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r22/workspace-project-bytes.test.sh
+ok: pnpm 10.32.1 lists only '. packages/cli' as workspace projects (not packages/a<ff>), yet links x -> packages/a<ef bf bd>, a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r22-bytes (workspace:*, link:"../attessa-r22\udcff"), a folder name that is not UTF-8: refused
+ok: control: packages/cli dependency attessa-r22-e (workspace:*, link:../attessa-r22-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r23/lockfile-line-breaks.test.sh
+ok: pnpm 10.32.1 (ws-nel): pnpm lists ['.', 'packages/a b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a b', pnpm links x -> '../../a\x85b', a plain folder, under --frozen-lockfile
+ok: pnpm 10.32.1 (ws-ls): pnpm lists ['.', 'packages/a\u2028b', 'packages/cli'] as workspace projects; PyYAML reads 'link:../a\u2028b', pnpm links x -> '../../a \u2028 b', a plain folder, under --frozen-lockfile
+ok: packages/cli dependency attessa-r23-nel (workspace:*, link:"../attessa-r23<U+0085>n"), PyYAML reads ../attessa-r23 n: refused
+ok: packages/cli dependency attessa-r23-ls (workspace:*, link:"../attessa-r23 <U+2028> l"), PyYAML reads ../attessa-r23<U+2028>l: refused
+ok: packages/cli dependency attessa-r23-nfd (workspace:*, link:../attessa-r23-e<U+0301>), project folder NFC: refused
+ok: packages/cli dependency attessa-r23-nfc (workspace:*, link:../attessa-r23-<U+00E9>), project folder NFD: refused
+ok: control: packages/cli dependency attessa-r23-e (workspace:*, link:../attessa-r23-<U+00E9>), a workspace project: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/adversary-install-r24/lockfile-numeric-names.test.sh
+ok: pnpm 10.32.1: PyYAML reads the dependency as ['1e3'], pnpm links node_modules/1000 -> ../../a (the project named 1e3) under --frozen-lockfile
+ok: packages/cli dependency 1000 (workspace:*), lockfile key 1e3 (link:../attessa-r24-a, project named 1e3): refused
+ok: packages/cli dependency 15 (workspace:*), lockfile key 0o17 (link:../attessa-r24-a, project named 0o17): refused
+ok: packages/cli dependency 8 (workspace:*), lockfile key 08 (link:../attessa-r24-a, project named 08): refused
+ok: control: packages/cli dependency attessa-r24-ctl, lockfile key attessa-r24-ctl, project of that name: accepted
+ok: the committed lockfile: accepted
+rc=0
+== scripts/codex-install-r2/snapshot-alias-and-signed-numbers.test.sh
+ok: snapshot better-sqlite3 dependency prebuild-install: node-addon-api@8.9.2 (an alias): refused
+ok: snapshot better-sqlite3 dependency node-addon-api: 9.9.9 (no such snapshot): refused
+ok: snapshot better-sqlite3 plain transitivePeerDependencies entry +0o17 (a number to YAML 1.2): refused
+ok: snapshot better-sqlite3 plain transitivePeerDependencies entry -0o17 (a number to YAML 1.2): refused
+ok: control: the same entry quoted, '+0o17': accepted
+ok: the committed lockfile: accepted
+rc=0
+== ./scripts/check-install-scripts.allowlist-gaps.test.sh
+ok: refused m["engines"]["node"] = ">=22.13.0.1"
+ok: refused m["scripts"]["gen:vectors"] = "node --require=/tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node /tmp/x.js scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node src/binding.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/gen.sh"; open("packages/core/scripts/gen.sh", "w").write("")
+ok: refused m["scripts"]["render-units"] = "node scripts/gen-vectors.ts"
+ok: refused m["scripts"]["gen:vectors"] = "node scripts/sub.ts"
+ok: refused m["dependencies"]["tr46"] = "５.1.1"
+rc=0
+== heavy
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+ok: gen:vectors on a tracked executable file accepted
+ok: wrong better-sqlite3 integrity
+21 cases, rc=0
+rc=0
+ ef bb bf
+probe exit 1: FAIL: repo install config is outside the allow-list
+ok: refused
+rc=0
+```
+reviewed: pending (Codex r3)
+
+### Install guard Codex r3: SHIP - 2026-11-06
+Codex round 3 reviewed 9909372 in a frozen worktree: no findings. It re-ran every adversary and Codex test and the heavy stage (all RC=0), confirmed the r2 alias and signed-octal fixes fail on 209049c and pass on 9909372, and found CORE12 conservative against pnpm 10.32.1's bundled YAML resolvers.
+```
+Disposition: SHIP
+VERDICT: implementation-ready
+```
+reviewed: reviews/install-allowlist-review-r3.md | verdict: implementation-ready (earlier rounds r1 and r2 ended changes required; archived outside the repo)
+
 ## T21 CLI - 2026-11-02
 commit: af66e32 (builder, Opus; branch feat/t21-cli from 32ad820), entry in the next commit
 built: buyer commands `init`, `call`, `cancel`, `status [<origin>|--agent <id>] [--pending]`, `evidence export` on @attessa/sdk (no payment logic in the CLI); owner commands `agent register|transfer|wallet-sig|set-wallet`, `selflink`, `release deprecate|revoke` / `revoke release`, `revoke signer`, `endpoint retire`; `attessa gateway …` handed to T19's runGatewayCommand. The SDK gained `ClientOptions.onProgress` (the moments the CLI prints a FLOWS §6 line) and a `dry_run` stop before signing. Snapshot tests read FLOWS.md itself and require each §6 sample block to appear contiguous in the CLI transcript (hex placeholders and named slots such as a time of day excepted; a matcher self-test proves a changed word, a dropped line or a reordering fails): J0, J1 (and price above the limit), J2, J2 variant (paid_but_rejected and settled_after_refusal), J1 interrupted (not charged, charged, 202, resume), J3 (seller --help, agent register, enclave build, release approve, endpoint add, enclave start, signer register) and J4 (revoke release) on one chain.
@@ -1300,6 +2280,396 @@ adversary r1 (5c22712, `packages/cli/test/adversary-t21-r1-buyer.test.ts`, 5 fai
 `pnpm -r typecheck` (exit=0):
 ```
 Scope: 5 of 6 workspace projects
+
+### Site adversary r47 (failing test 4c640f9, fix d5c5f34) - 2026-11-05
+Finding: on use-cases.html at 390px, with Anybody not loaded (Google Fonts blocked, or before `display=swap` lands), "RECOMMENDATIONS" in a 35.2px uppercase `.use h2` is wider than the 350px column; `.beats`' auto grid column grew to it and `main`'s overflow clip cut the line ends of all four uses (site/README.md:109).
+Fix: `.use h2 { overflow-wrap: anywhere; }` (site.css).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then the r47 off-right probe, `offright.mjs site/dist use-cases.html <state> 390x844`, which counted 8 elements past the edge before the fix):
+```
+# tests 154
+# pass 154
+# fail 0
+build=0
+== nojs 390x844 use-cases.html 0
+== cdnfail 390x844 use-cases.html 0
+== live 390x844 use-cases.html 0
+```
+reviewed: pending (adversary r48, then Codex)
+
+### Site adversary r48 (failing test de1a898, fix e64f0ee) - 2026-11-05
+Finding: at 200% zoom on 1280, 1366 and 1440px laptops (640x400, 683x384, 720x450 CSS px), the open `.menu` (fixed, `justify-content: center`, no overflow) was taller than the screen: "How it works" sat under the nav bar, "Explorer preview" below the screen, and nothing scrolled (site/README.md:104,109; WCAG 1.4.4, 2.4.11). Lead taken too: r47's `overflow-wrap: anywhere` broke "RECOMMENDATIONS" mid-word at every width in a fallback face.
+Fix: `.menu { justify-content: safe center; overflow-y: auto; scroll-padding-top: 100px; }`; the `.use h2` wrap rule now applies under 720px only.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r48's menufit probe, index.html, cdnfail and live, at 640x400, 683x384, 720x450, 768x432 and 768x1024: every menu link visible below the 68px nav bar as Tab cycles, the menu scrolls where it is taller than the screen; r48's midword probe: the break is at 390px only, none at 768 or 1440; r47's offright probe, use-cases.html at 390x844: 0 in nojs, cdnfail and live):
+```
+# tests 160
+# pass 160
+# fail 0
+build=0
+```
+reviewed: pending (adversary r49, then Codex)
+
+### Site adversary r49 (failing test 6510b18, fix 6256e43) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px), with everything working, the pinned proves section's content (at least 609.8px) overflowed its `overflow: hidden; align-items: center` 450px box, so its h2, lede and "security page" link sat above the screen where nothing scrolls (site/README.md:102-103, site.css "the two lists must fit"; WCAG 1.4.4, 2.4.11). The probe showed the same for the outcomes, explorer, defaults and story steps, and the proves section 86px too tall even at 1440x900 at 100%.
+Fix (site.css): `.story-sticky, .scene-sticky { overflow-y: auto; align-items: safe center; scroll-padding-top: var(--nav-h); }` and `.story-sticky > .wrap { height: auto; min-height: 100%; align-content: safe center; }`, so a box that still overflows scrolls from its top; the proves short-screen rule now reaches 960px tall. site/README.md says so.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r49's pinscan probe, index.html live at 720x450, 768x432, 1024x600, 1280x800, 1440x900 and 1920x1080: no text above a box or under the nav bar (before the fix: 15 such lines at 720x450, 6 at 1024x600, 1 at 1440x900); and boxoverflow.mjs: boxes scroll only where content overflows, at 720x450 and 1024x600, none at 1280x800, 1366x768, 1440x900, 1536x960, 1680x1050 or 1920x1080):
+```
+# tests 161
+# pass 161
+# fail 0
+build=0
+```
+reviewed: pending (adversary r50, then Codex)
+
+### Site adversary r50 (failing test 38c77c6, fix 56b8c75) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px) the story, "Three ways a call can end" and the four uses boxes overflow and scroll (r49), but they had no tabindex and nothing inside them takes focus, so arrow keys, Page Down and Space scrolled the page and never the box (WCAG 2.1.1; site/README.md "scrolls from its top"). The hidden part of the outcomes box held the three outcomes.
+Fix: the three boxes get `tabindex="0" role="group"` with the section's name (index.html, use-cases.html), and a focused pinned box draws its outline inside (`outline-offset: -3px`). site/README.md says so.
+Not fixed, reported by the adversary without a test: the wheel scrolls a box's own content while its section is still entering, so it can pin already scrolled; it stays reachable by scrolling back up.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe at 720x450, live, focusing each box and pressing PageDown: story scrollTop 0 to 194 of 194, outcomes 0 to 334 of 418, uses 0 to 99 of 99, page moved 0, outline solid; Tab lands on each box):
+```
+# tests 164
+# pass 164
+# fail 0
+build=0
+```
+reviewed: pending (adversary r51, then Codex)
+
+### Site adversary r51 (failing test 2aa9b89, fix 28620fb) - 2026-11-05
+Finding: seven docs code blocks (how-to: seller commands, the MCP args, the "Use it with buy" output with the 206-character "you pay even if the answer fails it" line; tutorial: git clone, `attessa init` output, the JSON body, `attessa call`) scroll sideways at 390px, three of them at 720x450 (200% zoom), with no tabindex and nothing focusable inside, so the keyboard couldn't bring the ends of their lines into view (site/README.md:104; WCAG 2.1.1). The four reference tables' `.table-wrap` had the same gap.
+Fix: `<pre tabindex="0">` for the code blocks in docs/how-to.html, docs/tutorial.html and docs/reference.html, and `tabindex="0"` on reference.html's `.table-wrap`; site/README.md says so.
+Not filed by the adversary: the r50 tab stops stay on phones and without JavaScript, where the boxes don't scroll (an extra named group stop; the static tabindex can't depend on JS); under reduced motion, scrolling a pinned box may leave the 3D object and globe labels where the slot was (scene.js:1003, not rendered: no real three.js here).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe, cdnfail, focusing each tab-stop scroller and pressing ArrowRight: every scroller reached its end, how-to 384/384 and 993/993 at 720x450, 674, 151 and 1283 at 390x844; tutorial 300 at 720x450, 158, 590, 127 and 143 at 390x844; reference tables 32 at 720x450, 72, 209, 18 and 322 at 390x844):
+```
+# tests 167
+# pass 167
+# fail 0
+build=0
+```
+reviewed: pending (adversary r52, then Codex)
+
+### Site adversary r52 (failing test 536a259, fix a011230) - 2026-11-05
+Finding: r51 made the docs code blocks tab stops, but a focused `<pre>` drew the site ring 3px outside itself (site.css:52) inside `.docs-main .code { overflow: hidden }` with no padding, so its left, right and bottom sides were clipped and only a 1px line in the caption bar was left: obscured focus on 10 tab stops (how-to x4, tutorial x5, reference payAndVerify), at every width.
+Fix (site.css): `.docs-main .code pre:focus-visible { outline-offset: -3px; }`, the same inside ring r50 gave the pinned boxes.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r52's prering probe, docs/how-to.html, cdnfail, 390x844: each of the 4 focused blocks now changes 846 to 1114 px inside its box and none outside, outline "solid 1px, off -3px"; before the fix: top 347 px, right 0, bottom 0, left 1):
+```
+# tests 170
+# pass 170
+# fail 0
+build=0
+```
+reviewed: pending (adversary r53, then Codex)
+
+### Site adversary r53 (failing test 39f57dc, fix c5811fa) - 2026-11-05
+Finding: at 1024, 1280, 1366 and 1440px (site/README.md:110) the docs menu (`.docs-nav`, `overflow-y: auto`, no padding) clipped every link's focus ring: the 3px-offset ring lost its left and right sides on all 15 links, and "Known limits" its bottom too, leaving one line between it and "Threat model" (obscured focus).
+Fix (site.css): from 861px up, `.docs-nav { padding: 0 6px 6px; margin-left: -6px; }`: room for the ring inside the clipping menu, with the link rail where it was.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r53's navring probe, docs/reference.html, cdnfail: at 1440x900 and 1280x800 every link's ring now changes 38 to 46 px on its left and right sides (0 before); a bottom side is missing only for the link the browser scrolled flush to the screen's bottom edge, which r53 classed as browser behaviour):
+```
+# tests 174
+# pass 174
+# fail 0
+build=0
+```
+reviewed: pending (adversary r54, then Codex)
+
+### Site adversary r54 (failing test d2b29fc, fix 964c8d9) - 2026-11-05
+Finding: r53 gave the docs menu its ring room under `(min-width: 861px)` while its clip stops only under `(max-width: 860px)`, so at fractional CSS widths between 860 and 861px (1076 device px at 125%, 947px at 110%, 1291px at 150%) the menu clipped with no room and a focused link lost its left and right ring sides.
+Fix (site.css): the room (`padding: 0 6px 6px; margin-left: -6px`) is on the base `.docs-nav` rule and reset to 0 inside the same `(max-width: 860px)` block that sets `overflow: visible`, so the two always switch together. (`not all and (...)` and `(width > 860px)` would also work in browsers, but the site tests' CSS harness doesn't parse them.)
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r54's fracnav probe, docs/reference.html at device scale 1.17, windows 859 to 862: at 860.684px CSS the menu now has `pad="0px 6px 6px" ml=-6px` and the focused link's ring changes left 84 and right 81 px, the same as at 861.539px (before the fix: left 0, right 0); at 859.829px the menu is static and unclipped):
+```
+# tests 176
+# pass 176
+# fail 0
+build=0
+```
+reviewed: pending (adversary r55, then Codex)
+
+### Site adversary r55 (failing test 85248d5, fix b772ee2) - 2026-11-05
+Finding: a docs page loaded at 760px or narrower closes the docs menu `<details>` (site.js), and over 860px site.css hides its summary, the only control that opens it, so after a 200% zoom reset, a tablet rotation or a widened window the whole docs menu was gone from the page and the Tab order until a reload (site/README.md:108, "the docs menu becomes a toggle under 860px").
+Fix: site.js listens on `(max-width: 860px)` and opens the menu again when it stops matching (so fractional widths between 860 and 861 are covered too). Browser check with r55's probe/docsrotate.mjs on the built dist, docs/reference.html: live 720x450 to 1440x900, cdnfail 744x1133 to 1133x744 and nojs 390x844 to 1024x768 all end `details.open=true`, 15/15 links with a box, first docs-menu Tab stop "Overview"; the control 1440x900 to 720x450 still reaches the "Docs menu" summary.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 178
+# pass 178
+# fail 0
+```
+reviewed: pending (adversary r56, then Codex)
+
+### Site adversary r56 (failing test 1931399, fix 84858ba) - 2026-11-05
+Finding: a width change that hides the focused control dropped focus to `<body>` (WCAG 2.4.3; the brief's "lost or obscured focus"): the "Docs menu" summary growing past 860px, an "On this page" link narrowing under 1181px, and the closed menu button growing past 1020px. Chromium sometimes moves focus before a media listener runs, so a check inside the width listener is a race.
+Fix: site.js listens for `focusout` with no `relatedTarget`; on the next frame, if focus is on `<body>` and the element that lost it no longer renders, focus goes to the docs menu's first link if it shows, else `main` (`tabindex="-1"`). Browser check with r56's probe/focusrepeat.mjs on the built dist, docs/reference.html: summary closed and open 800x900 to 1024x768, TOC link 1280x800 to 1024x768, menu button 900x800 to 1280x800 all end on "Overview", 6 of 6 (CDN failed) and 3 of 3 (live) each; focuscross.mjs TOC link 1280x800 to 720x800 ends on "Overview", next Tab "Pay-if-verified in 10 minutes".
+verify:
+```
+node site/build.mjs: exit 0
+# tests 182
+# pass 182
+# fail 0
+```
+reviewed: pending (adversary r57, then Codex)
+
+### Site adversary r57 (failing test 7411472, fix b95b596) - 2026-11-05
+Finding: the r56 focusout fallback sent focus to the docs menu's first link, which at 860px and under sits at the top of the page (not sticky), so turning a tablet or snapping a window narrower with focus on an "On this page" link jumped a deep docs page to scrollY 0 (the brief's "lost or obscured focus"; site.js's own "give it back to something visible").
+Fix: the fallback focuses the first tab stop inside main that is fully on screen below the header (the docs menu's links come first in main, so over 860px, where the menu sticks, it is still "Overview"), else main, which does not scroll. Browser check with r57's probe/tocjump.mjs on the built dist: reference 1280x800 to 800x1280 and 1194x834 to 834x1194 keep scrollY (6488, 6691; no tab stop fully on screen there, focus on main, the next Tab starts at main's top); tutorial live 1280x800 to 768x1024 keeps 3604 with focus on an on-screen "Copy" button; explanation 1440x900 to 720x900 keeps 3531 on "KNOWN-LIMITS.md on GitHub". r56's focusrepeat.mjs: all four cases still end on "Overview", 3 of 3.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 184
+# pass 184
+# fail 0
+```
+reviewed: pending (adversary r58, then Codex)
+
+### Site adversary r58 (failing test ea140e0, fix below) - 2026-11-05
+Finding: at the end of any page, when a width change hid the focused control (the header network chip under 1181px, the menu button over 1020px), the focusout fallback found no stop of main on screen and called main.focus(), which scrolled the page to main's middle (index.html at 1024x900: scrollY 10387 to 4354) and sent the next Tab to the top of the page (WCAG 2.2 SC 2.4.3; site/README.md states).
+Fix: site.js's fallback takes the first enabled tab stop fully on screen below the header anywhere on the page (footer links and radios included), else focuses main with preventScroll. No more adversary rounds (Joshua, 2026-11-05: Codex reviews from here).
+verify:
+```
+node site/build.mjs: exit 0
+# tests 186
+# pass 186
+# fail 0
+```
+reviewed: pending (Codex)
+
+### Site Codex r1 fixes - 2026-11-05
+Codex r1 (site-ui-review-r1.md, on d7b0a5d): REVISE, 2 major, 1 minor.
+- M1 (the recorded count): on this machine `node --test site/test/*.test.mjs` at d7b0a5d prints `# tests 186` / `# pass 186` under node v22.23.2: 186 tests in 65 files. Codex's run reported 65, the file count, as top-level tests. From this entry on, the record quotes the node version, the file count and the whole TAP footer.
+- M2: the pinned third-party script and stylesheet tags carry `integrity` (sha512) and `crossorigin="anonymous"`: GSAP 3.12.5 and ScrollTrigger (the hashes cdnjs publishes, matched by sha512 of the downloaded bytes), Phosphor 2.1.1 CSS (the same bytes from unpkg and jsDelivr), and three 0.160.0 through the import map's `integrity` entry. Google Fonts' CSS stays unpinned: Google serves different CSS per browser. Test: site/test/cdn-integrity.test.mjs (3; 2 fail on the old layout).
+- m1: the focus fallback skips a control with `tabIndex < 0` (a roving tab that isn't selected). Test added to site/test/focus-return-at-page-end.test.mjs (fails on the old site.js).
+verify:
+```
+$ node --version
+v22.23.2
+$ node site/build.mjs
+exit 0
+$ ls site/test/*.test.mjs | wc -l
+66
+$ node --test site/test/*.test.mjs (TAP footer)
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1352.085698
+```
+reviewed: pending (Codex r2)
+
+### Site Codex r2: the test count, settled by a per-file run - 2026-11-06
+Codex r2 (site-ui-review-r2.md, on dc191dc): REVISE, 1 major: `node --test site/test/*.test.mjs` printed `1..66` / `# tests 66` in Codex's environment (node v22.23.2), where this machine prints `1..190` / `# tests 190` (same node, also under `env -i`). Both are real output of the same command: one environment reports each of the 66 files as one top-level test, the other reports the 190 tests inside them. So the count no longer rests on the globbed footer: `site/test-count.sh` runs each file alone and sums its own footer.
+verify (`./site/test-count.sh`, exit 0; per-file lines then the total):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+For reference, the globbed command on this machine:
+```
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1123.324034
+```
+reviewed: pending (Codex r3)
+
+### Site Codex r3: the counter runs each module directly - 2026-11-06
+Codex r3 (site-ui-review-r3.md, on 64a615f): REVISE, 1 major, 1 minor. M1: `node --test <file>` reports one wrapper test per file in Codex's environment, so the r2 counter summed 66 there; running the module itself (`node <file>`) reports the module's own tests in both environments. m1: a failure was counted twice (TAP footer plus nonzero exit).
+Fix: site/test-count.sh runs `node <file>` and counts each failure once (the footer, or 1 for a nonzero exit with no footer). Correction to the site entries above: their totals (154 to 190) are direct-module totals, which Codex replayed at each cited commit with zero failures; the globbed `node --test site/test/*.test.mjs` footer differs between environments (190 on this machine, 66 in Codex's), so it is no longer used as evidence.
+verify (`./site/test-count.sh`, exit 0):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+Mutant check: one assertion in site/test/built-state-consistent.test.mjs made to fail, then restored: `node v22.23.2: 66 files, 190 tests, 1 failed`, exit 1.
+reviewed: pending (Codex r4)
+
+## T38 - 2026-11-02
+Decisions from the PR #8 review (posted on PR #8 as a comment review), recorded in OPEN-QUESTIONS.md:
+- D1, explorer proof source: Joshua chose option A (public read-only proof route, T43), 2026-11-02.
+- D2, install path: Joshua left it to Claude, 2026-11-02; install from source with `pnpm link --global`, applied on feat/site-ui in 5ff468a.
+- The review's spec conflicts (M6), FLOWS' npm line after D2, and the T21b MCP path are open entries for Joshua.
+- TASKS.md gains the Website section, T38 to T48.
+
+verify (`grep -n -i -E 'explorer proof source|install path' OPEN-QUESTIONS.md`, lines cut at 120 characters), 2026-11-02:
+```
+94:- [x] **Explorer proof source (D1, PR #8 review C1).** The site said the explorer re-runs the buyer's checks "from pu
+95:- [x] **Install path (D2, PR #8 review C2).** `@attessa/cli` and `@attessa/mcp` are not on npm (E404 on 2026-11-02) a
+```
+reviewed: pending (adversary, then Codex)
+
+### Website finish (T39, T40, T42, T47, T48) - 2026-11-06
+
+branch: feat/site-finish (not pushed). Commits: 044a5b1 (step 0 fixtures), 7fad5d3 (T39), the T40, T42, T47 and T48 commits after it (`git log --oneline 6a1039c..HEAD`).
+
+- Step 0: recorded the Celo Sepolia fixtures with `site/test/fixtures/capture.mjs` (read-only `eth_*` calls, no key, no transaction); `explorer-live-recorded` and `explorer-live-errors` pass. capture.mjs now reads 40 blocks at a time and takes `CAPTURE_SCAN_BLOCKS` (no reverted transaction in 3000 blocks).
+- T39: `site/` is `packages/site` (`@attessa/site`, private; scripts build, lint, typecheck, test; esbuild 0.28.2 exact). The lockfile gained only importer entries for packages/site. `test/pages.test.mjs` snapshots the text of all 12 pages. `test-count.sh` moved with it (two path lines changed).
+- T40: three 0.160.0 and gsap 3.12.5 (bundled by esbuild into assets/scene.js and assets/motion.js), fonts vendored as woff2 with `SHA256SUMS` (latin and latin-ext), Phosphor 2.1.1 inlined as SVG, CSP as a `<meta>` tag in every page with computed inline-script hashes, `CNAME` (attessa.xyz) and `.nojekyll` written into dist. `test/cdn-integrity.test.mjs` became `test/no-third-party-origins.test.mjs`. Headless Chromium smoke: scene live, only the site's own origin requested, no CSP violation.
+- T42: `config.mjs` builds `assets/config.js` from `@attessa/core` DEPLOYMENTS and `networks.json`; mainnet disabled while `enclaveRegistry` is null; `?network=` beats local storage; `[[chain:...]]` fills addresses; a `[[slot:` the deploy record has fails the build (`test/config.test.mjs`).
+- T47: scene idle stop, DPR 1 on coarse pointers, particle tiers, Data Saver off, no ScrollTrigger under reduced motion; menu Tab containment, one live region, search focus ring, hash button name. `node packages/site/scripts/perf-probe.mjs` (local headless Chromium):
+```
+ok   docs/reference.html idle 2 s: 0 scene frames (124 while loading), 129 rAF calls
+ok   docs/reference.html scroll wakes it: 27 scene frames after a scroll
+ok   index.html idle 2 s: 0 scene frames (114 while loading), 128 rAF calls
+ok   index.html scroll wakes it: 25 scene frames after a scroll
+ok   docs/reference.html reduced motion idle 2 s: 0 rAF calls, 0 scene frames, 0 ScrollTriggers
+ok   reduced motion registers no ScrollTrigger: 0
+ok   index.html with saveData: 0 scene frames, no-webgl class true
+```
+  (the 129 rAF calls at idle are GSAP's ticker, not the scene; see OPEN-QUESTIONS.) The real-phone pass is Joshua's and not done.
+- T48: `site.config.json` (origin https://attessa.xyz; securityContact and securityTxtExpires null, for Joshua), security.txt built from it, privacy copy corrected. `grep -rn -E '\{securityContact\}|\{securityTxtExpires\}|\{siteOrigin\}|@attessa/(cli|mcp)|npx ' packages/site/dist` printed nothing (exit 1). The text snapshot diff since T39 is one privacy.html change plus the earlier privacy line; Joshua approves it. T41 and T43 to T46 are not built (OPEN-QUESTIONS).
+
+Final verify, `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/site test && ./scripts/check-install-scripts.sh` (build, typecheck and lint output, then the TAP summary lines of the site test run, then the guard):
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
 packages/core typecheck$ tsc -p . --noEmit
 packages/core typecheck: Done
 packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
@@ -2156,6 +3526,127 @@ reviewed: pending (adversary r47, then Codex; Codex to judge the r17 call, the r
 Finding: after `endpoint retire` and `endpoint add` with a new operator, the running key's signer keeps the old operator (Inert, SPEC §3.4). `signer renew` from the new operator said that wallet "isn't the operator", and `signer register --fresh` sent it back to `signer renew`; neither could pass (FLOWS.md:832).
 Fix: renew splits the wrong-wallet check from the operator-changed check and gives the latter `operator_mismatch` with "Restart with `attessa enclave start`, then `attessa signer register`."; register's signer_exists row gives that restart line whenever renew can't extend the signer (expired, revoked or old operator). Copy logged in OPEN-QUESTIONS (not in FLOWS).
 verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+
+> @attessa/site@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-site-finish/packages/site
+> node --test test/*.test.mjs
+
+...
+# tests 255
+# suites 0
+# pass 255
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2459.14687
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+`./packages/site/test-count.sh` (one file at a time):
+```
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+8 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+4 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+
+reviewed: pending (Codex r1)
+
+### Website finish: merged with feat/site-ui 8600d5d, lead's check - 2026-11-06
+Merged the latest feat/site-ui (test-count.sh runs each module directly) into feat/site-finish; test-count.sh keeps that logic with the paths for packages/site. Disclosure: T40 (b749736) removed packages/site/test/cdn-integrity.test.mjs (the SRI test on CDN tags; the CDN tags are gone because every asset is now self-hosted) and added packages/site/test/no-third-party-origins.test.mjs, which asserts no page loads anything from another origin. The project rule is never to delete a test; this one is replaced by a stronger one and is listed for Codex to judge. The built output (packages/site/dist) holds CNAME (attessa.xyz), .nojekyll and a CSP meta tag in every page; its only third-party URLs are plain links (GitHub, the Celo and Circle faucets).
+verify (build, typecheck, lint, `pnpm -r test`, install guard, under the heavy lock):
 ```
 build=0
 typecheck=0
@@ -2177,6 +3668,166 @@ reviewed: pending (adversary r48, then Codex)
 Finding: with live signers on two Approved releases for one origin, `revoke release R1` said "risk.example refuses calls until you approve and register another build", but R2's signer keeps serving it (FLOWS.md:833, SPEC §3.4 checkSigner per release).
 Fix: releaseStatus walks every SignerRegistered for the agent and leaves out of the prompt any origin a live signer on another Approved release still serves; when none is left the prompt says "another approved build still serves its endpoints" (not in FLOWS, logged in OPEN-QUESTIONS).
 verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
+packages/site test: # tests 255
+packages/site test: # pass 255
+packages/site test: # fail 0
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  16 passed (16)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+test=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard=0
+```
+reviewed: pending (Codex r1)
+
+### Website: security contact filled in (Joshua) - 2026-11-06
+packages/site/site.config.json: `securityContact` `mailto:attessa7@gmail.com` (Joshua, 2026-11-06), `securityTxtExpires` `2027-11-05T00:00:00Z` (within RFC 9116's year). The built /.well-known/security.txt now has Contact and Expires; security.html drops the "placeholder fields" clause (the one-line snapshot diff in packages/site/test/snapshots/text/security.txt). test/site-config.test.mjs: the committed-config test now checks these values; the no-contact test builds with both set to null through SITE_CONFIG, so that path keeps its coverage.
+verify (`./packages/site/test-count.sh`, exit 0):
+```
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+reviewed: pending (Codex r2)
+
+### Website finish Codex r1 fixes - 2026-11-06
+
+Codex r1 (REVISE, reviews/site-finish-review-r1.md) at ca0af9d; fixes on feat/site-finish, not pushed.
+
+- M1: `explorer.js` calls a pinned-USDC transfer an x402 settlement only when the same token's `AuthorizationUsed` names the address the Transfer came from (SPEC.md 6.2 V11). Otherwise: "A plain USDC transfer, not an x402 settlement". The settled result says an x402 payment settled on Celo and that no link to an Attessa call is shown (needs the proof; D1). Failing tests and real read-only fixtures (a real transferWithAuthorization settlement and a real plain transfer) went in first, alone: d6a3b41; the fix is a2fba7e.
+- M2: final Privacy and Terms copy (ca5ceec); the build refuses the default config when `securityContact` or `securityTxtExpires` is null, `SITE_CONFIG=<file>` is the explicit local opt-out (tested on a copy of the package). The security contact and expiry were already set by the lead (2adcd56).
+- m1: OFL 1.1 text for Anybody, Geist and Geist Mono and `fonts/PROVENANCE.json` (44d4329); `test/font-provenance.test.mjs` requires them and checks every hash.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/sdk lint$ tsc -p . --noEmit
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 75 files, 267 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r2)
+
+### Website finish Codex r2 fix - 2026-11-06
+Codex r2 (site-finish-review-r2.md, on 081a402): REVISE, 1 major: the explorer checked that the Transfer log named this transaction but not the AuthorizationUsed log, so a forged RPC receipt could splice an authorization from another transaction onto a real transfer (SPEC §6.2 V11 is one transaction). r1 M2 and m1 were recorded as fixed.
+Fix (explorer.js readReceipt): every pinned-token AuthorizationUsed or Transfer log must carry this transaction's hash, and its block hash when given must be the receipt's; otherwise the whole answer is refused as unreadable. Test (failing first, 63f6c9b): five cases in packages/site/test/explorer-live-errors.test.mjs (authorization from another transaction, with no transaction hash, from another block; transfer with no transaction hash, from another block). Codex's reproduction now prints `badanswer`.
+verify (under the heavy lock):
 ```
 build=0
 typecheck=0
@@ -2663,3 +4314,259 @@ Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filt
 exit=0
 ```
 reviewed: pending (Codex r4)
+### T21 Codex r3 fixes - 2026-11-06
+Codex r3 (reviews/t21-cli-review-r3.md, on d4567fc): REVISE, 2 major.
+- M1: a dry run (or a run with no wallet) prints the calldata of `release approve --source` and `agent register --uri`, which holds the URL as given. The CLI now refuses a URL with a user name, password, query or fragment before anything is read, encoded or signed (`secret_in_url`), since it would be published on Celo for good.
+- M2: `status --agent` printed and returned on-chain source refs and endpoint origins raw. Source refs are cleaned (no userinfo, query or fragment) and origins shown as scheme://host[:port], in text and --json alike. URL paths stay visible; OPEN-QUESTIONS records why and asks Joshua.
+Tests: packages/cli/test/codex-t21-r3.test.ts (4); all 4 fail on d4567fc and pass here.
+Codex's own r3 run failed in its environment (core tests failed with no test named; CLI tests timed out at 20 s); the same commands pass here, below.
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  86 passed (86)
+packages/cli test:       Tests  342 passed (342)
+test=0
+```
+reviewed: pending (Codex r4)
+
+### T21 Codex r4 fixes - 2026-11-06
+Codex r4 (reviews/t21-cli-review-r4.md, on a49ffa1): REVISE, 2 major, 1 minor.
+- M1: `--source`/`--uri` text that is not a URL but holds `?` or `#` passed `refuseSecretUrl` and reached printed calldata. Non-URL text is now refused for `//user@`, `?` or `#` too.
+- M2: `originOf` (registry.ts, behind `revoke signer` and `revoke release`) and `originFor` (signer.ts, behind `signer register` and `signer renew`) returned the raw EndpointAdded origin. Both readers now return scheme://host[:port] (their result is used only in messages and copy; the endpoint is identified by its hash). Command-level tests cover the revoke flows; the signer flows share the same reader and are covered only through it.
+- m1 (correction to the "T21 Codex r3 fixes" entry): "all 4 fail on d4567fc" was measured by copying the new test file onto d4567fc, where `refuseSecretUrl` did not exist, so the first test failed on a missing function rather than an assertion. This round's tests were run the reproducible way: packages/cli/test/codex-t21-r4.test.ts copied onto a49ffa1 with `refuseSecretUrl` read through a namespace import (`import * as copy`), so a missing export fails at the assertion, not the import:
+```
+on a49ffa1:  Tests  5 failed (5)
+on the fix:  Tests  5 passed (5)
+```
+verify (build, typecheck, lint, `pnpm -r test`, under the heavy lock):
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+```
+reviewed: pending (Codex r5)
+
+## T21 Codex r5: SHIP (2026-11-06)
+Codex round 5 reviewed d7297ac in a frozen worktree: no findings.
+```
+REVIEW DECISION: SHIP
+VERDICT: implementation-ready
+```
+Codex's own full test run could not complete in its sandbox: core's oracle tests fail there with `spawnSync cast EPERM` (the sandbox may not start `cast`), and CLI tests hit 20 s timeouts under its load; its focused run of the r4 tests passed 5 of 5. After merging staging (with PR #12, the install guard) into feat/t21-cli, the task's verify command and the full suite on this machine:
+```
+build=0
+typecheck=0
+lint=0
+packages/core test:  Test Files  9 passed (9)
+packages/core test:       Tests  69 passed (69)
+packages/seller-host test:  Test Files  8 passed (8)
+packages/seller-host test:       Tests  81 passed (81)
+packages/gateway test:  Test Files  23 passed (23)
+packages/gateway test:       Tests  164 passed (164)
+packages/sdk test:  Test Files  20 passed (20)
+packages/sdk test:       Tests  191 passed (191)
+packages/cli test:  Test Files  87 passed (87)
+packages/cli test:       Tests  347 passed (347)
+test=0
+$ pnpm --filter @attessa/cli test
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+cli=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+reviews ok
+```
+reviewed: reviews/t21-cli-review-r5.md | verdict: implementation-ready (rounds r1 to r4 ended changes required; archived outside the repo)
+
+node v22.23.2: 75 files, 268 tests, 0 failed
+site=0
+FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first
+```
+reviewed: pending (Codex r3)
+
+The install guard above ran before the fix was committed and refused a dirty checkout; run again on ee679ac (clean), under the lock:
+```
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
+
+### Site Codex r4 fix: a nonzero exit is a failure - 2026-11-06
+Codex r4 (site-ui-review-r4.md, on 8600d5d): REVISE, 1 major: a module that printed a clean TAP footer (`# fail 0`) but exited nonzero (`process.exitCode = 1`) was counted as passing, and the script exited 0. Fix: test-count.sh counts a nonzero exit as one failure whenever the footer reports none; a footer with failures is counted as before, once.
+Mutant (Codex's): `process.exitCode = 1;` prepended to built-state-consistent.test.mjs, then restored: `4 tests, 1 failed, exit 1` for that module, `(same rule, on this branch's packages/site copy)`, exit 1. Clean run:
+```
+node v22.23.2: 75 files, 268 tests, 0 failed
+```
+reviewed: pending (Codex r4)
+
+Correction to the note above: its mutant line was written from the feat/site-ui run, not run on this branch. Run here now (`process.exitCode = 1;` prepended to packages/site/test/built-state-consistent.test.mjs, then restored):
+```
+4 tests, 1 failed, exit 1: test/built-state-consistent.test.mjs
+node v22.23.2: 75 files, 268 tests, 1 failed
+exit 1
+```
+
+## Website finish Codex r3: SHIP (2026-11-06)
+Codex round 3 reviewed 48fdee6 in a frozen worktree: the r2 log-splicing finding is fixed, the new tests pass, and the real recorded settlement still verifies.
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+Two commits follow 48fdee6 (9034aab, a44b9b1): packages/site/test-count.sh counts a nonzero module exit as a failure (the same change Codex reviews on feat/site-ui as round 5) and its DONE notes. They change no site source: `packages/site/build.mjs` at 48fdee6 and at a44b9b1 produce identical output (`diff -r` of the two builds: no difference).
+reviewed: reviews/site-finish-review-r3.md | verdict: implementation-ready (rounds r1 and r2 ended changes required; archived outside the repo)
+
+### Website deployed to GitHub Pages (Joshua's "deploy") - 2026-11-06
+Built from feat/site-finish 52b6234 (site output identical to the SHIP'd 48fdee6) and pushed as the only content of the gh-pages branch (commit ea10c5b) by .worktrees/prompts/deploy-gh-pages.sh. GitHub Pages: source gh-pages /, custom domain attessa.xyz (from the CNAME file), first build status "built". DNS for attessa.xyz still points at GoDaddy parking (3.33.130.190, 15.197.148.33) until Joshua changes the records; HTTPS is enforced after GitHub issues the certificate.
+
+### Website: buyer CLI shown as built (T21 merged) - 2026-11-06
+
+After the merge of origin/staging (927f35f, T21 ticked) the site shows the buyer CLI as built (55c7c9d): `attessa init`, `call`, `cancel`, `status`, `evidence export` and the owner commands (agent register/transfer/wallet-sig/set-wallet, release deprecate/revoke, revoke signer, endpoint retire, selflink, gateway pause|resume|status|export) lose their Coming marks on the reference, home, how-it-works, use-cases, tutorial, how-to, docs index and docs menu. Each flag the reference lists was checked against `packages/cli/src/index.ts` (`--max-amount`, `--daily-cap`, `--keystore`, `--asset`, `--new`, `--no-wait`, `--out`, `--format csv|jsonl`, and the global `--network`, `--dry-run`, `--json`, `--yes`); the install path is D2 (clone, `pnpm install --frozen-lockfile && pnpm -r build`, `pnpm link --global`). Still marked: `attessa verify` (T21a), the MCP server (T21b), `attessa call --via buy` (T29), `attessa release verify`, mainnet, and the demo service (no real paid call yet, T22/T23). `use-cases-cli-not-built` became `use-cases-cli-built` (and checks every `attessa ...` command on every page against the CLI's command table); the five unbuilt-marked tests were converted to keep their rule for verify, MCP and buy.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/site build$ node build.mjs
+packages/seller-host build$ tsc -p .
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli lint: Done
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+18 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-cli-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 75 files, 270 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r4)
+
+### Website live at https://attessa.xyz - 2026-11-06
+Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.153, .111.153; `www` CNAME jesterkeri.github.io (checked over DNS-over-HTTPS). GitHub had not issued a certificate after 60 minutes (the custom domain was saved before DNS pointed at Pages); re-saving the custom domain through the Pages API started it, and a fresh build ran. Pages API state:
+```
+status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
+```
+The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.

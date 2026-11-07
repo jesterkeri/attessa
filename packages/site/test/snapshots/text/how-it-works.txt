@@ -1,0 +1,120 @@
+title: How it works | Attessa
+description: How a paid call is checked before the buyer's money moves, from the buyer's side and the seller's.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+How a call
+gets checked
+before you pay
+A seller runs their service in a sealed machine and approves that exact build on Celo. A buyer pays only after the answer comes back signed by that build and the signature checks out. Here is each step, with the line the CLI prints for it.
+On this page
+Who's involved4 parts The buyer's steps7 steps The seller's steps6 steps Records on Celo4 records
+Why it's needed, and who's involved
+Without a check, you pay first. If the answer is wrong, you can't tell whether the code the seller stands behind ran, or whether the program was swapped or the answer changed on its way to you. Four parts make the check work.
+Before any call
+Seller
+Runs a paid service inside a sealed machine and approves that exact build on Celo, from the wallet that owns their agent.
+On every call
+Buyer
+You, or your agent. Asks for an answer and signs a payment permission. The Attessa CLI or SDK on your side checks every proof again on its own.
+Gateway
+Sits in front of the sealed machine and takes the payment, but settles only once the proof checks out against the registry on Celo. A marketplace such as buy would run it; in this demo the seller's side runs it too, one of our known limits.
+Sealed machine
+An AWS Nitro enclave. Its running code is measured, its operator can't log in or change it, and it signs every answer with a key that never leaves it.
+Buyer's view
+Seller's view
+Buyer's view
+01
+You ask for an answer
+Your agent, or you, calls a paid API through Attessa instead of calling it directly.
+$ attessa call https://risk.example/v1/evaluate --body tx.json
+→ Checking risk.example before paying
+02
+Attessa reads who is selling
+It looks the service up in the Attessa registry on Celo: which agent owns it (an on-chain identity, agent 412 here), which build the owner approved (a release, named by the build's fingerprint), and the source code the owner says it came from, which is their claim, not something Attessa checks. If the service isn't registered, it stops here and nothing is signed.
+Runs agent 412's approved build in a sealed machine the seller can't change (release 0x9c4e…a1, Nitro enclave)
+Owner says it's built from github.com/acme/risk @ a1b2c3d (not checked by attessa)
+03
+It checks the sealed machine is answering
+A quick check that the registered machine is up at this address before anything is signed.
+→ It's up and answering for this address right now (liveness check, 0.4 s)
+04
+You see the price and sign a payment permission
+The price arrives as an x402 quote. If it's within your limits (0.10 USDC a call by default, set by attessa init), you sign a permission to pay it, in USDC, or USA₮ on mainnet. Signing moves no money, and the permission expires in about 120 seconds.
+→ Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way (EIP-3009 authorization)
+05
+The gateway checks the proof, then you pay
+The sealed machine computes the answer from Celo data at a stated block and signs a proof that binds this request, this answer, those inputs and this payment to the approved build. The gateway checks it against the registry and only then settles. Attessa on your side, the CLI or the SDK, checks the same proof again on its own once the payment has settled, and records a failure as paid but rejected.
+→ Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118 (settled: tx 0xabc…, signer 0x7f3b…22)
+06
+You keep a record
+The answer and the evidence are saved locally. For 24 hours you can fetch the stored answer again from the gateway, with your wallet's signature. Anyone can check the payment on Celo, with no wallet and no payment.
+→ Answer saved to result.json. Record: ~/.attessa/evidence.jsonl
+07
+If the proof fails, nothing settles
+If any check fails (a tampered answer, a revoked build, a wrong signer), the gateway refuses before it settles, so it shouldn't use your permission. Attessa shows which check failed, waits for the permission to expire, and checks on Celo whether it was used: not charged if it wasn't, or settled_after_refusal if the gateway used it anyway. You can cancel it sooner, on chain, for a little gas.
+→ Refused: the answer doesn't match what the sealed machine signed (response hash differs from the proof)
+→ Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…
+→ Not charged: confirmed on Celo, your payment permission expired unused (block 31,204,245)
+Example output. risk.example and the hashes in it are illustrative. Run it yourself with attessa init and attessa call (install from source).
+Seller's view
+01
+Register your agent
+Your agent's public identity is an ERC-8004 entry owned by your wallet. Everything else hangs off it. Run attessa agent register to create it.
+$ attessa agent register --name "Acme risk check"
+→ This creates your agent's public identity (ERC-8004) from this wallet. One transaction, about 0.05 CELO. [register/cancel]
+→ Registered: agent 412 (tx 0x…). Next: attessa enclave build.
+02
+Build the sealed machine image
+On an AWS EC2 machine with Nitro enclaves turned on, in your service's repo at the commit you'll publish. The build packs your service into a sealed machine image and writes the three measurements, fingerprints of that image, that identify it.
+# on the EC2 host, in your service's repo at the commit you'll publish
+$ attessa enclave build
+→ Built build/risk.eif from acme/risk @ a1b2c3d. Measurements written to build/measurements.json. Next: attessa release approve.
+03
+Approve that exact build on Celo
+An approved build is a release, identified by its measurements PCR0 to PCR2. Buyers see the source you name as your claim, not as something Attessa checked.
+$ attessa release approve --agent 412 --from-build build/measurements.json --source https://github.com/acme/risk/commit/a1b2c3d
+→ Approving the build made from acme/risk @ a1b2c3d for agent 412 (release 0x9c4e…a1; PCR0-2 read from the build output)
+Buyers will see "owner says it's built from acme/risk @ a1b2c3d" (attessa can't check that claim). One transaction, about 0.03 CELO. [approve/cancel]
+→ Approved (tx 0x…). Next: attessa endpoint add.
+04
+Add your endpoint
+The endpoint is your service's web address and the address buyers pay, which is the gateway's. Buyers only pay the address you register here.
+$ attessa endpoint add --agent 412 --origin https://risk.example --pay-to 0xGATE…01
+→ Buyers of risk.example will pay 0xGATE…01 and only accept answers from agent 412's approved builds. One transaction, about 0.03 CELO. [add/cancel]
+→ Added (tx 0x…).
+05
+Start the sealed machine
+It makes a fresh signing key inside, and AWS signs a report of exactly what is running.
+# on the EC2 host
+$ attessa enclave start --agent 412 --origin https://risk.example
+→ Starting the sealed machine from build/risk.eif… running (Nitro enclave, 1 vCPU, 1 GiB)
+→ It made a fresh signing key and AWS signed a report of what's running (attestation written to att.bin; register within 30 minutes, or get a fresh one any time with --fresh)
+06
+Register the signer
+The registry checks AWS's report on chain and records the machine's key as a signer for your approved build. From then on, anyone can check its proofs.
+$ attessa signer register --agent 412 --attestation att.bin
+→ This publishes the machine's key on Celo so buyers can check it. Up to 5 transactions, about 8 CELO at today's price (3 of 4 certificates already cached, so 2 transactions, about 4 CELO). [register/cancel]
+→ [1/2] Certificate cached (tx 0x…)
+→ [2/2] Signer 0x7f3b…22 is live for risk.example, running agent 412's approved build (tx 0x…)
+→ Valid until Oct 26 14:00 UTC, or until the machine restarts. To renew without a restart: attessa signer renew. After a restart (new key): attessa enclave start, then attessa signer register (about 4–6 CELO, up to 8 if no certificates are cached).
+→ Liveness check passed. Buyers can check this seller now.
+Example output. Each transaction shows its CELO cost and asks before it sends. Full seller guide.
+The records on Celo, and how they link
+An agent owns an approved release. A signer is proven to run that release. An endpoint is where it sells and gets paid. A proof is checked against all of them.
+Approved buildIn the code this is a release: the build's three measurements, approved by the agent's owner. Revoking it stops every signer that runs it within 60 seconds.
+SignerThe key a sealed machine makes when it starts. It never leaves the machine. Every restart makes a new one.
+ProofAn EIP-712 signature by the signer over the request, the answer, the inputs and the payment. AWS's report is the attestation; the proof is Attessa's.
+Explorer previewOpen the explorer Ten minutes on Celo SepoliaTry the tutorial
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

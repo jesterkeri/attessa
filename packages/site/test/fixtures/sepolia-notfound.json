@@ -1,0 +1,32 @@
+{
+  "note": "A transaction hash that does not exist on Celo Sepolia: sha256(\"attessa site explorer fixture: a hash with no transaction\"). The receipt answer is null.",
+  "capturedAt": "2026-11-06T15:20:45.674Z",
+  "rpc": "https://forno.celo-sepolia.celo-testnet.org",
+  "txHash": "0x0906ee2ebe2c0c334131a628ea58f0d7c34f02d6191fd95da292d93bd5206697",
+  "calls": [
+    {
+      "request": {
+        "method": "eth_chainId",
+        "params": []
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": "0xaa044c",
+        "id": 22129
+      }
+    },
+    {
+      "request": {
+        "method": "eth_getTransactionReceipt",
+        "params": [
+          "0x0906ee2ebe2c0c334131a628ea58f0d7c34f02d6191fd95da292d93bd5206697"
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": null,
+        "id": 22130
+      }
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+<div class="proves">
+  <div data-side="left">
+    <h3><span class="tile">{{i:pass}}</span>What a proof shows</h3>
+    <ul class="claims">
+      <li data-at="0.04">{{i:yes}}<span><strong>Which approved build answered</strong>, for this request, with these inputs.</span></li>
+      <li data-at="0.1">{{i:yes}}<span><strong>That it ran in a sealed machine</strong>, attested by AWS, with its key registered on Celo.</span></li>
+      <li data-at="0.16">{{i:yes}}<span><strong>Which Celo data it used</strong>, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.</span></li>
+      <li data-at="0.22">{{i:yes}}<span><strong>Which payment it answers for.</strong> The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.</span></li>
+    </ul>
+  </div>
+  <div data-side="right">
+    <h3><span class="tile">{{i:na}}</span>What it doesn't show</h3>
+    <ul class="claims">
+      <li data-at="0.38">{{i:no}}<span><strong>That the answer is correct.</strong> A bad answer is a rules problem you can read in the source.</span></li>
+      <li data-at="0.45">{{i:no}}<span><strong>That the service is available.</strong> An operator can still withhold or delay answers.</span></li>
+      <li data-at="0.52">{{i:no}}<span><strong>That the build matches its source.</strong> That link is the owner's claim, shown as "Owner says it's built from github.com/… @ commit" until someone reproduces the build.</span></li>
+      <li data-at="0.59">{{i:no}}<span><strong>That requests are private.</strong> Request bodies are visible to the service's gateway and to the server the sealed machine runs on.</span></li>
+      <li data-at="0.66">{{i:no}}<span><strong>Protection when paying through buy.</strong> buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.</span></li>
+      <li data-at="0.73">{{i:no}}<span><strong>An instant "not charged".</strong> After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.</span></li>
+    </ul>
+  </div>
+</div>

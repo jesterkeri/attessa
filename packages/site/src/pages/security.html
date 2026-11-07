@@ -1,0 +1,71 @@
+<!-- title: Security and limits | Attessa -->
+<!-- description: Attessa's contracts and addresses, how changes are reviewed, its admin keys, and the known limits. -->
+<!-- nav: security -->
+<!-- body: security-page -->
+<section class="hero page-hero short-hero">
+  <div class="wrap hero-inner page-head">
+    <div>
+      <h1 data-split data-intro>Security<br> and limits</h1>
+      <div class="hero-sub">
+        <p class="lede" data-intro>What's deployed on Celo, how changes are reviewed, who holds which keys, and what Attessa doesn't cover.</p>
+      </div>
+    </div>
+    <nav class="page-index" aria-label="On this page" data-intro>
+      <p class="label">On this page</p>
+      <a href="#contracts">Contracts</a>
+      <a href="#review">How changes are reviewed</a>
+      <a href="#keys">Who holds which keys</a>
+      <a href="#limits">Known limits</a>
+      <a href="#report">Report a problem</a>
+    </nav>
+  </div>
+</section>
+
+<div class="wrap page-body">
+  <article class="docs-main">
+    <h2 id="contracts">Contracts</h2>
+    <p>Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Ours are live on Celo Sepolia; our Celo mainnet addresses fill in once deployed.</p>
+    <div class="table-wrap"><table class="table">
+      <thead><tr><th scope="col">Contract</th><th scope="col">What it does</th><th scope="col">Celo Sepolia</th><th scope="col">Celo mainnet</th></tr></thead>
+      <tbody>
+        <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[chain:celo-sepolia.enclaveRegistry]]</td><td class="muted">After launch</td></tr>
+        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[chain:celo-sepolia.nitroValidator]]</td><td class="muted">After launch</td></tr>
+        <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[chain:celo-sepolia.certManager]]</td><td class="muted">After launch</td></tr>
+        <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[chain:celo-sepolia.p384Verifier]]</td><td class="muted">After launch</td></tr>
+        <tr><td>ERC-8004 identity registry</td><td>The agent identity registry. Not ours, and upgradeable by whoever holds its keys.</td><td>[[chain:celo-sepolia.identityRegistry]]</td><td>[[chain:celo.identityRegistry]]</td></tr>
+        <tr><td>Self Agent ID registry</td><td>Links a person-verified ID to an agent. Shown for information only, never part of the check. Not ours, and upgradeable.</td><td>[[chain:celo-sepolia.selfRegistry]]</td><td>[[chain:celo.selfRegistry]]</td></tr>
+      </tbody>
+    </table></div>
+    <div class="doc-note"><p>A deploy check confirms that each of our four contracts' code on chain matches the compiled production build, and that they point at each other.</p></div>
+
+    <h2 id="review">How changes are reviewed</h2>
+    <dl class="cast-list review-list">
+      <div><dt>Attacked first</dt><dd>An adversarial test writer tries to break the code with failing tests, in rounds. The rounds and what they found are logged in DONE.md.</dd></div>
+      <div><dt>Then a second model</dt><dd>A second model then reviews each task's diff. Its finished reviews are in the reviews folder.</dd></div>
+      <div><dt>No AI in the check</dt><dd>Whether a call is paid is decided by signatures, registry reads and re-reads of the Celo inputs alone.</dd></div>
+    </dl>
+    <p>The code and its review records are public: the <a href="https://github.com/jesterkeri/attessa/tree/staging/reviews">reviews folder</a> and <a href="https://github.com/jesterkeri/attessa/blob/staging/DONE.md">DONE.md</a> on GitHub.</p>
+
+    <h2 id="keys">Who holds which keys</h2>
+    <ul>
+      <li><strong>The Attessa registry has no admin.</strong> Nobody can change its rules after deploy.</li>
+      <li><strong>Each agent's owner</strong> approves and revokes that agent's builds and endpoints, from their own wallet.</li>
+      <li><strong>The certificate manager's owner is a single offline key for now</strong>; a 2-of-3 Safe is planned. Its only power is revoking cached AWS certificates, which can block new signer registrations. Existing signers keep working, and it can't forge an attestation.</li>
+      <li><strong>The signing key inside each sealed machine</strong> never leaves it. A restart makes a new one, which has to be registered again.</li>
+    </ul>
+
+    <h2 id="limits">Known limits</h2>
+    <ul>
+      <li>A proof shows which approved build produced an answer. It doesn't show the answer is correct, or that the service is available.</li>
+      <li>The link from a build to its source code is the owner's claim until someone reproduces the build.</li>
+      <li>In the demo, the gateway is run by the seller's side, so its protection rests on the short payment window, cancel, the registered pay-to address, your own re-check, and the on-chain "not charged" confirmation.</li>
+      <li>Request bodies are visible to the gateway and to the server the sealed machine runs on.</li>
+      <li>Paying through buy has no payment protection: buy takes payment before the service runs.</li>
+      <li>Confirming "not charged" after a refusal takes up to about two minutes, or a little gas to cancel sooner.</li>
+    </ul>
+    <p><a href="docs/explanation.html#limits">All known limits, explained</a>, or the full list with when each will be revisited in <a href="https://github.com/jesterkeri/attessa/blob/main/KNOWN-LIMITS.md">KNOWN-LIMITS.md on GitHub</a>.</p>
+
+    <h2 id="report">Report a problem</h2>
+    <p>Security contacts are in <a href=".well-known/security.txt"><code>/.well-known/security.txt</code></a><!--if-no-contact-->, which still has placeholder fields: its contact is published before launch<!--/if-no-contact-->. See also the <a href="privacy.html">privacy notice</a> and the <a href="terms.html">terms</a>.</p>
+  </article>
+</div>

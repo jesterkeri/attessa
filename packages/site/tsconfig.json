@@ -1,0 +1,16 @@
+{
+  // The site's Node scripts are plain JavaScript; tsc checks them without strict mode
+  // (strict would need JSDoc types on every helper in build.mjs, a content-neutral rewrite left for later).
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "types": ["node"]
+  },
+  // The test files are plain scripts run by node --test; they are not type-checked.
+  "include": ["build.mjs", "config.mjs", "csp.mjs", "serve.mjs", "scripts/**/*.mjs"]
+}

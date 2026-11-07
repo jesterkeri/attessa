@@ -1,0 +1,297 @@
+title: Reference | Attessa
+description: Attessa CLI commands, the nine agent tools, SDK payAndVerify options, and every refusal code with its next step.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Docs menu
+Start
+Overview
+Tutorial
+Pay-if-verified in 10 minutes
+How-tos
+All how-tos
+Run a seller
+Revoke a build or a signer
+Use it from an MCP agent Coming
+Use it with buy Optional, not built yet
+Reference
+Reference
+CLI commands
+Agent tools Coming
+SDK payAndVerify
+Refusal codes
+Explanation
+What it proves
+Threat model
+Known limits
+Reference
+Reference
+Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.
+CLI commands
+These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. Run attessa --help for the full list; --network sepolia is the only network Attessa is deployed on today.
+Buyer
+Command
+What it does
+attessa init
+Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
+attessa call <url>
+Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. --body, --max-amount, --asset usdc|usat, --new, --no-wait, --out <file>, --keystore <file>, --dry-run (stops before signing), --json, --yes.
+attessa call --via buy <url>
+Optional, not built yet. Buys through buy and records what came back. No payment protection. --accept-unprotected skips the prompt for agents.
+attessa verify <requestId>
+Coming. Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.
+attessa cancel <requestId>
+Voids an unused payment permission on chain, for a little gas.
+attessa status
+Spend today against your cap, pending permissions, recent verdicts. --pending, --agent <id>, or an origin.
+attessa evidence export
+Exports your call records. --format csv|jsonl.
+attessa release verify
+Optional, not built yet. Rebuilds a release from the source you name and compares its measurements.
+Seller
+Command
+What it does
+attessa agent register
+Creates your agent's ERC-8004 identity from this wallet.
+attessa agent transfer, wallet-sig, set-wallet
+Moves your agent to a cold owner wallet, then sets the agent wallet from it.
+attessa enclave build
+Builds the sealed machine image and writes its measurements. Refuses a dirty tree.
+attessa release approve
+Approves a build for your agent, with the source you claim it came from.
+attessa release deprecate
+Marks an approved build deprecated. It can be approved again later.
+attessa release revoke
+Permanently revokes a build. Its signers stop working within 60 s.
+attessa endpoint add
+Registers the origin buyers call and the address they pay.
+attessa endpoint retire
+Stops selling at an origin.
+attessa enclave start
+Starts the sealed machine and writes AWS's attestation to att.bin. attessa signer register --fresh gets a new one.
+attessa signer register
+Registers the machine's key on Celo. --fresh, --dry-run (estimates gas).
+attessa signer renew
+Renews a running signer without a restart.
+attessa revoke signer <addr>
+Permanently revokes a signer. Takes effect within 60 s.
+attessa selflink
+Links a Self Agent ID to your agent. Informational only.
+attessa gateway pause|resume|status|export
+Stops and restarts new paid calls at your gateway, shows its state, and exports its records.
+Agent tools
+Coming. The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.
+Tool
+What it does
+Side effect
+resolve_endpoint
+Looks a service up in the registry: agent, approved builds, pay-to address.
+None
+check_liveness
+Checks the sealed machine is answering at this address.
+None
+quote
+Gets the price without signing anything.
+None
+pay_and_verify
+Signs a payment within your bounds and returns the answer only if its proof checks out.
+Signs a payment
+verify_proof
+Checks a proof against the registry.
+None
+get_result
+Fetches a stored answer by request ID.
+None
+list_pending
+Lists payment permissions not yet settled or expired.
+None
+cancel_authorization
+Voids an unused payment permission on chain.
+Sends a transaction
+status
+Spend today against your cap, pending items, recent verdicts.
+None
+SDK: payAndVerify
+TypeScript
+Copy
+payAndVerify(url: string, req: {
+body: Uint8Array | string;
+requestId?: Hex;
+maxAmount?: bigint;
+asset?: AssetKey;
+newRequest?: boolean;
+}): Promise<CallResult>
+Option
+Meaning
+maxAmount
+The most this call may cost, in the asset's atomic units. The SDK uses the lower of this and your configured limit per call. Over it, nothing is signed: over_max_amount.
+dailyCap
+Set in Limits. Today's settled plus reserved spend, per asset, per UTC day. Over it, nothing is signed: over_daily_cap.
+asset
+Which stablecoin to pay in: USDC, or USA₮ on mainnet.
+requestId
+Your own ID for this call: 32 random bytes, fresh for every new call. Never reuse one after its call has ended; the gateway answers request_id_conflict. To resume an interrupted call, send the same request again: the SDK finds it in its ledger and never pays twice.
+newRequest
+Force a fresh request ID.
+Refusal codes
+A refusal is the product working: a named check failed, and the gateway shouldn't use your payment permission. If you had signed one, the SDK checks on Celo whether it was used, unless you passed --no-wait, and reports not_charged or settled_after_refusal. Codes marked R are refusals; the rest are conditions with a next step.
+Code
+What it means
+Next step
+proof_rejected R
+A check in the proof failed. The reason names it: response_hash_mismatch, request_mismatch, inputs_hash_mismatch, signer_not_active, release_not_approved, proof_expired and others.
+Wait for your permission to expire, or cancel it now.
+payto_mismatch R
+The service asked to be paid somewhere other than its registered address. It may be an impostor.
+Don't retry. Report it where you found the link.
+origin_agent_mismatch
+The service claims to be a different agent than the registry says.
+Don't retry. Report it.
+over_max_amount R
+The price is above your limit per call.
+raise --max-amount if that's fine.
+over_daily_cap R
+This call would take today's spend past your cap.
+Wait until 00:00 UTC. raise --daily-cap.
+endpoint_not_registered
+The origin isn't an attested endpoint.
+Ask the seller to register. Optional, not built yet: pay without protection with --via buy.
+endpoint_retired
+The owner stopped selling at this origin. Nothing was signed.
+attessa status --agent <id> lists current endpoints.
+liveness_failed
+The sealed machine didn't answer a fresh check.
+Retry later. attessa status <origin> shows when it last answered.
+payment_invalid
+The payment permission was refused, for example for insufficient funds.
+Add funds to your address.
+authorization_expiring R
+Your permission expires in under 10 s, too close to settle safely.
+Retry; the SDK signs a fresh 120 s window.
+authorization_window_too_short
+Your permission expires too soon for this service, usually a slow clock or network.
+Call again.
+execution_timeout
+The service didn't respond in 20 s.
+Retry with a new request.
+enclave_unavailable
+The service is offline.
+Retry later.
+gateway_paused
+The service can't take payments right now.
+Retry later.
+gateway_busy
+The service is busy, so the call was refused before it ran. If you had signed a payment permission, the SDK checks on Celo whether it was used, unless you passed --no-wait, and reports not_charged or settled_after_refusal.
+Try again shortly.
+rate_limited
+Too many requests from you, or too many of your paid calls to this service ended without settling in the last hour. The call was refused before it ran. If you had signed a payment permission, the SDK checks on Celo whether it was used, unless you passed --no-wait, and reports not_charged or settled_after_refusal.
+Try again after the time the service gives.
+settle_pending
+Payment sent and confirming, usually under 5 s.
+None: the CLI keeps checking.
+settle_failed
+The payment didn't go through, so the answer was withheld.
+Retry with a new request.
+uncertain
+The connection dropped after you signed. Attessa checks Celo for up to 2 minutes.
+None: it resolves to paid or not charged.
+not_charged
+Confirmed on Celo: your permission expired unused.
+None: done.
+paid_but_rejected
+You paid, but the answer didn't check out. On-chain payments can't be reversed.
+Report the gateway to the marketplace, with your record.
+settled_after_refusal
+The service refused, but your permission was used anyway. The gateway is at fault.
+Report the gateway, with your record.
+already_used
+Too late to cancel: the payment went through.
+None: Attessa fetches your answer.
+payment_reused, request_id_conflict
+This request ID or permission was already used for a different call.
+call again with --new.
+in_progress
+This call is already running.
+None: it checks again in 2 s.
+result_not_found
+No stored result for this request ID. Results expire after 24 hours.
+attessa status --pending.
+bad_request
+The service can't read this input.
+Fix the input and call again.
+quote_unavailable, quote_malformed
+The service didn't ask for payment in a form Attessa can read.
+Check the URL, or update the CLI.
+network_mismatch
+Your RPC is on a different chain than the registry.
+Set --rpc for the right network.
+rpc_unavailable
+Can't reach Celo. Before signing, the call stops and nothing is signed. While checking a paid call, the call stays uncertain until Celo can be read; an RPC error never fails a check.
+Retry or set another --rpc.
+max_amount_required
+No limit per call is set, so nothing was signed.
+run attessa init or pass --max-amount.
+no_wallet
+No wallet set up yet.
+run attessa init.
+attestation_stale R
+Seller: the machine's report is over 30 minutes old.
+attessa signer register --fresh.
+release_not_approved R
+Seller: the machine runs a build the agent hasn't approved.
+Approve it, or run the approved build.
+debug_pcrs R
+Seller: the machine is in debug mode.
+Restart without --debug-mode.
+binding_mismatch R
+Seller: the report was made for another agent, chain or origin.
+Re-attest with the right config.
+cert_expired
+Seller: the report's certificates have expired.
+attessa signer register --fresh.
+not_owner R
+Seller: only the agent's owner can do this.
+Run it from the owner wallet.
+not_operator R
+Seller: this address isn't the operator for the origin.
+Run it from the operator wallet.
+origin_taken R
+Seller: the origin is registered to another agent.
+Use another origin, or ask that owner to retire it.
+invalid_origin R
+Seller: the origin isn't just a scheme and host.
+Use just the scheme and host, like https://risk.example (no path, lowercase).
+invalid_pcr R
+Seller: the build measurements file can't be read. It should be the JSON that nitro-cli build-enclave prints.
+Pass the file nitro-cli wrote.
+release_exists R
+Seller: this build is already approved for the agent.
+None. attessa status shows it.
+endpoint_inactive R
+Seller: the origin isn't an active endpoint for the agent.
+Add it with attessa endpoint add.
+signer_not_active, signer_mismatch, release_mismatch R
+Seller: attessa signer renew refused, for example because the signer already expired or the report is from a different key.
+Expired: restart with attessa enclave start, then attessa signer register. Otherwise: run attessa signer renew on the machine that holds this key.
+self_link_invalid R
+Seller: the Self Agent ID must be held by this wallet (Self's linked mode) and have a current human proof.
+check it in the Self app, then run attessa selflink again.
+nsm_unavailable
+Seller: the machine couldn't get a signed report from AWS.
+Use an instance with enclaves enabled.
+On this page
+CLI commands
+Agent tools
+SDK payAndVerify
+Refusal codes
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch
