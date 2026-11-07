@@ -1,0 +1,6 @@
+{
+  "_comment": "The one place for the values Joshua owns. siteOrigin is where GitHub Pages serves the site. securityContact (a mailto:, https: or tel: URI) and securityTxtExpires (an ISO date within a year) fill /.well-known/security.txt; while either is null the file says so and security.html says the contact is not published yet. Nothing here is invented: fill them in or leave them null.",
+  "siteOrigin": "https://attessa.xyz",
+  "securityContact": "mailto:attessa7@gmail.com",
+  "securityTxtExpires": "2027-11-05T00:00:00Z"
+}

@@ -1,0 +1,43 @@
+{
+  "note": "decimals() and symbol() of the pinned Celo Sepolia USDC, read with eth_call at the head block.",
+  "capturedAt": "2026-11-06T15:20:45.674Z",
+  "rpc": "https://forno.celo-sepolia.celo-testnet.org",
+  "address": "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+  "block": "0x26cf2b8",
+  "calls": [
+    {
+      "request": {
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+            "data": "0x313ce567"
+          },
+          "0x26cf2b8"
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": "0x0000000000000000000000000000000000000000000000000000000000000006",
+        "id": 22131
+      }
+    },
+    {
+      "request": {
+        "method": "eth_call",
+        "params": [
+          {
+            "to": "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+            "data": "0x95d89b41"
+          },
+          "0x26cf2b8"
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": "0x000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000045553444300000000000000000000000000000000000000000000000000000000",
+        "id": 22132
+      }
+    }
+  ]
+}
