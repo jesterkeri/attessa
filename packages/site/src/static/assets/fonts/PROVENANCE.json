@@ -1,0 +1,99 @@
+{
+  "note": "The woff2 files are the latin and latin-ext subsets Google Fonts serves for these families (googleFontsVersion is the version in its URL). The licence text is each upstream repository's OFL.txt at upstreamCommit; Google Fonts does not say which upstream commit built its files.",
+  "fetchedAt": "2026-11-06",
+  "source": "https://fonts.googleapis.com/css2?family=Anybody:wdth,wght@50..150,300..800&family=Geist:wght@300..700&family=Geist+Mono:wght@400;500&display=swap",
+  "families": [
+    {
+      "family": "Anybody",
+      "upstreamRepo": "https://github.com/Etcetera-Type-Co/Anybody",
+      "upstreamCommit": "fe7b55cf9d1563348ad95ac8e05f43b81a420c31",
+      "licence": "SIL Open Font License 1.1",
+      "licenceFile": "licenses/OFL-Anybody.txt",
+      "licenceUrl": "https://raw.githubusercontent.com/Etcetera-Type-Co/Anybody/fe7b55cf9d1563348ad95ac8e05f43b81a420c31/OFL.txt",
+      "licenceSha256": "7f0313b042b462fcae1934436cc747f9fd4433e3b08fd6459a4a5104b0bbd5db",
+      "copyright": "Copyright 2020 The Anybody Project Authors (https://github.com/Etcetera-Type-Co/Anybody)",
+      "files": [
+        {
+          "name": "anybody-300-800-latin-ext.woff2",
+          "subset": "latin-ext",
+          "sha256": "b31b9f987ba50ea706903efd00f610edf3c76b9cd65b3f3a3dd94788e9b6cf05",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/anybody/v13/VuJxdNvK2Ib2ppdWSK_dObFn.woff2",
+          "googleFontsVersion": "v13"
+        },
+        {
+          "name": "anybody-300-800-latin.woff2",
+          "subset": "latin",
+          "sha256": "041c675622919a7a380210851ecb00be81458a886441dab13269e1339b492354",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/anybody/v13/VuJxdNvK2Ib2ppdWSKHdOQ.woff2",
+          "googleFontsVersion": "v13"
+        }
+      ]
+    },
+    {
+      "family": "Geist",
+      "upstreamRepo": "https://github.com/vercel/geist-font",
+      "upstreamCommit": "ef2597cfc42f4797676df105517ccc0a1cfa6569",
+      "licence": "SIL Open Font License 1.1",
+      "licenceFile": "licenses/OFL-Geist.txt",
+      "licenceUrl": "https://raw.githubusercontent.com/vercel/geist-font/ef2597cfc42f4797676df105517ccc0a1cfa6569/OFL.txt",
+      "licenceSha256": "021caa749f89fecd7c2e40a50499de29e84d2bc19251659b47d499c2fbfffc17",
+      "copyright": "Copyright 2026 The Geist Project Authors (https://github.com/vercel/geist-font)",
+      "files": [
+        {
+          "name": "geist-300-700-latin-ext.woff2",
+          "subset": "latin-ext",
+          "sha256": "824f485b5d26e2f2da3c2b236132ece1bc8e4e43373452950bb0e40548b4313f",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwSGFWfOw.woff2",
+          "googleFontsVersion": "v5"
+        },
+        {
+          "name": "geist-300-700-latin.woff2",
+          "subset": "latin",
+          "sha256": "19f9c92546aa300c312235e3125af1b81394d8db9a4bc4a425cd5b641d2d54e1",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geist/v5/gyByhwUxId8gMEwcGFU.woff2",
+          "googleFontsVersion": "v5"
+        }
+      ]
+    },
+    {
+      "family": "Geist Mono",
+      "upstreamRepo": "https://github.com/vercel/geist-font",
+      "upstreamCommit": "ef2597cfc42f4797676df105517ccc0a1cfa6569",
+      "licence": "SIL Open Font License 1.1",
+      "licenceFile": "licenses/OFL-Geist-Mono.txt",
+      "licenceUrl": "https://raw.githubusercontent.com/vercel/geist-font/ef2597cfc42f4797676df105517ccc0a1cfa6569/OFL.txt",
+      "licenceSha256": "021caa749f89fecd7c2e40a50499de29e84d2bc19251659b47d499c2fbfffc17",
+      "copyright": "Copyright 2026 The Geist Project Authors (https://github.com/vercel/geist-font)",
+      "files": [
+        {
+          "name": "geist-mono-400-latin-ext.woff2",
+          "subset": "latin-ext",
+          "sha256": "1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geistmono/v6/or3nQ6H-1_WfwkMZI_qYFrkdmgPn.woff2",
+          "googleFontsVersion": "v6"
+        },
+        {
+          "name": "geist-mono-400-latin.woff2",
+          "subset": "latin",
+          "sha256": "684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geistmono/v6/or3nQ6H-1_WfwkMZI_qYFrcdmg.woff2",
+          "googleFontsVersion": "v6"
+        },
+        {
+          "name": "geist-mono-500-latin-ext.woff2",
+          "subset": "latin-ext",
+          "sha256": "1a189eb997c3e2ece68373e387afaec9e8617424186c4b1ab3cff7c54ba6223b",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geistmono/v6/or3nQ6H-1_WfwkMZI_qYFrkdmgPn.woff2",
+          "googleFontsVersion": "v6"
+        },
+        {
+          "name": "geist-mono-500-latin.woff2",
+          "subset": "latin",
+          "sha256": "684ad5b531f81d43c1e8c7038262d5db7cdc1f68006e04d6c7769efa8d33c8cc",
+          "googleFontsUrl": "https://fonts.gstatic.com/s/geistmono/v6/or3nQ6H-1_WfwkMZI_qYFrcdmg.woff2",
+          "googleFontsVersion": "v6"
+        }
+      ]
+    }
+  ]
+}

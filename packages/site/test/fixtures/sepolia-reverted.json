@@ -1,0 +1,55 @@
+{
+  "note": "A real Celo Sepolia transaction that reverted (status 0x0). Found by reading recent blocks' receipts.",
+  "capturedAt": "2026-11-06T15:20:45.674Z",
+  "rpc": "https://forno.celo-sepolia.celo-testnet.org",
+  "txHash": "0x65828848c20bf66c557202649f46b83471785358d0962b528b25aa2652e26043",
+  "calls": [
+    {
+      "request": {
+        "method": "eth_chainId",
+        "params": []
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": "0xaa044c",
+        "id": 22124
+      }
+    },
+    {
+      "request": {
+        "method": "eth_getTransactionReceipt",
+        "params": [
+          "0x65828848c20bf66c557202649f46b83471785358d0962b528b25aa2652e26043"
+        ]
+      },
+      "response": {
+        "jsonrpc": "2.0",
+        "result": {
+          "blobGasUsed": "0xc6",
+          "blockHash": "0x80ca3b54b1f14b5179f5a5626cae8d6d9da63352be0e1cd18626c4c1e032b193",
+          "blockNumber": "0x26c9c8a",
+          "contractAddress": null,
+          "cumulativeGasUsed": "0x218f1",
+          "daFootprintGasScalar": "0x1",
+          "effectiveGasPrice": "0xc393e6d00",
+          "from": "0x559802be2d686203ce4be1b4758bc6d7c44250bb",
+          "gasUsed": "0x164eb",
+          "l1BaseFeeScalar": "0x0",
+          "l1BlobBaseFee": "0x2",
+          "l1BlobBaseFeeScalar": "0x0",
+          "l1Fee": "0x0",
+          "l1GasPrice": "0x14",
+          "l1GasUsed": "0xc65",
+          "logs": [],
+          "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+          "status": "0x0",
+          "to": "0x8de7ba3992c8036d4818b0d01c8e1ceef4730c3f",
+          "transactionHash": "0x65828848c20bf66c557202649f46b83471785358d0962b528b25aa2652e26043",
+          "transactionIndex": "0x1",
+          "type": "0x0"
+        },
+        "id": 22125
+      }
+    }
+  ]
+}

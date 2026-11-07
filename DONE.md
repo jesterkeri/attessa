@@ -2280,6 +2280,396 @@ adversary r1 (5c22712, `packages/cli/test/adversary-t21-r1-buyer.test.ts`, 5 fai
 `pnpm -r typecheck` (exit=0):
 ```
 Scope: 5 of 6 workspace projects
+
+### Site adversary r47 (failing test 4c640f9, fix d5c5f34) - 2026-11-05
+Finding: on use-cases.html at 390px, with Anybody not loaded (Google Fonts blocked, or before `display=swap` lands), "RECOMMENDATIONS" in a 35.2px uppercase `.use h2` is wider than the 350px column; `.beats`' auto grid column grew to it and `main`'s overflow clip cut the line ends of all four uses (site/README.md:109).
+Fix: `.use h2 { overflow-wrap: anywhere; }` (site.css).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then the r47 off-right probe, `offright.mjs site/dist use-cases.html <state> 390x844`, which counted 8 elements past the edge before the fix):
+```
+# tests 154
+# pass 154
+# fail 0
+build=0
+== nojs 390x844 use-cases.html 0
+== cdnfail 390x844 use-cases.html 0
+== live 390x844 use-cases.html 0
+```
+reviewed: pending (adversary r48, then Codex)
+
+### Site adversary r48 (failing test de1a898, fix e64f0ee) - 2026-11-05
+Finding: at 200% zoom on 1280, 1366 and 1440px laptops (640x400, 683x384, 720x450 CSS px), the open `.menu` (fixed, `justify-content: center`, no overflow) was taller than the screen: "How it works" sat under the nav bar, "Explorer preview" below the screen, and nothing scrolled (site/README.md:104,109; WCAG 1.4.4, 2.4.11). Lead taken too: r47's `overflow-wrap: anywhere` broke "RECOMMENDATIONS" mid-word at every width in a fallback face.
+Fix: `.menu { justify-content: safe center; overflow-y: auto; scroll-padding-top: 100px; }`; the `.use h2` wrap rule now applies under 720px only.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r48's menufit probe, index.html, cdnfail and live, at 640x400, 683x384, 720x450, 768x432 and 768x1024: every menu link visible below the 68px nav bar as Tab cycles, the menu scrolls where it is taller than the screen; r48's midword probe: the break is at 390px only, none at 768 or 1440; r47's offright probe, use-cases.html at 390x844: 0 in nojs, cdnfail and live):
+```
+# tests 160
+# pass 160
+# fail 0
+build=0
+```
+reviewed: pending (adversary r49, then Codex)
+
+### Site adversary r49 (failing test 6510b18, fix 6256e43) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px), with everything working, the pinned proves section's content (at least 609.8px) overflowed its `overflow: hidden; align-items: center` 450px box, so its h2, lede and "security page" link sat above the screen where nothing scrolls (site/README.md:102-103, site.css "the two lists must fit"; WCAG 1.4.4, 2.4.11). The probe showed the same for the outcomes, explorer, defaults and story steps, and the proves section 86px too tall even at 1440x900 at 100%.
+Fix (site.css): `.story-sticky, .scene-sticky { overflow-y: auto; align-items: safe center; scroll-padding-top: var(--nav-h); }` and `.story-sticky > .wrap { height: auto; min-height: 100%; align-content: safe center; }`, so a box that still overflows scrolls from its top; the proves short-screen rule now reaches 960px tall. site/README.md says so.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r49's pinscan probe, index.html live at 720x450, 768x432, 1024x600, 1280x800, 1440x900 and 1920x1080: no text above a box or under the nav bar (before the fix: 15 such lines at 720x450, 6 at 1024x600, 1 at 1440x900); and boxoverflow.mjs: boxes scroll only where content overflows, at 720x450 and 1024x600, none at 1280x800, 1366x768, 1440x900, 1536x960, 1680x1050 or 1920x1080):
+```
+# tests 161
+# pass 161
+# fail 0
+build=0
+```
+reviewed: pending (adversary r50, then Codex)
+
+### Site adversary r50 (failing test 38c77c6, fix 56b8c75) - 2026-11-05
+Finding: at 200% zoom on a 1440x900 laptop (720x450 CSS px) the story, "Three ways a call can end" and the four uses boxes overflow and scroll (r49), but they had no tabindex and nothing inside them takes focus, so arrow keys, Page Down and Space scrolled the page and never the box (WCAG 2.1.1; site/README.md "scrolls from its top"). The hidden part of the outcomes box held the three outcomes.
+Fix: the three boxes get `tabindex="0" role="group"` with the section's name (index.html, use-cases.html), and a focused pinned box draws its outline inside (`outline-offset: -3px`). site/README.md says so.
+Not fixed, reported by the adversary without a test: the wheel scrolls a box's own content while its section is still entering, so it can pin already scrolled; it stays reachable by scrolling back up.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe at 720x450, live, focusing each box and pressing PageDown: story scrollTop 0 to 194 of 194, outcomes 0 to 334 of 418, uses 0 to 99 of 99, page moved 0, outline solid; Tab lands on each box):
+```
+# tests 164
+# pass 164
+# fail 0
+build=0
+```
+reviewed: pending (adversary r51, then Codex)
+
+### Site adversary r51 (failing test 2aa9b89, fix 28620fb) - 2026-11-05
+Finding: seven docs code blocks (how-to: seller commands, the MCP args, the "Use it with buy" output with the 206-character "you pay even if the answer fails it" line; tutorial: git clone, `attessa init` output, the JSON body, `attessa call`) scroll sideways at 390px, three of them at 720x450 (200% zoom), with no tabindex and nothing focusable inside, so the keyboard couldn't bring the ends of their lines into view (site/README.md:104; WCAG 2.1.1). The four reference tables' `.table-wrap` had the same gap.
+Fix: `<pre tabindex="0">` for the code blocks in docs/how-to.html, docs/tutorial.html and docs/reference.html, and `tabindex="0"` on reference.html's `.table-wrap`; site/README.md says so.
+Not filed by the adversary: the r50 tab stops stay on phones and without JavaScript, where the boxes don't scroll (an extra named group stop; the static tabindex can't depend on JS); under reduced motion, scrolling a pinned box may leave the 3D object and globe labels where the slot was (scene.js:1003, not rendered: no real three.js here).
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then a probe, cdnfail, focusing each tab-stop scroller and pressing ArrowRight: every scroller reached its end, how-to 384/384 and 993/993 at 720x450, 674, 151 and 1283 at 390x844; tutorial 300 at 720x450, 158, 590, 127 and 143 at 390x844; reference tables 32 at 720x450, 72, 209, 18 and 322 at 390x844):
+```
+# tests 167
+# pass 167
+# fail 0
+build=0
+```
+reviewed: pending (adversary r52, then Codex)
+
+### Site adversary r52 (failing test 536a259, fix a011230) - 2026-11-05
+Finding: r51 made the docs code blocks tab stops, but a focused `<pre>` drew the site ring 3px outside itself (site.css:52) inside `.docs-main .code { overflow: hidden }` with no padding, so its left, right and bottom sides were clipped and only a 1px line in the caption bar was left: obscured focus on 10 tab stops (how-to x4, tutorial x5, reference payAndVerify), at every width.
+Fix (site.css): `.docs-main .code pre:focus-visible { outline-offset: -3px; }`, the same inside ring r50 gave the pinned boxes.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r52's prering probe, docs/how-to.html, cdnfail, 390x844: each of the 4 focused blocks now changes 846 to 1114 px inside its box and none outside, outline "solid 1px, off -3px"; before the fix: top 347 px, right 0, bottom 0, left 1):
+```
+# tests 170
+# pass 170
+# fail 0
+build=0
+```
+reviewed: pending (adversary r53, then Codex)
+
+### Site adversary r53 (failing test 39f57dc, fix c5811fa) - 2026-11-05
+Finding: at 1024, 1280, 1366 and 1440px (site/README.md:110) the docs menu (`.docs-nav`, `overflow-y: auto`, no padding) clipped every link's focus ring: the 3px-offset ring lost its left and right sides on all 15 links, and "Known limits" its bottom too, leaving one line between it and "Threat model" (obscured focus).
+Fix (site.css): from 861px up, `.docs-nav { padding: 0 6px 6px; margin-left: -6px; }`: room for the ring inside the clipping menu, with the link rail where it was.
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r53's navring probe, docs/reference.html, cdnfail: at 1440x900 and 1280x800 every link's ring now changes 38 to 46 px on its left and right sides (0 before); a bottom side is missing only for the link the browser scrolled flush to the screen's bottom edge, which r53 classed as browser behaviour):
+```
+# tests 174
+# pass 174
+# fail 0
+build=0
+```
+reviewed: pending (adversary r54, then Codex)
+
+### Site adversary r54 (failing test d2b29fc, fix 964c8d9) - 2026-11-05
+Finding: r53 gave the docs menu its ring room under `(min-width: 861px)` while its clip stops only under `(max-width: 860px)`, so at fractional CSS widths between 860 and 861px (1076 device px at 125%, 947px at 110%, 1291px at 150%) the menu clipped with no room and a focused link lost its left and right ring sides.
+Fix (site.css): the room (`padding: 0 6px 6px; margin-left: -6px`) is on the base `.docs-nav` rule and reset to 0 inside the same `(max-width: 860px)` block that sets `overflow: visible`, so the two always switch together. (`not all and (...)` and `(width > 860px)` would also work in browsers, but the site tests' CSS harness doesn't parse them.)
+verify (`node --test site/test/*.test.mjs`, `node site/build.mjs`; then r54's fracnav probe, docs/reference.html at device scale 1.17, windows 859 to 862: at 860.684px CSS the menu now has `pad="0px 6px 6px" ml=-6px` and the focused link's ring changes left 84 and right 81 px, the same as at 861.539px (before the fix: left 0, right 0); at 859.829px the menu is static and unclipped):
+```
+# tests 176
+# pass 176
+# fail 0
+build=0
+```
+reviewed: pending (adversary r55, then Codex)
+
+### Site adversary r55 (failing test 85248d5, fix b772ee2) - 2026-11-05
+Finding: a docs page loaded at 760px or narrower closes the docs menu `<details>` (site.js), and over 860px site.css hides its summary, the only control that opens it, so after a 200% zoom reset, a tablet rotation or a widened window the whole docs menu was gone from the page and the Tab order until a reload (site/README.md:108, "the docs menu becomes a toggle under 860px").
+Fix: site.js listens on `(max-width: 860px)` and opens the menu again when it stops matching (so fractional widths between 860 and 861 are covered too). Browser check with r55's probe/docsrotate.mjs on the built dist, docs/reference.html: live 720x450 to 1440x900, cdnfail 744x1133 to 1133x744 and nojs 390x844 to 1024x768 all end `details.open=true`, 15/15 links with a box, first docs-menu Tab stop "Overview"; the control 1440x900 to 720x450 still reaches the "Docs menu" summary.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 178
+# pass 178
+# fail 0
+```
+reviewed: pending (adversary r56, then Codex)
+
+### Site adversary r56 (failing test 1931399, fix 84858ba) - 2026-11-05
+Finding: a width change that hides the focused control dropped focus to `<body>` (WCAG 2.4.3; the brief's "lost or obscured focus"): the "Docs menu" summary growing past 860px, an "On this page" link narrowing under 1181px, and the closed menu button growing past 1020px. Chromium sometimes moves focus before a media listener runs, so a check inside the width listener is a race.
+Fix: site.js listens for `focusout` with no `relatedTarget`; on the next frame, if focus is on `<body>` and the element that lost it no longer renders, focus goes to the docs menu's first link if it shows, else `main` (`tabindex="-1"`). Browser check with r56's probe/focusrepeat.mjs on the built dist, docs/reference.html: summary closed and open 800x900 to 1024x768, TOC link 1280x800 to 1024x768, menu button 900x800 to 1280x800 all end on "Overview", 6 of 6 (CDN failed) and 3 of 3 (live) each; focuscross.mjs TOC link 1280x800 to 720x800 ends on "Overview", next Tab "Pay-if-verified in 10 minutes".
+verify:
+```
+node site/build.mjs: exit 0
+# tests 182
+# pass 182
+# fail 0
+```
+reviewed: pending (adversary r57, then Codex)
+
+### Site adversary r57 (failing test 7411472, fix b95b596) - 2026-11-05
+Finding: the r56 focusout fallback sent focus to the docs menu's first link, which at 860px and under sits at the top of the page (not sticky), so turning a tablet or snapping a window narrower with focus on an "On this page" link jumped a deep docs page to scrollY 0 (the brief's "lost or obscured focus"; site.js's own "give it back to something visible").
+Fix: the fallback focuses the first tab stop inside main that is fully on screen below the header (the docs menu's links come first in main, so over 860px, where the menu sticks, it is still "Overview"), else main, which does not scroll. Browser check with r57's probe/tocjump.mjs on the built dist: reference 1280x800 to 800x1280 and 1194x834 to 834x1194 keep scrollY (6488, 6691; no tab stop fully on screen there, focus on main, the next Tab starts at main's top); tutorial live 1280x800 to 768x1024 keeps 3604 with focus on an on-screen "Copy" button; explanation 1440x900 to 720x900 keeps 3531 on "KNOWN-LIMITS.md on GitHub". r56's focusrepeat.mjs: all four cases still end on "Overview", 3 of 3.
+verify:
+```
+node site/build.mjs: exit 0
+# tests 184
+# pass 184
+# fail 0
+```
+reviewed: pending (adversary r58, then Codex)
+
+### Site adversary r58 (failing test ea140e0, fix below) - 2026-11-05
+Finding: at the end of any page, when a width change hid the focused control (the header network chip under 1181px, the menu button over 1020px), the focusout fallback found no stop of main on screen and called main.focus(), which scrolled the page to main's middle (index.html at 1024x900: scrollY 10387 to 4354) and sent the next Tab to the top of the page (WCAG 2.2 SC 2.4.3; site/README.md states).
+Fix: site.js's fallback takes the first enabled tab stop fully on screen below the header anywhere on the page (footer links and radios included), else focuses main with preventScroll. No more adversary rounds (Joshua, 2026-11-05: Codex reviews from here).
+verify:
+```
+node site/build.mjs: exit 0
+# tests 186
+# pass 186
+# fail 0
+```
+reviewed: pending (Codex)
+
+### Site Codex r1 fixes - 2026-11-05
+Codex r1 (site-ui-review-r1.md, on d7b0a5d): REVISE, 2 major, 1 minor.
+- M1 (the recorded count): on this machine `node --test site/test/*.test.mjs` at d7b0a5d prints `# tests 186` / `# pass 186` under node v22.23.2: 186 tests in 65 files. Codex's run reported 65, the file count, as top-level tests. From this entry on, the record quotes the node version, the file count and the whole TAP footer.
+- M2: the pinned third-party script and stylesheet tags carry `integrity` (sha512) and `crossorigin="anonymous"`: GSAP 3.12.5 and ScrollTrigger (the hashes cdnjs publishes, matched by sha512 of the downloaded bytes), Phosphor 2.1.1 CSS (the same bytes from unpkg and jsDelivr), and three 0.160.0 through the import map's `integrity` entry. Google Fonts' CSS stays unpinned: Google serves different CSS per browser. Test: site/test/cdn-integrity.test.mjs (3; 2 fail on the old layout).
+- m1: the focus fallback skips a control with `tabIndex < 0` (a roving tab that isn't selected). Test added to site/test/focus-return-at-page-end.test.mjs (fails on the old site.js).
+verify:
+```
+$ node --version
+v22.23.2
+$ node site/build.mjs
+exit 0
+$ ls site/test/*.test.mjs | wc -l
+66
+$ node --test site/test/*.test.mjs (TAP footer)
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1352.085698
+```
+reviewed: pending (Codex r2)
+
+### Site Codex r2: the test count, settled by a per-file run - 2026-11-06
+Codex r2 (site-ui-review-r2.md, on dc191dc): REVISE, 1 major: `node --test site/test/*.test.mjs` printed `1..66` / `# tests 66` in Codex's environment (node v22.23.2), where this machine prints `1..190` / `# tests 190` (same node, also under `env -i`). Both are real output of the same command: one environment reports each of the 66 files as one top-level test, the other reports the 190 tests inside them. So the count no longer rests on the globbed footer: `site/test-count.sh` runs each file alone and sums its own footer.
+verify (`./site/test-count.sh`, exit 0; per-file lines then the total):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+For reference, the globbed command on this machine:
+```
+1..190
+# tests 190
+# suites 0
+# pass 190
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1123.324034
+```
+reviewed: pending (Codex r3)
+
+### Site Codex r3: the counter runs each module directly - 2026-11-06
+Codex r3 (site-ui-review-r3.md, on 64a615f): REVISE, 1 major, 1 minor. M1: `node --test <file>` reports one wrapper test per file in Codex's environment, so the r2 counter summed 66 there; running the module itself (`node <file>`) reports the module's own tests in both environments. m1: a failure was counted twice (TAP footer plus nonzero exit).
+Fix: site/test-count.sh runs `node <file>` and counts each failure once (the footer, or 1 for a nonzero exit with no footer). Correction to the site entries above: their totals (154 to 190) are direct-module totals, which Codex replayed at each cited commit with zero failures; the globbed `node --test site/test/*.test.mjs` footer differs between environments (190 on this machine, 66 in Codex's), so it is no longer used as evidence.
+verify (`./site/test-count.sh`, exit 0):
+```
+4 tests, 0 failed, exit 0: site/test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: site/test/buy-optional-not-coming.test.mjs
+3 tests, 0 failed, exit 0: site/test/cdn-integrity.test.mjs
+2 tests, 0 failed, exit 0: site/test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: site/test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: site/test/code-block-keyboard-scrolls.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: site/test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: site/test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: site/test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-buy-unprotected.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: site/test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: site/test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: site/test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: site/test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: site/test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: site/test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: site/test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: site/test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: site/test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: site/test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: site/test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: site/test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: site/test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: site/test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: site/test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: site/test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/no-js-steps-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: site/test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: site/test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: site/test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: site/test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: site/test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: site/test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: site/test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: site/test/scene-cdn-failure-readable.test.mjs
+3 tests, 0 failed, exit 0: site/test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: site/test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: site/test/settlement-names-no-seller.test.mjs
+3 tests, 0 failed, exit 0: site/test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: site/test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: site/test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: site/test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: site/test/use-cases-unused-check.test.mjs
+node v22.23.2: 66 files, 190 tests, 0 failed
+```
+Mutant check: one assertion in site/test/built-state-consistent.test.mjs made to fail, then restored: `node v22.23.2: 66 files, 190 tests, 1 failed`, exit 1.
+reviewed: pending (Codex r4)
+
+## T38 - 2026-11-02
+Decisions from the PR #8 review (posted on PR #8 as a comment review), recorded in OPEN-QUESTIONS.md:
+- D1, explorer proof source: Joshua chose option A (public read-only proof route, T43), 2026-11-02.
+- D2, install path: Joshua left it to Claude, 2026-11-02; install from source with `pnpm link --global`, applied on feat/site-ui in 5ff468a.
+- The review's spec conflicts (M6), FLOWS' npm line after D2, and the T21b MCP path are open entries for Joshua.
+- TASKS.md gains the Website section, T38 to T48.
+
+verify (`grep -n -i -E 'explorer proof source|install path' OPEN-QUESTIONS.md`, lines cut at 120 characters), 2026-11-02:
+```
+94:- [x] **Explorer proof source (D1, PR #8 review C1).** The site said the explorer re-runs the buyer's checks "from pu
+95:- [x] **Install path (D2, PR #8 review C2).** `@attessa/cli` and `@attessa/mcp` are not on npm (E404 on 2026-11-02) a
+```
+reviewed: pending (adversary, then Codex)
+
+### Website finish (T39, T40, T42, T47, T48) - 2026-11-06
+
+branch: feat/site-finish (not pushed). Commits: 044a5b1 (step 0 fixtures), 7fad5d3 (T39), the T40, T42, T47 and T48 commits after it (`git log --oneline 6a1039c..HEAD`).
+
+- Step 0: recorded the Celo Sepolia fixtures with `site/test/fixtures/capture.mjs` (read-only `eth_*` calls, no key, no transaction); `explorer-live-recorded` and `explorer-live-errors` pass. capture.mjs now reads 40 blocks at a time and takes `CAPTURE_SCAN_BLOCKS` (no reverted transaction in 3000 blocks).
+- T39: `site/` is `packages/site` (`@attessa/site`, private; scripts build, lint, typecheck, test; esbuild 0.28.2 exact). The lockfile gained only importer entries for packages/site. `test/pages.test.mjs` snapshots the text of all 12 pages. `test-count.sh` moved with it (two path lines changed).
+- T40: three 0.160.0 and gsap 3.12.5 (bundled by esbuild into assets/scene.js and assets/motion.js), fonts vendored as woff2 with `SHA256SUMS` (latin and latin-ext), Phosphor 2.1.1 inlined as SVG, CSP as a `<meta>` tag in every page with computed inline-script hashes, `CNAME` (attessa.xyz) and `.nojekyll` written into dist. `test/cdn-integrity.test.mjs` became `test/no-third-party-origins.test.mjs`. Headless Chromium smoke: scene live, only the site's own origin requested, no CSP violation.
+- T42: `config.mjs` builds `assets/config.js` from `@attessa/core` DEPLOYMENTS and `networks.json`; mainnet disabled while `enclaveRegistry` is null; `?network=` beats local storage; `[[chain:...]]` fills addresses; a `[[slot:` the deploy record has fails the build (`test/config.test.mjs`).
+- T47: scene idle stop, DPR 1 on coarse pointers, particle tiers, Data Saver off, no ScrollTrigger under reduced motion; menu Tab containment, one live region, search focus ring, hash button name. `node packages/site/scripts/perf-probe.mjs` (local headless Chromium):
+```
+ok   docs/reference.html idle 2 s: 0 scene frames (124 while loading), 129 rAF calls
+ok   docs/reference.html scroll wakes it: 27 scene frames after a scroll
+ok   index.html idle 2 s: 0 scene frames (114 while loading), 128 rAF calls
+ok   index.html scroll wakes it: 25 scene frames after a scroll
+ok   docs/reference.html reduced motion idle 2 s: 0 rAF calls, 0 scene frames, 0 ScrollTriggers
+ok   reduced motion registers no ScrollTrigger: 0
+ok   index.html with saveData: 0 scene frames, no-webgl class true
+```
+  (the 129 rAF calls at idle are GSAP's ticker, not the scene; see OPEN-QUESTIONS.) The real-phone pass is Joshua's and not done.
+- T48: `site.config.json` (origin https://attessa.xyz; securityContact and securityTxtExpires null, for Joshua), security.txt built from it, privacy copy corrected. `grep -rn -E '\{securityContact\}|\{securityTxtExpires\}|\{siteOrigin\}|@attessa/(cli|mcp)|npx ' packages/site/dist` printed nothing (exit 1). The text snapshot diff since T39 is one privacy.html change plus the earlier privacy line; Joshua approves it. T41 and T43 to T46 are not built (OPEN-QUESTIONS).
+
+Final verify, `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/site test && ./scripts/check-install-scripts.sh` (build, typecheck and lint output, then the TAP summary lines of the site test run, then the guard):
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
 packages/core typecheck$ tsc -p . --noEmit
 packages/core typecheck: Done
 packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
@@ -3136,6 +3526,127 @@ reviewed: pending (adversary r47, then Codex; Codex to judge the r17 call, the r
 Finding: after `endpoint retire` and `endpoint add` with a new operator, the running key's signer keeps the old operator (Inert, SPEC §3.4). `signer renew` from the new operator said that wallet "isn't the operator", and `signer register --fresh` sent it back to `signer renew`; neither could pass (FLOWS.md:832).
 Fix: renew splits the wrong-wallet check from the operator-changed check and gives the latter `operator_mismatch` with "Restart with `attessa enclave start`, then `attessa signer register`."; register's signer_exists row gives that restart line whenever renew can't extend the signer (expired, revoked or old operator). Copy logged in OPEN-QUESTIONS (not in FLOWS).
 verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+
+> @attessa/site@0.0.0 test /home/hr/myvscode_linux/attessa/.worktrees/build-site-finish/packages/site
+> node --test test/*.test.mjs
+
+...
+# tests 255
+# suites 0
+# pass 255
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2459.14687
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+`./packages/site/test-count.sh` (one file at a time):
+```
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+8 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+4 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+
+reviewed: pending (Codex r1)
+
+### Website finish: merged with feat/site-ui 8600d5d, lead's check - 2026-11-06
+Merged the latest feat/site-ui (test-count.sh runs each module directly) into feat/site-finish; test-count.sh keeps that logic with the paths for packages/site. Disclosure: T40 (b749736) removed packages/site/test/cdn-integrity.test.mjs (the SRI test on CDN tags; the CDN tags are gone because every asset is now self-hosted) and added packages/site/test/no-third-party-origins.test.mjs, which asserts no page loads anything from another origin. The project rule is never to delete a test; this one is replaced by a stronger one and is listed for Codex to judge. The built output (packages/site/dist) holds CNAME (attessa.xyz), .nojekyll and a CSP meta tag in every page; its only third-party URLs are plain links (GitHub, the Celo and Circle faucets).
+verify (build, typecheck, lint, `pnpm -r test`, install guard, under the heavy lock):
 ```
 build=0
 typecheck=0
@@ -3157,6 +3668,166 @@ reviewed: pending (adversary r48, then Codex)
 Finding: with live signers on two Approved releases for one origin, `revoke release R1` said "risk.example refuses calls until you approve and register another build", but R2's signer keeps serving it (FLOWS.md:833, SPEC §3.4 checkSigner per release).
 Fix: releaseStatus walks every SignerRegistered for the agent and leaves out of the prompt any origin a live signer on another Approved release still serves; when none is left the prompt says "another approved build still serves its endpoints" (not in FLOWS, logged in OPEN-QUESTIONS).
 verify (`flock ... pnpm -r build; typecheck; lint; test`):
+
+packages/site test: # tests 255
+packages/site test: # pass 255
+packages/site test: # fail 0
+packages/gateway test:  Test Files  21 passed (21)
+packages/gateway test:       Tests  154 passed (154)
+packages/sdk test:  Test Files  16 passed (16)
+packages/sdk test:       Tests  144 passed (144)
+packages/cli test:  Test Files  11 passed (11)
+packages/cli test:       Tests  76 passed (76)
+test=0
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+guard=0
+```
+reviewed: pending (Codex r1)
+
+### Website: security contact filled in (Joshua) - 2026-11-06
+packages/site/site.config.json: `securityContact` `mailto:attessa7@gmail.com` (Joshua, 2026-11-06), `securityTxtExpires` `2027-11-05T00:00:00Z` (within RFC 9116's year). The built /.well-known/security.txt now has Contact and Expires; security.html drops the "placeholder fields" clause (the one-line snapshot diff in packages/site/test/snapshots/text/security.txt). test/site-config.test.mjs: the committed-config test now checks these values; the no-contact test builds with both set to null through SITE_CONFIG, so that path keeps its coverage.
+verify (`./packages/site/test-count.sh`, exit 0):
+```
+node v22.23.2: 73 files, 255 tests, 0 failed
+```
+reviewed: pending (Codex r2)
+
+### Website finish Codex r1 fixes - 2026-11-06
+
+Codex r1 (REVISE, reviews/site-finish-review-r1.md) at ca0af9d; fixes on feat/site-finish, not pushed.
+
+- M1: `explorer.js` calls a pinned-USDC transfer an x402 settlement only when the same token's `AuthorizationUsed` names the address the Transfer came from (SPEC.md 6.2 V11). Otherwise: "A plain USDC transfer, not an x402 settlement". The settled result says an x402 payment settled on Celo and that no link to an Attessa call is shown (needs the proof; D1). Failing tests and real read-only fixtures (a real transferWithAuthorization settlement and a real plain transfer) went in first, alone: d6a3b41; the fix is a2fba7e.
+- M2: final Privacy and Terms copy (ca5ceec); the build refuses the default config when `securityContact` or `securityTxtExpires` is null, `SITE_CONFIG=<file>` is the explicit local opt-out (tested on a copy of the package). The security contact and expiry were already set by the lead (2adcd56).
+- m1: OFL 1.1 text for Anybody, Geist and Geist Mono and `fonts/PROVENANCE.json` (44d4329); `test/font-provenance.test.mjs` requires them and checks every hash.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/gateway build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/sdk lint$ tsc -p . --noEmit
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../seller-host && tsc -p . --noEmit
+packages/cli lint: Done
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+17 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-cli-not-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 75 files, 267 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r2)
+
+### Website finish Codex r2 fix - 2026-11-06
+Codex r2 (site-finish-review-r2.md, on 081a402): REVISE, 1 major: the explorer checked that the Transfer log named this transaction but not the AuthorizationUsed log, so a forged RPC receipt could splice an authorization from another transaction onto a real transfer (SPEC §6.2 V11 is one transaction). r1 M2 and m1 were recorded as fixed.
+Fix (explorer.js readReceipt): every pinned-token AuthorizationUsed or Transfer log must carry this transaction's hash, and its block hash when given must be the receipt's; otherwise the whole answer is refused as unreadable. Test (failing first, 63f6c9b): five cases in packages/site/test/explorer-live-errors.test.mjs (authorization from another transaction, with no transaction hash, from another block; transfer with no transaction hash, from another block). Codex's reproduction now prints `badanswer`.
+verify (under the heavy lock):
 ```
 build=0
 typecheck=0
@@ -3643,33 +4314,90 @@ Note: the TASKS.md verify command as written (`pnpm --filter @attessa/cli test -
 verify (`flock -w 3600 /home/hr/.cache/attessa-heavy.lock bash -c 'pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/cli test && pnpm --filter @attessa/cli test -- -t "verify"'`, exit 0; per-test lines trimmed):
 ```
 Scope: 5 of 6 workspace projects
+node v22.23.2: 75 files, 268 tests, 0 failed
+site=0
+FAIL: the checkout is not HEAD; the snapshot is built from it, so commit or restore these first
+```
+reviewed: pending (Codex r3)
+
+The install guard above ran before the fix was committed and refused a dirty checkout; run again on ee679ac (clean), under the lock:
+```
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
+
+### Site Codex r4 fix: a nonzero exit is a failure - 2026-11-06
+Codex r4 (site-ui-review-r4.md, on 8600d5d): REVISE, 1 major: a module that printed a clean TAP footer (`# fail 0`) but exited nonzero (`process.exitCode = 1`) was counted as passing, and the script exited 0. Fix: test-count.sh counts a nonzero exit as one failure whenever the footer reports none; a footer with failures is counted as before, once.
+Mutant (Codex's): `process.exitCode = 1;` prepended to built-state-consistent.test.mjs, then restored: `4 tests, 1 failed, exit 1` for that module, `(same rule, on this branch's packages/site copy)`, exit 1. Clean run:
+```
+node v22.23.2: 75 files, 268 tests, 0 failed
+```
+reviewed: pending (Codex r4)
+
+Correction to the note above: its mutant line was written from the feat/site-ui run, not run on this branch. Run here now (`process.exitCode = 1;` prepended to packages/site/test/built-state-consistent.test.mjs, then restored):
+```
+4 tests, 1 failed, exit 1: test/built-state-consistent.test.mjs
+node v22.23.2: 75 files, 268 tests, 1 failed
+exit 1
+```
+
+## Website finish Codex r3: SHIP (2026-11-06)
+Codex round 3 reviewed 48fdee6 in a frozen worktree: the r2 log-splicing finding is fixed, the new tests pass, and the real recorded settlement still verifies.
+```
+Decision: SHIP
+VERDICT: implementation-ready
+```
+Two commits follow 48fdee6 (9034aab, a44b9b1): packages/site/test-count.sh counts a nonzero module exit as a failure (the same change Codex reviews on feat/site-ui as round 5) and its DONE notes. They change no site source: `packages/site/build.mjs` at 48fdee6 and at a44b9b1 produce identical output (`diff -r` of the two builds: no difference).
+reviewed: reviews/site-finish-review-r3.md | verdict: implementation-ready (rounds r1 and r2 ended changes required; archived outside the repo)
+
+### Website deployed to GitHub Pages (Joshua's "deploy") - 2026-11-06
+Built from feat/site-finish 52b6234 (site output identical to the SHIP'd 48fdee6) and pushed as the only content of the gh-pages branch (commit ea10c5b) by .worktrees/prompts/deploy-gh-pages.sh. GitHub Pages: source gh-pages /, custom domain attessa.xyz (from the CNAME file), first build status "built". DNS for attessa.xyz still points at GoDaddy parking (3.33.130.190, 15.197.148.33) until Joshua changes the records; HTTPS is enforced after GitHub issues the certificate.
+
+### Website: buyer CLI shown as built (T21 merged) - 2026-11-06
+
+After the merge of origin/staging (927f35f, T21 ticked) the site shows the buyer CLI as built (55c7c9d): `attessa init`, `call`, `cancel`, `status`, `evidence export` and the owner commands (agent register/transfer/wallet-sig/set-wallet, release deprecate/revoke, revoke signer, endpoint retire, selflink, gateway pause|resume|status|export) lose their Coming marks on the reference, home, how-it-works, use-cases, tutorial, how-to, docs index and docs menu. Each flag the reference lists was checked against `packages/cli/src/index.ts` (`--max-amount`, `--daily-cap`, `--keystore`, `--asset`, `--new`, `--no-wait`, `--out`, `--format csv|jsonl`, and the global `--network`, `--dry-run`, `--json`, `--yes`); the install path is D2 (clone, `pnpm install --frozen-lockfile && pnpm -r build`, `pnpm link --global`). Still marked: `attessa verify` (T21a), the MCP server (T21b), `attessa call --via buy` (T29), `attessa release verify`, mainnet, and the demo service (no real paid call yet, T22/T23). `use-cases-cli-not-built` became `use-cases-cli-built` (and checks every `attessa ...` command on every page against the CLI's command table); the five unbuilt-marked tests were converted to keep their rule for verify, MCP and buy.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
 packages/core build$ tsc -p .
 packages/core build: Done
 packages/gateway build$ tsc -p .
 packages/sdk build$ tsc -p .
 packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/seller-host build$ tsc -p .
+packages/site build: built 12 pages into dist
+packages/site build: Done
 packages/seller-host build: Done
 packages/sdk build: Done
 packages/gateway build: Done
 packages/cli build$ tsc -p .
 packages/cli build: Done
 Scope: 5 of 6 workspace projects
+Scope: 6 of 7 workspace projects
 packages/core typecheck$ tsc -p . --noEmit
 packages/core typecheck: Done
 packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
 packages/sdk typecheck$ tsc -p . --noEmit
 packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
 packages/seller-host typecheck: Done
 packages/sdk typecheck: Done
 packages/gateway typecheck: Done
 packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
 packages/cli typecheck: Done
 Scope: 5 of 6 workspace projects
+Scope: 6 of 7 workspace projects
 packages/core lint$ tsc -p . --noEmit
 packages/core lint: Done
 packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
 packages/sdk lint$ tsc -p . --noEmit
 packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
 packages/seller-host lint: Done
 packages/sdk lint: Done
 packages/gateway lint: Done
@@ -3703,3 +4431,91 @@ exit=1
 ```
 So "a run against one real Sepolia call" is open: after T22 makes the first real paid call, run `attessa verify <settlement tx> --proof <file> --response <file> --network sepolia` and paste it here. T21a is therefore not ticked in TASKS.md.
 reviewed: pending (Codex r1)
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+18 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-cli-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 75 files, 270 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r4)
+
+### Website live at https://attessa.xyz - 2026-11-06
+Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.153, .111.153; `www` CNAME jesterkeri.github.io (checked over DNS-over-HTTPS). GitHub had not issued a certificate after 60 minutes (the custom domain was saved before DNS pointed at Pages); re-saving the custom domain through the Pages API started it, and a fresh build ran. Pages API state:
+```
+status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
+```
+The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
