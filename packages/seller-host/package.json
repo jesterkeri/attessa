@@ -1,0 +1,26 @@
+{
+  "name": "@attessa/seller-host",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p ../core && tsc -p . --noEmit",
+    "test": "vitest run",
+    "lint": "tsc -p ../core && tsc -p . --noEmit",
+    "render-units": "node --experimental-strip-types scripts/render-units.ts"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "better-sqlite3": "13.0.3",
+    "viem": "2.57.13"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.13"
+  },
+  "bin": {
+    "attessa-seller-host": "dist/main.js"
+  }
+}

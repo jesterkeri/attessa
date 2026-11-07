@@ -1,0 +1,215 @@
+{
+  "spec": "SPEC §2.2. Bytes are lowercase hex; requestHash uppercases method; inputsHash = keccak256(utf8(jcs)).",
+  "requestHash": [
+    {
+      "name": "evaluate POST",
+      "method": "POST",
+      "pathAndQuery": "/v1/evaluate",
+      "body": "0x7b22616d6f756e74223a223230303030222c226173736574223a22307830316335633031323230333935343961643134393362383232306361626564643733396263343465222c22636861696e4964223a223131313432323230222c22706179546f223a22307831313131313131313131313131313131313131313131313131313131313131313131313131313131227d",
+      "expected": "0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00"
+    },
+    {
+      "name": "lowercase method is uppercased",
+      "method": "post",
+      "pathAndQuery": "/v1/evaluate",
+      "body": "0x7b22616d6f756e74223a223230303030222c226173736574223a22307830316335633031323230333935343961643134393362383232306361626564643733396263343465222c22636861696e4964223a223131313432323230222c22706179546f223a22307831313131313131313131313131313131313131313131313131313131313131313131313131313131227d",
+      "expected": "0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00"
+    },
+    {
+      "name": "GET with empty body",
+      "method": "GET",
+      "pathAndQuery": "/v1/results/0x4a58edd56f6145c7242fc7536535a755f909fd6a7f90319590b617e1d567ee93",
+      "body": "0x",
+      "expected": "0x77fb64b9a53d3930f9ca46d7497222e3976b3d3d1a82d986b8b2a697e12bc247"
+    },
+    {
+      "name": "query string kept as sent",
+      "method": "POST",
+      "pathAndQuery": "/v1/evaluate?a=1&b=%20x",
+      "body": "0x7b7d",
+      "expected": "0x4fc221efbe363eeea60a5e0d67d6b3b845031a51e7be098bd17285eb98656832"
+    },
+    {
+      "name": "binary body with zero bytes",
+      "method": "PUT",
+      "pathAndQuery": "/",
+      "body": "0x00ff0000017f80",
+      "expected": "0x005e1adcd2e157862c5f3890b2d11ad4fe079f7d16c5ad3e4b064e92a225b7a2"
+    },
+    {
+      "name": "non-ASCII method uppercased ASCII-only",
+      "method": "poßt",
+      "pathAndQuery": "/v1/evaluate",
+      "body": "0x7b7d",
+      "expected": "0x143a3a8aee94f37984b801a2db2204b6016ff8a8db3457ea749cc5a7d963bd6b"
+    }
+  ],
+  "responseHash": [
+    {
+      "name": "empty",
+      "body": "0x",
+      "expected": "0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470"
+    },
+    {
+      "name": "evaluate response",
+      "body": "0x7b22696e70757473223a7b22626c6f636b223a7b2268617368223a22307834303064353732366532626437613163626335653961346261396165643236336665646138323637323263633538353965613335623231636265303361386433222c226e756d626572223a223132333435363738222c2274696d657374616d70223a2231373631373030303030227d2c22706179546f223a7b2261646472657373223a22307831313131313131313131313131313131313131313131313131313131313131313131313131313131222c2262616c616e6365576569223a2231303030303030303030303030303030303030222c22636f6465223a223078222c226e6f6e6365223a2237227d2c22736f75726365223a22666f726e6f227d2c22726561736f6e73223a5b227061795f746f5f6e657665725f73656e74225d2c2272756c657356657273696f6e223a2231222c2276657264696374223a22726576696577227d",
+      "expected": "0xe14798bf3ff9a29082e185814ee9899949a6037547578234f642a1f20886c7e7"
+    },
+    {
+      "name": "binary",
+      "body": "0x4b36f4a348be7cbf332c76b1201ec3d45a2b9f66b44844c5fec07422ac4daec27e5e1ad26311750df69f82f36fa58761b555235a293b3da048adc750a5c70dea34bb77011b7286800a3f5426dbf13c821ba7feaeb40c7ed5839e091980b52717ecc2fa5a",
+      "expected": "0xd78e79883fbdbce81d6dd73211f2a620aa8e3ab210dbb1f8403c712a33146271"
+    }
+  ],
+  "inputsHash": [
+    {
+      "name": "forno inputs, keys out of order",
+      "inputs": {
+        "source": "forno",
+        "payTo": {
+          "nonce": "7",
+          "code": "0x",
+          "balanceWei": "1000000000000000000",
+          "address": "0x1111111111111111111111111111111111111111"
+        },
+        "block": {
+          "timestamp": "1761700000",
+          "number": "12345678",
+          "hash": "0x400d5726e2bd7a1cbc5e9a4ba9aed263feda826722cc5859ea35b21cbe03a8d3"
+        }
+      },
+      "jcs": "{\"block\":{\"hash\":\"0x400d5726e2bd7a1cbc5e9a4ba9aed263feda826722cc5859ea35b21cbe03a8d3\",\"number\":\"12345678\",\"timestamp\":\"1761700000\"},\"payTo\":{\"address\":\"0x1111111111111111111111111111111111111111\",\"balanceWei\":\"1000000000000000000\",\"code\":\"0x\",\"nonce\":\"7\"},\"source\":\"forno\"}",
+      "expected": "0x398d8de5fbb671052db4b85489bb637cc322c02ced5b42ddb65cfa491d2b6233"
+    },
+    {
+      "name": "buy inputs, contract payTo",
+      "inputs": {
+        "block": {
+          "number": "44000000",
+          "hash": "0x129b82ecb606ffdfec11996fd5b25915a25e9e8a80d04c4a4ca6d4ae319de746",
+          "timestamp": "1762000000"
+        },
+        "payTo": {
+          "address": "0x2222222222222222222222222222222222222222",
+          "code": "0x6080604052",
+          "nonce": "1",
+          "balanceWei": "0"
+        },
+        "source": "buy:celo-rpc"
+      },
+      "jcs": "{\"block\":{\"hash\":\"0x129b82ecb606ffdfec11996fd5b25915a25e9e8a80d04c4a4ca6d4ae319de746\",\"number\":\"44000000\",\"timestamp\":\"1762000000\"},\"payTo\":{\"address\":\"0x2222222222222222222222222222222222222222\",\"balanceWei\":\"0\",\"code\":\"0x6080604052\",\"nonce\":\"1\"},\"source\":\"buy:celo-rpc\"}",
+      "expected": "0x85ad94c61e09aca433b4ce3f0a90c316f037d61a886f2d241219f37ea787fd28"
+    },
+    {
+      "name": "JCS escaping and UTF-16 key order",
+      "inputs": {
+        "1": "one",
+        "€": "euro",
+        "\r": "cr",
+        "a": "line\nbreak \"q\" \\ \u0007 é 😀",
+        "A": [
+          "x",
+          "y"
+        ]
+      },
+      "jcs": "{\"\\r\":\"cr\",\"1\":\"one\",\"A\":[\"x\",\"y\"],\"a\":\"line\\nbreak \\\"q\\\" \\\\ \\u0007 é 😀\",\"€\":\"euro\"}",
+      "expected": "0xdd150600571734891669c2917655beb19ce958ac358b9112d104f5a5543f1312"
+    },
+    {
+      "name": "RFC 8785 3.2.3 sort example (UTF-16 code units, not code points)",
+      "inputs": {
+        "1": "One",
+        "€": "Euro Sign",
+        "\r": "Carriage Return",
+        "דּ": "Hebrew Letter Dalet With Dagesh",
+        "😀": "Emoji: Grinning Face",
+        "": "Control",
+        "ö": "Latin Small Letter O With Diaeresis"
+      },
+      "jcs": "{\"\\r\":\"Carriage Return\",\"1\":\"One\",\"\":\"Control\",\"ö\":\"Latin Small Letter O With Diaeresis\",\"€\":\"Euro Sign\",\"😀\":\"Emoji: Grinning Face\",\"דּ\":\"Hebrew Letter Dalet With Dagesh\"}",
+      "expected": "0xa0a138a7404c34122e9e872cd2a11429272c1ad2a592c0c8c47cf059164bb78f"
+    },
+    {
+      "name": "empty key, emoji before U+E000 (code-point order would swap them)",
+      "inputs": {
+        "": "private use",
+        "😀": "emoji",
+        "": "empty"
+      },
+      "jcs": "{\"\":\"empty\",\"😀\":\"emoji\",\"\":\"private use\"}",
+      "expected": "0xb7e18690294f5f8284a4e0c6bc3338f59c1551feb8e6d8a2cba35c39596938a3"
+    },
+    {
+      "name": "RFC 8785 Appendix B numbers",
+      "inputs": {
+        "numbers": [
+          0,
+          0,
+          5e-324,
+          -5e-324,
+          1.7976931348623157e+308,
+          -1.7976931348623157e+308,
+          9007199254740992,
+          -9007199254740992,
+          295147905179352830000,
+          9.999999999999997e+22,
+          1e+23,
+          1.0000000000000001e+23,
+          999999999999999700000,
+          999999999999999900000,
+          1e+21,
+          9.999999999999997e-7,
+          0.000001,
+          333333333.3333332,
+          333333333.33333325,
+          333333333.3333333,
+          333333333.3333334,
+          333333333.33333343,
+          -0.0000033333333333333333,
+          1424953923781206.2
+        ]
+      },
+      "jcs": "{\"numbers\":[0,0,5e-324,-5e-324,1.7976931348623157e+308,-1.7976931348623157e+308,9007199254740992,-9007199254740992,295147905179352830000,9.999999999999997e+22,1e+23,1.0000000000000001e+23,999999999999999700000,999999999999999900000,1e+21,9.999999999999997e-7,0.000001,333333333.3333332,333333333.33333325,333333333.3333333,333333333.3333334,333333333.33333343,-0.0000033333333333333333,1424953923781206.2]}",
+      "expected": "0xb3f75499d233d290e8dd9cfc0f0c39f0dfa3853c9c38de191116380be93c9b84"
+    }
+  ],
+  "releaseId": [
+    {
+      "name": "distinct PCRs",
+      "pcr0": "0x5f0b5d62aab58b836d48b6b89beab108d16ff782a11e701146496697515c9e6dab9e600bc0f26626557f7387a16aa531",
+      "pcr1": "0x2fe11dbb92f902187bb51b07a21ac31f4f3e886ac543c41a76c9141cc34c25c435bf83dbddbb712f182d0afb835c7af5",
+      "pcr2": "0x35c1dac1e6d81576cf871b26f20a8078777ce18607ea5758a38c863e111a483fc95adc7956bfbcb6953e67e2e6c6cdf9",
+      "expected": "0x0f566606f519afe424f41654bc20c1b064ed6a4ef1056cbd85780863606091ac"
+    },
+    {
+      "name": "swapped PCRs differ",
+      "pcr0": "0x2fe11dbb92f902187bb51b07a21ac31f4f3e886ac543c41a76c9141cc34c25c435bf83dbddbb712f182d0afb835c7af5",
+      "pcr1": "0x5f0b5d62aab58b836d48b6b89beab108d16ff782a11e701146496697515c9e6dab9e600bc0f26626557f7387a16aa531",
+      "pcr2": "0x35c1dac1e6d81576cf871b26f20a8078777ce18607ea5758a38c863e111a483fc95adc7956bfbcb6953e67e2e6c6cdf9",
+      "expected": "0xf049a16a60d168a49525dcdd3e55dc80bc12c65833a1f99018b02927bffe875e"
+    },
+    {
+      "name": "all zero (hash only; approveRelease rejects it)",
+      "pcr0": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "pcr1": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "pcr2": "0x000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "0xcd2e66bf0b91eeedc6c648ae9335a78d7c9a4ab0ef33612a824d91cdc68a4f21"
+    }
+  ],
+  "requestId": [
+    {
+      "name": "sepolia USDC",
+      "asset": "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+      "payer": "0xc5aceac899a18191d8b83330f4c5efbec7ab4dc5",
+      "nonce": "0x9c6230254ac733f54ec47298f0a5ddaf93dc9efe6e05fb726dcb6faf10ddece2",
+      "expected": "0x28e8739bcbeedd09c7ce3856b4192162fc7facbe0a4322a616066b7ef6880809"
+    },
+    {
+      "name": "mainnet USA₮, zero nonce",
+      "asset": "0xd2ab3c9a02dbbab236bfec45d1d755df4267f771",
+      "payer": "0xffffffffffffffffffffffffffffffffffffffff",
+      "nonce": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "expected": "0x85dcd09be28022f8932d75ad9a4439e84b054f817d0e28d48e635fe113b6662c"
+    }
+  ]
+}

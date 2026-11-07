@@ -1,0 +1,4 @@
+packages:
+  - packages/*
+# PIPELINE "Supply chain": no install scripts run except the onlyBuiltDependencies allowlist in package.json.
+ignoreScripts: true

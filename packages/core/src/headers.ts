@@ -1,0 +1,145 @@
+import { hashMessage, type Address, type Hex } from 'viem';
+import { jcs } from './jcs.ts';
+import { proofFromJson, proofToJson, type ExecutionProof } from './eip712.ts';
+
+// SPEC §2.5 header grammars.
+
+const BYTES32 = /^0x[0-9a-f]{64}$/;
+const SECONDS = /^(0|[1-9][0-9]*)$/;
+const PAYER_SIG = /^(0|[1-9][0-9]*)\.(0x[0-9a-f]{130})$/;
+const SIGNATURE = /^0x[0-9a-f]{130}$/;
+const ADDRESS = /^0x[0-9a-f]{40}$/;
+
+export const HEADER = {
+  requestId: 'X-Request-Id',
+  challenge: 'X-Attest-Challenge',
+  paymentRequired: 'PAYMENT-REQUIRED',
+  paymentSignature: 'PAYMENT-SIGNATURE',
+  paymentResponse: 'PAYMENT-RESPONSE',
+  attestedProof: 'X-Attested-Proof',
+  payerSig: 'X-Attest-Payer-Sig',
+  retryAfter: 'Retry-After',
+} as const;
+
+/** `X-Request-Id`: `0x[0-9a-f]{64}`. */
+export function isRequestIdHeader(v: string): boolean {
+  return BYTES32.test(v);
+}
+
+/** `X-Attest-Challenge`: `0x[0-9a-f]{64}`. */
+export function isChallengeHeader(v: string): boolean {
+  return BYTES32.test(v);
+}
+
+/** `Retry-After`: whole seconds. */
+export function isRetryAfterHeader(v: string): boolean {
+  return SECONDS.test(v);
+}
+
+/** `X-Attest-Payer-Sig`: `<unixSeconds>.<0x65-byte-hex>`. Returns null when the grammar fails. */
+export function parsePayerSig(v: string): { unixSeconds: number; signature: Hex } | null {
+  const m = PAYER_SIG.exec(v);
+  if (!m) return null;
+  const unixSeconds = Number(m[1]);
+  if (!Number.isSafeInteger(unixSeconds)) return null;
+  return { unixSeconds, signature: m[2] as Hex };
+}
+
+/** The ASCII string the payer `personal_sign`s: `attested-exec:results:<requestId lowercase>:<unixSeconds>`. */
+export function payerSigMessage(requestId: Hex, unixSeconds: number): string {
+  return `attested-exec:results:${requestId.toLowerCase()}:${unixSeconds}`;
+}
+
+/** EIP-191 digest of `payerSigMessage`, for `recoverDigestSigner`. */
+export function payerSigDigest(requestId: Hex, unixSeconds: number): Hex {
+  return hashMessage(payerSigMessage(requestId, unixSeconds));
+}
+
+/** Whether c is in the RFC 4648 standard base64 alphabet `A-Za-z0-9+/`. */
+function isBase64Char(c: number): boolean {
+  return (c >= 0x41 && c <= 0x5a) || (c >= 0x61 && c <= 0x7a) || (c >= 0x30 && c <= 0x39) || c === 0x2b || c === 0x2f;
+}
+
+/**
+ * RFC 4648 standard alphabet with padding: whole 4-character groups, the last of which may end in
+ * `=` or `==`. A linear loop rather than a regex, because V8's regex engine overflows its stack on a
+ * repeated group a few megabytes long, and every header length must reach the SPEC §2.5 checks.
+ */
+function isPaddedBase64(v: string): boolean {
+  const n = v.length;
+  if (n % 4 !== 0) return false;
+  let pad = 0;
+  while (pad < n && v.charCodeAt(n - 1 - pad) === 0x3d) pad++;
+  if (pad > 2) return false;
+  for (let i = 0; i < n - pad; i++) if (!isBase64Char(v.charCodeAt(i))) return false;
+  return true;
+}
+
+/** Strict RFC 4648 base64 (standard alphabet, padded, canonical) to bytes, or null. */
+export function decodeBase64Strict(v: string): Uint8Array | null {
+  if (v === '' || !isPaddedBase64(v)) return null;
+  const bytes = Buffer.from(v, 'base64');
+  // Rejects non-zero padding bits, which Buffer would silently drop.
+  if (bytes.toString('base64') !== v) return null;
+  return new Uint8Array(bytes);
+}
+
+export interface AttestedProof {
+  proof: ExecutionProof;
+  signature: Hex;
+  signer: Address;
+}
+
+/** `X-Attested-Proof`: base64 of JCS `{"proof":{…strings…},"signature":"0x…","signer":"0x…"}`. */
+export function encodeAttestedProof(a: AttestedProof): string {
+  const json = jcs({ proof: proofToJson(a.proof), signature: a.signature.toLowerCase(), signer: a.signer.toLowerCase() });
+  return Buffer.from(json, 'utf8').toString('base64');
+}
+
+/** SPEC §2.5 nesting limit for the decoded `X-Attested-Proof` JSON; the outer object is level 1. */
+export const ATTESTED_PROOF_MAX_DEPTH = 32;
+
+/**
+ * Whether the decoded `X-Attested-Proof` bytes nest deeper than `max`. Each `{` or `[` opens a level
+ * and each `}` or `]` closes one (never below zero); brackets inside strings do not count, where a
+ * string runs from `"` to the next `"` not taken by a `\` escape. Iterative, and run on the bytes
+ * before UTF-8 decoding, parsing or the JCS check, so any input gets the same answer as in the
+ * Solidity and Rust grammars. Every byte it looks at is ASCII, which never occurs inside a
+ * multi-byte UTF-8 sequence.
+ */
+export function nestsDeeperThan(bytes: Uint8Array, max: number): boolean {
+  let depth = 0;
+  let str = false;
+  for (let i = 0; i < bytes.length; i++) {
+    const c = bytes[i];
+    if (str) {
+      if (c === 0x5c) i++;
+      else if (c === 0x22) str = false;
+    } else if (c === 0x22) {
+      str = true;
+    } else if (c === 0x7b || c === 0x5b) {
+      if (++depth > max) return true;
+    } else if ((c === 0x7d || c === 0x5d) && depth > 0) {
+      depth--;
+    }
+  }
+  return false;
+}
+
+/** Parses `X-Attested-Proof`; throws on any grammar violation, including non-canonical JSON. */
+export function decodeAttestedProof(v: string): AttestedProof {
+  const bytes = decodeBase64Strict(v);
+  if (!bytes) throw new Error('X-Attested-Proof: not strict base64');
+  // SPEC §2.5 nesting limit, checked before anything recursive (JSON.parse, jcs) sees the text.
+  if (nestsDeeperThan(bytes, ATTESTED_PROOF_MAX_DEPTH)) throw new Error('X-Attested-Proof: too deep');
+  // ignoreBOM keeps a leading U+FEFF in the text, so JSON.parse refuses it as serde_json does.
+  const text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+  const obj: unknown = JSON.parse(text);
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) throw new Error('X-Attested-Proof: not an object');
+  if (jcs(obj) !== text) throw new Error('X-Attested-Proof: not JCS');
+  const { proof, signature, signer, ...rest } = obj as Record<string, unknown>;
+  if (Object.keys(rest).length > 0) throw new Error('X-Attested-Proof: unknown field');
+  if (typeof signature !== 'string' || !SIGNATURE.test(signature)) throw new Error('X-Attested-Proof: bad signature');
+  if (typeof signer !== 'string' || !ADDRESS.test(signer)) throw new Error('X-Attested-Proof: bad signer');
+  return { proof: proofFromJson(proof), signature: signature as Hex, signer: signer as Address };
+}

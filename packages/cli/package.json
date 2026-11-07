@@ -1,0 +1,25 @@
+{
+  "name": "@attessa/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p .",
+    "typecheck": "tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit",
+    "test": "vitest run",
+    "lint": "tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "@attessa/core": "workspace:*",
+    "@attessa/gateway": "workspace:*",
+    "@attessa/sdk": "workspace:*",
+    "@attessa/seller-host": "workspace:*",
+    "viem": "2.57.13"
+  },
+  "bin": {
+    "attessa": "dist/bin.js",
+    "attest": "dist/bin.js"
+  }
+}

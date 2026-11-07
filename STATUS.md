@@ -6,7 +6,7 @@
 | stage | ready for G2 (T02) |
 | tier | 2, scoped to MVP |
 | updated | 2026-10-19 |
-| blocked on | Joshua: Loops enrollment, public repo, domain for the origin, AWS account with enclaves, fresh dev wallets |
+| blocked on | Joshua: domain for the origin, AWS account with enclaves, fresh dev wallets |
 
 ## Stage log
 - 0 route, done 2026-10-19 (written plan → stage 1)
@@ -26,3 +26,5 @@
 - 5 handoff pack + harness 2026-10-19
 - Gate 1 kill test: running in parallel in Claude Code (BUILD_KICKOFF.md)
 - product named Attessa; pack renamed (packages `@attessa/*`, CLI `attessa` + alias `attest`, units `attessa-*`), protocol identifiers unchanged 2026-10-29
+- Joshua registered on Loops 2026-10-29 (attribution tag goes in .env as LOOPS_ATTRIBUTION_TAG for T30)
+- public repo github.com/jesterkeri/attessa created 2026-10-29; ruleset on main requires guardrails + no secrets in client output
