@@ -4570,3 +4570,23 @@ Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.
 status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
+
+### T21b Codex r4 fixes - 2026-11-07
+
+Codex r4 (REVISE, 3466a30). First merged origin/staging (T21 merged; DONE.md and OPEN-QUESTIONS.md keep both sides, lockfile regenerated, MCP builds against the merged CLI). Failing tests first (commit message ends "(failing)"), then the design fix:
+
+- Major 1 (rendered secrets leaked after safe()) and Major 2 (names outside the classifier): the name-pattern guess is gone. Secrets are exactly what the server consumes (ATTESSA_PRIVATE_KEY, ATTESSA_KEYSTORE_PASSWORD, the userinfo/path/query/fragment of ATTESSA_RPC) plus variables named in ATTESSA_REDACT; other variables are neither required nor touched. The final layer removes those values from the serialised text, then sends the result only if it still parses, keeps keys, numbers, amounts and hashes unchanged, and no string, with escaping undone (\xNN, \u{N}, \uNNNN, \n, \/, %XX), still holds a secret; otherwise it sends a fixed redaction_withheld error. A declared secret under 4 characters (digits-only under 8) stops the server. Tests cover every r3 and r4 reproduction plus the RPC credentials, an undeclared WALLET key, and the final-layer integrity. Existing tests now declare their secret variables in ATTESSA_REDACT; one r3 test accepts redaction_withheld as well as unknown_tool for an escaped spelling.
+- Design for Joshua is in OPEN-QUESTIONS.md.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  51 passed (51)
+   Duration  2.67s (transform 376ms, setup 305ms, collect 449ms, tests 1.67s, environment 0ms, prepare 88ms)
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+   Duration  17.98s (transform 2.75s, setup 44.27s, collect 24.89s, tests 139.03s, environment 27ms, prepare 11.98s)
+exit=0
+```
+reviewed: pending (Codex r5)
