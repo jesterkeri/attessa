@@ -62,3 +62,36 @@ test('every attessa command a page shows is a real CLI command, or the page mark
   }
   assert.deepEqual(bad, [], 'commands shown as usable but not in packages/cli/src/index.ts');
 });
+
+// Codex site-finish r4: the test above resolves only the first word or two, so it let `attessa call --via buy` through because `call` is real,
+// and never looked at flags. This one resolves the command exactly (longest match in the CLI's table) and checks each flag shown with it.
+import { commandOf, COMMANDS } from './lib/cli-table.mjs';
+
+test('every flag shown with an attessa command is a flag that exact command accepts, unless the page marks it not built', () => {
+  const bad = [];
+  for (const f of walk(src).filter(f => f.endsWith('.html'))) {
+    const raw = readFileSync(f, 'utf8');
+    for (const m of raw.matchAll(/(?:<code>|<span class="c">)(?:<[^>]*>)*\s*attessa ([^<]*(?:<span[^>]*>[^<]*<\/span>[^<]*)*)/g)) {
+      const line = text(m[1]);
+      const words = line.split(/\s+/).filter(w => /^[a-z][a-z-]*$/.test(w));
+      const key = commandOf(words);
+      if (!key || key === 'gateway') continue;
+      // A table row marks itself; anything else is marked by its section (from the nearest <h2> to the next one).
+      const row = raw.lastIndexOf('<tr', m.index) > raw.lastIndexOf('</tr>', m.index);
+      const start = row ? raw.lastIndexOf('<tr', m.index) : Math.max(0, raw.lastIndexOf('<h2', m.index));
+      const end = row ? raw.indexOf('</tr>', m.index) : (raw.indexOf('<h2', m.index) < 0 ? raw.length : raw.indexOf('<h2', m.index));
+      if (marked.test(text(raw.slice(start, end)))) continue;
+      for (const flag of line.matchAll(/(?<![\w-])--([a-z][a-z-]*)/g)) {
+        if (!COMMANDS.get(key).has(flag[1])) bad.push(`${f.slice(src.length + 1)}: attessa ${key} --${flag[1]}`);
+      }
+    }
+  }
+  assert.deepEqual(bad, [], 'flags shown for a built command that packages/cli/src/index.ts does not accept for it');
+});
+
+test('a command with an unbuilt modifier is not accepted just because its first word is real (attessa call --via buy)', () => {
+  assert.ok(!COMMANDS.get('call').has('via'), 'call accepts --via now: remove the Optional / not built marks (T29)');
+  const ref = readFileSync(join(src, 'pages', 'docs', 'reference.html'), 'utf8');
+  const row = ref.split('\n').find(l => l.includes('attessa call --via buy'));
+  assert.ok(row && marked.test(text(row)), 'the reference row for attessa call --via buy must stay marked Optional / not built');
+});

@@ -33,7 +33,7 @@ Reference
 Reference
 Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.
 CLI commands
-These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. Run attessa --help for the full list; --network sepolia is the only network Attessa is deployed on today.
+These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. The CLI has no full command list of its own yet: attessa --help and attessa seller --help print only the seller steps (agent register, enclave build, release approve, endpoint add, enclave start, signer register). --network sepolia is the only network Attessa is deployed on today.
 Buyer
 Command
 What it does
@@ -58,7 +58,7 @@ Command
 What it does
 attessa agent register
 Creates your agent's ERC-8004 identity from this wallet.
-attessa agent transfer, wallet-sig, set-wallet
+attessa agent transfer, attessa agent wallet-sig, attessa agent set-wallet
 Moves your agent to a cold owner wallet, then sets the agent wallet from it.
 attessa enclave build
 Builds the sealed machine image and writes its measurements. Refuses a dirty tree.
