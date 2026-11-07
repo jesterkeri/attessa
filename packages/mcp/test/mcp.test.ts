@@ -48,7 +48,7 @@ async function world(config: unknown = { network: 'local', limits: { usdc: { max
     home,
     dataDir,
     key,
-    env: { ATTESSA_REGISTRY: chain.registry, ATTESSA_PRIVATE_KEY: key, ATTESSA_NETWORK: 'local', ATTESSA_RPC: 'http://127.0.0.1:1', ATTESSA_DATA_DIR: dataDir } as Record<string, string | undefined>,
+    env: { ATTESSA_REGISTRY: chain.registry, ATTESSA_PRIVATE_KEY: key, ATTESSA_NETWORK: 'local', ATTESSA_RPC: 'http://127.0.0.1:1', ATTESSA_DATA_DIR: dataDir, ATTESSA_REDACT: 'FACILITATOR_API_KEY,SERVICE_TOKEN,JSON_TOKEN,PCT_SECRET,SPACE_PASSWORD,DEMO_TOKEN,LONG_TOKEN,SHORT_TOKEN' } as Record<string, string | undefined>,
     body: { chainId: String(chain.chainId), payTo, asset: chain.asset, amount: '20000' },
     client: undefined as unknown as Client,
     async connect() {
@@ -297,7 +297,7 @@ describe('mcp: no secret in any output', () => {
   });
 
   it('a keystore password, a key and URL credentials are scrubbed from any text', () => {
-    const env = { ATTESSA_PRIVATE_KEY: `0x${'ab'.repeat(32)}`, ATTESSA_KEYSTORE_PASSWORD: 'hunter2-hunter2', FACILITATOR_API_KEY: 'fac-secret-123' };
+    const env = { ATTESSA_REDACT: 'FACILITATOR_API_KEY', ATTESSA_PRIVATE_KEY: `0x${'ab'.repeat(32)}`, ATTESSA_KEYSTORE_PASSWORD: 'hunter2-hunter2', FACILITATOR_API_KEY: 'fac-secret-123' };
     const out = scrub(`k ${env.ATTESSA_PRIVATE_KEY} ${'ab'.repeat(32)} p hunter2-hunter2 f fac-secret-123 u https://user:pw@rpc.example/v3/x`, env);
     expect(out).not.toMatch(/abab|hunter2|fac-secret|user:pw/);
     expect(out).toContain('https://rpc.example/v3/x');
@@ -321,7 +321,7 @@ describe('mcp: Codex r1 Major 1, short and encoded secrets never reach a result'
   });
 
   it('scrub: short secrets, encodings and an empty value (nothing to hide, nothing mangled)', () => {
-    const env = { ATTESSA_KEYSTORE_PASSWORD: 'abc123', EMPTY_SECRET: '', FACILITATOR_API_KEY: 'a b&c' };
+    const env = { ATTESSA_REDACT: 'EMPTY_SECRET,FACILITATOR_API_KEY', ATTESSA_KEYSTORE_PASSWORD: 'abc123', EMPTY_SECRET: '', FACILITATOR_API_KEY: 'a b&c' };
     const out = scrub(`pw abc123 enc ${encodeURIComponent('a b&c')} plus a+b%26c raw a b&c`, env);
     expect(out).not.toMatch(/abc123|a b&c|a%20b%26c/);
     expect(out.startsWith('pw ')).toBe(true);
@@ -618,7 +618,7 @@ describe('mcp: Codex r3 Major 1, an unredactable secret stops the server; every 
     for (const [name, value] of [['ATTESSA_KEYSTORE_PASSWORD', 'ab'], ['SERVICE_TOKEN', '1234567'], ['DEMO_SECRET', 'x']] as const) {
       let err: Error | undefined;
       try {
-        createMcpServer({ deps: deps({ [name]: value }) });
+        createMcpServer({ deps: deps({ [name]: value, ATTESSA_REDACT: name }) });
       } catch (e) {
         err = e as Error;
       }
@@ -700,5 +700,93 @@ describe('mcp: Codex r3 Minor 1, get_result says when it signs', () => {
     const d = tools.find((t) => t.name === 'get_result')!.description!;
     expect(d).not.toMatch(/for each open call/i);
     expect(d).toMatch(/already refused/i);
+  });
+});
+
+describe('mcp: Codex r4, the secrets are exactly what the server consumes, and none reaches a result', () => {
+  const declared = (w: W, secret: string) => {
+    w.env.ATTESSA_REDACT = 'DEMO_TOKEN';
+    w.env.DEMO_TOKEN = secret;
+  };
+
+  it('Major 1: a declared secret does not leave through safe(), \\xNN, \\u{N}, \\uNNNN or \\/ spellings; the result is withheld, never altered', async () => {
+    w = await world();
+    declared(w, 'ab\ncd');
+    for (const name of ['pre-ab\ncd-post', 'pre-ab\\x0acd-post', 'pre-ab\\u{a}cd-post', 'pre-ab\\u000acd-post', 'pre-ab\\ncd-post']) {
+      const r = await w.tool(name);
+      expect(r.isError, name).toBe(true);
+      expect(r.text, name).not.toContain('ab\\ncd');
+      expect(r.text, name).not.toContain('ab\\\\x0acd');
+      expect(r.text, name).not.toContain('x0a');
+      expect(['redaction_withheld', 'unknown_tool']).toContain(r.json.error);
+    }
+    declared(w, 'token');
+    for (const name of ['pre-\\u0074oken-post', 'pre-t\\u006fken-post', 'pre-\\x74oken-post', 'pre-%74oken-post', 'pre-tok%65n-post', 'pre-\\/token-post']) {
+      const r = await w.tool(name);
+      expect(r.isError, name).toBe(true);
+      expect(r.text, name).not.toMatch(/u0074|u006f|x74|%74|%65|token/i);
+    }
+  });
+
+  it('Major 2: a key under any other variable name is neither required nor touched, and nothing about its name matters', async () => {
+    w = await world();
+    const wallet = `0x${'11'.repeat(32)}`;
+    w.env.WALLET = wallet;
+    w.env.DATABASE_URL = 'postgres://user:pw@db/x';
+    w.env.SOME_TOKEN = '1'; // undeclared: the server reads it for nothing, so it is not its to hide or refuse
+    w.env.KEYBOARD = 'us';
+    const r = await w.tool(`pre-${wallet}-post`);
+    expect(r.json.error).toBe('unknown_tool');
+    expect(r.text).toContain(wallet); // not declared in ATTESSA_REDACT: documented, not hidden
+    const ok = await w.tool('list_pending');
+    expect(ok.json.ok).toBe(true);
+    w.env.ATTESSA_REDACT = 'WALLET';
+    const hidden = await w.tool(`pre-${wallet}-post`);
+    expect(hidden.text).not.toContain(wallet);
+  });
+
+  it('the consumed secrets are fixed: the key and keystore password need no declaration', async () => {
+    w = await world();
+    const pw = 'hunter2-hunter2';
+    w.env.ATTESSA_KEYSTORE_PASSWORD = pw;
+    for (const leak of [pw, w.key, w.key.slice(2)]) {
+      const r = await w.tool(`pre-${leak}-post`);
+      expect(r.text).not.toContain(leak);
+    }
+    w.env.ATTESSA_KEYSTORE_PASSWORD = 'ab';
+    expect((await w.tool('list_pending')).json.error).toBe('unsafe_secret');
+  });
+
+  it('an RPC URL with credentials is never in a result: scheme://host only, and its userinfo, path and query values are hidden if echoed', async () => {
+    w = await world();
+    w.env.ATTESSA_RPC = 'https://rpcuser:pw-s3cret@rpc.example:8545/v3/APIKEY-abc123?key=queryTok99#fragTok77';
+    w.chain.failing.add('eth_chainId');
+    const r = await w.tool('resolve_endpoint', { url: w.url });
+    expect(r.isError).toBe(true);
+    expect(r.text).not.toMatch(/rpcuser|pw-s3cret|APIKEY-abc123|queryTok99|fragTok77/);
+    for (const part of ['rpcuser', 'pw-s3cret', 'APIKEY-abc123', 'queryTok99', 'fragTok77', 'pw%2Ds3cret']) {
+      const e = await w.tool(`pre-${part}-post`);
+      expect(e.text, part).not.toContain(part);
+    }
+  });
+
+  it('final layer: a redaction that would change a number, a hash or the JSON structure withholds the result instead', async () => {
+    w = await world(null);
+    // A declared secret that equals the digits of the vector's request hash tail: replacing it would corrupt a hash.
+    declared(w, VECTOR_REQUEST_HASH.slice(10, 30));
+    const r = await w.tool('verify_proof', vectorArgs());
+    expect(r.isError).toBe(true);
+    expect(r.json.error).toBe('redaction_withheld');
+    expect(r.json.next).toBeTruthy();
+    expect(r.text).not.toContain(VECTOR_REQUEST_HASH.slice(10, 30));
+  });
+
+  it('final layer: a structure-breaking secret withholds the result and the text still parses', async () => {
+    w = await world();
+    declared(w, 'unknown_tool","message":"'); // present in the serialised error: replacing it would merge two members
+    const r = await w.tool('prefix-x-suffix');
+    expect(r.isError).toBe(true);
+    expect(() => JSON.parse(r.text)).not.toThrow();
+    expect(r.json.error).toBe('redaction_withheld');
   });
 });
