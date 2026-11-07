@@ -15,7 +15,8 @@ import { run } from '../src/index.ts';
 // generated in the test. A call is made first (that needs a wallet); verify itself must need none.
 
 const AGENT = 412n;
-const NET = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
+const NET = ['--network', 'sepolia'];
+const NET_LOCAL = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
 
 class WatchedKeychain implements Keychain {
   touched = 0;
@@ -90,7 +91,7 @@ async function world(behavior: Behavior = {}) {
     },
     /** `attessa call` on the fake chain; returns the requestId. */
     async call(...extra: string[]): Promise<Hex> {
-      const code = await run(['call', `${origin}/v1/evaluate`, '--body', 'tx.json', ...NET, ...extra], w.deps());
+      const code = await run(['call', `${origin}/v1/evaluate`, '--body', 'tx.json', ...NET_LOCAL, ...extra], w.deps());
       if (!existsSync(join(home, '.attessa', 'pending.jsonl'))) throw new Error(`call wrote no ledger entry (exit ${code}): ${[...w.out, ...w.err].join(' | ')}`);
       w.out.length = 0;
       w.err.length = 0;
@@ -203,7 +204,10 @@ describe('verify: a call that went through', () => {
     const id = await w.call();
     expect(await w.verify(id)).toBe(1);
     expect(w.row('settlement')).toMatch(PASS);
-    for (const c of ['release', 'signer', 'signature', 'binding']) expect(w.row(c), c).toMatch(SKIP);
+    for (const c of ['release', 'signer', 'signature', 'binding', 'timing_and_inputs']) {
+      expect(w.row(c), c).toMatch(SKIP);
+      expect(w.row(c), c).toContain(SCAN);
+    }
   });
 });
 
@@ -370,5 +374,55 @@ describe('verify: errors and no key', () => {
     expect(used.length).toBeGreaterThan(0);
     for (const m of used) expect(m).not.toMatch(/send|sign|estimateGas/i);
     expect(w.out.join('\n')).not.toContain('definitely not a key');
+  });
+});
+
+describe('verify: Codex r1', () => {
+  const V10 = 'timing_and_inputs';
+  const refuses = async (behavior: Behavior, words: RegExp) => {
+    await started(behavior);
+    const id = await w.call();
+    const kept = w.keep(id);
+    expect(await w.verify(id, '--proof', kept.proof, '--response', kept.response)).toBe(1);
+    expect(w.row(V10)).toMatch(FAIL);
+    expect(w.row(V10)).toMatch(words);
+    expect(w.out.join('\n')).not.toContain('Verified: every check passed.');
+  };
+
+  it('verify passes the V10 timing and inputs row on an honest call', async () => {
+    await started();
+    const id = await w.call();
+    const kept = w.keep(id);
+    expect(await w.verify(id, '--proof', kept.proof, '--response', kept.response)).toBe(0);
+    expect(w.row(V10)).toMatch(PASS);
+    expect(w.row(V10)).toContain(SCAN);
+  });
+  it('verify refuses a proof whose expiresAt is not issuedAt + 600 (proof_expired)', () => refuses({ proof: (p) => ({ ...p, expiresAt: p.issuedAt + 601n }) }, /expired/));
+  it('verify refuses a proof whose inputsHash is not the answer\'s inputs (inputs_hash_mismatch)', () =>
+    refuses({ proof: (p) => ({ ...p, inputsHash: keccak256(stringToBytes('other inputs')) }) }, /Celo data in the answer/));
+  it('verify refuses inputs whose account values differ from the chain (inputs_mismatch)', () =>
+    refuses({ inputs: (h) => ({ ...h, payTo: { ...(h.payTo as object), balanceWei: '1' } }) }, /doesn't match the chain/));
+  it('verify refuses a proof issued far from the signing time (clock_skew)', () => refuses({ proof: (p) => ({ ...p, issuedAt: p.issuedAt - 1000n, expiresAt: p.expiresAt - 1000n }) }, /clock/));
+  it('verify refuses a proof for another agent than the call was made to (agent_mismatch)', () => refuses({ proof: (p) => ({ ...p, agentId: 999n }) }, /different agent|machine's key/));
+
+  it('verify never echoes an unreadable --response value, text or --json', async () => {
+    await started();
+    const id = await w.call();
+    const bad = 'https://user:SENTINELCRED@example.invalid/a?token=SENTINELCRED#x';
+    expect(await w.verify(id, '--response', bad)).toBe(1);
+    w.out.length = 0;
+    expect(await w.verify(id, '--response', bad, '--json')).toBe(1);
+    expect([...w.out, ...w.err].join('\n')).not.toContain('SENTINELCRED');
+    expect(JSON.parse(w.out[0]!).error).toBe('usage');
+  });
+
+  it('verify on --network local prints no public explorer link, and says so', async () => {
+    await started();
+    const id = await w.call();
+    const kept = w.keep(id);
+    w.out.length = 0;
+    expect(await run(['verify', id, '--proof', kept.proof, '--response', kept.response, ...NET_LOCAL], w.deps())).toBe(0);
+    expect(w.out.join('\n')).not.toContain('celoscan');
+    expect(w.out.join('\n')).toContain('No public explorer for --network local');
   });
 });
