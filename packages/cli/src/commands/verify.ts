@@ -1,9 +1,9 @@
 import { resolve } from 'node:path';
 import { decodeAttestedProof, deploymentForChainId, eip712Domain, proofDigest, recoverDigestSigner, responseHash, DEPLOYMENTS, type Deployment, type ExecutionProof } from '@attessa/core';
-import { Chain, Ledger, RELEASE_STATUS, RpcError, type PendingEntry, type Settlement } from '@attessa/sdk';
+import { Chain, Ledger, RELEASE_STATUS, RpcError, verifyPaid, type PendingEntry, type Settlement } from '@attessa/sdk';
 import { http, parseEventLogs, parseAbi, type Address, type Hex } from 'viem';
 import { DEFAULT_RPC, type Deps, type Global } from '../context.ts';
-import { CliError, ERR, rpcShownSafe, safe, short } from '../copy.ts';
+import { CliError, ERR, checkWords, rpcShownSafe, safe, short } from '../copy.ts';
 import { dataDir, display } from './buyer.ts';
 
 /**
@@ -16,7 +16,7 @@ const HEX32 = /^0x[0-9a-fA-F]{64}$/;
 const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
 const lc = (s: string) => s.toLowerCase();
 
-export type CheckId = 'release' | 'signer' | 'signature' | 'binding' | 'settlement';
+export type CheckId = 'release' | 'signer' | 'signature' | 'binding' | 'timing_and_inputs' | 'settlement';
 export type CheckStatus = 'pass' | 'fail' | 'not_checked';
 export interface CheckRow {
   check: CheckId;
@@ -50,12 +50,12 @@ function rpcFor(g: Global, d: Deps): string {
   return DEFAULT_RPC[g.network];
 }
 
-/** `--proof` / `--response` take a file or (for the proof) the header text itself. Never echoes the value back. */
+/** `--response` is a file. The value is never echoed back: it may be a URL or path holding a credential (SPEC §7 "Never printed"). */
 function readFileArg(d: Deps, flag: string, value: string): Buffer {
   try {
     return d.readFile(resolve(d.cwd, value));
   } catch {
-    throw ERR.usage(`Can't read ${flag} ${safe(value.length > 60 ? `${value.slice(0, 57)}...` : value)}.`);
+    throw ERR.usage(`Can't read the file given to ${flag}.`); // not in FLOWS
   }
 }
 
@@ -111,7 +111,8 @@ export async function verify(g: Global, d: Deps, o: VerifyOpts): Promise<number>
   if (!registry) throw ERR.noRegistry(g.network);
   if (!/^0x[0-9a-fA-F]{40}$/.test(registry)) throw ERR.usage('ATTESSA_REGISTRY must be an address.');
   const chain = new Chain(transport, lc(registry) as Address);
-  const base = EXPLORER[chainId];
+  // A local chain (even a fork that keeps Sepolia's chain id) has blocks and transactions no public explorer shows.
+  const base = g.network === 'local' ? undefined : EXPLORER[chainId];
   const addr = (a: string) => (base ? `${base}/address/${a}` : null);
   const txLink = (t: string) => (base ? `${base}/tx/${t}` : null);
 
@@ -173,7 +174,8 @@ export async function verify(g: Global, d: Deps, o: VerifyOpts): Promise<number>
         set('signature', 'fail', "the proof isn't a well-formed X-Attested-Proof", addr(chain.registry));
       }
     }
-    const skip = (check: CheckId, why: string) => void (rows[check] ??= { check, status: 'not_checked', detail: why, link: null });
+    const skipLink = (check: CheckId) => (check === 'binding' || check === 'timing_and_inputs') && known ? txLink(known) : addr(chain.registry);
+    const skip = (check: CheckId, why: string) => void (rows[check] ??= { check, status: 'not_checked', detail: why, link: skipLink(check) });
     let recovered: Address | null = null;
     if (decoded) {
       const proof = decoded.proof;
@@ -186,8 +188,29 @@ export async function verify(g: Global, d: Deps, o: VerifyOpts): Promise<number>
       }
       binding(proof);
       await status(proof, recovered, settlement, entry);
+      await v10(settlement, entry);
     } else {
-      for (const c of ['release', 'signer', 'signature', 'binding'] as const) skip(c, proofWhy || 'the proof could not be read');
+      for (const c of ['release', 'signer', 'signature', 'binding', 'timing_and_inputs'] as const) skip(c, proofWhy || 'the proof could not be read');
+    }
+
+    /** The SDK's own V10 (SPEC §7): every §6.2 step-9 check at the payment's time anchors. `verified` never stands on less. */
+    async function v10(s: Settlement | null, e: PendingEntry | undefined): Promise<void> {
+      const link = known ? txLink(known) : addr(chain.registry);
+      const why = !e ? 'needs the local record of the call (its signing time and payment)' : !s ? 'needs the settlement: a call that was not charged has no paid answer to check' : response === undefined ? 'no answer given: pass --response <file>' : '';
+      if (why) return set('timing_and_inputs', 'not_checked', why, link);
+      try {
+        const sleep = d.sdk?.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
+        const r = await verifyPaid(chain, chainId, e!, response!, proofHeader!, s!, sleep);
+        if (!r.ok) {
+          const words = checkWords(r.check)?.[0] ?? safe(r.check);
+          return set('timing_and_inputs', 'fail', `${words} (${safe(r.check)})`, link);
+        }
+        const note = r.inputsChecked ? '' : "; the account values were not re-read (your RPC doesn't keep state that old)"; // SPEC §7 V10: not a failure
+        set('timing_and_inputs', 'pass', `expiry, time anchors, agent, inputs hash and the Celo data at block ${r.inputsBlock} all check out${note}`, link);
+      } catch (err) {
+        if (!(err instanceof RpcError)) throw err;
+        set('timing_and_inputs', 'not_checked', RPC_OLD, link);
+      }
     }
 
     function binding(proof: ExecutionProof): void {
@@ -263,7 +286,8 @@ export async function verify(g: Global, d: Deps, o: VerifyOpts): Promise<number>
       else set('signer', 'pass', `signer ${short(signer)} was Active and attested for ${short(proof.releaseId)} ${when}`, sLink);
     }
 
-    const order: CheckId[] = ['release', 'signer', 'signature', 'binding', 'settlement'];
+    const order: CheckId[] = ['release', 'signer', 'signature', 'binding', 'timing_and_inputs', 'settlement'];
+    if (!base) d.io.out('No public explorer for --network local: links are left out.'); // not in FLOWS
     const list = order.map((c) => rows[c] ?? { check: c, status: 'not_checked' as const, detail: 'not run', link: null });
     const tag: Record<CheckStatus, string> = { pass: 'pass', fail: 'FAIL', not_checked: 'not checked' };
     for (const r of list) d.io.out(`${tag[r.status].padEnd(11)} ${r.check}: ${r.detail}${r.link ? `  ${r.link}` : ''}`);

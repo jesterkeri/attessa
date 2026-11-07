@@ -166,6 +166,7 @@ describe('verify: a call that went through', () => {
       ['signer', 'pass'],
       ['signature', 'pass'],
       ['binding', 'pass'],
+      ['timing_and_inputs', 'pass'],
       ['settlement', 'pass'],
     ]);
     for (const c of j.checks) expect(c.link).toContain(SCAN);
@@ -178,11 +179,11 @@ describe('verify: a call that went through', () => {
     rmSync(join(w.home, '.attessa', 'pending.jsonl'));
     expect(await w.verify(tx)).toBe(1);
     expect(w.row('settlement')).toMatch(PASS);
-    for (const c of ['release', 'signer', 'signature', 'binding']) {
+    for (const c of ['release', 'signer', 'signature', 'binding', 'timing_and_inputs']) {
       expect(w.row(c), c).toMatch(SKIP);
       expect(w.row(c), c).toContain('no proof given');
     }
-    expect(w.out.join('\n')).toContain('Not fully verified: 4 checks were not run.');
+    expect(w.out.join('\n')).toContain('Not fully verified: 5 checks were not run.');
   });
 
   it('verify of a settlement tx with a proof but no local record never passes the checks it cannot make', async () => {

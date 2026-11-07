@@ -5,3 +5,4 @@ export { RELEASE_STATUS } from './abi.ts';
 export { KeyError, keyToAccount, loadAccount, type KeySource, type Keychain } from './keys.ts';
 export * from './types.ts';
 export { TX_GAS_CAP, canPayGas, gasTerms, isInsufficientFundsReply, InsufficientGasFundsError, type GasTerms } from './gas.ts';
+export { verifyPaid, type VerifyResult } from './verify.ts';
