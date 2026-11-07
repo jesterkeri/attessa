@@ -147,29 +147,72 @@ interface ToolResult {
   isError?: boolean;
 }
 
-/** An environment variable is a secret when a word of its name is, or ends in, KEY, SECRET, PASSWORD, PASSPHRASE, TOKEN or CREDENTIAL(S), or is AUTH (so KEYBOARD and AUTHOR are not). */
-function isSecretName(name: string): boolean {
-  return name === 'ATTESSA_PRIVATE_KEY' || name === 'ATTESSA_KEYSTORE_PASSWORD' || name.split('_').some((w) => /(KEY|SECRET|PASSWORD|PASSPHRASE|TOKEN|CREDENTIALS?)$/i.test(w) || /^AUTH$/i.test(w));
+/**
+ * The secrets this server holds are exactly what it consumes, plus what the operator declares:
+ *   - ATTESSA_PRIVATE_KEY and ATTESSA_KEYSTORE_PASSWORD (the wallet; the key only ever goes to the signer),
+ *   - the userinfo, path segments, query values and fragment of ATTESSA_RPC (results show an RPC as scheme://host[:port] only),
+ *   - every variable named in ATTESSA_REDACT (comma-separated names), for anything the operator knows could reach a result.
+ * The server reads no other secret, so no other variable is its to hide, require or refuse, whatever its name.
+ */
+const CONSUMED = ['ATTESSA_PRIVATE_KEY', 'ATTESSA_KEYSTORE_PASSWORD'];
+
+function declared(env: Record<string, string | undefined>): Array<[string, string]> {
+  const names = [...CONSUMED, ...(env.ATTESSA_REDACT ?? '').split(',').map((n) => n.trim()).filter((n) => n !== '')];
+  return [...new Set(names)].flatMap((n): Array<[string, string]> => (env[n] !== undefined && env[n] !== '' ? [[n, env[n]!]] : []));
 }
 
 /** Shortest secret that can be told from protocol data (amounts, block numbers, hash digits) and so hidden without changing a result. */
 export const MIN_SECRET_LENGTH = 4;
 /** A secret made only of digits collides with amounts and block numbers unless it is this long. */
 export const MIN_DIGIT_SECRET_LENGTH = 8;
+const redactable = (v: string): boolean => v.length >= MIN_SECRET_LENGTH && !(/^\d+$/.test(v) && v.length < MIN_DIGIT_SECRET_LENGTH);
 
-/** Names of secret variables whose value can't be redacted safely: the server won't run with them. Never their values. */
+/** Names of declared secrets whose value can't be redacted safely: the server won't run with them. Never their values. */
 export function unsafeSecrets(env: Record<string, string | undefined>): string[] {
-  return Object.entries(env)
-    .filter(([k, v]) => v !== undefined && v !== '' && isSecretName(k) && (v.length < MIN_SECRET_LENGTH || (/^\d+$/.test(v) && v.length < MIN_DIGIT_SECRET_LENGTH)))
-    .map(([k]) => k);
+  return declared(env).filter(([, v]) => !redactable(v)).map(([k]) => k);
 }
 
 export function unsafeSecretError(name: string): CliError {
   return new CliError(
     'unsafe_secret',
     `${name} is set to a value too short to hide safely, so the MCP server won't run with it.`,
-    `Use a value of at least ${MIN_SECRET_LENGTH} characters (at least ${MIN_DIGIT_SECRET_LENGTH} if it is only digits) for ${name}, or unset it, then start the server again.`,
+    `Use a value of at least ${MIN_SECRET_LENGTH} characters (at least ${MIN_DIGIT_SECRET_LENGTH} if it is only digits) for ${name}, or take ${name} out of ATTESSA_REDACT, then start the server again.`,
   );
+}
+
+/** The pieces of ATTESSA_RPC that carry credentials: userinfo, path segments, query values, fragment (decoded and as typed). */
+function rpcPieces(rpc: string | undefined): string[] {
+  if (!rpc) return [];
+  try {
+    const u = new URL(rpc);
+    const dec = (x: string): string[] => {
+      try {
+        return [x, decodeURIComponent(x)];
+      } catch {
+        return [x];
+      }
+    };
+    return [
+      ...dec(u.username),
+      ...dec(u.password),
+      ...u.pathname.split('/').flatMap(dec),
+      ...[...u.searchParams.values()].flatMap(dec),
+      ...dec(u.hash.replace(/^#/, '')),
+    ].filter((x) => x !== '' && redactable(x));
+  } catch {
+    return [];
+  }
+}
+
+/** Every string to hide: the declared secrets that can be hidden, a key without its 0x, and the RPC's credential pieces. */
+function secretBases(env: Record<string, string | undefined>): string[] {
+  const bases = new Set<string>(rpcPieces(env.ATTESSA_RPC));
+  for (const [, v] of declared(env)) {
+    if (!redactable(v)) continue;
+    bases.add(v);
+    if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.add(v.slice(2));
+  }
+  return [...bases].sort((x, y) => y.length - x.length);
 }
 
 const escRe = (x: string): string => x.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&');
@@ -188,44 +231,100 @@ function secretPattern(b: string): RegExp {
   return new RegExp(`${pct}|${escRe(JSON.stringify(b).slice(1, -1))}|${escRe(b)}`, 'g');
 }
 
-/** One pattern per safe configured secret (and a key without its 0x), the longest first. */
-function secretPatterns(env: Record<string, string | undefined>): RegExp[] {
-  const unsafe = new Set(unsafeSecrets(env));
-  const bases = new Set<string>();
-  for (const [k, v] of Object.entries(env)) {
-    if (v === undefined || v === '' || unsafe.has(k) || !isSecretName(k)) continue;
-    bases.add(v);
-    if (/^0x[0-9a-fA-F]{64}$/.test(v)) bases.add(v.slice(2));
-  }
-  return [...bases].sort((x, y) => y.length - x.length).map(secretPattern);
-}
-
-/** One string with configured secrets (raw, JSON-escaped and URL-encoded) and URL userinfo removed. */
+/** Text with the secrets (raw, JSON-escaped, URL-encoded) and URL userinfo removed: the first, cheap layer. */
 export function scrub(text: string, env: Record<string, string | undefined>): string {
   let t = text;
-  for (const re of secretPatterns(env)) t = t.replace(re, '[hidden]');
+  for (const b of secretBases(env)) t = t.replace(secretPattern(b), '[hidden]');
   return t.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s"'@\\]*@/gi, '$1');
 }
 
-/**
- * The last line of defence on every result: scrub applied to each string VALUE of the result before it is serialised.
- * Keys, numbers, booleans and the JSON structure are never touched, so the result stays valid and means what it meant.
- * Secrets too short to hide safely never get here: the server refuses to run with them (unsafeSecrets).
- */
-export function redactResult(v: unknown, env: Record<string, string | undefined>): unknown {
-  const walk = (x: unknown): unknown => {
-    if (typeof x === 'string') return scrub(x, env);
-    if (Array.isArray(x)) return x.map(walk);
-    if (typeof x === 'object' && x !== null) return Object.fromEntries(Object.entries(x).map(([k, y]) => [k, walk(y)]));
-    return x;
-  };
-  return walk(v);
+/** `s` with one level of escaping undone: \u{…}, \uXXXX, \xNN, \n \/ \\ …, and %XX runs. */
+function unescapeOnce(s: string): string {
+  const cp = (n: number): string => (n <= 0x10ffff ? String.fromCodePoint(n) : '');
+  const simple: Record<string, string> = { n: '\n', r: '\r', t: '\t', b: '\b', f: '\f', '\\': '\\', '/': '/', '"': '"', "'": "'" };
+  return s
+    .replace(/\\u\{([0-9a-fA-F]{1,6})\}/g, (_m, h: string) => cp(parseInt(h, 16)))
+    .replace(/\\u([0-9a-fA-F]{4})/g, (_m, h: string) => cp(parseInt(h, 16)))
+    .replace(/\\x([0-9a-fA-F]{2})/g, (_m, h: string) => cp(parseInt(h, 16)))
+    .replace(/\\([nrtbf\\/"'])/g, (_m, c: string) => simple[c]!)
+    .replace(/(?:%[0-9a-fA-F]{2})+/g, (m) => {
+      try {
+        return decodeURIComponent(m);
+      } catch {
+        return m;
+      }
+    });
 }
 
-const text = (env: Record<string, string | undefined>, v: unknown, isError = false): ToolResult => ({
-  content: [{ type: 'text', text: jsonOut(redactResult(v, env)) }],
-  ...(isError ? { isError: true } : {}),
-});
+/** Every reading of `s` after undoing up to four levels of escaping, with `+` also read as a space. */
+function readings(s: string): string[] {
+  const out = [s];
+  let cur = s;
+  for (let i = 0; i < 4; i++) {
+    const next = unescapeOnce(cur);
+    if (next === cur) break;
+    out.push(next);
+    cur = next;
+  }
+  return [...out, ...out.map((x) => x.replace(/\+/g, ' '))];
+}
+
+const PROTOCOL_STRING = /^(?:0x[0-9a-fA-F]{40,}|\d+(?:\.\d+)?)$/;
+
+/** Same keys, same numbers and booleans, same amounts and hashes; only other strings may differ. */
+function sameShape(a: unknown, b: unknown): boolean {
+  if (typeof a === 'string') return typeof b === 'string' && (!PROTOCOL_STRING.test(a) || a === b);
+  if (Array.isArray(a)) return Array.isArray(b) && a.length === b.length && a.every((x, i) => sameShape(x, b[i]));
+  if (typeof a === 'object' && a !== null) {
+    if (typeof b !== 'object' || b === null || Array.isArray(b)) return false;
+    const ka = Object.keys(a);
+    const kb = Object.keys(b);
+    return ka.length === kb.length && ka.every((k, i) => k === kb[i] && sameShape((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
+  }
+  return a === b;
+}
+
+function everyString(v: unknown, f: (s: string) => boolean): boolean {
+  if (typeof v === 'string') return f(v);
+  if (Array.isArray(v)) return v.every((x) => everyString(x, f));
+  if (typeof v === 'object' && v !== null) return Object.entries(v).every(([k, x]) => f(k) && everyString(x, f));
+  return true;
+}
+
+const WITHHELD = {
+  ok: false,
+  error: 'redaction_withheld',
+  message: 'The result was withheld because it would have shown a secret this server holds, or hiding it would have changed a number or a hash.',
+  next: 'Check what you passed in and what the service returned; if the secret was exposed outside this server, replace it.',
+};
+
+/**
+ * The final layer, after every rendering: the serialised text has the secrets removed, and the result is sent only if it
+ * still parses, has the same keys, numbers and booleans, has unchanged amounts and hashes, and no string in it, with its
+ * escaping undone (\xNN, \uNNNN, %XX, …), still holds a secret. Otherwise a fixed result without any of it is sent instead.
+ */
+function render(env: Record<string, string | undefined>, v: unknown): { text: string; withheld: boolean } {
+  const original = jsonOut(v);
+  const bases = secretBases(env);
+  const redacted = scrub(original, env);
+  const fail = { text: jsonOut(WITHHELD), withheld: true };
+  let parsedOriginal: unknown;
+  let parsed: unknown;
+  try {
+    parsedOriginal = JSON.parse(original);
+    parsed = JSON.parse(redacted);
+  } catch {
+    return fail;
+  }
+  if (!sameShape(parsedOriginal, parsed)) return fail;
+  if (!everyString(parsed, (s) => !readings(s).some((r) => bases.some((b) => r.includes(b))))) return fail;
+  return { text: redacted, withheld: false };
+}
+
+const text = (env: Record<string, string | undefined>, v: unknown, isError = false): ToolResult => {
+  const r = render(env, v);
+  return { content: [{ type: 'text', text: r.text }], ...(isError || r.withheld ? { isError: true } : {}) };
+};
 
 const failure = (env: Record<string, string | undefined>, e: CliError): ToolResult => text(env, { ok: false, error: e.code, message: e.message, next: e.next }, true);
 

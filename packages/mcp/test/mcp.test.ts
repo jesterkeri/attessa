@@ -650,10 +650,11 @@ describe('mcp: Codex r3 Major 1, an unredactable secret stops the server; every 
     for (const leak of leaks) {
       const r = await w.tool(`pre-${leak}-post`);
       expect(r.isError, leak).toBe(true);
-      expect(r.json.error, leak).toBe('unknown_tool');
+      // Hidden in place, or (an escaped spelling that reads back as the secret) withheld whole: never shown.
+      expect(['unknown_tool', 'redaction_withheld'], leak).toContain(r.json.error);
       expect(r.text, leak).not.toContain(leak);
       expect(r.text, leak).not.toContain(JSON.stringify(leak).slice(1, -1));
-      expect(r.text).toContain('pre-');
+      if (r.json.error === 'unknown_tool') expect(r.text).toContain('pre-');
     }
   });
 });
