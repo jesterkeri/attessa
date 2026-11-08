@@ -4614,3 +4614,26 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+## T34 README (README part only; T34 not ticked) - 2026-11-08
+
+Wrote `README.md` from FLOWS §1 (premise line verbatim), SPEC §1, ARCHITECTURE, KNOWN-LIMITS, `packages/cli/src/index.ts` COMMANDS, `packages/mcp/src/server.ts` and `docs/DEPLOYMENTS.md`. Every relative link was checked and resolves; no em dashes; no numbers, addresses or keys in it. `scripts/check-claims.sh` does not exist on this branch (not written). No project license file or `license` field exists, so the README states none.
+
+Documented commands run from the worktree, each under `flock /home/hr/.cache/attessa-heavy.lock`, all exit 0:
+
+```
+install (pnpm install --frozen-lockfile; then submodule update + cargo fetch): exit 0
+build: exit 0   (tail: Finished `release` profile [optimized] target(s) in 10.30s)
+typecheck: exit 0
+lint: exit 0    (tail: Finished `dev` profile ... in 5.63s)
+test: exit 0
+  packages/cli test:  Test Files 87 passed (87), Tests 347 passed (347)
+  packages/core test: Test Files 9 passed (9), Tests 69 passed (69)
+  packages/gateway test: Test Files 23 passed (23), Tests 164 passed (164)
+  packages/mcp test:  Test Files 1 passed (1), Tests 66 passed (66)
+  packages/sdk test:  Tests 191 passed (191)
+  forge test: every suite ok, 0 failed
+  cargo test: test result: ok
+```
+
+Not run: invariants and slither (documented only). reviewed: pending Codex
