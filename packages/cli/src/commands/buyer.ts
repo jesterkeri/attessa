@@ -29,7 +29,7 @@ import {
 } from '@attessa/sdk';
 import type { Address, Hex, LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { DEFAULT_RPC, type Deps, type Global, type NetworkFlag } from '../context.ts';
+import { DEFAULT_RPC, loopsSuffix, type Deps, type Global, type NetworkFlag } from '../context.ts';
 import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, jsonOut, safe, signedRefusal } from '../copy.ts';
 
 /** Buyer commands (SPEC §8): `init`, `call`, `cancel`, `status [<origin>] [--pending]`, `evidence export`. All payment logic is the SDK's. */
@@ -222,6 +222,11 @@ function makeClient(
   if (o.onProgress) opts.onProgress = o.onProgress;
   // --dry-run is the SDK's own stop, not the price-line handler's answer: printing can fail, the stop can't.
   if (g.dryRun) opts.dryRun = true;
+  // Loops attribution: the one transaction this client sends (the cancel) is tagged on mainnet. `call` pays by x402
+  // signature and sends none; `cancel` refuses without the tag before it signs anything.
+  // The SDK appends it only when the RPC's verified chain id is 42220 (also behind `--network local`), and refuses there without it.
+  const tag = g.network === 'sepolia' ? null : loopsSuffix(d.env);
+  if (tag) opts.dataSuffix = tag;
   return createAttestClient(cfg, opts);
 }
 
@@ -606,6 +611,8 @@ export function sdkError(g: Global, code: string, rawDetail: string | undefined,
       return BUYERR.inProgress();
     case 'no_registry':
       return ERR.noRegistry(g.network);
+    case 'no_attribution_tag': // the SDK's verified chain is 42220 (also behind --network local) and no valid suffix was given
+      return ERR.attributionRequired();
   }
   if (origin !== undefined) {
     switch (code) {
@@ -673,8 +680,11 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   }
   if (g.dryRun) {
     d.io.out('  (dry run: nothing was sent)');
+    if (g.network === 'mainnet' && !loopsSuffix(d.env)) d.io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real cancel on mainnet is refused until it is)'); // not in FLOWS
     return 0;
   }
+  // The tag rule is on the verified chain id, after the wrong-network check: the SDK's requireAttribution refuses
+  // before the cancel permission is signed, and the error maps to ERR.attributionRequired above.
   // FLOWS.md:833: "Cancel no longer prompts".
   try {
     // A chain read the SDK throws as RpcError is one made before anything was signed (cancelAuthorization wraps every
