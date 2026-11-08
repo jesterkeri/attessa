@@ -77,15 +77,30 @@ import { tmpdir } from 'node:os';
 // The text after `attessa` stops at the end of its element, or at sentence punctuation / "and" / "or" / "then" in running prose.
 const UNBUILT = [/^verify(?: <\w+>)?$/, /^release verify(?: <\w+>)?$/, /^call --via buy(?: \S+)?$/];
 // Running prose that starts with the word "attessa" and is not a command (the product name in a sentence).
-const PROSE = [/^can't check\b/, /^checks which\b/, /^on your PATH\b/];
+const PROSE = [/^can't check\b/, /^checks which\b/, /^on your PATH\b/, /^command\b/];
 const BLOCKS = ['tr', 'li', 'p', 'h2', 'h3', 'figure', 'a'];
+// A block runs to its own end tag, but HTML lets end tags be omitted, so it also ends at the first tag that would close it in a browser:
+// a new block-level start tag (for p and headings), the next <li> / <tr>, or the end of its container. No terminator at all: no block, so no exemption.
+const CLOSES = {
+  p: /<(?:address|article|aside|blockquote|details|div|dl|fieldset|figcaption|figure|footer|form|h[1-6]|header|hgroup|hr|main|menu|nav|ol|p|pre|section|search|table|ul|li|dd|dt|tr|td|th)(?=[\s/>])|<\/(?:li|td|th|tr|ul|ol|table|tbody|thead|tfoot|div|section|article|aside|header|footer|main|nav|form|blockquote|body|dd|dt|dl|details|figure|figcaption|fieldset|menu|search)\s*>/gi,
+  li: /<li(?=[\s/>])|<\/(?:ul|ol|menu)\s*>/gi,
+  tr: /<tr(?=[\s/>])|<\/(?:table|tbody|thead|tfoot)\s*>/gi,
+};
+CLOSES.h2 = CLOSES.h3 = CLOSES.p;
+const blockEnd = (raw, at, tag) => {
+  const own = new RegExp(`</${tag}\\s*>`, 'ig');
+  const ends = [own, ...(CLOSES[tag] ? [CLOSES[tag]] : [])].flatMap(re => { re.lastIndex = at; const m = re.exec(raw); return m ? [m.index] : []; });
+  return ends.length ? Math.min(...ends) : -1;
+};
 const enclosing = (raw, at) => {
   const open = BLOCKS.flatMap(tag => {
     const starts = [...raw.slice(0, at).matchAll(new RegExp(`<${tag}[\\s>]`, 'g'))];
     const start = starts.length ? starts[starts.length - 1].index : -1;
     return start > raw.lastIndexOf(`</${tag}>`, at) ? [{ tag, start }] : [];
   }).sort((x, y) => y.start - x.start)[0];
-  return open ? raw.slice(open.start, raw.indexOf(`</${open.tag}>`, at)) : '';
+  if (!open) return '';
+  const end = blockEnd(raw, at, open.tag);
+  return end < 0 ? '' : raw.slice(open.start, end);
 };
 // Character references, decoded once, the way a browser does (HTML Living Standard "character reference state"): decimal and hex
 // numeric forms with or without the semicolon, named references (the legacy ones also without it), nothing else. A reference that
@@ -128,8 +143,8 @@ const BREAKS = new Set(['address', 'article', 'aside', 'blockquote', 'body', 'br
   'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hgroup', 'hr', 'html', 'legend',
   'li', 'listing', 'main', 'menu', 'nav', 'ol', 'optgroup', 'option', 'p', 'plaintext', 'pre', 'rp', 'rt', 'search', 'section', 'summary', 'table', 'tbody', 'td',
   'tfoot', 'th', 'thead', 'title', 'tr', 'ul', 'xmp']);
-// The one kept exception to "transparent": code / a / span / kbd / samp / var / tt mark the edge of an element a command may START just inside
-// (`attessa <code>ghost</code>`) but not run out of, which the real pages need (a `<span class="ln">` output line ends where its span ends, and
+// The one kept exception to "transparent": code / a / span / kbd / samp / var / tt mark an element edge. A command is read across it while it is incomplete
+// or an option follows (see `continues`), and ends at it otherwise, which the real pages need (a `<span class="ln">` output line ends where its span ends, and
 // `<code>attessa init</code> and` must not read "and" as an argument). It only ever shortens what is read as one command at a boundary.
 const INLINE = new Set(['code', 'a', 'span', 'kbd', 'samp', 'var', 'tt']);
 const tagName = tag => /^<\/?([a-zA-Z][^\s/>]*)/.exec(tag)?.[1].toLowerCase() ?? '';
@@ -137,7 +152,7 @@ const separator = tag => { const n = tagName(tag); return BREAKS.has(n) ? SEP : 
 // Attributes whose value a visitor sees or a search result shows, so a command in one is a displayed command. Policy: all of them are
 // scanned, input `value` and `placeholder` included, in double-quoted, single-quoted and unquoted form. (`title`, `alt` and `aria-label` are
 // read out or shown on hover; `content` is the meta description; `data-*` feeds the site's own JS, which writes it into the page.)
-const ATTRS = /\s(?:title|alt|aria-label|content|placeholder|value|data-[\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+const ATTRS = /\s(?:title|alt|aria-label|aria-description|aria-roledescription|aria-valuetext|aria-placeholder|aria-braillelabel|aria-brailleroledescription|label|srcdoc|content|placeholder|value|data-[\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
 const TAG = /^<[^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/;
 // The rendered view of a document: text with character references decoded, a SEP wherever a BREAKS tag starts or ends (SEPI for
 // INLINE ones), every other tag transparent, and the decoded text of the visible attributes above. Comments, scripts and styles are not rendered.
@@ -150,13 +165,25 @@ const render = raw => {
   const put = (str, i, a) => { for (const ch of str) { view += ch; at.push(i); attr.push(a); } };
   for (let i = 0; i < raw.length;) {
     if (raw.startsWith('<!--', i)) { const e = raw.indexOf('-->', i); i = e < 0 ? raw.length : e + 3; put(SEP, i, null); continue; }
-    const hide = /^<(script|style)\b/i.exec(raw.slice(i, i + 9));
-    if (hide) { const e = raw.toLowerCase().indexOf(`</${hide[1].toLowerCase()}>`, i); i = e < 0 ? raw.length : e + hide[1].length + 3; put(SEP, i, null); continue; }
+    // <script> and <style> hide their content up to an end tag: `</script` then whitespace, `/` or `>` (so `</script >` closes it too, as in a browser).
+    const hide = /^<(script|style)(?=[\s/>])/i.exec(raw.slice(i, i + 9));
+    if (hide) {
+      const end = new RegExp(`</${hide[1]}(?=[\\s/>])`, 'ig'); end.lastIndex = i + 1;
+      const e = end.exec(raw);
+      if (!e) { i = raw.length; put(SEP, i, null); continue; }
+      const gt = raw.indexOf('>', e.index);
+      i = gt < 0 ? raw.length : gt + 1; put(SEP, i, null); continue;
+    }
     if (raw[i] === '<' && /[a-zA-Z/]/.test(raw[i + 1] ?? '')) {
       const rest = raw.slice(i);
       const tag = TAG.exec(rest)?.[0] ?? rest.slice(0, rest.indexOf('>') < 0 ? rest.length : rest.indexOf('>') + 1);
       put(separator(tag), i, null);
-      for (const m of tag.matchAll(ATTRS)) { unknown.push(...unknownRefs(m[1] ?? m[2] ?? m[3])); const v = decodeAll(m[1] ?? m[2] ?? m[3]); put(`${v}${SEP}`, i, v); }
+      for (const m of tag.matchAll(ATTRS)) {
+        unknown.push(...unknownRefs(m[1] ?? m[2] ?? m[3]));
+        const v = decodeAll(m[1] ?? m[2] ?? m[3]);
+        if (/^\s*srcdoc/i.test(m[0])) { const inner = render(v); unknown.push(...inner.unknown); put(`${inner.view}${SEP}`, i, v); } // srcdoc is a page: read its rendered text
+        else put(`${v}${SEP}`, i, v);
+      }
       i += tag.length; continue;
     }
     if (raw[i] === '&') { const d = decodeRef(raw.slice(i, i + 40)); if (d) { put(d.ch, i, null); i += d.len; continue; } const u = /^&([A-Za-z][A-Za-z0-9]*);/.exec(raw.slice(i, i + 40)); if (u && !Object.hasOwn(NAMED, u[1])) unknown.push(u[1]); }
@@ -166,10 +193,11 @@ const render = raw => {
 };
 const tokensOf = s => s.match(/"[^"]*"|\S+/g) ?? [];
 /** Why these tokens (the words after `attessa`) are not a usable command, or null. Built commands only; UNBUILT is decided by the caller. */
+const keyOf = tokens => (tokens.length > 1 && SPECS.has(`${tokens[0]} ${tokens[1]}`) ? `${tokens[0]} ${tokens[1]}` : SPECS.has(tokens[0] ?? '') ? tokens[0] : null);
 const reasonFor = tokens => {
   const line = tokens.join(' ');
   if (line === '--help' || line === 'seller' || line === 'seller --help') return null; // answered by index.ts before the table
-  const key = tokens.length > 1 && SPECS.has(`${tokens[0]} ${tokens[1]}`) ? `${tokens[0]} ${tokens[1]}` : SPECS.has(tokens[0] ?? '') ? tokens[0] : null;
+  const key = keyOf(tokens);
   if (!key) return 'no such command';
   const spec = SPECS.get(key);
   let rest = tokens.slice(key.split(' ').length);
@@ -192,18 +220,46 @@ const reasonFor = tokens => {
   return positionals > spec.args ? `Unexpected argument: ${rest.filter(t => !t.startsWith('-')).slice(spec.args).join(' ')}` : null;
 };
 // The string literals of a script (and the template literals, whose range includes their ${} expressions), as { s, e } ranges of their contents.
-// Comments are skipped. A regex literal holding a quote can confuse it; the effect is a literal found wrong, and a wrong literal reports a violation.
+// Comments are skipped, and so are regex literals (a `/` where an expression may start; `/"/g` holds a quote that is not a string). When the
+// boundaries are not certain, `out.uncertain` is set and the caller grants no exemption: a string that is not closed on its line, a regex that is
+// not closed on its line, or a `/` after `)` or `]` that could be division or a regex (Codex site-finish r1: a regex quote merged two literals
+// and a Coming mark in the other one exempted the command).
 const literalsOf = src => {
   const out = [];
+  out.uncertain = false;
+  let prev = ''; // the last significant character seen in code
+  const regexOk = () => prev === '' || /[(,=:[!&|?{};+\-*%<>~^]/.test(prev) || /(?:^|[^\w$])(?:return|typeof|case|in|of|delete|void|throw|new|else|do)$/.test(src.slice(Math.max(0, i0 - 8), i0).trimEnd());
+  let i0 = 0;
   const code = (i, inBraces) => {
     let depth = 0;
     while (i < src.length) {
       const c = src[i];
+      i0 = i;
       if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); if (i < 0) return src.length; continue; }
-      if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); if (e < 0) return src.length; i = e + 2; continue; }
-      if (c === '"' || c === "'") { let j = i + 1; while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1; out.push({ s: i + 1, e: j }); i = j + 1; continue; }
-      if (c === '`') { i = template(i); continue; }
+      if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); if (e < 0) { out.uncertain = true; return src.length; } i = e + 2; continue; }
+      if (c === '/') {
+        if (/[)\]]/.test(prev)) { // division or a regex (`if (x) /"/.test(s)`): only a candidate regex that holds a quote can move a literal boundary
+          const e = src.indexOf('/', i + 1), nl = src.indexOf('\n', i);
+          if (e >= 0 && (nl < 0 || e < nl) && /["'`]/.test(src.slice(i + 1, e))) out.uncertain = true;
+          i++; prev = c; continue;
+        }
+        if (regexOk()) {
+          let j = i + 1, cls = false;
+          while (j < src.length && src[j] !== '\n' && (cls || src[j] !== '/')) { if (src[j] === '\\') j++; else if (src[j] === '[') cls = true; else if (src[j] === ']') cls = false; j++; }
+          if (j >= src.length || src[j] !== '/') out.uncertain = true;
+          i = j + 1; prev = ')'; continue; // a regex ends like a value; a following `/` is division
+        }
+        prev = c; i++; continue;
+      }
+      if (c === '"' || c === "'") {
+        let j = i + 1;
+        while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1;
+        if (src[j] !== c) out.uncertain = true; // not closed on its line
+        out.push({ s: i + 1, e: j }); i = j + 1; prev = 'a'; continue;
+      }
+      if (c === '`') { i = template(i); prev = 'a'; continue; }
       if (inBraces) { if (c === '{') depth++; else if (c === '}') { if (depth === 0) return i + 1; depth--; } }
+      if (!/\s/.test(c)) prev = c;
       i++;
     }
     return i;
@@ -212,38 +268,76 @@ const literalsOf = src => {
     const lit = { s: i + 1, e: src.length };
     out.push(lit);
     let j = i + 1;
-    while (j < src.length && src[j] !== '`') { if (src[j] === '\\') j += 2; else if (src[j] === '$' && src[j + 1] === '{') j = code(j + 2, true); else j++; }
+    while (j < src.length && src[j] !== '`') { if (src[j] === '\\') j += 2; else if (src[j] === '$' && src[j + 1] === '{') { const sp = prev; j = code(j + 2, true); prev = sp; } else j++; }
+    if (j >= src.length) out.uncertain = true;
     lit.e = Math.min(j, src.length);
     return j + 1;
   };
   code(0, false);
   return out;
 };
-/** A script with its tags replaced by SEP, and for each character of that text its offset in the original. */
+/** A script with its tags replaced by SEP, and for each character of that text its offset in the original. Escape sequences are decoded the way
+ *  the browser shows them: a line break or tab escape (\n \t \r \v \f \b \0) is a boundary (SEP), \xNN and \uNNNN are the character, `\\` is a backslash,
+ *  so the n of `\n` is not a word character that hides the command after it (Codex site-finish r1). */
 const flatten = raw => {
   let flat = '';
   const map = [];
   let last = 0;
   const copy = to => { for (let k = last; k < to; k++) { flat += raw[k]; map.push(k); } };
-  for (const m of raw.matchAll(/<[^>]*>/g)) { copy(m.index); flat += SEP; map.push(m.index); last = m.index + m[0].length; }
+  for (const m of raw.matchAll(/<[^>]*>|\\(?:\\|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|[ntrvfb0])/g)) {
+    copy(m.index);
+    const t = m[0];
+    let out = SEP;
+    if (t[0] === '\\') {
+      if (t[1] === '\\') out = '\\';
+      else if (t[1] === 'x' || t[1] === 'u') { const cp = parseInt(t.replace(/^\\[xu]\{?|\}$/g, ''), 16); out = cp <= 0x10ffff ? String.fromCodePoint(cp) : SEP; if (/\s/.test(out) || out === '\u0001' || out === '\u0002') out = SEP; }
+    }
+    flat += out; map.push(m.index);
+    last = m.index + t.length;
+  }
   copy(raw.length);
   return { flat, map };
 };
+const cut = t => t.split(/\.(?=\s|$)|,\s|;\s|:\s|\s\(|\s(?:and|or|then)\s/)[0].trim();
+/** Whether the text after an inline-element edge (code, a, span, kbd, samp, var, tt) is still part of the command read so far.
+ *  Markup that does not break the line must not hide a word or a flag (`attessa <span>call</span> --via buy`), but real pages need an edge to
+ *  end a command: `<code>attessa verify</code> isn't built` and `<span class="c">attessa call X</span>` then an output line. So an edge continues the
+ *  command while it is incomplete (no command word yet, the first word of a two-word command, a gateway sub-command), when what follows is an option
+ *  (starts with `-`), or when the last token is an option that may take a value (a string option, or one the CLI lacks) and no line break came between. Anything else after a finished command is prose or the next line. */
+const continues = (acc, piece, gap) => {
+  const toks = tokensOf(acc);
+  const first = tokensOf(piece)[0];
+  if (first === undefined || toks.length === 0 || first.startsWith('-')) return true;
+  if (toks.length === 1 && (toks[0] === 'gateway' || (!SPECS.has(toks[0]) && [...SPECS.keys()].some(k => k.startsWith(`${toks[0]} `))))) return true;
+  const key = keyOf(toks), last = toks[toks.length - 1];
+  const m = /^--([A-Za-z0-9-]+)$/.exec(last);
+  return Boolean(key && m && !/\n/.test(gap) && SPECS.get(key).flags.get(m[1]) !== 'boolean'); // a string option, or one the CLI does not have (judged whole)
+};
+/** The text of one command, read from `run` (what follows `attessa`, up to the next line break). */
+const readCommand = run => {
+  const [head, ...rest] = run.split(SEPI);
+  let joined = head, acc = cut(head);
+  for (const piece of rest) {
+    if (acc !== joined.trim() || !continues(acc, piece, /\s*$/.exec(joined)[0])) break;
+    joined += piece;
+    acc = cut(joined);
+  }
+  return acc;
+};
 /** Every violation in one rendered document. `isJs`: the source is a script. There an unbuilt command is exempt only when the Coming mark is in the
- *  very string literal that holds the command (for a template literal: anywhere in that template, which is the fragment it builds). Nearby text is not an association. */
+ *  very string literal that holds the command (for a template literal: anywhere in that template, which is the fragment it builds). Nearby text is not an association.
+ *  If the literal boundaries are not certain (see literalsOf), there is no exemption at all. */
 const violations = (raw, isJs = false) => {
   const js = isJs ? flatten(raw) : null;
   const { view, at, attr, unknown = [] } = render(isJs ? js.flat : raw);
   const literals = isJs ? literalsOf(raw) : [];
-  const literalAt = pos => literals.filter(l => l.s <= pos && pos <= l.e).sort((x, y) => (x.e - x.s) - (y.e - y.s))[0];
+  const literalAt = pos => (literals.uncertain ? undefined : literals.filter(l => l.s <= pos && pos <= l.e).sort((x, y) => (x.e - x.s) - (y.e - y.s))[0]);
   const bad = isJs ? [] : unknown.map(n => `&${n};: a character reference this scanner cannot read`);
-  for (const m of view.matchAll(/(?<![\w/@.:-])attessa\s+(?=[^\s\u0001])/g)) {
+  for (const m of view.matchAll(/(?<![\w/@.:-])(?<!\bcd )attessa[\s\u0002]+(?=[^\s\u0001\u0002])/g)) {
     const start = m.index + m[0].length;
-    let tail = view.slice(start).split(SEP)[0];
-    // A command may begin just inside an inline element (`attessa <code>ghost</code>`), and ends at that element's edge.
-    tail = tail.startsWith(SEPI) ? tail.replace(/^\u0002+/, '').split(SEPI)[0] : tail.split(SEPI)[0];
-    if (isJs) tail = tail.split(/["'`\\]/)[0]; // the end of the string literal
-    tail = tail.split(/\.(?=\s|$)|,\s|;\s|:\s|\s\(|\s(?:and|or|then)\s/)[0].trim();
+    let run = view.slice(start).split(SEP)[0];
+    if (isJs) run = run.split(/["'`\\]/)[0]; // the end of the string literal
+    const tail = readCommand(run);
     if (PROSE.some(p => p.test(tail))) continue;
     const tokens = tokensOf(tail);
     const line = tokens.join(' ');
@@ -353,7 +447,7 @@ test('character-reference and whitespace mutants in a built page are caught (Cod
     ['attessa init&nbsp;--bogus', 'attessa init --bogus: --bogus: no such flag'],
     ['attessa init --bogus', 'attessa init --bogus: --bogus: no such flag'],
     ['attessa <b>ghost</b> --bogus', 'attessa ghost --bogus: no such command'],
-    ['attessa <code>ghost</code> --bogus', 'attessa ghost: no such command'],
+    ['attessa <code>ghost</code> --bogus', 'attessa ghost --bogus: no such command'], // r1: judged whole, flags included (was 'attessa ghost')
     ['attessa <i>gh</i>ost --bogus', 'attessa ghost --bogus: no such command'],
     ['attessa init <em>--bogus</em>', 'attessa init --bogus: --bogus: no such flag'],
     ['attessa init<b></b> --bogus', 'attessa init --bogus: --bogus: no such flag'],
@@ -432,4 +526,123 @@ test('a script exempts an unbuilt command only when the mark is in the same lite
   assert.deepEqual(violations('const a = `<p>Coming</p><p><code>attessa verify</code></p>${x}`;', true), []);
   assert.deepEqual(violations('const a = `<p>Coming ${"x"}</p>`; const b = `${y}<code>attessa verify</code>`;', true), ['attessa verify: not built, and its block does not say so']);
   assert.deepEqual(violations('const a = "attessa ghost --bogus";', true), ['attessa ghost --bogus: no such command']);
+});
+
+// Site-finish adversary r1 (false passes; probe site-r1-scanner-false-passes). Each test below fails on fe9e2ff.
+// 1. span / code / a / kbd / samp / var / tt must not cut a command short or hide it. A whole command is judged, flags included. Real pages still pass:
+//    `<span class="c">cd attessa</span>`, `the <code>attessa</code> command`, `<code>attessa verify</code> isn't built yet`, and an output line after a command.
+test('a command split across span / code / a / kbd / samp / var / tt is read whole and judged (adversary r1 defect 1)', () => {
+  const NOT_BUILT = 'not built, and its block does not say so';
+  for (const t of ['span', 'code', 'a', 'kbd', 'samp', 'var', 'tt']) {
+    assert.deepEqual(violations(`<p><${t}>attessa</${t}> <${t}>call</${t}> --via buy https://x</p>`), [`attessa call --via buy https://x: ${NOT_BUILT}`], t);
+    assert.deepEqual(violations(`<p><${t}>attessa</${t}> verify</p>`), [`attessa verify: ${NOT_BUILT}`], t);
+    assert.deepEqual(violations(`<p><${t}>attessa</${t}> <${t}>verify</${t}></p>`), [`attessa verify: ${NOT_BUILT}`], t);
+    assert.deepEqual(violations(`<p>attessa <${t}>call</${t}> --via buy https://x</p>`), [`attessa call --via buy https://x: ${NOT_BUILT}`], t);
+    assert.deepEqual(violations(`<p><${t} class="c">attessa</${t}> <${t} class="a">ghost</${t}></p>`), ['attessa ghost: no such command'], t);
+    assert.deepEqual(violations(`<p>attessa <${t} class="c">init</${t}> <${t} class="f">--bogus</${t}></p>`), ['attessa init --bogus: --bogus: no such flag'], t);
+    assert.deepEqual(violations(`<p>attessa <${t}>call</${t}> <${t}>--body</${t}> <${t}>tx.json</${t}> https://x</p>`), [], `${t}: a split real command passes`);
+    assert.deepEqual(violations(`<p>attessa <${t}>call</${t}> <${t}>--via</${t}> <${t}>buy</${t}></p>`), ['attessa call --via buy: not built, and its block does not say so'], `${t}: the value of a flag after an edge`);
+    assert.deepEqual(violations(`<p><${t}>attessa</${t}> <${t}>agent</${t}> <${t}>register</${t}> --name x</p>`), [], `${t}: a split two-word command passes`);
+  }
+  assert.deepEqual(violations('<p><code>attessa</code> <code>verify</code></p>'), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('<p>Coming: <code>attessa</code> <code>verify</code></p>'), []);
+  // known limit: a plain positional after a finished command and an edge is read as prose (`<code>attessa verify</code> isn't built`), so only `buy` is seen here.
+  assert.deepEqual(violations('<p>attessa <span>call</span> <span>--via</span> <span>buy</span> https://x</p>'), ['attessa call --via buy: not built, and its block does not say so']);
+});
+test('real pages keep passing: the name in a directory path, the product name in prose, a command then its output line (adversary r1 defect 1)', () => {
+  // pages/docs/tutorial.html: `cd attessa` is a directory, not a command.
+  assert.deepEqual(violations('<pre><code><span class="p">$ </span><span class="c">cd attessa</span>\n<span class="p">$ </span><span class="c">pnpm install</span></code></pre>'), []);
+  // prose: `the attessa command`, `attessa on your PATH`.
+  assert.deepEqual(violations('<p>This puts <code>attessa</code> on your PATH, and the <code>attessa</code> command prints help.</p>'), []);
+  assert.deepEqual(violations('<p><code>attessa verify</code> isn\'t built yet. <span class="muted">Coming.</span></p>'), []);
+  assert.deepEqual(violations('<p><code>attessa init</code> sets limits and <code>attessa call</code> is built.</p>'), []);
+  // a command line followed by its output line: the output is not part of the command.
+  assert.deepEqual(violations('<pre><code><span class="ln"><span class="p">$ </span><span class="c">attessa call https://x --body tx.json</span></span>\n<span class="ln"><span class="k">→</span> Checking risk.example before paying</span></code></pre>'), []);
+  assert.deepEqual(violations('<pre><code><span class="c">attessa init</span> <span class="m">(done)</span>\n<span class="k">→</span> Next: attessa call https://&lt;service&gt;</code></pre>'), []);
+  // the same inside the built site's own pages
+  const tut = readFileSync(join(built, 'docs', 'tutorial.html'), 'utf8');
+  assert.ok(tut.includes('<span class="c">cd attessa</span>'), 'the tutorial lost its `cd attessa` line');
+  assert.deepEqual(violations(tut), []);
+});
+
+// 2. A command after a script escape is still inside its literal and is shown.
+test('a script literal holding a command after an escape (\\n, \\t, \\r, \\x0a, \\u000a) is scanned (adversary r1 defect 2)', () => {
+  const NOT_BUILT = ['attessa verify: not built, and its block does not say so'];
+  assert.deepEqual(violations('const t = "Ok\\nattessa verify";', true), NOT_BUILT);
+  assert.deepEqual(violations("const t = 'done\\tattessa verify';", true), NOT_BUILT);
+  assert.deepEqual(violations('const t = "Ok\\r\\nattessa verify";', true), NOT_BUILT);
+  assert.deepEqual(violations('const t = "Ok\\x0aattessa verify";', true), NOT_BUILT);
+  assert.deepEqual(violations('const t = "Ok\\u000aattessa verify";', true), NOT_BUILT);
+  assert.deepEqual(violations('const t = `Ok\\nattessa verify`;', true), NOT_BUILT);
+  assert.deepEqual(violations('const t = "attessa init\\nattessa ghost --bogus";', true), ['attessa ghost --bogus: no such command']);
+  assert.deepEqual(violations('const t = "attessa init\\nattessa verify";', true), NOT_BUILT);
+  // a command run after the escape stops at the next one, and a marked or real command still passes
+  assert.deepEqual(violations('const t = "Coming\\nattessa verify";', true), []);
+  assert.deepEqual(violations('const t = "Ok\\nattessa init\\nattessa call https://x";', true), []);
+  assert.deepEqual(violations('const t = "path C:\\\\nattessa init";', true), []); // an escaped backslash, then the letters `nattessa`: not a command start
+});
+
+// 3. A regex holding a quote does not merge two literals. When the boundaries are not certain there is no exemption.
+test('a regex or an unclosed quote never merges literals into an exemption (adversary r1 defect 3)', () => {
+  const NOT_BUILT = ['attessa verify: not built, and its block does not say so'];
+  assert.deepEqual(violations('const esc = s.replace(/"/g, ""); const b = \'attessa verify\'; const a = \'Coming\';', true), NOT_BUILT);
+  assert.deepEqual(violations('const esc = s.replace(/\'/g, ""); const b = "attessa verify"; const a = "Coming";', true), NOT_BUILT);
+  assert.deepEqual(violations('const esc = s.replace(/[\'"]/g, ""); const b = "attessa verify"; const a = "Coming";', true), NOT_BUILT);
+  assert.deepEqual(violations('const ok = /^"/.test(s) && x; const b = "attessa verify"; const a = "Coming";', true), NOT_BUILT);
+  // `)` then `/"/` could be division or a regex: not certain, so no exemption
+  assert.deepEqual(violations('if (ok) /"/.test(s); const b = \'attessa verify\'; const a = \'Coming\';', true), NOT_BUILT);
+  // a string not closed on its line: boundaries unknown, so even a literal that says Coming earlier gives no exemption
+  assert.deepEqual(violations('const a = "Coming: attessa verify"; const q = \'it\n', true), NOT_BUILT);
+  // certain boundaries still exempt: a regex without a quote, division, a regex with quotes elsewhere in the file's other lines
+  assert.deepEqual(violations('const n = (a + b) / 2; const r = /a+/g; const c = "Coming: attessa verify";', true), []);
+  assert.deepEqual(violations('const esc = s.replace(/"/g, ""); const c = "Coming: attessa verify";', true), []);
+  assert.deepEqual(violations('const esc = s.replace(/"/g, ""); const c = \'Coming\' + \'attessa verify\';', true), NOT_BUILT);
+});
+
+// 4. An omitted end tag ends the block at the next block-level start tag, so a Coming elsewhere does not exempt a command.
+test('a block with an omitted end tag ends at the next block start; a Coming past it does not exempt (adversary r1 defect 4)', () => {
+  const NOT_BUILT = ['attessa verify: not built, and its block does not say so'];
+  assert.deepEqual(violations('<ul><li>attessa verify<li>Coming: x</ul>'), NOT_BUILT);
+  assert.deepEqual(violations('<p>attessa verify\n<p>Coming soon'), NOT_BUILT);
+  assert.deepEqual(violations('<p>attessa verify\n<ul><li>Coming soon</li></ul>'), NOT_BUILT);
+  assert.deepEqual(violations('<p>attessa verify\n<h2>Coming</h2>'), NOT_BUILT);
+  assert.deepEqual(violations('<table><tr><td>attessa verify<tr><td>Coming</table>'), NOT_BUILT);
+  assert.deepEqual(violations('<div><p>attessa verify</div><p>Coming</p>'), NOT_BUILT);
+  assert.deepEqual(violations('<p>attessa verify'), NOT_BUILT); // no end and nothing after: no block, no exemption
+  // the mark inside the same block still exempts, with or without end tags
+  assert.deepEqual(violations('<ul><li>attessa verify. Coming<li>other</ul>'), []);
+  assert.deepEqual(violations('<p>Coming: attessa verify\n<p>other'), []);
+  assert.deepEqual(violations('<table><tr><td>attessa verify</td><td>Coming</td></tr></table>'), []);
+  assert.deepEqual(violations('<ul><li><code>attessa verify</code> <span>Coming</span></li></ul>'), []);
+  assert.deepEqual(violations('<table><tr><td><code>attessa verify</code><td><span class="muted">Coming.</span></table>'), []);
+});
+
+// 5. `</script >` (and `</script/>`) closes a script, so the page after it is still scanned.
+test('a script closed with `</script >` does not hide the rest of the page (adversary r1 defect 5)', () => {
+  const GHOST = ['attessa ghost: no such command'];
+  assert.deepEqual(violations('<script>x</script ><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<script>x</script\n><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<script>x</script/><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<SCRIPT>x</SCRIPT ><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<style>a{}</style ><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<script >x</script ><p>attessa ghost</p>'), GHOST);
+  assert.deepEqual(violations('<script>attessa ghost</script ><p>fine</p>'), []); // script text is still not rendered
+  assert.deepEqual(violations('<script-x>attessa ghost</script-x>'), GHOST); // a custom element, not a script
+});
+
+// 6. More attributes a visitor sees, hears or reads from a frame.
+test('aria-description, option label, iframe srcdoc and the other visible attributes are scanned (adversary r1 defect 6)', () => {
+  const GHOST = ['attessa ghost --bogus: no such command'];
+  assert.deepEqual(violations('<button aria-description="attessa ghost --bogus">x</button>'), GHOST);
+  assert.deepEqual(violations('<select><option label="attessa ghost --bogus">x</option></select>'), GHOST);
+  assert.deepEqual(violations('<iframe srcdoc="<p>attessa ghost --bogus</p>"></iframe>'), GHOST);
+  assert.deepEqual(violations('<iframe srcdoc="&lt;p&gt;attessa ghost --bogus&lt;/p&gt;"></iframe>'), GHOST);
+  assert.deepEqual(violations("<iframe srcdoc='<p><b>attessa</b> ghost --bogus</p>'></iframe>"), GHOST);
+  assert.deepEqual(violations('<div aria-roledescription="attessa ghost --bogus">x</div>'), GHOST);
+  assert.deepEqual(violations('<div aria-valuetext="attessa ghost --bogus">x</div>'), GHOST);
+  assert.deepEqual(violations('<optgroup label="attessa ghost --bogus"></optgroup>'), GHOST);
+  assert.deepEqual(violations('<button aria-description="attessa init">x</button><option label="attessa call https://x">'), []);
+  assert.deepEqual(violations('<iframe srcdoc="<p>Coming: attessa verify</p>"></iframe>'), []);
+  assert.deepEqual(violations('<iframe srcdoc="<p>attessa verify</p>"></iframe>'), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('<button aria-description="Coming: attessa verify">x</button>'), []);
 });

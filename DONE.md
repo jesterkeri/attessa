@@ -4665,3 +4665,22 @@ Codex r8 (REVISE) on 02ab7c1: two major findings in `packages/site/test/use-case
 - Verification: `pnpm --filter @attessa/site test` -> `tests 288`, `pass 288`, `fail 0` (was 286 at 02ab7c1; +2 tests, the M1 and M2 tests). `node --test packages/site/test/use-cases-cli-built.test.mjs` -> `tests 16`, `pass 16`, `fail 0`.
 - Fails without the fix: the two new tests appended to the 02ab7c1 version of the file fail there (`not ok 15 ... (Codex site r8 M1)` at `label`, `not ok 16 ... (Codex site r8 M2)`), and pass with the fix.
 reviewed: pending Codex
+
+### Website scanner, adversary site-r1 false passes - 2026-11-08 (correction of the regex-quote claim)
+
+Adversary probe `site-r1-scanner-false-passes` found three false passes in `violations()` of `packages/site/test/use-cases-cli-built.test.mjs` (HEAD fe9e2ff); three more were checked beside them. No page text changed; the real pages all still pass.
+- Correction: the r8 entry above says a regex literal holding a quote "only causes a violation". That is wrong. `const esc = s.replace(/"/g, ""); const b = 'attessa verify'; const a = 'Coming';` made the literal finder merge `b` and `a`, and the Coming in `a` exempted the command: a false pass. The literal finder now skips regex literals, and when boundaries are not certain (a string not closed on its line, a regex not closed on its line, a `/` after `)` or `]` whose candidate regex holds a quote) it grants no exemption at all.
+- 1. Inline tags (`span code a kbd samp var tt`): the text after `attessa` is joined across their edges while the command is incomplete (no command word, first word of a two-word command, `gateway` sub-command), when an option follows, or when the last token is an option that may take a value and no line break came between. Otherwise the edge ends the command, which real pages need (`<code>attessa verify</code> isn't built yet`, a command line then its output line). `cd attessa` (a directory) and `the <code>attessa</code> command` (prose) are not commands. Known limit: a plain positional after a finished command and an edge is read as prose.
+- 2. Script escapes `\n \t \r \v \f \b \0` are boundaries, `\xNN \uNNNN \u{..}` are decoded, `\\` is a backslash, so the n of `\n` no longer hides the next command.
+- 4. `enclosing()` ends a block at its own end tag or the first tag that closes it in a browser (a new block start for `p`/headings, the next `li`/`tr`, the end of the container). No terminator: no block, no exemption.
+- 5. `</script >`, `</script/>`, `</style >` close the element; `<script-x>` is a custom element, not a script.
+- 6. Also scanned: `aria-description aria-roledescription aria-valuetext aria-placeholder aria-braillelabel aria-brailleroledescription label srcdoc` (srcdoc is read as a page).
+- One kept test changed its expected text, not its strength: the r7 mutant `attessa <code>ghost</code> --bogus` now reports `attessa ghost --bogus: no such command` (the whole command) instead of `attessa ghost: no such command`.
+- 7 tests added (6 fail on fe9e2ff, one guards the real pages): run against the old checker they print `not ok 17, 19, 20, 21, 22, 23`.
+
+```
+node --test test/use-cases-cli-built.test.mjs: tests 23, pass 23, fail 0
+pnpm --filter @attessa/site test: tests 295, pass 295, fail 0   (was 288)
+adversary probe site-r1-scanner-false-passes.test.mjs: before the fix 3 fail, after 4 pass
+```
+reviewed: pending
