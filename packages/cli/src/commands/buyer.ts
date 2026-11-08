@@ -29,7 +29,7 @@ import {
 } from '@attessa/sdk';
 import type { Address, Hex, LocalAccount } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { DEFAULT_RPC, type Deps, type Global, type NetworkFlag } from '../context.ts';
+import { DEFAULT_RPC, loopsSuffix, type Deps, type Global, type NetworkFlag } from '../context.ts';
 import { BUY, BUYERR, CliError, DECIMALS, ERR, amount, blockNo, checkWords, hms, host, jsonOut, safe, signedRefusal } from '../copy.ts';
 
 /** Buyer commands (SPEC §8): `init`, `call`, `cancel`, `status [<origin>] [--pending]`, `evidence export`. All payment logic is the SDK's. */
@@ -222,6 +222,10 @@ function makeClient(
   if (o.onProgress) opts.onProgress = o.onProgress;
   // --dry-run is the SDK's own stop, not the price-line handler's answer: printing can fail, the stop can't.
   if (g.dryRun) opts.dryRun = true;
+  // Loops attribution: the one transaction this client sends (the cancel) is tagged on mainnet. `call` pays by x402
+  // signature and sends none; `cancel` refuses without the tag before it signs anything.
+  const tag = g.network === 'mainnet' ? loopsSuffix(d.env) : null;
+  if (tag) opts.dataSuffix = tag;
   return createAttestClient(cfg, opts);
 }
 
@@ -673,8 +677,10 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
   }
   if (g.dryRun) {
     d.io.out('  (dry run: nothing was sent)');
+    if (g.network === 'mainnet' && !loopsSuffix(d.env)) d.io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real cancel on mainnet is refused until it is)'); // not in FLOWS
     return 0;
   }
+  if (g.network === 'mainnet' && !loopsSuffix(d.env)) throw ERR.attributionRequired(); // before the cancel permission is signed
   // FLOWS.md:833: "Cancel no longer prompts".
   try {
     // A chain read the SDK throws as RpcError is one made before anything was signed (cancelAuthorization wraps every

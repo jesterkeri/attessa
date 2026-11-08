@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { normalizeOrigin, originHash } from '@attessa/core';
+import { DEPLOYMENTS, normalizeOrigin, originHash } from '@attessa/core';
 import {
   decodeEventLog,
   encodeEventTopics,
@@ -10,7 +10,7 @@ import {
   type Hex,
 } from 'viem';
 import { AGENT_WALLET_SET_TYPES, ENDPOINT_STATUS, IDENTITY_ABI, REGISTRY_ABI, REGISTRY_EVENTS, RELEASE_STATUS, SIGNER_STATUS } from '../abi.ts';
-import { connect, type Chain, type Deps, type Global } from '../context.ts';
+import { connect, type Chain, type ChainBase, type Deps, type Global } from '../context.ts';
 import { CliError, ERR, OWN, OWNERR, celo, host, rpcShownSafe, safe, short, sourceLabel, utcShort, withoutCredentials } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Revert, type Step } from '../tx.ts';
@@ -57,7 +57,7 @@ function onRevert(rc: RevertContext, extra: Partial<Record<string, () => CliErro
 }
 
 async function write(
-  c: Chain,
+  c: ChainBase,
   g: Global,
   deps: Deps,
   o: { from: Address; step: Step; yesWord: string; prompt: (cost: string) => string; rc: RevertContext; extra?: Partial<Record<string, () => CliError>>; done: (tx: Hex, logs: Array<{ address: Address; topics: Hex[]; data: Hex }>) => void },
@@ -79,8 +79,14 @@ function needAgent(v: string | undefined): bigint {
 export async function agentRegister(g: Global, deps: Deps, o: { name?: string | undefined; description?: string | undefined; uri?: string | undefined }): Promise<number> {
   if (!o.name) throw ERR.usage('--name is required, like --name "Acme risk check".');
   if (!o.uri) throw ERR.usage('--uri <agentURI> is required: where docs/agent.json will be published.');
-  const c = await connect(g, deps);
-  const identity = ((await read(c, c.registry, REGISTRY_ABI, 'identityRegistry', [])) as Address).toLowerCase() as Address;
+  // Registering an ERC-8004 identity needs only the identity registry, so it works before our EnclaveRegistry exists
+  // (mainnet until T30). A registry that is deployed or configured stays authoritative for its address.
+  const c = await connect(g, deps, { registry: 'optional' });
+  const identity = (
+    c.registry
+      ? ((await read(c, c.registry, REGISTRY_ABI, 'identityRegistry', [])) as Address)
+      : (Object.values(DEPLOYMENTS).find((d) => d.chainId === c.chainId)?.identityRegistry ?? (() => { throw ERR.noRegistry(g.network); })())
+  ).toLowerCase() as Address;
   // ERC-8004 registration file (SPEC §8). `services` lists endpoints; there are none before `endpoint add`.
   const file = resolve(deps.cwd, 'docs/agent.json');
   const doc = (registrations: Array<{ agentId: number; agentRegistry: string }>) =>

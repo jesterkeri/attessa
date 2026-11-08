@@ -327,6 +327,13 @@ export const ERR = {
   noRegistry: (network: string) =>
     new CliError('no_registry', `No EnclaveRegistry address is known for ${network}.`, 'Set ATTESSA_REGISTRY to the registry address.'),
   // `renewable` false: the signer is expired, revoked or carries an old operator, so renew can't pass and only a new key works.
+  // not in FLOWS: a mainnet transaction without the Loops tag can never be credited later.
+  attributionRequired: () =>
+    new CliError(
+      'no_attribution_tag',
+      'LOOPS_ATTRIBUTION_TAG is not set, and a mainnet transaction sent without it can never be credited to your Loops entry. Nothing was signed.',
+      'Set LOOPS_ATTRIBUTION_TAG to the attribution tag from your Loops entry, then run the command again.',
+    ),
   signerExists: (signer: string, renewable = true) =>
     new CliError(
       'signer_exists',

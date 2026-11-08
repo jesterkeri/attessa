@@ -764,12 +764,27 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(w.err).toEqual(['Use just the scheme and host, like https://risk.example (no path, lowercase).']);
   });
 
+  it('cancel on mainnet without LOOPS_ATTRIBUTION_TAG is refused before anything is signed (no_attribution_tag)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG');
+  });
+
   it('cancel --json against an RPC on another chain: error code network_mismatch', async () => {
     await initialized();
     w.gw.behavior = { paid: 'pending_no_settle' };
     expect(await w.call('--no-wait')).toBe(1);
     const id = w.pending()[0]!.requestId as string;
     w.out.length = 0;
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234'; // mainnet sends carry the Loops tag, so the tag is not what these tests are about
     expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
     expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'network_mismatch' });
   });

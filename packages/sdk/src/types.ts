@@ -57,6 +57,12 @@ export interface ClientOptions {
    * into a payment.
    */
   dryRun?: boolean;
+  /**
+   * An ERC-8021 data suffix appended to the calldata of the transactions the client itself sends (today only
+   * `cancelAuthorization`). The CLI sets it on Celo mainnet for the Loops attribution tag. x402 payment
+   * authorizations are signed messages and never carry it.
+   */
+  dataSuffix?: Hex;
 }
 
 /** Not in SPEC §7: the moments a caller shows progress for (FLOWS §6 J1, J2, interrupted). */

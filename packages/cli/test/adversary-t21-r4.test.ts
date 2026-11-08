@@ -180,6 +180,7 @@ describe('adversary T21 r4: SDK errors the CLI now reports as "Unexpected error"
 
   it('cancel against an RPC on another chain prints the FLOWS wrong-network line', async () => {
     const { w, id } = await withOpenCall();
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234'; // mainnet sends carry the Loops tag, so the tag is not what these tests are about
     expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', RPC, '--yes')).toBe(1);
     expect(w.err).toEqual(['Your RPC is on chain 11142220; this registry is on 42220.', 'Set `--rpc` for 42220.']);
   });

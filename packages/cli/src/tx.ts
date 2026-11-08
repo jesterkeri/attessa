@@ -9,9 +9,10 @@ import {
   type ContractFunctionName,
   type Hex,
 } from 'viem';
+import { withAttribution } from '@attessa/core';
 import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
-import type { Chain, Deps, Global } from './context.ts';
+import type { ChainBase as Chain, Deps, Global } from './context.ts';
 import { CliError, ERR } from './copy.ts';
 import { RpcError, RpcUnavailable, revertData } from './rpc.ts';
 
@@ -131,6 +132,8 @@ export interface Sent {
 export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Revert | null, message: string) => CliError): Promise<Sent> {
   const account = c.account;
   if (!account) throw new Error('send: no account');
+  // Belt and braces: planOrSend refuses first, so no prompt precedes this; a caller that skips it still can't send untagged.
+  if (c.network === 'mainnet' && !c.attribution) throw ERR.attributionRequired();
   const sim = await simulate(c, account.address, step);
   if (!sim.ok) throw onRevert(sim.revert, sim.message);
   const [nonceHex, price, tip, balance] = await Promise.all([
@@ -150,7 +153,7 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     chainId: c.chainId,
     nonce: Number(BigInt(nonceHex as string)),
     to: step.to,
-    data: step.data,
+    data: withAttribution(step.data, c.attribution),
     value: 0n,
     gas: t.gas,
     maxFeePerGas: t.maxFeePerGas,
@@ -203,15 +206,19 @@ export async function planOrSend(
 ): Promise<'sent' | 'planned'> {
   const { io } = deps;
   if (g.dryRun || !c.account) {
+    const missingTag = c.network === 'mainnet' && !c.attribution;
     plan.steps.forEach((s, i) => {
       const sim = plan.simulations[i];
       const simText = sim === null || sim === undefined ? 'simulated after the previous transaction lands' : sim.ok ? `eth_call ok, gas ${sim.gas}` : `eth_call reverts${sim.revert ? ` ${sim.revert.name}` : ''}`;
       io.out(`  (tx ${i + 1}/${plan.steps.length}: ${s.label}; from ${plan.from} to ${s.to}; ${simText})`);
-      io.out(`  (calldata ${s.data})`);
+      io.out(`  (calldata ${withAttribution(s.data, c.attribution)})`);
     });
+    // not in FLOWS: a plan on mainnet shows what a send would carry, or that it would be refused.
+    if (missingTag) io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real send on mainnet is refused until it is)');
     io.out(g.dryRun ? '  (dry run: nothing was sent)' : '  (no ATTESSA_PRIVATE_KEY: nothing was sent; set it and run again to send these yourself)');
     return 'planned';
   }
+  if (c.network === 'mainnet' && !c.attribution) throw ERR.attributionRequired(); // before the prompt: nothing was signed
   if (!g.yes && !(await io.confirm(plan.yesWord))) throw ERR.cancelled(plan.yesWord); // a non-TTY stdin answers no (bin.ts)
   for (let i = 0; i < plan.steps.length; i++) {
     let sent: Sent;

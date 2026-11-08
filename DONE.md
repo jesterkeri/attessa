@@ -4477,3 +4477,19 @@ Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.
 status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
+
+### Mainnet entry: `agent register` before the registry exists, and the Loops attribution tag - 2026-11-08
+Change 1: `attessa agent register` uses the pinned ERC-8004 identity registry (`packages/core/src/deployments.ts`) when no EnclaveRegistry is deployed or configured, on any network; a deployed or `ATTESSA_REGISTRY` registry's `identityRegistry()` stays authoritative; every other command still refuses with `no_registry`; `--dry-run` needs no key. Dry run: `attessa agent register --name "<name>" --uri <agentURI> --network mainnet --dry-run`.
+Change 2: `withAttribution` (`packages/core/src/attribution.ts`) appends an ERC-8021 Schema 0 suffix `[code ASCII][len:1][0x00][0x80218021 x8]` (celo-org/attribution-tags INDEXERS.md and BUILDERS.md; byte-identical to `ox/erc8021` `Attribution.toDataSuffix`, checked once by hand) to every non-x402 transaction on mainnet, code from env `LOOPS_ATTRIBUTION_TAG`. Send paths: `packages/cli/src/tx.ts send()` (all seller/owner/operator writes) and `packages/sdk/src/client.ts sendCancel()` (`attessa cancel`, through `ClientOptions.dataSuffix`). Mainnet with the tag unset: `no_attribution_tag`, nothing signed; `--dry-run` prints that the tag is missing. Sepolia and local: no suffix. x402 signing untouched.
+Not reached: `forge script` deploys (T30), the seller host and gateway (they send no transactions from this CLI; the gateway's settlement/facilitator is x402).
+Verification (real output, run under the heavy lock):
+```
+pnpm -r build      exit 0
+pnpm -r typecheck  exit 0
+pnpm -r lint       exit 0
+@attessa/cli test: Test Files 89 passed (89), Tests 362 passed (362)
+@attessa/core test: Tests 75 passed (75)   @attessa/sdk test: Tests 193 passed (193)
+```
+Three existing mainnet tests now set a synthetic `LOOPS_ATTRIBUTION_TAG` (their subject is not the tag); no assertion changed.
+
+reviewed: pending Codex
