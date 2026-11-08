@@ -4,7 +4,7 @@ You pay a service for an answer, it comes back wrong, and you can't tell whether
 
 Site: https://attessa.xyz
 
-Attessa is a trust layer for x402 sellers on Celo. A seller runs approved code inside an AWS Nitro Enclave. Every response carries a signed proof from that code. The gateway settles the payment only after its own check of that proof passes, and the buyer's SDK checks it again independently.
+Attessa is a trust layer for x402 sellers on Celo. A seller runs approved code inside an AWS Nitro Enclave. Every paid response carries a signed proof from that code. The gateway settles the payment only after its own check of that proof passes, and the buyer's SDK checks it again independently.
 
 ## What Attessa proves, and what it does not
 
@@ -17,7 +17,7 @@ How it works:
 3. Each paid response carries an EIP-712 proof signed by that signer, covering the request, the response and the chain inputs the workload used.
 4. The gateway verifies the proof (and re-reads the chain inputs) before it settles the x402 payment. If any check fails, it does not settle.
 5. The buyer SDK does not trust the gateway. It resolves the endpoint from the registry itself, refuses to sign if `payTo` does not match, and re-verifies the proof.
-6. "Not charged" is only reported once chain state confirms the payment authorization expired unused or was cancelled.
+6. "Not charged" is only reported once chain state confirms the payment authorization expired unused or was cancelled. Before that, a refusal is the gateway's word: the CLI shows it at once and warns if the chain later shows the authorization was used.
 
 The owner's `sourceRef` (the git commit a build claims to come from) is the owner's claim, not something checked here. Buyer-facing copy says "owner says it's built from ...". Design detail is in [SPEC.md](SPEC.md) and [ARCHITECTURE.md](ARCHITECTURE.md), and the decisions behind it are in [adr/](adr/).
 
@@ -44,7 +44,7 @@ Project documents at the root: [SPEC.md](SPEC.md), [FLOWS.md](FLOWS.md), [INVARI
 
 ## Build and test
 
-Requirements: Node 22 with pnpm, Foundry (version in `contracts/FOUNDRY_VERSION`), Rust (`rust-toolchain.toml`). Slither is needed only for static analysis. The enclave image targets arm64 and is built on the EC2 host, not locally.
+Requirements: Node 22.13 or newer (the SDK uses `node:sqlite`) with pnpm 10.32.1 or newer, Foundry (version in `contracts/FOUNDRY_VERSION`), Rust (`rust-toolchain.toml`). Slither is needed only for static analysis. The enclave image targets arm64 and is built on the EC2 host, not locally.
 
 ```sh
 # install
@@ -109,7 +109,7 @@ Built and covered by tests in this repo (see [DONE.md](DONE.md) for the recorded
 
 - `EnclaveRegistry` and the deploy scripts, with unit, invariant, vector and Sepolia-fork tests.
 - The shared formats and test vectors in TypeScript, Solidity and Rust.
-- The enclave app, seller-host, gateway, buyer SDK, CLI and MCP server.
+- The enclave app, seller-host, gateway, buyer SDK, CLI and MCP server. The enclave's tests use a fake Nitro security module; the real-Nitro spike (T12) is not recorded as done.
 - The site source.
 
 Deployed: the validator stack and `EnclaveRegistry` on Celo Sepolia (chain 11142220). The addresses and transactions are in [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md).
@@ -120,7 +120,7 @@ Not done, per [TASKS.md](TASKS.md):
 - Reproducible enclave builds (spike S3) are not done, so a release's `sourceRef` is not yet checked against its measurements.
 - The Sepolia end-to-end run (signer registration, paid calls, tamper and modified-build refusals) and the drills are not recorded as done.
 - This README makes no claim of a live seller, real paid calls or users.
-- Still open: `attessa verify`, `attessa call --via buy`, the public proof explorer, and the rest of the docs set (tutorial, how-tos, privacy and terms).
+- Still open: `attessa verify`, `attessa call --via buy`, the public proof explorer, and the final docs set (the tutorial and how-tos on the site source are not final).
 
 ## Known limits
 

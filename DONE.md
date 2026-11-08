@@ -4641,3 +4641,10 @@ Not run: invariants and slither (documented only). reviewed: pending Codex
 ### T34 README adversary r1 fixes - 2026-11-08
 A fact-check against the code found statements that were false or overstated; README.md corrected: `attessa seller --help` prints the steps, not the full list; a source install has no OS keychain (keytar is not installed), so `attessa init` needs ATTESSA_PRIVATE_KEY or --keystore; attestations are checked at each signer registration or renewal, not "once per boot"; the intro now says the gateway settles only after its check passes, not that a buyer always pays only on a valid proof; `init` ignores --dry-run; `pnpm setup` may be needed; L17 wording matches the SDK's real checks. README only, so no suite re-run.
 reviewed: pending
+
+### T34 README adversary r2 corrections - 2026-11-08
+Round 2 (tests archived at .worktrees/archive/adversary/readme-r2/) proved two gaps:
+1. README step 6 implied the CLI says nothing about a refusal until the chain confirms. In fact the CLI prints the gateway's refusal, including "Your payment permission wasn't used.", at once, and warns if the chain later shows it was used. `packages/cli/test/buyer.test.ts:329` pins that FLOWS line, so the README now states the order instead. The FLOWS wording question goes to OPEN-QUESTIONS.md.
+2. "Node 22" is not enough: `packages/sdk/src/ledger.ts:3` imports `node:sqlite`, and on v22.12.0 the CLI stops with ERR_UNKNOWN_BUILTIN_MODULE. The README now says Node 22.13 or newer, and pnpm 10.32.1 or newer.
+Also from its suspicions: "Every paid response" in the intro, the fake Nitro module stated in Status, and the docs line no longer calls existing site pages missing.
+reviewed: pending
