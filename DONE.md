@@ -4609,3 +4609,17 @@ EXIT=0
 ```
 
 reviewed: pending (Codex r5)
+
+### Website Codex r5 fixes - 2026-11-08
+
+Codex r5 (REVISE) on 6488d29.
+- `use-cases-cli-built` now parses every displayed command node (`<code>`, terminal `span.c`, and `Next:`-style output). An unknown command fails before its flags are looked at. Only `verify`, `release verify` and `call --via` may be exempt, and only with the marker in the same table row, list item, paragraph, heading or figure.
+- Regressions added for the r5 mutants: `attessa ghost --bogus` in a terminal block, `attessa init --bogus` beside a Coming mark, an unknown command in a marked paragraph, and an unbuilt command with the mark only in its section heading.
+- The stricter test found two unmarked terminal blocks, so their captions now say "Terminal (coming)" and "Example output (not built yet)".
+- The reference says `--help` and `seller --help` print "only the seller summary and its steps". Three text snapshots changed, for those three wordings only.
+
+```
+node v22.23.2: 76 files, 278 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
+`pnpm -r build`, `typecheck` and `lint` ended Done. reviewed: pending Codex r6.
