@@ -4611,3 +4611,6 @@ Verification: `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint` exit 0; tails
       Tests  347 passed (347)
 ```
 reviewed: pending Codex r6
+
+Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
+reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
