@@ -4637,3 +4637,7 @@ test: exit 0
 ```
 
 Not run: invariants and slither (documented only). reviewed: pending Codex
+
+### T34 README adversary r1 fixes - 2026-11-08
+A fact-check against the code found statements that were false or overstated; README.md corrected: `attessa seller --help` prints the steps, not the full list; a source install has no OS keychain (keytar is not installed), so `attessa init` needs ATTESSA_PRIVATE_KEY or --keystore; attestations are checked at each signer registration or renewal, not "once per boot"; the intro now says the gateway settles only after its check passes, not that a buyer always pays only on a valid proof; `init` ignores --dry-run; `pnpm setup` may be needed; L17 wording matches the SDK's real checks. README only, so no suite re-run.
+reviewed: pending

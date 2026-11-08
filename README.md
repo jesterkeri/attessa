@@ -4,7 +4,7 @@ You pay a service for an answer, it comes back wrong, and you can't tell whether
 
 Site: https://attessa.xyz
 
-Attessa is a trust layer for x402 sellers on Celo. A seller runs approved code inside an AWS Nitro Enclave. Every response carries a signed proof from that code, and a buyer pays only when the proof checks out.
+Attessa is a trust layer for x402 sellers on Celo. A seller runs approved code inside an AWS Nitro Enclave. Every response carries a signed proof from that code. The gateway settles the payment only after its own check of that proof passes, and the buyer's SDK checks it again independently.
 
 ## What Attessa proves, and what it does not
 
@@ -13,7 +13,7 @@ It tells a buyer whether the seller's approved rules ran for this request. It do
 How it works:
 
 1. The enclave generates a signing key at boot and never exports it. AWS Nitro produces an attestation document that binds that key to the exact code measurements (PCR0 to PCR2) of the running build.
-2. The `EnclaveRegistry` contract checks the attestation on chain, once per boot, through a Nitro validator. The seller is an ERC-8004 agent identity, and only the owner of that identity can approve a build (a "release") or add an endpoint. A registered signer is tied to one agent, one approved release and one endpoint origin.
+2. The `EnclaveRegistry` contract checks the attestation on chain, each time a signer is registered or renewed, through a Nitro validator. The seller is an ERC-8004 agent identity, and only the owner of that identity can approve a build (a "release") or add an endpoint. A registered signer is tied to one agent, one approved release and one endpoint origin.
 3. Each paid response carries an EIP-712 proof signed by that signer, covering the request, the response and the chain inputs the workload used.
 4. The gateway verifies the proof (and re-reads the chain inputs) before it settles the x402 payment. If any check fails, it does not settle.
 5. The buyer SDK does not trust the gateway. It resolves the endpoint from the registry itself, refuses to sign if `payTo` does not match, and re-verifies the proof.
@@ -80,26 +80,28 @@ None of the packages is published to npm. Install from source:
 git clone https://github.com/jesterkeri/attessa
 cd attessa
 pnpm install --frozen-lockfile && pnpm -r build
-(cd packages/cli && pnpm link --global)
+(cd packages/cli && pnpm link --global)   # run `pnpm setup` first if pnpm has no global bin directory
 ```
 
 Buyer commands (these exist in `packages/cli`):
 
 ```sh
-attessa init                                   # wallet, spending limits (--max-amount, --daily-cap, --keystore)
+attessa init                                   # wallet, spending limits (--max-amount, --daily-cap, --keystore; see the wallet note below)
 attessa call https://<service> --body input.json --max-amount 0.05
 attessa status --pending                       # pending payments; also: attessa status <origin>, attessa status --agent <id>
 attessa cancel <id>                            # void an unsettled payment authorization on chain
 attessa evidence export --format csv           # or jsonl
 ```
 
-Global flags: `--network sepolia|mainnet|local`, `--rpc`, `--json`, `--yes`, `--dry-run`.
+Global flags: `--network sepolia|mainnet|local`, `--rpc`, `--json`, `--yes`, `--dry-run` (it stops commands that pay or send; `init` still saves its settings).
 
-Owner and operator commands also exist: `agent register|transfer|wallet-sig|set-wallet`, `selflink`, `release approve|deprecate|revoke`, `endpoint add|retire`, `signer register|renew`, `revoke release|signer`, `enclave build|start`, and `gateway pause|resume|status|export`. Run `attessa seller --help` for the list the CLI prints.
+Wallet note: a source install has no OS keychain support, because `keytar` is not installed. Give `attessa init` a wallet with `ATTESSA_PRIVATE_KEY` or `--keystore`; with neither it reports that no wallet was created.
 
-MCP server (stdio): after the build above, point your MCP client at `node <clone>/packages/mcp/dist/bin.js`. It reads the wallet from `ATTESSA_PRIVATE_KEY`, or `ATTESSA_KEYSTORE` with `ATTESSA_KEYSTORE_PASSWORD`, or the OS keychain, and takes `ATTESSA_NETWORK`, `ATTESSA_RPC`, `ATTESSA_REGISTRY` and `ATTESSA_DATA_DIR`.
+Owner and operator commands also exist: `agent register|transfer|wallet-sig|set-wallet`, `selflink`, `release approve|deprecate|revoke`, `endpoint add|retire`, `signer register|renew`, `revoke release|signer`, `enclave build|start`, and `gateway pause|resume|status|export`. `attessa seller --help` prints the seller steps in order.
 
-Not on this branch yet: `attessa verify`, `attessa call --via buy`, and `attessa release verify`.
+MCP server (stdio): after the build above, point your MCP client at `node <clone>/packages/mcp/dist/bin.js`. It reads the wallet from `ATTESSA_PRIVATE_KEY`, or `ATTESSA_KEYSTORE` with `ATTESSA_KEYSTORE_PASSWORD`, and takes `ATTESSA_NETWORK`, `ATTESSA_RPC`, `ATTESSA_REGISTRY` and `ATTESSA_DATA_DIR`.
+
+Not available in this code yet: `attessa verify`, `attessa call --via buy`, and `attessa release verify`.
 
 ## Status
 
@@ -114,7 +116,7 @@ Deployed: the validator stack and `EnclaveRegistry` on Celo Sepolia (chain 11142
 
 Not done, per [TASKS.md](TASKS.md):
 
-- Nothing is deployed on Celo mainnet. Mainnet deployment is in progress and `docs/DEPLOYMENTS.md` will carry the addresses when it is done.
+- Nothing is deployed on Celo mainnet. Mainnet deployment is being prepared and `docs/DEPLOYMENTS.md` will carry the addresses when it is done.
 - Reproducible enclave builds (spike S3) are not done, so a release's `sourceRef` is not yet checked against its measurements.
 - The Sepolia end-to-end run (signer registration, paid calls, tamper and modified-build refusals) and the drills are not recorded as done.
 - This README makes no claim of a live seller, real paid calls or users.
@@ -129,7 +131,7 @@ The full list is in [KNOWN-LIMITS.md](KNOWN-LIMITS.md). The ones to know first:
 - L4: attestation shows which code produced a response, not that it was available. An operator can withhold, delay or reorder.
 - L5: request bodies are visible to the gateway and the host.
 - L10: signer keys are ephemeral, so every enclave restart needs a new registration transaction.
-- L17: origin squatting. Anyone can bind an origin on a registry first; buyers stay safe because the SDK cross-checks the origin's `.well-known` agent id and `payTo`.
+- L17: origin squatting. Anyone can bind an origin on a registry first; buyers stay safe because the SDK cross-checks the origin's `.well-known` agent id, registry and chain, and checks the quote's `payTo` against the registry.
 - L19: the ERC-8004 identity registry is upgradeable, so whoever holds its keys can change who owns an agent.
 - L20: `sourceRef` is the owner's unverified claim.
 - L21: confirming "not charged" takes time, up to about 125 seconds after a refusal, or the buyer can cancel on chain.
