@@ -7,7 +7,7 @@
 #   - triggers: pull_request, push, each with branches only.
 #   - jobs: name, runs-on (exactly ubuntu-latest: never a self-hosted or labelled runner),
 #     timeout-minutes (required, an integer from 1 to the job's PIPELINE.md budget, looked up by
-#     both its id and its name (which defaults to the id) and the smaller one taken: ts 4,
+#     both its id and its name (which defaults to the id) and the smaller one taken: ts 6,
 #     contracts 4, slither 3, enclave 5, guardrails 1, secrets / "no secrets in client output" 1;
 #     an id or name not listed counts as 1, the strictest budget, so a renamed or new job is held
 #     to 1 minute until it is added to BUDGET deliberately), steps. Steps: name, id, uses, with, run, env,
