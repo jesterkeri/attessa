@@ -4652,3 +4652,29 @@ $ pnpm --filter @attessa/seller-host lint        -> exit 0
 (previous count 92 passed)
 reviewed: pending
 
+
+## T28 seller-host paid reads through the @celo/buy-core library, not the buy CLI (NOT ticked; no real paid call has run)
+
+No real paid call has run and nothing touched the buy gateway. T27 (capability id, price, first paid transaction) needs a funded agent wallet, so T27 and T28 stay unticked. Why: on a headless mainnet host the `buy` CLI cannot sign (`BUY_KEYSTORE_BACKEND=file` refuses mainnet, `system` needs a Secret Service over D-Bus), so every evaluate would have fallen back to Forno.
+
+Read as data first (`npm pack @celo/buy-core@0.8.5 --ignore-scripts`, unpacked in an empty scratch directory, not run): no install scripts, one dependency (`viem ^2.21.55`, already in the lockfile at 2.57.13). `x402.payingFetch(ctx, url, init)`: `ctx = { account: LocalAccount | () => Promise<LocalAccount>, network: 'celo' | 'celo-sepolia', preferredToken?, fetchImpl?, readBalance?, ... }`; `init` is a `RequestInit` plus `maxAmount?: bigint` (cap), `maxRetries` (default 1), `onChallenge`, `onBeforePayment`. Cap: the library compares the selected requirement's `maxAmountRequired` to `maxAmount` and throws `amount_exceeds_max` before `buildPayment` (before signing). Seller-host also checks, in `onChallenge` (also before signing): network `celo`, asset 0xcebA9300f2b948710d2653dD7B07f33A8B32118C, scheme `exact`, integer price within the cap, payTo an address; `onBeforePayment` refuses if the evaluate was aborted. The paid request is sent once (library comment: no transient retry after a payment is on the wire); the library signs with chainId from the `celo` table, 42220. v2: challenge in the `payment-required` header (base64 JSON, CAIP-2 network `eip155:42220`, price in `amount`), payment in `PAYMENT-SIGNATURE`.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` and the process-group exec replaced by `BuyPaidSource(config, account, fetchImpl?)` (same `BuySource` interface, same `buy:<capabilityId>` source, same cost per evaluate) and `loadAgentAccount(env)`. The key comes from env `AGENT_PRIVATE_KEY` only (64 hex, 0x optional), through viem's `privateKeyToAccount`, in memory. A missing or malformed key returns a reason that never contains the value. Errors carry a short code (`paid read failed (http_500)`), never a library or network message; the source does not serialise or inspect its account. The paid request uses `redirect: 'error'`, the caller's abort signal, and a 1 MiB reply cap.
+- `src/main.ts`: builds the source only if the config has `buy` and the key loads; otherwise logs `buy_disabled` (reason, `fallback: forno`) and reads go to Forno. The `listening` log says whether buy is on. seller-host has no health route, so the startup log is the message.
+- `src/config.ts`: `binary`, `account`, `home` and `keystoreBackend` removed (an old config that still has them has them ignored).
+- `package.json`: `@celo/buy-core` `0.8.5` exact. `pnpm-lock.yaml`: +15 lines: the importer entry, the `@celo/buy-core@0.8.5` package and snapshot (depends only on the existing `viem 2.57.13` instance). No other package was added.
+- Tests: `test/fake-x402.ts` (new): a local x402 v2 seller that verifies the EIP-3009 signature (chain 42220, USDC domain) before answering from a fake JSON-RPC node. `test/buy-inputs.test.ts` rewritten on it with a throwaway key generated in the test; `test/buy-adversary.test.ts` keeps its config and guard probes. Removed as tests of deleted features: the argv/`--max-amount` and minimal-env test, the keystoreBackend env tests (2), the two process-group abort tests and the two spawn-based adversary tests. Ported to the new route: abort ends the in-flight request (the server sees the connection close, exactly one payment), reply that is not a valid batch is a failed read, fallback and spend counting, cross-check, head, guard. New: cap, chain, asset and scheme refusals with a counted signer (zero signatures), cap boundary, a cheaper wrong-token offer listed first, redirect not followed, abort during signing sends nothing, no second payment after a 5xx / 402 / dropped connection, key loading, key never in a thrown error, JSON or inspect output. A mutation check (the scheme and payTo checks disabled) makes the refusal test fail.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm install --frozen-lockfile        -> Done in 428ms (lockfile up to date; bin-link WARNs are for unbuilt workspace dists)
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  119 passed (119)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+$ bash scripts/check-install-scripts.sh          -> see below (run on the commit)
+(previous count 109 passed)
+```
+reviewed: pending

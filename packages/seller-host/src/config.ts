@@ -26,7 +26,7 @@ export interface SellerHostConfigFile {
   /** Where the budget guard keeps its daily counter. */
   stateDir: string;
   /** Paid chain reads through buy. Mainnet only; needs `gatewayDbPath`. No default: absent means Forno only. */
-  buy?: { capabilityId: string; url: string; maxAmount: string; binary?: string; account?: string; home?: string; keystoreBackend?: 'system' | 'file' };
+  buy?: { capabilityId: string; url: string; maxAmount: string };
 }
 
 export interface LoadedConfig {
@@ -86,16 +86,10 @@ export function parseConfig(raw: unknown): LoadedConfig {
     if (typeof b.maxAmount !== 'string' || !/^[0-9]+(\.[0-9]{1,6})?$/.test(b.maxAmount)) throw new Error('config: buy.maxAmount must be a decimal USDC string');
     const [whole, frac = ''] = b.maxAmount.split('.');
     for (const k of ['capabilityId', 'url'] as const) if (typeof b[k] !== 'string' || b[k] === '') throw new Error(`config: buy.${k} is required and must be a non-empty string`);
-    if (b.keystoreBackend !== undefined && b.keystoreBackend !== 'system' && b.keystoreBackend !== 'file') throw new Error('config: buy.keystoreBackend must be system or file');
-    for (const k of ['binary', 'account', 'home'] as const) if (b[k] !== undefined && (typeof b[k] !== 'string' || b[k] === '')) throw new Error(`config: buy.${k} must be a non-empty string`);
     buy = {
       capabilityId: b.capabilityId as string,
       url: b.url as string,
       maxAmountAtomic: BigInt(whole!) * 1_000_000n + BigInt(frac.padEnd(6, '0')),
-      ...(b.binary !== undefined ? { binary: b.binary as string } : {}),
-      ...(b.account !== undefined ? { account: b.account as string } : {}),
-      ...(b.home !== undefined ? { home: b.home as string } : {}),
-      ...(b.keystoreBackend !== undefined ? { keystoreBackend: b.keystoreBackend } : {}),
     };
     validateBuyConfig(buy);
   }

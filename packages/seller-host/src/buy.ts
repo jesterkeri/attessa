@@ -1,14 +1,16 @@
-import { spawn } from 'node:child_process';
+import { isAddress, type LocalAccount } from 'viem';
+import { privateKeyToAccount } from 'viem/accounts';
+import { x402 } from '@celo/buy-core';
 import { parseBatchReply, type BuySource, type RpcCall } from './inputs.ts';
 
 /**
- * The buy RPC capability as a `BuySource` (SPEC §5, FR-11), driven through the installed `buy` CLI
- * (@celo/buy 0.8.5, subcommand `curl` with `--max-amount`, `--request POST` and a body). buy pays from its
- * own account, so this code never reads, holds or passes the agent key: the account is set up once by an
- * operator (`buy setup --import`, stdin from the 0600 file, never argv).
+ * The buy RPC capability as a `BuySource` (SPEC §5, FR-11), paid through the library route of @celo/buy-core 0.8.5
+ * (`x402.payingFetch`), not the `buy` CLI: on a headless mainnet host the CLI has no usable keystore. The signer is
+ * `privateKeyToAccount(AGENT_PRIVATE_KEY)`, held in memory only; the key never reaches a log, an error, a config or
+ * a child process.
  *
- * Not confirmed against a real paid call yet (T27): the capability id, the price, whether the capability
- * accepts a JSON-RPC batch, and what stdout holds. A reply that is not a valid batch array is a failed read.
+ * Not confirmed against a real paid call yet (T27): the capability id, the price, whether the capability accepts a
+ * JSON-RPC batch. A reply that is not a valid batch array is a failed read.
  */
 
 /** Largest per-call maximum the configuration may set (0.10 USDC): catches a units mistake before it can spend. */
@@ -19,20 +21,8 @@ export interface BuyConfig {
   capabilityId: string;
   /** The capability's endpoint (POST, JSON-RPC). */
   url: string;
-  /** Per-call maximum in atomic USDC (6 decimals). Passed to buy as `--max-amount`; also what one evaluate is counted as. */
+  /** Per-call maximum in atomic USDC (6 decimals): refused before signing if the 402 asks for more; also what one evaluate is counted as. */
   maxAmountAtomic: bigint;
-  /** Path of the `buy` binary. Default `buy`, found on PATH. */
-  binary?: string;
-  /** buy account name (`buy --account`). Default: buy's default account. */
-  account?: string;
-  /** buy's state directory (BUY_HOME). */
-  home?: string;
-  /**
-   * Where buy keeps the account key (BUY_KEYSTORE_BACKEND). buy defaults to `system`, the OS keychain, which a
-   * headless host does not have. @celo/buy-keystore 0.8.5 has no passphrase: `file` is a plaintext 0600 file under
-   * BUY_HOME and refuses mainnet accounts. Not a secret; forwarded to the child as-is.
-   */
-  keystoreBackend?: 'system' | 'file';
 }
 
 /** The enclave's source grammar (enclave/src/rules.rs `is_source`): `buy:` + `[A-Za-z0-9._:/-]+`. */
@@ -47,7 +37,6 @@ export function atomicToDecimal(v: bigint): string {
 export function validateBuyConfig(c: BuyConfig): void {
   if (typeof c.capabilityId !== 'string' || !CAPABILITY_ID.test(c.capabilityId)) throw new Error('buy: capabilityId must be 1-128 characters of A-Z a-z 0-9 . _ : / -');
   if (typeof c.url !== 'string') throw new Error('buy: url is required');
-  if (c.keystoreBackend !== undefined && c.keystoreBackend !== 'system' && c.keystoreBackend !== 'file') throw new Error('buy: keystoreBackend must be system or file');
   let u: URL;
   try {
     u = new URL(c.url);
@@ -59,100 +48,138 @@ export function validateBuyConfig(c: BuyConfig): void {
   if (c.maxAmountAtomic > MAX_AMOUNT_CEILING_ATOMIC) throw new Error(`buy: maxAmount is above the ceiling of ${atomicToDecimal(MAX_AMOUNT_CEILING_ATOMIC)} USDC`);
 }
 
-export type Exec = (file: string, args: string[], opts: { env: NodeJS.ProcessEnv; signal: AbortSignal; maxBuffer: number }) => Promise<{ stdout: string }>;
+
+/** The only chain and asset the agent wallet pays on: Celo mainnet USDC (SPEC §5). Anything else in a 402 is refused before signing. */
+export const PAY_NETWORK = 'celo';
+export const PAY_CHAIN_ID = 42220;
+export const PAY_ASSET = '0xcebA9300f2b948710d2653dD7B07f33A8B32118C';
+
+const KEY_SHAPE = /^(0x)?[0-9a-fA-F]{64}$/;
+
+export type AgentKey = { ok: true; account: LocalAccount } | { ok: false; reason: string };
 
 /**
- * Runs buy in its own process group (Linux) so that an abort ends buy and the curl it spawned: buy hands the signed
- * payment to a curl grandchild, which would otherwise finish after the timeout. stdin is closed, stderr is dropped
- * and never surfaced, stdout is capped.
+ * The signer from env `AGENT_PRIVATE_KEY` (SPEC §5), in memory only. The result never contains the value: a missing or
+ * malformed key gives a reason that names the problem, not the input, and the buy source is then not built.
  */
-export const defaultExec: Exec = (file, args, opts) =>
-  new Promise((resolve, reject) => {
-    const group = process.platform !== 'win32';
-    const child = spawn(file, args, { env: opts.env, stdio: ['ignore', 'pipe', 'ignore'], detached: group });
-    const killGroup = (): void => {
-      try {
-        if (group && child.pid !== undefined) process.kill(-child.pid, 'SIGKILL');
-        else child.kill('SIGKILL');
-      } catch {
-        // already gone
-      }
-    };
-    let out = '';
-    let done = false;
-    const finish = (f: () => void): void => {
-      if (done) return;
-      done = true;
-      opts.signal.removeEventListener('abort', onAbort);
-      killGroup();
-      f();
-    };
-    const onAbort = (): void => finish(() => reject(Object.assign(new Error('aborted'), { code: 'ABORT_ERR' })));
-    if (opts.signal.aborted) return onAbort();
-    opts.signal.addEventListener('abort', onAbort);
-    child.stdout.setEncoding('utf8');
-    child.stdout.on('data', (d: string) => {
-      out += d;
-      if (out.length > opts.maxBuffer) finish(() => reject(Object.assign(new Error('too much output'), { code: 'MAXBUFFER' })));
-    });
-    child.on('error', (e) => finish(() => reject(e)));
-    child.on('close', (code) => finish(() => (code === 0 ? resolve({ stdout: out }) : reject(Object.assign(new Error('buy exited'), { code: code ?? 'SIGNAL' })))));
-  });
+export function loadAgentAccount(env: NodeJS.ProcessEnv = process.env): AgentKey {
+  const raw = env.AGENT_PRIVATE_KEY;
+  if (raw === undefined || raw.trim() === '') return { ok: false, reason: 'AGENT_PRIVATE_KEY is not set' };
+  const k = raw.trim();
+  if (!KEY_SHAPE.test(k)) return { ok: false, reason: 'AGENT_PRIVATE_KEY is not 32 bytes of hex' };
+  try {
+    return { ok: true, account: privateKeyToAccount((k.startsWith('0x') ? k : `0x${k}`) as `0x${string}`) };
+  } catch {
+    return { ok: false, reason: 'AGENT_PRIVATE_KEY is not a valid secp256k1 key' };
+  }
+}
 
-export class BuyCliSource implements BuySource {
+/** A 402 whose chosen requirement is not Celo mainnet USDC, `exact`, with an integer price within the cap. Thrown before signing. */
+class RefusedRequirement extends Error {
+  readonly code = 'refused_requirement';
+}
+
+/** Largest reply body read (1 MiB). */
+const MAX_BODY = 1 << 20;
+
+async function readCapped(res: Response): Promise<string> {
+  if (!res.body) return '';
+  const reader = res.body.getReader();
+  const dec = new TextDecoder();
+  let out = '';
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > MAX_BODY) {
+      void reader.cancel().catch(() => {});
+      throw Object.assign(new Error('too much output'), { code: 'too_large' });
+    }
+    out += dec.decode(value, { stream: true });
+  }
+  return out + dec.decode();
+}
+
+/** A short machine code for a failure, never its message: library and network messages could carry request detail. */
+function failureCode(e: unknown): string {
+  const code = (e as { code?: unknown } | null)?.code;
+  if (typeof code === 'string' && /^[a-z0-9_]{1,40}$/i.test(code)) return code;
+  const name = (e as { name?: unknown } | null)?.name;
+  if (name === 'AbortError' || name === 'TimeoutError') return 'aborted';
+  return 'error';
+}
+
+export class BuyPaidSource implements BuySource {
   readonly id: string;
   readonly costPerEvaluate: bigint;
   private readonly c: BuyConfig;
-  private readonly exec: Exec;
-  private readonly env: NodeJS.ProcessEnv;
-  constructor(c: BuyConfig, exec: Exec = defaultExec, parentEnv: NodeJS.ProcessEnv = process.env) {
+  private readonly account: LocalAccount;
+  private readonly fetchImpl: typeof fetch | undefined;
+  constructor(c: BuyConfig, account: LocalAccount, fetchImpl?: typeof fetch) {
     validateBuyConfig(c);
     this.c = c;
     this.id = `buy:${c.capabilityId}`;
     this.costPerEvaluate = c.maxAmountAtomic;
-    this.exec = exec;
-    // A minimal environment: AGENT_PRIVATE_KEY and any other secret in ours never reach the child.
-    const env: NodeJS.ProcessEnv = {};
-    // XDG_RUNTIME_DIR and the session bus address are what the OS keychain (backend `system`) needs; none is secret.
-    for (const k of ['PATH', 'HOME', 'LANG', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']) if (parentEnv[k] !== undefined) env[k] = parentEnv[k];
-    if (c.home !== undefined) env.BUY_HOME = c.home;
-    // The config field wins; otherwise our own BUY_KEYSTORE_BACKEND, if it is one buy accepts. Nothing else of buy's env is forwarded.
-    const backend = c.keystoreBackend ?? parentEnv.BUY_KEYSTORE_BACKEND;
-    if (backend === 'system' || backend === 'file') env.BUY_KEYSTORE_BACKEND = backend;
-    this.env = env;
+    this.account = account;
+    this.fetchImpl = fetchImpl;
   }
 
-  /** Argv for one paid batch. Only public values: the batch, the URL, the cap and the account name. */
-  args(calls: RpcCall[]): string[] {
-    const body = JSON.stringify(calls.map((x, i) => ({ jsonrpc: '2.0', id: i + 1, method: x.method, params: x.params })));
-    return [
-      ...(this.c.account !== undefined ? ['--account', this.c.account] : []),
-      'curl',
-      '--max-amount',
-      atomicToDecimal(this.c.maxAmountAtomic),
-      '--silent',
-      '--request',
-      'POST',
-      '--header',
-      'content-type: application/json',
-      '--data',
-      body,
-      this.c.url,
-    ];
+  /** Nothing about the account or the config crosses a JSON or inspect boundary. */
+  toJSON(): { id: string } {
+    return { id: this.id };
+  }
+  [Symbol.for('nodejs.util.inspect.custom')](): string {
+    return `BuyPaidSource(${this.id})`;
   }
 
-  /** One attempt, no retry: a failed paid call is never repeated here. Errors carry no buy output. */
+  /**
+   * One paid request per call, never repeated: payingFetch signs and sends the payment once (no retry after a payment
+   * is on the wire; only the unpaid probe may be retried). The chosen requirement is checked before anything is signed,
+   * and an abort before the send stops it. The abort signal also ends the request in flight. Errors carry a code only.
+   */
   async batch(calls: RpcCall[], signal: AbortSignal): Promise<unknown[]> {
-    let stdout: string;
+    if (signal.aborted) throw new Error(`${this.id}: paid read failed (aborted)`);
+    const max = this.c.maxAmountAtomic;
+    let text: string;
     try {
-      ({ stdout } = await this.exec(this.c.binary ?? 'buy', this.args(calls), { env: this.env, signal, maxBuffer: 1 << 20 }));
+      const res = await x402.payingFetch(
+        { account: this.account, network: PAY_NETWORK, preferredToken: 'USDC', ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}) },
+        this.c.url,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(calls.map((x, i) => ({ jsonrpc: '2.0', id: i + 1, method: x.method, params: x.params }))),
+          signal,
+          // A redirect must never carry a signed payment to another origin.
+          redirect: 'error',
+          maxAmount: max,
+          maxRetries: 1,
+          onChallenge: (req) => {
+            // Runs before the signer is touched. The library already refuses a price above `maxAmount`; this is the
+            // check that the code here relies on, and it also pins chain, asset and scheme.
+            if (req.network !== PAY_NETWORK) throw new RefusedRequirement('network');
+            if (typeof req.asset !== 'string' || req.asset.toLowerCase() !== PAY_ASSET.toLowerCase()) throw new RefusedRequirement('asset');
+            if (req.scheme !== 'exact') throw new RefusedRequirement('scheme');
+            if (typeof req.maxAmountRequired !== 'string' || !/^[0-9]+$/.test(req.maxAmountRequired) || BigInt(req.maxAmountRequired) > max) throw new RefusedRequirement('price');
+            if (typeof req.payTo !== 'string' || !isAddress(req.payTo)) throw new RefusedRequirement('payTo');
+          },
+          onBeforePayment: () => {
+            if (signal.aborted) throw Object.assign(new Error('aborted'), { code: 'aborted' });
+          },
+        },
+      );
+      if (!res.ok) {
+        void res.body?.cancel().catch(() => {});
+        throw Object.assign(new Error('status'), { code: `http_${res.status}` });
+      }
+      text = await readCapped(res);
     } catch (e) {
-      const code = (e as { code?: unknown }).code;
-      throw new Error(`${this.id}: buy failed${typeof code === 'number' || typeof code === 'string' ? ` (${String(code)})` : ''}`);
+      throw new Error(`${this.id}: paid read failed (${failureCode(e)})`);
     }
     let json: unknown;
     try {
-      json = JSON.parse(stdout);
+      json = JSON.parse(text);
     } catch {
       throw new Error(`${this.id}: reply is not JSON`);
     }
