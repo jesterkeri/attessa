@@ -2,6 +2,7 @@
 pragma solidity 0.8.26;
 
 import {Script} from "forge-std/Script.sol";
+import {VmSafe} from "forge-std/Vm.sol";
 import {P384Verifier} from "nitro-validator/P384Verifier.sol";
 import {IP384Verifier} from "nitro-validator/IP384Verifier.sol";
 import {CertManager} from "nitro-validator/CertManager.sol";
@@ -149,10 +150,33 @@ abstract contract DeployScript is Script {
             block.chainid == SUPPORTED_CHAIN_A || block.chainid == SUPPORTED_CHAIN_B,
             "Celo mainnet (42220) or Celo Sepolia (11142220) only"
         );
+        _requireNoUntaggedMainnetSend();
+    }
+
+    /// T30: every Celo mainnet creation must carry the Loops attribution suffix, and `forge script`
+    /// cannot append bytes to a creation transaction. So these scripts may simulate on 42220 (the
+    /// dry-run context) but never send there: `--broadcast` and `--resume` revert. Mainnet is
+    /// deployed by `scripts/tagged-deploy.mjs` and `cast send --create`.
+    function _mainnetSendRefused(uint256 chainId, bool broadcastContext) internal pure returns (bool) {
+        return chainId == SUPPORTED_CHAIN_B && broadcastContext;
+    }
+
+    /// True under `forge script --broadcast` or `--resume` (forge's execution context cheatcode).
+    /// Virtual only so a test can stand in for a context the test runner cannot enter without sending.
+    function _inBroadcastContext() internal view virtual returns (bool) {
+        return vm.isContext(VmSafe.ForgeContext.ScriptBroadcast) || vm.isContext(VmSafe.ForgeContext.ScriptResume);
+    }
+
+    function _requireNoUntaggedMainnetSend() internal view {
+        require(
+            !_mainnetSendRefused(block.chainid, _inBroadcastContext()),
+            "Celo mainnet (42220) is deployed with scripts/tagged-deploy.mjs (attribution suffix); forge script may only simulate there"
+        );
     }
 
     /// The key comes from `--account <keystore>` (or `--ledger`), or from env PRIVATE_KEY; never inline.
     function _startBroadcast() internal returns (address deployer) {
+        _requireNoUntaggedMainnetSend();
         uint256 pk = vm.envOr("PRIVATE_KEY", uint256(0));
         if (pk != 0) vm.startBroadcast(pk);
         else vm.startBroadcast();
