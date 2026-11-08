@@ -5,10 +5,13 @@
 # fill /etc/attessa as docs/EC2-RUNBOOK.md says. Ran on the real host on 2026-11-08 (DONE.md, T12).
 #
 # Pinned: Node 22.23.2 (.nvmrc says 22), pnpm 10.32.1 (package.json packageManager, via corepack), Caddy 2.10.2,
-#   the repo commit you pass, every JS dependency (pnpm-lock.yaml).
-# NOT pinned: dnf packages (Amazon's repo for the AMI's release; nitro-cli is only checked against 1.5.2 and
-#   warns), the Node and Caddy downloads (checked against the checksum file from the same site, not a hash
-#   written here).
+#   the repo commit you pass, every JS dependency (pnpm-lock.yaml), and the SHA-256 of the Node archive and the
+#   SHA-512 of the Caddy archive (constants below, checked before any sudo extraction; a mismatch stops the script).
+#   Node and Caddy are re-downloaded, verified and installed on every run, so a binary put there by an older
+#   version of this script is replaced by a verified one.
+# NOT pinned: dnf packages (Amazon's repo for the AMI's release, whatever it serves at run time; nitro-cli is only
+#   checked against 1.5.2 and warns), and the pnpm release that corepack downloads (its version is pinned, its hash
+#   is not checked here).
 set -euo pipefail
 SHA=${1:-}
 [[ $SHA =~ ^[0-9a-f]{40}$ ]] || { echo "usage: $0 <40-hex commit sha of https://github.com/jesterkeri/attessa>"; exit 2; }
@@ -16,10 +19,21 @@ SHA=${1:-}
 [ "$(uname -m)" = aarch64 ] || { echo "run this on the arm64 host"; exit 2; }
 NODE_VERSION=22.23.2
 CADDY_VERSION=2.10.2
+# Expected digests, taken on 2026-11-08 from a download hashed locally and equal to the digests the two projects publish.
+NODE_SHA256=fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8   # node-v22.23.2-linux-arm64.tar.xz
+CADDY_SHA512=6ce061a690312ab38367df3c5d5f89a2e4a263e7300d300d87356211bb81e79b15933e6d6203e03fbf26f15cc0311f264805f336147dbdd24938d84b57a4421c   # caddy_2.10.2_linux_arm64.tar.gz
 REPO=https://github.com/jesterkeri/attessa
 APP=/opt/attessa
 ME=$(id -un)
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
+
+# fetch_verified <url> <file in $TMP> <sha256|sha512> <expected hex digest>: download, compare with the constant, else fail.
+fetch_verified() {
+  local got
+  curl -fsSLo "$TMP/$2" "$1"
+  got=$("$3sum" "$TMP/$2" | cut -d' ' -f1)
+  [ "$got" = "$4" ] || { echo "DIGEST MISMATCH for $2: expected $4, got $got. Nothing was installed."; return 1; }
+}
 
 echo "== packages"
 sudo dnf install -y docker aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel socat jq git tar gzip xz gcc-c++ make python3
@@ -32,26 +46,17 @@ sudo systemctl restart docker nitro-enclaves-allocator
 sudo usermod -aG docker,ne "$ME"
 
 echo "== node $NODE_VERSION and pnpm via corepack"
-if [ "$(/usr/local/bin/node -v 2>/dev/null)" != "v$NODE_VERSION" ]; then
-  f=node-v$NODE_VERSION-linux-arm64.tar.xz
-  curl -fsSLo "$TMP/$f" "https://nodejs.org/dist/v$NODE_VERSION/$f"
-  curl -fsSLo "$TMP/SHASUMS256.txt" "https://nodejs.org/dist/v$NODE_VERSION/SHASUMS256.txt"
-  (cd "$TMP" && grep " $f\$" SHASUMS256.txt | sha256sum -c -)
-  sudo tar -xJf "$TMP/$f" -C /usr/local --strip-components=1 --no-same-owner
-fi
+f=node-v$NODE_VERSION-linux-arm64.tar.xz
+fetch_verified "https://nodejs.org/dist/v$NODE_VERSION/$f" "$f" sha256 "$NODE_SHA256" || exit 1
+sudo tar -xJf "$TMP/$f" -C /usr/local --strip-components=1 --no-same-owner
 sudo ln -sf /usr/local/bin/node /usr/bin/node   # the systemd units run /usr/bin/node
 sudo /usr/local/bin/corepack enable
 export PATH=/usr/local/bin:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 echo "== caddy $CADDY_VERSION"
-if ! /usr/local/bin/caddy version 2>/dev/null | grep -q "v$CADDY_VERSION"; then
-  f=caddy_${CADDY_VERSION}_linux_arm64.tar.gz
-  base=https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION
-  curl -fsSLo "$TMP/$f" "$base/$f"
-  curl -fsSLo "$TMP/checksums.txt" "$base/caddy_${CADDY_VERSION}_checksums.txt"
-  (cd "$TMP" && grep " $f\$" checksums.txt | sha512sum -c -)   # Caddy publishes SHA-512
-  sudo tar -xzf "$TMP/$f" -C /usr/local/bin caddy
-fi
+f=caddy_${CADDY_VERSION}_linux_arm64.tar.gz
+fetch_verified "https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/$f" "$f" sha512 "$CADDY_SHA512" || exit 1
+sudo tar -xzf "$TMP/$f" -C /usr/local/bin caddy
 
 echo "== service users and /etc/attessa"
 for u in attessa-gw attessa-seller attessa-op caddy; do
@@ -59,7 +64,8 @@ for u in attessa-gw attessa-seller attessa-op caddy; do
 done
 # The task asked for mode 700. The units run node as attessa-gw / attessa-seller and read their json from
 # here, so the directory is root:attessa-gw 0750 (seller-host has attessa-gw as a supplementary group).
-# Secret files you add are 0600 or 0640 root:<service group>, never world-readable.
+# Secret files you add (seller-<n>.secret, gateway-<n>.secret) are 0600 root:root: systemd reads EnvironmentFile as
+# PID 1 before it drops to the service user, so no service group needs read access.
 sudo install -d -m 0750 -o root -g attessa-gw /etc/attessa
 
 echo "== repo at $SHA"

@@ -4654,3 +4654,16 @@ T12_JOB_END exit=0 2026-11-08T21:06:45Z
 ```
 The spike stopped its enclaves on exit. These PCRs are the spike build's, not a release. Not exercised: Caddy, the systemd units, `attessa enclave build`, a real on-chain registration. The binding values were placeholders, and the attestation was not verified against the on-chain validator.
 reviewed: pending Codex
+
+### T12 Codex r1 fixes (M1, M2, M3) - 2026-11-08
+Review: `t12-review-r1.md` (REVISE, 3 major). T12 stays unticked.
+- M1 `scripts/t12-spike.sh`: no `terminate-enclave --all`. It refuses to start when `describe-enclaves` is not empty, records each enclave id as `run-enclave` returns, and on exit or interrupt terminates only those ids and stops its socat. Regression tests with fake `nitro-cli`, `docker`, `socat`, `node`, `uname`: pre-existing enclave means refusal and no terminate call; a normal run terminates exactly i-fake-16/17/18 by id; a failure midway (node fails after CID 18) terminates only 18.
+- M2 `docs/EC2-RUNBOOK.md` step 5: `seller-<n>.secret` and `gateway-<n>.secret` are 0600 root:root. Both units read them via `EnvironmentFile=` (attessa-seller@.service:14 with `-`, attessa-gw@.service:12), which PID 1 reads as root before dropping to the service user; no unit uses `LoadCredential` or reads the files itself, and no source file references `.secret`. 0640 root:attessa-gw remains only for the `*.json` and `*.env` files the services read themselves. Test reads the runbook and fails on a wider mode.
+- M3 `scripts/ec2-host-setup.sh`: `NODE_SHA256` and `CADDY_SHA512` constants, `fetch_verified` checks them before each `sudo tar`, no checksum file is fetched, and Node and Caddy are always downloaded, verified and installed (idempotent; closes the gap for binaries installed by the old check). Header comment now says dnf packages stay unpinned. I downloaded both archives into a scratch directory, did not execute them, and hashed them here:
+```
+fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8  node-v22.23.2-linux-arm64.tar.xz   (computed == published SHASUMS256.txt)
+6ce061a690312ab38367df3c5d5f89a2e4a263e7300d300d87356211bb81e79b15933e6d6203e03fbf26f15cc0311f264805f336147dbdd24938d84b57a4421c  caddy_2.10.2_linux_arm64.tar.gz   (computed == published caddy_2.10.2_checksums.txt)
+```
+Tests (`packages/seller-host/test/host-scripts.test.ts`, 8): constants are 64 and 128 hex, no checksum fetch, verify precedes extraction, and the real `fetch_verified` run with a fake `curl` rejects a tampered archive (prints DIGEST MISMATCH, no install) and accepts the genuine one, for sha256 and sha512.
+Not verified: the new setup script was not run on the host or with real `sudo`; `t12-spike.sh` was exercised only with fakes.
+reviewed: pending Codex

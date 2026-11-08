@@ -31,6 +31,8 @@ chmod +x ec2-host-setup.sh && ./ec2-host-setup.sh <commit>
 exit        # log back in so the docker and ne groups apply
 ```
 `<commit>` is a 40-hex commit on the public repo (push first). Safe to re-run. It starts no Attessa service.
+Node 22.23.2 and Caddy 2.10.2 are downloaded on every run and checked against SHA-256 / SHA-512 constants written in the
+script (no checksum file is fetched); a mismatch stops it before any `sudo` extraction. dnf packages stay unpinned.
 `/etc/attessa` is `root:attessa-gw` mode 750, not 700, because the units read their JSON from it (comment in the script).
 
 ## 4. T12 spike S2 (on the instance)
@@ -45,7 +47,8 @@ node scripts/inspect-attestation.mjs att.bin && nitro-cli describe-enclaves | jq
 ```
 Done when (TASKS T12): public_key length 65, user_data length 160, PCR0/1/2 non-zero, timestamp within 60 s,
 and `3` (if `2`, record it: the test enclave then runs only after stopping the Sepolia one). Paste the real
-output into DONE.md. The spike stops its enclaves on exit.
+output into DONE.md. The spike refuses to run if any enclave is already running (stop a live seller yourself first), and on exit,
+including Ctrl-C, terminates only the enclaves it started, by id; it never uses `terminate-enclave --all`.
 
 ## 5. Before T23 / serving (still on the instance)
 
@@ -55,8 +58,11 @@ output into DONE.md. The spike stops its enclaves on exit.
 2. Config files the units expect, per network `<n>` = `mainnet` or `sepolia`:
    `/etc/attessa/seller-<n>.json`, `/etc/attessa/gateway-<n>.json` (SPEC §6.6), `/etc/attessa/gateway-<n>.secret`
    (holds `FACILITATOR_API_KEY`, optional `RPC_URL`), and `/etc/attessa/seller-<n>.secret` (holds
-   `AGENT_PRIVATE_KEY`; mainnet only, SPEC §5). Create secrets in your own terminal, mode 0640, owner root,
-   group `attessa-gw` (gateway) or `attessa-seller` (seller); never paste them anywhere.
+   `AGENT_PRIVATE_KEY`; mainnet only, SPEC §5). Create both secret files in your own terminal, mode 0600, owner root:root
+   (`sudo install -m 0600 -o root -g root /dev/null /etc/attessa/seller-<n>.secret`, then edit it); never paste them
+   anywhere. 0600 is enough because systemd reads `EnvironmentFile=` as PID 1 (root) before it drops to the service
+   user, so neither `attessa-seller` nor `attessa-gw` needs read access (SPEC §5: `AGENT_PRIVATE_KEY` file 0600). Only
+   the `*.json` and `*.env` files are 0640 `root:attessa-gw`, because the services read those themselves.
 3. `sudo systemctl enable --now caddy` then, per network, `attessa-vsock@<n>`, `attessa-seller@<n>`,
    `attessa-gw@<n>`. The enclave itself is started with `attessa enclave start` (CLI), not a unit.
 4. Caddy proxies only 127.0.0.1:8080 (mainnet) and 127.0.0.1:8081 (Sepolia). The test gateway
