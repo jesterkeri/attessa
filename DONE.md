@@ -4701,3 +4701,8 @@ pnpm --filter @attessa/cli test:  Test Files  88 passed (88) / Tests  376 passed
 pnpm -r build, typecheck, lint: Done
 ```
 reviewed: pending Codex r3.
+
+### T21a Codex r3: SHIP - 2026-11-08
+
+Codex round 3 reviewed 1791ac9 in a frozen worktree: SHIP. T21a stays unticked: its done-when also needs a run against one real Sepolia call, which waits for a live seller. CI on 1791ac9: ci and harness both success. This branch carries a merge of feat/site-finish, whose own review is still open (r6: REVISE), so its PR waits for that one.
+reviewed: reviews/t21a-verify-review-r3.md | verdict: implementation-ready
