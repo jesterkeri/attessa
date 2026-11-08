@@ -4735,3 +4735,9 @@ $ pnpm --filter @attessa/seller-host lint        -> same, no output
 $ bash -n scripts/t12-spike.sh scripts/ec2-host-setup.sh -> ok
 ```
 reviewed: pending
+
+### T12 adversary r2 fixes - 2026-11-08
+Defect, proved by packages/seller-host/test/adversary-t12-r4.test.ts: real nitro-cli makes enclave names unique among running enclaves (aws-nitro-enclaves-cli src/lib.rs new_enclave_name), so a shared name reached CIDs 16 and 17 as `<name>_1` and `<name>_2`. The ownership check then failed for an enclave this run had started, and left it running on a host shared with the seller.
+Fix: each launch has its own name, `t12spike-<pid>-<cid>`, and cleanup requires that exact name. Also taken from the round's suspicions: more than one JSON document from describe-enclaves counts as unreadable (`jq -se`), cleanup tolerates a signal between recording a CID and its snapshot, and cleanup polls for socat's exit instead of `wait`, which could hang.
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 135 passed (135). `bash -n scripts/t12-spike.sh`: ok. Fakes only; the real host needs a re-run of the script.
+reviewed: pending

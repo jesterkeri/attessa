@@ -14,7 +14,8 @@ for c in docker nitro-cli socat jq node; do command -v "$c" >/dev/null || { echo
 enclaves() {
   local out
   out=$(nitro-cli describe-enclaves) || return 1
-  jq -e 'type == "array" and all(.[]; type == "object" and (.EnclaveID | type == "string" and length > 0) and (.EnclaveCID | type == "number"))' <<<"$out" >/dev/null 2>&1 || return 1
+  # -s: more than one JSON document is not a list of enclaves (plain -e reports only the last one's status).
+  jq -se 'length == 1 and (.[0] | type == "array" and all(.[]; type == "object" and (.EnclaveID | type == "string" and length > 0) and (.EnclaveCID | type == "number")))' <<<"$out" >/dev/null 2>&1 || return 1
   printf '%s' "$out"
 }
 HOST=$(enclaves) || { echo "refusing to run: cannot establish the set of running enclaves (nitro-cli describe-enclaves failed or returned something other than a list of enclave records)."; exit 1; }
@@ -22,14 +23,16 @@ RUNNING=$(jq length <<<"$HOST")
 [ "$RUNNING" = 0 ] || { echo "refusing to run: $RUNNING enclave(s) already running on this host (a live seller may own CIDs 16-18). Stop them yourself first; this script never terminates enclaves it did not start."; exit 1; }
 mkdir -p build
 OUTD=$(mktemp -d)   # run-enclave output, one file per attempt, written by the command itself so a signal cannot lose it
-NAME="t12spike-$$"  # every enclave we launch carries this name; describe-enclaves reports it back as EnclaveName
+# Each launch gets its own name, t12spike-<pid>-<cid>, reported back by describe-enclaves as EnclaveName. One shared
+# name would not do: nitro-cli makes names unique among running enclaves (new_enclave_name appends _1, _2, ...).
+NAME="t12spike-$$"
 STARTED=()     # enclave ids this run started and proved (printed by run-enclave for the CID we asked for)
 ATT_CID=()     # every CID this run asked run-enclave to start, recorded before the call
 ATT_PRE=()     # for each attempt: the enclave ids that existed in the snapshot taken just before that run-enclave
 KNOWN=" "      # CIDs whose id is already in STARTED
 REFUSED=0      # a launch was refused (CID held, or the host could not be listed)
 # Ownership is never inferred from a CID alone. An enclave found on an attempted CID is ours only if (a) run-enclave
-# itself printed its id for that CID, or (b) it is absent from the pre-launch snapshot AND carries our EnclaveName.
+# itself printed its id for that CID, or (b) it is absent from the pre-launch snapshot AND carries that launch's EnclaveName.
 # Anything else is named and left running, and the script exits non-zero.
 cleanup() {
   local st=$?
@@ -45,11 +48,11 @@ cleanup() {
     id=$(jq -er --argjson c "$cid" 'select(type == "object" and .EnclaveCID == $c) | .EnclaveID | select(type == "string" and length > 0)' "$of" 2>/dev/null)
     if [ -n "$id" ]; then STARTED+=("$id"); continue; fi
     if found=$(enclaves); then
-      pre=${ATT_PRE[$i]}
+      pre=${ATT_PRE[$i]:-}   # a signal can land between recording the CID and its snapshot; the name check still applies
       while IFS=$'\t' read -r id name; do
         [ -n "$id" ] || continue
         case " $pre " in *" $id "*) continue ;; esac
-        if [ "$name" = "$NAME" ]; then STARTED+=("$id")
+        if [ "$name" = "$NAME-$cid" ]; then STARTED+=("$id")
         else echo "enclave $id holds CID $cid but this run cannot prove it started it; NOT terminating it. Check it and stop it by hand if it is yours." >&2; rc=1; fi
       done < <(jq -r --argjson c "$cid" '.[] | select(.EnclaveCID == $c) | [.EnclaveID, (.EnclaveName // "")] | @tsv' <<<"$found")
     else
@@ -63,7 +66,7 @@ cleanup() {
   done
   if [ -n "${SOCAT:-}" ]; then
     kill "$SOCAT" 2>/dev/null
-    wait "$SOCAT" 2>/dev/null
+    for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$SOCAT" 2>/dev/null || break; sleep 0.2; done   # never `wait`: a socat that ignores TERM would hang cleanup
     if kill -0 "$SOCAT" 2>/dev/null; then echo "socat (pid $SOCAT) is still running; kill it by hand" >&2; rc=1; fi
   fi
   rm -rf "$OUTD"
@@ -87,7 +90,7 @@ run() {
     echo "refusing to start CID $cid: an enclave already holds it (not ours; left alone)"; REFUSED=1; return 1
   fi
   ATT_CID+=("$cid"); ATT_PRE+=("$(jq -r '.[].EnclaveID' <<<"$snap" | tr '\n' ' ')")   # before the call
-  nitro-cli run-enclave --eif-path build/enclave-spike.eif --cpu-count 1 --memory 1024 --enclave-cid "$cid" --enclave-name "$NAME" >"$OUTD/$cid.out" || return 1
+  nitro-cli run-enclave --eif-path build/enclave-spike.eif --cpu-count 1 --memory 1024 --enclave-cid "$cid" --enclave-name "$NAME-$cid" >"$OUTD/$cid.out" || return 1
   out=$(<"$OUTD/$cid.out")
   id=$(jq -r .EnclaveID <<<"$out") && [ -n "$id" ] && [ "$id" != null ] || { echo "cannot read the EnclaveID of CID $cid; cleanup will look it up"; return 1; }
   KNOWN+="$cid "; STARTED+=("$id")   # recorded at once so cleanup terminates exactly this enclave
