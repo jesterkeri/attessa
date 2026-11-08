@@ -4,6 +4,12 @@
 test that reads them; no AWS command was run. Expect to fix a line or two. Stop at the first surprise.
 Steps marked **[Joshua]** spend money or broadcast; everything else only prepares. Variable names only below.
 
+## 0. The host already exists: skip step 1
+
+`i-01d8e704fba8616b3` (`attessa-host`, c6g.xlarge, enclaves on) has run in `eu-north-1` since 2026-11-07, Elastic IP
+`16.192.129.244`, key pair `attessa-host`. The account's organization denies EC2 calls in `us-east-1`. Allow SSH from
+your current IP, and start the host if needed, with `.worktrees/prompts/aws-host-setup.sh`. Step 1 is only for a rebuild.
+
 ## 1. Launch (your machine, AWS CLI logged in)
 
 1. See what it will do: `./scripts/ec2-launch.sh <key-pair-name> <your-ip>/32`

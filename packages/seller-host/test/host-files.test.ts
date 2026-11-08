@@ -41,7 +41,7 @@ describe('host files: what the internet can reach', () => {
     expect(launch).toContain('--enclave-options Enabled=true');
     expect(launch).toContain('/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64');
     expect(launch).toContain('c6g.xlarge');
-    expect(launch).toContain('REGION=us-east-1');
+    expect(launch).toContain('REGION=eu-north-1'); // the only region the account's organization allows; see OPEN-QUESTIONS
     expect(launch).toMatch(/aws\(\) \{\n\s*\{\n\s*printf/); // print mode is the default definition
   });
 

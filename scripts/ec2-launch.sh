@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch the Attessa seller host (SPEC §5, ADR-008): one c6g.xlarge in us-east-1 with Nitro Enclaves on,
+# Launch the Attessa seller host (SPEC §5, ADR-008): one c6g.xlarge in eu-north-1 (ADR-008 says us-east-1; see OPEN-QUESTIONS) with Nitro Enclaves on,
 # Amazon Linux 2023 arm64, a security group, an Elastic IP.
 #   ./scripts/ec2-launch.sh <key-pair-name> <ssh-cidr>          prints every command, runs none
 #   ./scripts/ec2-launch.sh <key-pair-name> <ssh-cidr> --run    runs them (this creates billable resources)
@@ -7,7 +7,7 @@
 # gateway, seller-host, socat or enclave ports: Caddy on 443 is the only way in.
 # Reads no credential itself; the AWS CLI finds yours. Not yet run on a real account.
 set -euo pipefail
-REGION=us-east-1
+REGION=eu-north-1
 TYPE=c6g.xlarge
 NAME=attessa-seller
 AMI_PARAM=/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-arm64
