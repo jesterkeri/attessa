@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -40,25 +40,38 @@ function fakeHost(bin: string): void {
 touch "$STATE"
 case "$1" in
   describe-enclaves)
+    n=$(cat "$STATE.calls" 2>/dev/null || echo 0); n=$((n+1)); echo $n > "$STATE.calls"
     [ -z "\${DESCRIBE_FAIL:-}" ] || exit 1
+    if [ -n "\${DESCRIBE_FAIL_FROM:-}" ] && [ "$n" -ge "$DESCRIBE_FAIL_FROM" ]; then exit 1; fi
     if [ -n "\${DESCRIBE_RAW+x}" ]; then printf '%s' "$DESCRIBE_RAW"; exit 0; fi
-    jq -R -s -c 'split("\\n") | map(select(length>0)) | map({EnclaveID: ., EnclaveCID: (try (sub("^i-fake-";"") | tonumber) catch 0)})' "$STATE" ;;
-  build-enclave) echo '{"Measurements":{"PCR0":"00"}}' ;;
+    # state lines are "<id>" or "<id> <name>"; the CID is the number after "i-fake-" or "i-seller-"
+    jq -R -s -c 'split("\\n") | map(select(length>0) | split(" ")) | map({EnclaveID: .[0], EnclaveCID: (try (.[0] | sub("^i-(fake|seller)-";"") | tonumber) catch 0)} + (if .[1] then {EnclaveName: .[1]} else {} end))' "$STATE" ;;
+  build-enclave)
+    # SEIZE_CID: a seller takes this CID while the image builds, after the script's first look at the host
+    [ -z "\${SEIZE_CID:-}" ] || echo "i-seller-$SEIZE_CID" >> "$STATE"
+    echo '{"Measurements":{"PCR0":"00"}}' ;;
   run-enclave)
-    while [ $# -gt 0 ]; do [ "$1" = --enclave-cid ] && cid=$2; shift; done
+    while [ $# -gt 0 ]; do { [ "$1" = --enclave-cid ] && cid=$2; [ "$1" = --enclave-name ] && ename=$2; }; shift; done
     [ "$cid" != "\${FAIL_CID:-}" ] || exit 1
-    echo "i-fake-$cid" >> "$STATE"
+    # FOREIGN_CID: someone else's enclave takes this CID right before our call, which then fails
+    if [ "$cid" = "\${FOREIGN_CID:-}" ]; then echo "i-seller-$cid" >> "$STATE"; exit 1; fi
+    echo "i-fake-$cid $ename" >> "$STATE"
     # RUN_MODE: malformed = the enclave starts but the output lacks EnclaveID; garbage = not JSON at all;
     # failafter = the enclave starts and the command then exits 1 (no usable output).
+    # FAILAFTER_CID: the same as failafter, for that CID only.
+    [ "$cid" != "\${FAILAFTER_CID:-}" ] || exit 1
     case "\${RUN_MODE:-}" in
       malformed) echo "{\\"EnclaveCID\\":$cid}"; exit 0 ;;
       garbage) printf '{"EnclaveCID": 1'; exit 0 ;;
       failafter) exit 1 ;;
     esac
+    if [ "$(cat "$STATE.slowrun" 2>/dev/null)" = "$cid" ]; then touch "$STATE.inrun"; sleep 1; fi
     echo "{\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
   terminate-enclave)
     if [ "$2" = --all ]; then : > "$STATE"; exit 0; fi
-    grep -vx "$3" "$STATE" > "$STATE.new" || true; mv "$STATE.new" "$STATE" ;;
+    [ -z "\${TERMINATE_FAILS:-}" ] || exit 1
+    if [ -e "$STATE.slowterm" ]; then sleep 1; fi
+    grep -Ev "^$3( |\\$)" "$STATE" > "$STATE.new" || true; mv "$STATE.new" "$STATE" ;;
 esac`,
   );
 }
@@ -162,11 +175,11 @@ describe('t12-spike.sh fails closed on malformed Nitro CLI results', () => {
   });
 
   it('reports plainly when cleanup cannot list enclaves to find a started one', () => {
-    // describe-enclaves works for the preflight, then fails: the enclave of CID 18 cannot be located.
+    // describe-enclaves works for the preflight and the snapshot before CID 18 (2 calls), then fails: the enclave of CID 18 cannot be located.
     const sb = sandbox();
     fakeHost(sb.bin);
     const real = readFileSync(join(sb.bin, 'nitro-cli'), 'utf8');
-    writeFileSync(join(sb.bin, 'nitro-cli'), real.replace('describe-enclaves)', 'describe-enclaves)\n    if [ -e "$STATE.seen" ]; then exit 1; fi; touch "$STATE.seen"'));
+    writeFileSync(join(sb.bin, 'nitro-cli'), real.replace('describe-enclaves)', 'describe-enclaves)\n    c=$(cat "$STATE.seen" 2>/dev/null || echo 0); c=$((c+1)); echo $c > "$STATE.seen"; [ "$c" -le 2 ] || exit 1'));
     writeFileSync(sb.state, '');
     const cwd = join(sb.dir, 'work');
     mkdirSync(cwd);
@@ -177,6 +190,110 @@ describe('t12-spike.sh fails closed on malformed Nitro CLI results', () => {
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/cannot list enclaves to look for CID 18; check it and stop it by hand/);
   });
+});
+
+// T12 adversary r3 / Codex follow-up: ownership, swallowed terminate failures, exit status, signals.
+describe('t12-spike.sh ownership and truthful exit status', () => {
+  const T = (id: string) => `nitro-cli terminate-enclave --enclave-id ${id}`;
+
+  it('does not launch onto a CID a seller took after the preflight, and does not terminate the seller', () => {
+    const { r, log, terminates } = runSpike({ SEIZE_CID: '16' });
+    expect(log.some((l) => /run-enclave .*--enclave-cid 16\b/.test(l))).toBe(false);
+    expect(terminates).not.toContain(T('i-seller-16'));
+    expect(terminates.sort()).toEqual([T('i-fake-17'), T('i-fake-18')]);
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toMatch(/refusing to start CID 16/);
+  });
+
+  it('refuses to launch when the pre-launch snapshot cannot be read', () => {
+    // preflight is call 1, the snapshot before CID 18 is call 2
+    const { r, log } = runSpike({ DESCRIBE_FAIL_FROM: '2' });
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toMatch(/refusing to start CID 18: cannot establish/);
+    expect(log.some((l) => l.startsWith('nitro-cli run-enclave'))).toBe(false);
+  });
+
+  it('a foreign enclave that appears on an attempted CID during a failed launch is left alone, named, exit non-zero', () => {
+    const { r, terminates, sb } = runSpike({ FOREIGN_CID: '16' });
+    expect(terminates).not.toContain(T('i-seller-16'));
+    expect(readFileSync(sb.state, 'utf8')).toMatch(/^i-seller-16$/m);
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/i-seller-16 holds CID 16.*NOT terminating/);
+    expect(terminates.sort()).toEqual([T('i-fake-17'), T('i-fake-18')]);
+  });
+
+  it('an enclave carrying our name is ours even when run-enclave printed nothing usable', () => {
+    const { terminates } = runSpike({ FAILAFTER_CID: '16' });
+    expect(terminates).toContain(T('i-fake-16'));
+  });
+
+  it('a failed terminate-enclave is reported with the id still running, and the exit is non-zero', () => {
+    const { r, sb } = runSpike({ TERMINATE_FAILS: '1' });
+    expect(r.status).not.toBe(0);
+    for (const id of ['i-fake-16', 'i-fake-17', 'i-fake-18']) {
+      expect(r.stderr).toContain(`terminate-enclave FAILED: enclave ${id} is still running`);
+      expect(readFileSync(sb.state, 'utf8')).toContain(id);
+    }
+  });
+
+  it('a cleanup that cannot locate a started enclave exits non-zero even when the run itself was fine', () => {
+    // calls: preflight 1, snapshots 2-4, final report 5, cleanup lookup 6. CID 16 starts and then fails; 17 and 18 are clean.
+    const { r, sb } = runSpike({ FAILAFTER_CID: '16', DESCRIBE_FAIL_FROM: '6' });
+    expect(r.stderr).toMatch(/cannot list enclaves to look for CID 16; check it and stop it by hand/);
+    expect(readFileSync(sb.state, 'utf8')).toContain('i-fake-16');
+    expect(r.status).not.toBe(0);
+  });
+
+  it('a clean run exits 0 (guards the non-zero paths above)', () => {
+    expect(runSpike().r.status).toBe(0);
+  });
+});
+
+describe('t12-spike.sh signals', () => {
+  // A real signal arrives while run-enclave 17 is still running (bash acts on it when the command returns). Optionally
+  // further signals arrive while cleanup is terminating. Returns the exit code and what is left running.
+  async function signalled(signals: NodeJS.Signals[], extra: NodeJS.Signals[]) {
+    const sb = sandbox();
+    fakeHost(sb.bin);
+    writeFileSync(sb.state, '');
+    writeFileSync(`${sb.state}.slowrun`, '17'); // the signal lands during run-enclave 17, so cleanup has 3 terminates to do
+    const cwd = join(sb.dir, 'work');
+    mkdirSync(cwd);
+    const child = spawn('bash', [spike], {
+      cwd,
+      env: { PATH: `${sb.bin}:${process.env.PATH}`, LOG: sb.log, STATE: sb.state, SOCATPID: join(sb.dir, 'socat.pid') },
+    });
+    let err = '';
+    child.stderr.on('data', (d) => (err += d));
+    const exited = new Promise<number | null>((res) => child.on('exit', (code) => res(code)));
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    for (let i = 0; i < 100 && !existsSync(`${sb.state}.inrun`); i++) await sleep(50);
+    for (const sig of signals) child.kill(sig);
+    if (extra.length) {
+      writeFileSync(`${sb.state}.slowterm`, '');
+      await sleep(1500); // run-enclave returned at about 1 s; cleanup is now inside its slow terminate
+      for (const sig of extra) child.kill(sig);
+    }
+    const code = await exited;
+    const left = readFileSync(sb.state, 'utf8').split('\n').filter(Boolean);
+    return { code, left, err };
+  }
+
+  it.each([['SIGINT'], ['SIGTERM']] as const)('a real %s mid-launch ends with the enclave terminated and status 130', async (sig) => {
+    const { code, left } = await signalled([sig], []);
+    expect(left).toEqual([]);
+    expect(code).toBe(130);
+  }, 20_000);
+
+  it.each([
+    ['SIGINT', 'SIGTERM'],
+    ['SIGTERM', 'SIGINT'],
+    ['SIGTERM', 'SIGTERM'],
+  ] as const)('a %s followed by another %s during cleanup does not cut cleanup short', async (first, second) => {
+    const { code, left, err } = await signalled([first], [second, second]);
+    expect(left, err).toEqual([]);
+    expect(code).toBe(130);
+  }, 20_000);
 });
 
 describe('EC2-RUNBOOK.md secret file modes', () => {
@@ -197,6 +314,43 @@ describe('ec2-host-setup.sh pins the downloaded archives', () => {
     expect(setup).toMatch(/^CADDY_SHA512=[0-9a-f]{128}\s/m);
     expect(setup).not.toMatch(/SHASUMS256\.txt"|checksums\.txt"|_checksums/);
     expect(setup).not.toMatch(/sha(256|512)sum -c/);
+  });
+
+  it('pins the exact digests, not just their shape', () => {
+    expect(/^NODE_SHA256=(\S+)/m.exec(setup)?.[1]).toBe('fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8');
+    // CADDY_SHA512 as it stood at HEAD 4bf3224, verified against the published file earlier
+    expect(/^CADDY_SHA512=(\S+)/m.exec(setup)?.[1]).toBe(
+      '6ce061a690312ab38367df3c5d5f89a2e4a263e7300d300d87356211bb81e79b15933e6d6203e03fbf26f15cc0311f264805f336147dbdd24938d84b57a4421c',
+    );
+  });
+
+  it('downloads and verifies both archives before the first sudo, and checks its tools instead of installing them', () => {
+    const code = setup.split('\n').filter((l) => !l.trimStart().startsWith('#'));
+    const at = (re: RegExp, from = 0) => code.findIndex((l, i) => i >= from && re.test(l));
+    const firstSudo = at(/\bsudo\b/);
+    expect(firstSudo).toBeGreaterThan(0);
+    expect(at(/^fetch_verified "https:\/\/nodejs\.org/)).toBeGreaterThan(0);
+    expect(at(/^fetch_verified "https:\/\/nodejs\.org/)).toBeLessThan(firstSudo);
+    expect(at(/^fetch_verified "https:\/\/github\.com/)).toBeLessThan(firstSudo);
+    expect(at(/command -v/)).toBeLessThan(at(/^fetch_verified "https:\/\/nodejs\.org/));
+    expect(at(/dnf install/)).toBeGreaterThan(at(/^fetch_verified "https:\/\/github\.com/));
+  });
+
+  it('stops with a clear message, installing nothing, when curl is missing', () => {
+    const sb = sandbox();
+    const tools = join(sb.dir, 'tools');
+    mkdirSync(tools);
+    for (const t of ['bash', 'id', 'mktemp', 'rm', 'cut', 'sha256sum', 'sha512sum']) {
+      const p = spawnSync('command', ['-v', t], { shell: true, encoding: 'utf8' }).stdout.trim();
+      writeFileSync(join(tools, t), `#!/bin/sh\nexec ${p} "$@"\n`);
+      chmodSync(join(tools, t), 0o755);
+    }
+    fake(tools, 'uname', 'echo aarch64');
+    fake(tools, 'sudo', 'echo "sudo $*" >> "$LOG"');
+    const r = spawnSync('bash', [setupPath, 'a'.repeat(40)], { encoding: 'utf8', env: { PATH: tools, LOG: sb.log, HOME: sb.dir } });
+    expect(r.status).not.toBe(0);
+    expect(r.stdout).toMatch(/missing: curl\. Nothing was installed/);
+    expect(existsSync(sb.log)).toBe(false);
   });
 
   it('verifies before each privileged extraction and always downloads', () => {

@@ -6,7 +6,7 @@
 #
 # Pinned: Node 22.23.2 (.nvmrc says 22), pnpm 10.32.1 (package.json packageManager, via corepack), Caddy 2.10.2,
 #   the repo commit you pass, every JS dependency (pnpm-lock.yaml), and the SHA-256 of the Node archive and the
-#   SHA-512 of the Caddy archive (constants below, checked before any sudo extraction; a mismatch stops the script).
+#   SHA-512 of the Caddy archive (constants below, downloaded and checked first of all, before any sudo; a mismatch stops the script with nothing installed).
 #   Node and Caddy are re-downloaded, verified and installed on every run, so a binary put there by an older
 #   version of this script is replaced by a verified one.
 # NOT pinned: dnf packages (Amazon's repo for the AMI's release, whatever it serves at run time; nitro-cli is only
@@ -25,15 +25,28 @@ CADDY_SHA512=6ce061a690312ab38367df3c5d5f89a2e4a263e7300d300d87356211bb81e79b159
 REPO=https://github.com/jesterkeri/attessa
 APP=/opt/attessa
 ME=$(id -un)
+
+# Nothing below may change the host until both archives have been downloaded and have matched their pinned digests.
+# The tools for that come with the base AMI (curl-minimal and coreutils on Amazon Linux 2023), so they are checked,
+# not installed: installing anything first would change the host before the check.
+for c in curl sha256sum sha512sum cut mktemp; do
+  command -v "$c" >/dev/null || { echo "missing: $c. Nothing was installed. Install it yourself, then run this again."; exit 2; }
+done
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 # fetch_verified <url> <file in $TMP> <sha256|sha512> <expected hex digest>: download, compare with the constant, else fail.
 fetch_verified() {
   local got
-  curl -fsSLo "$TMP/$2" "$1"
+  curl -fsSLo "$TMP/$2" "$1" || { echo "DOWNLOAD FAILED for $2 ($1). Nothing was installed."; return 1; }
   got=$("$3sum" "$TMP/$2" | cut -d' ' -f1)
   [ "$got" = "$4" ] || { echo "DIGEST MISMATCH for $2: expected $4, got $got. Nothing was installed."; return 1; }
 }
+
+NODE_FILE=node-v$NODE_VERSION-linux-arm64.tar.xz
+CADDY_FILE=caddy_${CADDY_VERSION}_linux_arm64.tar.gz
+echo "== download and verify node $NODE_VERSION and caddy $CADDY_VERSION (before any change to the host)"
+fetch_verified "https://nodejs.org/dist/v$NODE_VERSION/$NODE_FILE" "$NODE_FILE" sha256 "$NODE_SHA256" || exit 1
+fetch_verified "https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/$CADDY_FILE" "$CADDY_FILE" sha512 "$CADDY_SHA512" || exit 1
 
 echo "== packages"
 sudo dnf install -y docker aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel socat jq git tar gzip xz gcc-c++ make python3
@@ -46,17 +59,13 @@ sudo systemctl restart docker nitro-enclaves-allocator
 sudo usermod -aG docker,ne "$ME"
 
 echo "== node $NODE_VERSION and pnpm via corepack"
-f=node-v$NODE_VERSION-linux-arm64.tar.xz
-fetch_verified "https://nodejs.org/dist/v$NODE_VERSION/$f" "$f" sha256 "$NODE_SHA256" || exit 1
-sudo tar -xJf "$TMP/$f" -C /usr/local --strip-components=1 --no-same-owner
+sudo tar -xJf "$TMP/$NODE_FILE" -C /usr/local --strip-components=1 --no-same-owner
 sudo ln -sf /usr/local/bin/node /usr/bin/node   # the systemd units run /usr/bin/node
 sudo /usr/local/bin/corepack enable
 export PATH=/usr/local/bin:$PATH COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 
 echo "== caddy $CADDY_VERSION"
-f=caddy_${CADDY_VERSION}_linux_arm64.tar.gz
-fetch_verified "https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION/$f" "$f" sha512 "$CADDY_SHA512" || exit 1
-sudo tar -xzf "$TMP/$f" -C /usr/local/bin caddy
+sudo tar -xzf "$TMP/$CADDY_FILE" -C /usr/local/bin caddy
 
 echo "== service users and /etc/attessa"
 for u in attessa-gw attessa-seller attessa-op caddy; do

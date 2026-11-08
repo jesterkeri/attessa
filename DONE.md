@@ -4707,3 +4707,31 @@ $ bash -n scripts/t12-spike.sh                   -> ok
 r2 said the full seller-host suite timed out in framing/server/inputs. Here it passed in 1.34 s with nothing skipped or weakened; no test is slow (the longest is 305 ms). The timeouts in r2 were most likely contention on the shared machine, but I did not reproduce them, so that is a guess.
 Not verified: the fixed script was exercised only with fakes. Real nitro-cli output format (that real records carry `EnclaveID` as a string and `EnclaveCID` as a number, as documented) was not re-checked on the host; if a real record differs, the script refuses, which is the safe failure. No full `pnpm -r build` was run here.
 reviewed: pending
+
+### T12 host-script fixes after adversary r3 - 2026-11-08
+T12 stays unticked. The fixed scripts have only run against fakes (fake `nitro-cli`, `curl`, `sudo`, sha tools); the real EC2 host needs a re-run of both `scripts/ec2-host-setup.sh` and `scripts/t12-spike.sh`. Nothing touched the real host, SSH or AWS.
+
+`scripts/t12-spike.sh`
+- Ownership is never inferred from a CID. `run()` takes a strict `describe-enclaves` snapshot immediately before each `run-enclave`. If the CID is already held, or the host cannot be listed, that step is refused (`refusing to start CID N ...`, run-enclave not called, final exit non-zero).
+- Every launch carries `--enclave-name t12spike-<pid>` and writes its output to a file. In cleanup an enclave is ours only if run-enclave printed its id for that CID, or it is absent from that attempt's pre-launch snapshot and reports our `EnclaveName`. Any other enclave on an attempted CID is named on stderr, left running, and the exit is non-zero. Malformed output or a failure after a real start still terminates our own enclave.
+- A failed `terminate-enclave` is no longer swallowed: `terminate-enclave FAILED: enclave <id> is still running; stop it by hand ...`, exit non-zero.
+- Cleanup ignores INT and TERM while it runs, and ends with `exit` (not `return`, which an EXIT trap ignores) so the status is truthful: an earlier non-zero status (130 after a signal) is kept, else 1 if anything was left in doubt or running.
+- Assumption to confirm on the host: real `nitro-cli run-enclave` accepts `--enclave-name` and `describe-enclaves` returns it as `EnclaveName`.
+
+`scripts/ec2-host-setup.sh`: both archives are downloaded and checked against the pinned digests before the first `sudo` (before `dnf`, allocator.yaml, docker, usermod, Node extraction). curl, sha256sum, sha512sum, cut and mktemp are checked, not installed (they ship with AL2023); if one is missing the script stops with `missing: <tool>. Nothing was installed.` Installing first was avoidable, so nothing is installed before the check. A failed download is also a stop.
+
+Tests: `host-scripts.test.ts` 23 -> 38; `adversary-t12-r3.test.ts` added (9 tests, unchanged except one number, see below). New: real SIGINT/SIGTERM, second signals during a 3-enclave cleanup, foreign enclave on an attempted CID, CID seized after the preflight, snapshot failure, terminate failure, exit status, exact NODE_SHA256 and CADDY_SHA512 values, first-sudo ordering, curl missing. Mutants run by hand, each caught: removing `trap 'exit 130' INT TERM` (5 fail), removing the cleanup `trap '' INT TERM` (3 fail), exit forced to 0 (16 fail), name check forced true (1), refusal of a held CID removed (1), terminate failure swallowed (1).
+Adjusted tests, disclosed: `adversary-t12-r3.test.ts` `DESCRIBE_FAIL_FROM` 3 -> 6, because the per-run snapshots add describe-enclaves calls before cleanup (same intent: the failing call is cleanup's lookup); and the host-scripts "cannot list" test lets the first 2 describe calls through for the same reason.
+
+Verification, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/adversary-t12-r3.test.ts (9 tests) 3164ms
+ ✓ test/host-scripts.test.ts (38 tests) 16083ms
+ Test Files  11 passed (11)
+      Tests  133 passed (133)
+$ pnpm --filter @attessa/seller-host typecheck   -> tsc -p ../core && tsc -p . --noEmit, exit 0
+$ pnpm --filter @attessa/seller-host lint        -> same, no output
+$ bash -n scripts/t12-spike.sh scripts/ec2-host-setup.sh -> ok
+```
+reviewed: pending
