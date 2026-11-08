@@ -33,7 +33,7 @@ Reference
 Reference
 Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.
 CLI commands
-These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. The CLI has no full command list of its own yet: attessa --help and attessa seller --help print only the seller steps (agent register, enclave build, release approve, endpoint add, enclave start, signer register). --network sepolia is the only network Attessa is deployed on today.
+These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. The CLI has no full command list of its own yet: attessa --help and attessa seller --help print only the seller summary and its steps (agent register, enclave build, release approve, endpoint add, enclave start, signer register). --network sepolia is the only network Attessa is deployed on today.
 Buyer
 Command
 What it does

@@ -3,7 +3,7 @@
 //   - the command words exist in the CLI's command table, unless the row is marked Coming or Optional (verify, release verify,
 //     call --via buy);
 //   - every flag the row's description shows is a flag that command accepts (its own, or a global one), unless the row is marked;
-//   - the page does not advertise `attessa --help` as a full command list: the CLI's usage path prints only the seller steps.
+//   - the page does not advertise `attessa --help` as a full command list: the CLI's usage path prints only the seller summary and its steps.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -64,6 +64,6 @@ test('reference commands: the page does not advertise --help as a full command l
   assert.doesNotMatch(t, /attessa --help[^.]*(full|every|all) (list|command)|full list[^.]*--help/i);
   for (const m of t.matchAll(/--help/g)) {
     const around = t.slice(Math.max(0, m.index - 120), m.index + 200);
-    assert.match(around, /seller/i, `--help is mentioned without saying it prints only the seller steps: ${around}`);
+    assert.match(around, /seller/i, `--help is mentioned without saying it prints only the seller summary and its steps: ${around}`);
   }
 });
