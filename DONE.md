@@ -4477,3 +4477,14 @@ Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.
 status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
+
+### Host-setup files for the EC2 seller (T12 prep) - 2026-11-08
+Added `scripts/ec2-launch.sh` (prints; launches only with `--run`), `scripts/ec2-host-setup.sh` (run on the instance), `packages/seller-host/caddy/{Caddyfile,caddy.service}`, `docs/EC2-RUNBOOK.md`, and `packages/seller-host/test/host-files.test.ts`. No AWS command was run; none of these has run on a real instance. shellcheck is not installed here; `bash -n` passes on both scripts and `ec2-launch.sh mykey 203.0.113.7/32` prints the full command list.
+```
+pnpm --filter @attessa/seller-host test   -> Test Files 9 passed (9), Tests 86 passed (86)
+mutation: 8083 added to the Caddyfile and to ec2-launch.sh -> 2 of 5 new tests fail, then reverted
+pnpm -r lint EXIT=0; pnpm -r typecheck EXIT=0
+check-workflows: workflows clean; check-reviews: reviews ok; check-error-coverage: ok; check-install-scripts: ok
+```
+Unpinned: dnf packages (nitro-cli only warned against 1.5.2), Node and Caddy downloads (checked against the checksum file from the same site). Deviation: `/etc/attessa` is root:attessa-gw 0750, not 700, because the units read their JSON there.
+reviewed: pending Codex
