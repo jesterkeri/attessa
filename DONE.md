@@ -4495,4 +4495,5 @@ $ forge script DeployRegistry (Sepolia, existing validator, dry run) -> EnclaveR
 $ forge script DeployRegistry on 42220 -> reverts "ATTESSA_NITRO_VALIDATOR has no code" (stack not deployed; expected)
 $ node scripts/check-deploy.mjs celo -> exit 2, "Admin is still TODO" (nothing deployed)
 ```
+Correction, same day: the first version of `test/deploy/DeployValidatorStack.t.sol` above was flaky. The lead's re-run failed 5 of 6 times without `-j 1`, because `vm.setEnv` is process-wide and its tests overwrote one another's ATTESSA_ADMIN. The "18 passed" above was a lucky run. `DeployValidatorStack` now has an internal `_run(admin)` as `DeployRegistry` has, and only one test sets the variable. Results after the fix are in the commit that changed it.
 reviewed: pending Codex

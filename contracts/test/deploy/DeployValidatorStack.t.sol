@@ -6,16 +6,22 @@ import {CertManager} from "nitro-validator/CertManager.sol";
 import {P384Verifier} from "nitro-validator/P384Verifier.sol";
 import {DeployValidatorStack} from "../../script/DeployValidatorStack.s.sol";
 
+contract DeployValidatorStackHarness is DeployValidatorStack {
+    /// The admin as an argument: vm.setEnv is process-wide and forge runs tests in parallel, so tests
+    /// that each set ATTESSA_ADMIN overwrite one another.
+    function runWith(address admin) external returns (ValidatorStack memory) {
+        return _run(admin);
+    }
+}
+
 /// The validator-stack script on both supported chains. It deploys the production CertManager on
 /// 42220 as on 11142220 (never CertManagerDemo), keeps the admin guard, and refuses every other chain.
 contract DeployValidatorStackTest is Test {
     address internal constant ADMIN = address(0xA11CE);
-    DeployValidatorStack internal script;
+    DeployValidatorStackHarness internal script;
 
     function setUp() public {
-        script = new DeployValidatorStack();
-        // setEnv is process-wide and tests share it: every test sets its own admin.
-        vm.setEnv("ATTESSA_ADMIN", vm.toString(ADMIN));
+        script = new DeployValidatorStackHarness();
     }
 
     function _checkProduction(DeployValidatorStack.ValidatorStack memory s) internal {
@@ -30,12 +36,17 @@ contract DeployValidatorStackTest is Test {
 
     function test_mainnet_deploysProductionCertManager() public {
         vm.chainId(42220);
-        vm.setEnv("ATTESSA_ADMIN", vm.toString(ADMIN));
-        _checkProduction(script.run());
+        _checkProduction(script.runWith(ADMIN));
     }
 
     function test_sepolia_deploysProductionCertManager() public {
         vm.chainId(11142220);
+        _checkProduction(script.runWith(ADMIN));
+    }
+
+    /// run() takes the admin from env. The only test in the suite that sets ATTESSA_ADMIN, so no race.
+    function test_run_readsAdminFromEnv() public {
+        vm.chainId(42220);
         vm.setEnv("ATTESSA_ADMIN", vm.toString(ADMIN));
         _checkProduction(script.run());
     }
@@ -45,24 +56,22 @@ contract DeployValidatorStackTest is Test {
         for (uint256 i = 0; i < ids.length; i++) {
             vm.chainId(ids[i]);
             vm.expectRevert(bytes("Celo mainnet (42220) or Celo Sepolia (11142220) only"));
-            script.run();
+            script.runWith(ADMIN);
         }
     }
 
     function test_mainnet_adminMustNotBeDeployer() public {
         vm.chainId(42220);
         // Under forge test the default sender stands in for the deployer.
-        vm.setEnv("ATTESSA_ADMIN", vm.toString(DEFAULT_SENDER_FOR_TEST));
         vm.expectRevert(bytes("ATTESSA_ADMIN must be the cold admin key, not the deployer"));
-        script.run();
+        script.runWith(DEFAULT_SENDER_FOR_TEST);
     }
 
     address internal constant DEFAULT_SENDER_FOR_TEST = 0x1804c8AB1F12E6bbf3894d4083f33e07309d1f38;
 
     function test_zeroAdmin_refused() public {
         vm.chainId(42220);
-        vm.setEnv("ATTESSA_ADMIN", vm.toString(address(0)));
         vm.expectRevert(bytes("ATTESSA_ADMIN is zero"));
-        script.run();
+        script.runWith(address(0));
     }
 }
