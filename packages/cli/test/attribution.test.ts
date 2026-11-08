@@ -40,10 +40,40 @@ describe('where the suffix goes', () => {
     expect(sentData()).toEqual([PLAIN]);
   });
 
-  it('local: no suffix, even on a fork that reports the mainnet chain id', async () => {
-    mainnet();
+  it('local on a chain that is not 42220: no suffix, even with the variable set', async () => {
+    w.env.LOOPS_ATTRIBUTION_TAG = TAG;
     expect(await w.cli(...REGISTER, '--network', 'local', '--rpc', 'http://127.0.0.1:1')).toBe(0);
     expect(sentData()).toEqual([PLAIN]);
+    expect(parseTransaction(w.chain.sent[0] as TransactionSerialized).chainId).toBe(11142220);
+  });
+
+  // Review r1 finding 1: the decision follows the verified chain id, not the --network label.
+  it('local on a RPC that reports 42220: tagged, and the signed chain id is the verified 42220', async () => {
+    mainnet();
+    expect(await w.cli(...REGISTER, '--network', 'local', '--rpc', 'http://127.0.0.1:1')).toBe(0);
+    expect(sentData()).toEqual([`${PLAIN}${SUFFIX.slice(2)}`]);
+    expect(parseTransaction(w.chain.sent[0] as TransactionSerialized).chainId).toBe(42220);
+  });
+
+  it('local on 42220 with no tag: refused before anything is signed or asked', async () => {
+    mainnet(null);
+    expect(await w.cli(...REGISTER.slice(0, -1), '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    expect(w.chain.sent).toHaveLength(0);
+    expect(w.chain.calls.map((c) => c.method)).not.toContain('eth_sendRawTransaction');
+  });
+
+  it('local on 42220 with no tag: --dry-run prints the missing-tag note', async () => {
+    mainnet(null);
+    delete w.env.ATTESSA_PRIVATE_KEY;
+    expect(await w.cli(...REGISTER.slice(0, -1), '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).toMatch(/LOOPS_ATTRIBUTION_TAG.*not set/);
+  });
+
+  it('the signed chain id is the verified one: a labelled-mainnet RPC that reports another chain is refused, nothing signed', async () => {
+    w.env.LOOPS_ATTRIBUTION_TAG = TAG; // the fake reports 11142220
+    expect(await w.cli(...REGISTER, '--network', 'mainnet')).toBe(1);
+    expect(w.chain.sent).toHaveLength(0);
   });
 
   it('mainnet with the variable set: the suffix is the last bytes, and the call still decodes and is accepted', async () => {

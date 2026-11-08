@@ -224,7 +224,8 @@ function makeClient(
   if (g.dryRun) opts.dryRun = true;
   // Loops attribution: the one transaction this client sends (the cancel) is tagged on mainnet. `call` pays by x402
   // signature and sends none; `cancel` refuses without the tag before it signs anything.
-  const tag = g.network === 'mainnet' ? loopsSuffix(d.env) : null;
+  // The SDK appends it only when the RPC's verified chain id is 42220 (also behind `--network local`), and refuses there without it.
+  const tag = g.network === 'sepolia' ? null : loopsSuffix(d.env);
   if (tag) opts.dataSuffix = tag;
   return createAttestClient(cfg, opts);
 }
@@ -610,6 +611,8 @@ export function sdkError(g: Global, code: string, rawDetail: string | undefined,
       return BUYERR.inProgress();
     case 'no_registry':
       return ERR.noRegistry(g.network);
+    case 'no_attribution_tag': // the SDK's verified chain is 42220 (also behind --network local) and no valid suffix was given
+      return ERR.attributionRequired();
   }
   if (origin !== undefined) {
     switch (code) {

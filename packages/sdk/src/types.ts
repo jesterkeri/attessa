@@ -60,7 +60,8 @@ export interface ClientOptions {
   /**
    * An ERC-8021 data suffix appended to the calldata of the transactions the client itself sends (today only
    * `cancelAuthorization`). The CLI sets it on Celo mainnet for the Loops attribution tag. x402 payment
-   * authorizations are signed messages and never carry it.
+   * authorizations are signed messages and never carry it. Appended only when the verified chain id is 42220, where
+   * `cancelAuthorization` refuses with `no_attribution_tag` (before signing anything) unless this ends in the ERC-8021 marker.
    */
   dataSuffix?: Hex;
 }
@@ -108,7 +109,7 @@ export type Outcome =
   | 'uncertain';
 
 /** Codes the SDK adds to SPEC §10's: `in_progress` reuse, and the V7 detail. */
-export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run' | 'no_registry';
+export type CallCode = ErrorCode | 'request_id_conflict' | 'already_used' | 'cancelled' | 'missing_nonce' | 'dry_run' | 'no_registry' | 'no_attribution_tag';
 
 export interface CallResult {
   outcome: Outcome;

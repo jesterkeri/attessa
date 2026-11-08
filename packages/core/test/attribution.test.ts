@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { concat, decodeFunctionData, encodeFunctionData, parseAbi, size, slice, toHex } from 'viem';
-import { ERC8021_MARKER, attributionSuffix, withAttribution } from '../src/attribution.ts';
+import { ERC8021_MARKER, attributionSuffix, isAttributionSuffix, withAttribution } from '../src/attribution.ts';
 
 // ERC-8021 Schema 0, as celo-org/attribution-tags INDEXERS.md defines it:
 //   [calldata] [code: N ASCII bytes] [length N: 1 byte] [schema: 0x00] [marker: 0x80218021 x 8]
@@ -41,5 +41,15 @@ describe('withAttribution', () => {
 
   it('a null suffix leaves the calldata as it was', () => {
     expect(withAttribution('0xdeadbeef', null)).toBe('0xdeadbeef');
+  });
+});
+
+describe('isAttributionSuffix', () => {
+  it('accepts a real suffix, in either hex case', () => {
+    expect(isAttributionSuffix(attributionSuffix('a'))).toBe(true);
+    expect(isAttributionSuffix(attributionSuffix('celo_test1234').toUpperCase().replace('0X', '0x') as `0x${string}`)).toBe(true);
+  });
+  it('rejects absent, empty, marker-less, bare-marker and non-hex values', () => {
+    for (const bad of [undefined, null, '', '0x', '0x00', '0x63656c6f5f74657374313233340d00', ERC8021_MARKER, 'celo_test'] as const) expect(isAttributionSuffix(bad)).toBe(false);
   });
 });

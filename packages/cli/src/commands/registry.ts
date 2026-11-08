@@ -89,7 +89,7 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
   ).toLowerCase() as Address;
   // ERC-8004 registration file (SPEC §8). `services` lists endpoints; there are none before `endpoint add`.
   const file = resolve(deps.cwd, 'docs/agent.json');
-  const doc = (registrations: Array<{ agentId: number; agentRegistry: string }>) =>
+  const doc = (registrations: Array<{ agentId: number | string; agentRegistry: string }>) =>
     `${JSON.stringify(
       {
         type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
@@ -134,7 +134,8 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
         .find((a) => a && a.from === ZERO && a.to.toLowerCase() === from);
       if (!minted) throw new CliError('no_agent_id', `The registration (tx ${tx}) minted no agent to ${from}.`, 'Check the tx on a Celo explorer.');
       const agent = minted.tokenId.toString();
-      deps.writeFile(file, doc([{ agentId: Number(minted.tokenId), agentRegistry: `eip155:${c.chainId}:${getAddress(identity)}` }]));
+      deps.writeFile(file, doc([{ agentId: minted.tokenId <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(minted.tokenId) : agent, // SPEC §2: above 2^53 a decimal string, never a rounded number
+           agentRegistry: `eip155:${c.chainId}:${getAddress(identity)}` }]));
       deps.io.out(OWN.registered(agent, tx));
       deps.io.data?.({ agentId: agent, tx, agentFile: file });
     },

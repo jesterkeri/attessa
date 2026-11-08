@@ -778,6 +778,21 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG');
   });
 
+  // Review r1 finding 1/2: `--network local` is no way round the tag. The SDK refuses on the verified chain id 42220.
+  it('cancel via --network local on an RPC that reports 42220, no LOOPS_ATTRIBUTION_TAG: no_attribution_tag, nothing signed or sent', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const before = w.transcript.length;
+    expect(await w.cli('cancel', id, ...LOCAL, '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+  });
+
   it('cancel --json against an RPC on another chain: error code network_mismatch', async () => {
     await initialized();
     w.gw.behavior = { paid: 'pending_no_settle' };

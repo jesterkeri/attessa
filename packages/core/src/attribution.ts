@@ -1,4 +1,4 @@
-import { concat, numberToHex, stringToHex, type Hex } from 'viem';
+import { concat, isHex, numberToHex, size, stringToHex, type Hex } from 'viem';
 
 /**
  * ERC-8021 transaction attribution, Schema 0 (a flat code list), for the Loops / Celo attribution programme.
@@ -28,4 +28,13 @@ export function attributionSuffix(code: string): Hex {
 /** `data` with the attribution suffix appended; `data` itself when there is no suffix (not mainnet). */
 export function withAttribution(data: Hex, suffix: Hex | null | undefined): Hex {
   return suffix ? concat([data, suffix]) : data;
+}
+
+/** The chain whose transactions must carry the suffix: Celo mainnet. Policy follows the verified chain id, never a CLI label. */
+export const ATTRIBUTION_CHAIN_ID = 42220;
+
+/** True when `suffix` is present and ends in the 16-byte ERC-8021 marker after at least a code, a length and a schema byte. */
+export function isAttributionSuffix(suffix: string | null | undefined): suffix is Hex {
+  if (!suffix || !isHex(suffix) || size(suffix) <= size(ERC8021_MARKER) + 2) return false;
+  return suffix.toLowerCase().endsWith(ERC8021_MARKER.slice(2));
 }

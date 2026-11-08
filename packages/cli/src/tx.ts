@@ -9,7 +9,7 @@ import {
   type ContractFunctionName,
   type Hex,
 } from 'viem';
-import { withAttribution } from '@attessa/core';
+import { ATTRIBUTION_CHAIN_ID, withAttribution } from '@attessa/core';
 import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
 import type { ChainBase as Chain, Deps, Global } from './context.ts';
@@ -133,7 +133,7 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   const account = c.account;
   if (!account) throw new Error('send: no account');
   // Belt and braces: planOrSend refuses first, so no prompt precedes this; a caller that skips it still can't send untagged.
-  if (c.network === 'mainnet' && !c.attribution) throw ERR.attributionRequired();
+  if (c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution) throw ERR.attributionRequired();
   const sim = await simulate(c, account.address, step);
   if (!sim.ok) throw onRevert(sim.revert, sim.message);
   const [nonceHex, price, tip, balance] = await Promise.all([
@@ -206,7 +206,7 @@ export async function planOrSend(
 ): Promise<'sent' | 'planned'> {
   const { io } = deps;
   if (g.dryRun || !c.account) {
-    const missingTag = c.network === 'mainnet' && !c.attribution;
+    const missingTag = c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution;
     plan.steps.forEach((s, i) => {
       const sim = plan.simulations[i];
       const simText = sim === null || sim === undefined ? 'simulated after the previous transaction lands' : sim.ok ? `eth_call ok, gas ${sim.gas}` : `eth_call reverts${sim.revert ? ` ${sim.revert.name}` : ''}`;
@@ -218,7 +218,7 @@ export async function planOrSend(
     io.out(g.dryRun ? '  (dry run: nothing was sent)' : '  (no ATTESSA_PRIVATE_KEY: nothing was sent; set it and run again to send these yourself)');
     return 'planned';
   }
-  if (c.network === 'mainnet' && !c.attribution) throw ERR.attributionRequired(); // before the prompt: nothing was signed
+  if (c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution) throw ERR.attributionRequired(); // before the prompt: nothing was signed
   if (!g.yes && !(await io.confirm(plan.yesWord))) throw ERR.cancelled(plan.yesWord); // a non-TTY stdin answers no (bin.ts)
   for (let i = 0; i < plan.steps.length; i++) {
     let sent: Sent;

@@ -1,4 +1,4 @@
-import { DEPLOYMENTS, attributionSuffix } from '@attessa/core';
+import { ATTRIBUTION_CHAIN_ID, DEPLOYMENTS, attributionSuffix } from '@attessa/core';
 import { KeyError, keyToAccount, type ClientOptions, type Keychain } from '@attessa/sdk';
 import type { EnclaveTransport } from '@attessa/seller-host';
 import type { Address, Hex } from 'viem';
@@ -164,8 +164,9 @@ export async function connect(g: Global, deps: Deps, o: { wallet?: boolean; regi
     rpc,
     url,
     registry: registry ? (registry.toLowerCase() as Address) : null,
-    // Only a command that can send looks at the tag; a read never fails on it.
-    attribution: wallet && g.network === 'mainnet' ? loopsSuffix(deps.env) : null,
+    // Only a command that can send looks at the tag; a read never fails on it. The decision follows the VERIFIED chain id
+    // (the one signed into the transaction), so `--network local` against a 42220 RPC is tagged or refused like mainnet.
+    attribution: wallet && chainId === ATTRIBUTION_CHAIN_ID ? loopsSuffix(deps.env) : null,
     account: wallet ? loadAccount(deps.env) : null,
   };
 }

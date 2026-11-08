@@ -4493,3 +4493,25 @@ pnpm -r lint       exit 0
 Three existing mainnet tests now set a synthetic `LOOPS_ATTRIBUTION_TAG` (their subject is not the tag); no assertion changed.
 
 reviewed: pending Codex
+
+### Mainnet entry r1 fixes (Codex REVISE: 1 critical, 1 major, 1 minor) - 2026-11-08
+1. Critical: the CLI attribution decision follows the verified chain id, not `--network`. `packages/cli/src/context.ts connect()` sets `attribution` when `chainId === 42220` (the id signed into the transaction; for `local` it is the RPC-reported one, otherwise the pinned one that must equal it); the gates in `packages/cli/src/tx.ts` (`send`, `planOrSend`, dry-run note) test `c.chainId`. `--network local` on a 42220 RPC is tagged, or refused with `no_attribution_tag` before any prompt or signature; `--dry-run` prints the missing-tag note. Other chains carry no suffix. The fake chain rejects a transaction whose chain id differs from the one it reports, and a test reads the signed chain id back (42220).
+2. Major: `packages/sdk/src/client.ts` `requireAttribution()` runs in `cancelAuthorization` before the cancel permission is signed and again at the top of `sendCancel` (before any estimate): on a verified 42220 an absent, `0x`, marker-less or bare-marker `dataSuffix` throws `AttestError('no_attribution_tag')`. The suffix is appended only on 42220. `packages/core/src/attribution.ts` gains `isAttributionSuffix` and `ATTRIBUTION_CHAIN_ID`. The CLI buyer passes the tag on every network but sepolia (`buyer.ts makeClient`) and maps the code to the same CLI error (`sdkError`).
+3. Minor: `registry.ts` writes `agentId` as a JSON number up to 2^53-1 and as a decimal string above (SPEC §2). The only reader of `registrations` in `packages/*/src` is the `registered()` check in the same file (`.length`), so both forms work.
+Tests that asserted the faulty behaviour were changed: `packages/cli/test/attribution.test.ts` "local: no suffix, even on a fork that reports the mainnet chain id" is now local-on-11142220 untagged plus local-on-42220 tagged / refused; `packages/sdk/test/attribution.test.ts` first case (no suffix accepted) is now refused on 42220, and a suffix on a non-42220 chain is not appended. `t21-r7-fix.test.ts` "local fork of mainnet: no faucet" sets a synthetic tag (its subject is not the tag; assertion unchanged).
+New tests fail on 5518cdf's source (reverted cli+sdk src, kept the tests): SDK 5 of 6, CLI 7 (local-42220 tagged, refused, dry-run note, buyer local-42220 cancel, 3 agent-id).
+Sweep: other flag-based routes in `packages/{cli,sdk}`: `buyer.ts makeClient` (fixed). Left: `buyer.ts cancel` early `g.network === 'mainnet'` refusal and dry-run note: the flag `mainnet` forces chain 42220 or `network_mismatch`, so it is a safe early refusal; a `--network local --dry-run` cancel does not print the note (the chain is not read in a dry run), the real cancel is refused by the SDK.
+Verification (real output, under the heavy lock):
+```
+pnpm -r build      exit 0
+pnpm -r typecheck  exit 0
+pnpm -r lint       exit 0
+@attessa/core test: Test Files 10 passed (10), Tests 77 passed (77)
+@attessa/sdk test:  Test Files 21 passed (21), Tests 197 passed (197)
+@attessa/cli test:  Test Files 90 passed (90), Tests 370 passed (370)
+```
+(build, typecheck and lint ran before the one-line test edit in t21-r7-fix.test.ts; the cli suite was rerun after it.)
+
+Correction to the entry above: its claims "every non-x402 transaction on mainnet" and "`--network local` ... no suffix" were false for a local route on chain 42220, and `sendCancel` was not guarded in the SDK; the entry's "no assertion changed" holds only for its own three tests. Superseded by this section.
+
+reviewed: pending Codex

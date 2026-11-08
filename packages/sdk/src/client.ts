@@ -25,6 +25,8 @@ import {
   recoverDigestSigner,
   requestHash as hashRequest,
   withAttribution,
+  isAttributionSuffix,
+  ATTRIBUTION_CHAIN_ID,
   GATEWAY_ERRORS,
   type Deployment,
   type PinnedAsset,
@@ -471,8 +473,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * broadcast to the same error: either way nothing was sent. Reads that fail are RpcError; the node's text of a
    * funds refusal is not kept.
    */
+  /** Celo mainnet (the verified chain id) takes no transaction without a valid ERC-8021 suffix. */
+  function requireAttribution(n: Net): void {
+    if (n.chainId === ATTRIBUTION_CHAIN_ID && !isAttributionSuffix(opts.dataSuffix)) {
+      throw new AttestError('no_attribution_tag', 'a transaction on Celo mainnet needs an ERC-8021 attribution suffix; nothing was signed');
+    }
+  }
+
   async function sendCancel(n: Net, to: Address, data: Hex, sent: { hash?: Hash }): Promise<Hash> {
     const from = cfg.account.address;
+    requireAttribution(n);
     const read = async (method: string, params: unknown[]): Promise<bigint> => {
       try {
         return BigInt((await n.chain.client.request({ method, params } as never)) as string);
@@ -502,7 +512,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       chainId: n.chainId,
       nonce: Number(nonce),
       to,
-      data: withAttribution(data, opts.dataSuffix),
+      data: withAttribution(data, n.chainId === ATTRIBUTION_CHAIN_ID ? opts.dataSuffix : null),
       value: 0n,
       gas: t.gas,
       maxFeePerGas: t.maxFeePerGas,
@@ -1213,6 +1223,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       };
       const before = await decide(false);
       if (before !== 'open') return await ended(before);
+      requireAttribution(n); // before the cancel permission is signed
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
