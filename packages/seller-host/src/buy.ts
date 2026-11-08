@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { parseBatchReply, type BuySource, type RpcCall } from './inputs.ts';
 
 /**
@@ -27,7 +27,16 @@ export interface BuyConfig {
   account?: string;
   /** buy's state directory (BUY_HOME). */
   home?: string;
+  /**
+   * Where buy keeps the account key (BUY_KEYSTORE_BACKEND). buy defaults to `system`, the OS keychain, which a
+   * headless host does not have. @celo/buy-keystore 0.8.5 has no passphrase: `file` is a plaintext 0600 file under
+   * BUY_HOME and refuses mainnet accounts. Not a secret; forwarded to the child as-is.
+   */
+  keystoreBackend?: 'system' | 'file';
 }
+
+/** The enclave's source grammar (enclave/src/rules.rs `is_source`): `buy:` + `[A-Za-z0-9._:/-]+`. */
+export const CAPABILITY_ID = /^[A-Za-z0-9._:/-]{1,128}$/;
 
 /** Atomic USDC as the decimal string `--max-amount` expects. */
 export function atomicToDecimal(v: bigint): string {
@@ -36,7 +45,9 @@ export function atomicToDecimal(v: bigint): string {
 }
 
 export function validateBuyConfig(c: BuyConfig): void {
-  if (!/^[\x21-\x7e]{1,128}$/.test(c.capabilityId)) throw new Error('buy: capabilityId must be 1-128 visible ASCII characters');
+  if (typeof c.capabilityId !== 'string' || !CAPABILITY_ID.test(c.capabilityId)) throw new Error('buy: capabilityId must be 1-128 characters of A-Z a-z 0-9 . _ : / -');
+  if (typeof c.url !== 'string') throw new Error('buy: url is required');
+  if (c.keystoreBackend !== undefined && c.keystoreBackend !== 'system' && c.keystoreBackend !== 'file') throw new Error('buy: keystoreBackend must be system or file');
   let u: URL;
   try {
     u = new URL(c.url);
@@ -50,11 +61,42 @@ export function validateBuyConfig(c: BuyConfig): void {
 
 export type Exec = (file: string, args: string[], opts: { env: NodeJS.ProcessEnv; signal: AbortSignal; maxBuffer: number }) => Promise<{ stdout: string }>;
 
-const defaultExec: Exec = (file, args, opts) =>
+/**
+ * Runs buy in its own process group (Linux) so that an abort ends buy and the curl it spawned: buy hands the signed
+ * payment to a curl grandchild, which would otherwise finish after the timeout. stdin is closed, stderr is dropped
+ * and never surfaced, stdout is capped.
+ */
+export const defaultExec: Exec = (file, args, opts) =>
   new Promise((resolve, reject) => {
-    // stdin is closed so buy can't wait on it; stderr is captured and dropped, never surfaced.
-    const child = execFile(file, args, { ...opts, encoding: 'utf8' }, (err, stdout) => (err ? reject(err) : resolve({ stdout })));
-    child.stdin?.end();
+    const group = process.platform !== 'win32';
+    const child = spawn(file, args, { env: opts.env, stdio: ['ignore', 'pipe', 'ignore'], detached: group });
+    const killGroup = (): void => {
+      try {
+        if (group && child.pid !== undefined) process.kill(-child.pid, 'SIGKILL');
+        else child.kill('SIGKILL');
+      } catch {
+        // already gone
+      }
+    };
+    let out = '';
+    let done = false;
+    const finish = (f: () => void): void => {
+      if (done) return;
+      done = true;
+      opts.signal.removeEventListener('abort', onAbort);
+      killGroup();
+      f();
+    };
+    const onAbort = (): void => finish(() => reject(Object.assign(new Error('aborted'), { code: 'ABORT_ERR' })));
+    if (opts.signal.aborted) return onAbort();
+    opts.signal.addEventListener('abort', onAbort);
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (d: string) => {
+      out += d;
+      if (out.length > opts.maxBuffer) finish(() => reject(Object.assign(new Error('too much output'), { code: 'MAXBUFFER' })));
+    });
+    child.on('error', (e) => finish(() => reject(e)));
+    child.on('close', (code) => finish(() => (code === 0 ? resolve({ stdout: out }) : reject(Object.assign(new Error('buy exited'), { code: code ?? 'SIGNAL' })))));
   });
 
 export class BuyCliSource implements BuySource {
@@ -71,8 +113,12 @@ export class BuyCliSource implements BuySource {
     this.exec = exec;
     // A minimal environment: AGENT_PRIVATE_KEY and any other secret in ours never reach the child.
     const env: NodeJS.ProcessEnv = {};
-    for (const k of ['PATH', 'HOME', 'LANG']) if (parentEnv[k] !== undefined) env[k] = parentEnv[k];
+    // XDG_RUNTIME_DIR and the session bus address are what the OS keychain (backend `system`) needs; none is secret.
+    for (const k of ['PATH', 'HOME', 'LANG', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']) if (parentEnv[k] !== undefined) env[k] = parentEnv[k];
     if (c.home !== undefined) env.BUY_HOME = c.home;
+    // The config field wins; otherwise our own BUY_KEYSTORE_BACKEND, if it is one buy accepts. Nothing else of buy's env is forwarded.
+    const backend = c.keystoreBackend ?? parentEnv.BUY_KEYSTORE_BACKEND;
+    if (backend === 'system' || backend === 'file') env.BUY_KEYSTORE_BACKEND = backend;
     this.env = env;
   }
 

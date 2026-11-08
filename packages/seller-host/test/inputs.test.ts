@@ -85,7 +85,7 @@ describe('input fetch (SPEC §5)', () => {
     const i = await f.fetch(PAY_TO, new Date('2026-11-10T12:00:00Z'));
     expect(i.source).toBe('buy:celo-rpc');
     expect(buy.calls.at(-1)!.map((c) => c.method)).toEqual(['eth_getBlockByNumber', 'eth_getCode', 'eth_getTransactionCount', 'eth_getBalance']);
-    expect(forno.requests).toHaveLength(1); // only the free head number
+    expect(forno.requests).toHaveLength(2); // the free head number, then the free cross-check of the paid block
     expect(buy.calls).toHaveLength(1); // one paid request per evaluate
     expect(guard.state(new Date('2026-11-10T13:00:00Z')).spentAtomic).toBe('5000');
   });

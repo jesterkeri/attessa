@@ -4627,3 +4627,28 @@ Built (packages/seller-host):
 
 Verification: `pnpm --filter @attessa/seller-host exec vitest run -t "inputs"` 16 passed | 76 skipped; full seller-host suite 92 passed (92); typecheck and lint exit 0 (see the build report for the output).
 reviewed: pending
+
+## T28 round 1 fixes after the adversary pass (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 and T28 stay unticked: T27 (capability id, price, first paid transaction) needs a funded agent wallet. Every buy test uses a test double or a stand-in shell script for the `buy` binary; nothing signs or spends.
+
+Fixed in packages/seller-host (each with a test that fails without the fix; confirmed by stashing `src/` and running the suite: 16 failed):
+1. `src/buy.ts`: new `keystoreBackend` config field (`system` | `file`), forwarded as BUY_KEYSTORE_BACKEND, plus XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS; the parent's own BUY_KEYSTORE_BACKEND is used if the config has none and it is a valid value. From @celo/buy-keystore 0.8.5 (read as data): the file backend has no passphrase and refuses mainnet accounts, so it cannot sign on mainnet (see OPEN-QUESTIONS). No AGENT_PRIVATE_KEY or other secret reaches the child.
+2. `CAPABILITY_ID = /^[A-Za-z0-9._:/-]{1,128}$/`, with a test reading `enclave/src/rules.rs` for the same grammar; `parseConfig` refuses a missing or non-string capabilityId, url or maxAmount at parse time.
+3. `src/inputs.ts`: `guard.allow`/`guard.record` run inside the paid-call wrapper under try/catch; a fault logs `buy_guard_fault`, makes no paid call, and Forno answers. The spend is recorded before the call it pays for.
+4. `defaultExec` uses spawn with `detached: true` and kills the process group on abort, exit or overflow; the test leaves a background child that would write a marker file 1.2 s later.
+5. The paid block's hash and timestamp are checked against Forno at the same number; a mismatch is a failed buy read (Forno answers). A Forno failure in the cross-check does not fail the evaluate (decision recorded in OPEN-QUESTIONS.md).
+6. A failed Forno head read is replaced by a head read through buy, counted as a second paid request within the budget; spend is counted only just before a paid call is made.
+Changed expectation in `test/inputs.test.ts`: Forno now sees 2 requests when buy succeeds (head, then the cross-check), was 1. `test/buy-adversary.test.ts` is the adversary's file with imports changed, kept as is.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  109 passed (109)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+```
+(previous count 92 passed)
+reviewed: pending
+

@@ -90,10 +90,16 @@ function quantity(v: unknown, what: string): bigint {
  * Reads the four inputs from `source` at latest − 1. The head number comes from `headSource` (default:
  * `source` itself). A paid source gets the free Forno head, so it is asked once, with the four reads in
  * one batch; its block is checked against the number asked for, and `source` names where the values came from.
+ * Every request has its own `timeoutMs`. `verify` runs on the block `source` returned and may throw to reject it.
  */
-export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs: number, headSource: RpcSource = source): Promise<Inputs> {
-  const signal = AbortSignal.timeout(timeoutMs);
-  const [head] = await headSource.batch([{ method: 'eth_blockNumber', params: [] }], signal);
+export async function readInputsFrom(
+  source: RpcSource,
+  payTo: string,
+  timeoutMs: number,
+  headSource: RpcSource = source,
+  verify?: (block: { number: string; hash: string; timestamp: string }) => Promise<void>,
+): Promise<Inputs> {
+  const [head] = await headSource.batch([{ method: 'eth_blockNumber', params: [] }], AbortSignal.timeout(timeoutMs));
   const latest = quantity(head, 'eth_blockNumber');
   if (latest < 1n) throw new Error('chain has no block before latest');
   const n = latest - 1n;
@@ -105,7 +111,7 @@ export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs
       { method: 'eth_getTransactionCount', params: [payTo, tag] },
       { method: 'eth_getBalance', params: [payTo, tag] },
     ],
-    signal,
+    AbortSignal.timeout(timeoutMs),
   );
   if (typeof block !== 'object' || block === null) throw new Error('block not found');
   const b = block as Record<string, unknown>;
@@ -113,7 +119,7 @@ export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs
   if (typeof b.hash !== 'string' || !HASH.test(b.hash)) throw new Error('bad block hash');
   const timestamp = quantity(b.timestamp, 'block timestamp');
   if (typeof code !== 'string' || !DATA.test(code)) throw new Error('bad code');
-  return {
+  const out: Inputs = {
     block: { number: n.toString(), hash: b.hash.toLowerCase(), timestamp: timestamp.toString() },
     payTo: {
       address: payTo,
@@ -123,6 +129,8 @@ export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs
     },
     source: source.id,
   };
+  await verify?.(out.block);
+  return out;
 }
 
 export interface InputFetcherOptions {
@@ -141,27 +149,85 @@ export class InputFetcher {
     this.timeoutMs = o.timeoutMs ?? 5_000;
   }
 
-  /** Primary, then one fallback attempt on Forno, then `InputsUnavailable`. */
+  /**
+   * Primary, then one fallback attempt on Forno, then `InputsUnavailable`. Spend is counted in the guard just
+   * before each paid request, never before one that does not happen; a guard fault (state file unwritable) means
+   * no paid request, so a spend that cannot be recorded cannot occur, and the read goes to Forno.
+   */
   async fetch(payTo: string, now: Date = new Date()): Promise<Inputs> {
-    const { buy, guard, forno } = this.o;
+    const { buy, guard, forno, log } = this.o;
     let primary: RpcSource = forno;
+    let headSource: RpcSource = forno;
+    let verify: ((b: Inputs['block']) => Promise<void>) | undefined;
     if (buy) {
       if (!guard) throw new Error('a buy source needs the budget guard');
-      if (guard.allow(buy.costPerEvaluate, now)) {
-        primary = buy;
-        // Counted before the call: a paid request is charged whether or not its answer is usable.
-        guard.record(buy.costPerEvaluate, now);
+      let allowed = false;
+      try {
+        allowed = guard.allow(buy.costPerEvaluate, now);
+      } catch (e) {
+        log?.('buy_guard_fault', { step: 'allow', reason: (e as Error).message });
+      }
+      if (allowed) {
+        const metered: RpcSource = {
+          id: buy.id,
+          batch: (calls, signal) => {
+            try {
+              if (!guard.allow(buy.costPerEvaluate, now)) throw new Error('buy budget exhausted');
+              guard.record(buy.costPerEvaluate, now);
+            } catch (e) {
+              log?.('buy_guard_fault', { step: 'record', reason: (e as Error).message });
+              return Promise.reject(new Error('buy not called: spend could not be recorded'));
+            }
+            return buy.batch(calls, signal);
+          },
+        };
+        let headFromBuy = false;
+        // The free head first; if Forno cannot give it, the head is one more paid request, within the same budget.
+        headSource = {
+          id: forno.id,
+          batch: async (calls, signal) => {
+            try {
+              return await forno.batch(calls, signal);
+            } catch (e) {
+              log?.('inputs_head_forno_failed', { reason: (e as Error).message });
+              headFromBuy = true;
+              return metered.batch(calls, AbortSignal.timeout(this.timeoutMs));
+            }
+          },
+        };
+        // A paid answer is checked against free Forno at the same number. If Forno cannot answer, the paid
+        // read stands (it is not Forno's evaluate to fail); a differing hash or timestamp is a failed buy read.
+        verify = async (blk) => {
+          if (headFromBuy) return;
+          let ref: unknown;
+          try {
+            [ref] = await forno.batch([{ method: 'eth_getBlockByNumber', params: [`0x${BigInt(blk.number).toString(16)}`, false] }], AbortSignal.timeout(this.timeoutMs));
+          } catch (e) {
+            log?.('inputs_crosscheck_unavailable', { reason: (e as Error).message });
+            return;
+          }
+          const r = (typeof ref === 'object' && ref !== null ? ref : {}) as Record<string, unknown>;
+          const sameHash = typeof r.hash === 'string' && r.hash.toLowerCase() === blk.hash;
+          let sameTime = false;
+          try {
+            sameTime = quantity(r.timestamp, 'timestamp').toString() === blk.timestamp;
+          } catch {
+            // not comparable
+          }
+          if (!sameHash || !sameTime) throw new Error('block differs from Forno at the same number');
+        };
+        primary = metered;
       }
     }
     try {
-      return await readInputsFrom(primary, payTo, this.timeoutMs, forno);
+      return await readInputsFrom(primary, payTo, this.timeoutMs, headSource, verify);
     } catch (e) {
-      this.o.log?.('inputs_primary_failed', { source: primary.id, reason: (e as Error).message });
+      log?.('inputs_primary_failed', { source: primary.id, reason: (e as Error).message });
     }
     try {
       return await readInputsFrom(forno, payTo, this.timeoutMs);
     } catch (e) {
-      this.o.log?.('inputs_unavailable', { reason: (e as Error).message });
+      log?.('inputs_unavailable', { reason: (e as Error).message });
       throw new InputsUnavailable('inputs_unavailable', { cause: e });
     }
   }
