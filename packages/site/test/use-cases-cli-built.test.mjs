@@ -90,8 +90,8 @@ const enclosing = (raw, at) => {
 // Character references, decoded once, the way a browser does (HTML Living Standard "character reference state"): decimal and hex
 // numeric forms with or without the semicolon, named references (the legacy ones also without it), nothing else. A reference that
 // does not match is left as literal text, and the decoded character is never decoded again (`&amp;#32;` shows as the text "&#32;").
-// No HTML-decoder package is in the lockfile, so the table below holds the names that matter here (whitespace, quoting, the
-// punctuation the site uses); an unknown name stays literal, which cannot hide a command a visitor sees as text.
+// No HTML-decoder package is in the lockfile, so the table below is partial. A browser knows names it lacks (`&NonBreakingSpace;` shows a
+// space), so a `&name;` not in the table is itself a violation: the scanner fails closed rather than read it as literal text.
 const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', Tab: '\t', NewLine: '\n', ensp: ' ', emsp: ' ',
   emsp13: ' ', emsp14: ' ', numsp: ' ', puncsp: ' ', thinsp: ' ', ThinSpace: ' ', hairsp: ' ', VeryThinSpace: ' ',
   MediumSpace: ' ', ZeroWidthSpace: '​', NoBreak: '⁠', shy: '­', copy: '©', reg: '®', hellip: '…', mdash: '—',
@@ -130,9 +130,11 @@ const TAG = /^<[^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/;
 // The rendered view of a document: text with character references decoded, a SEP wherever a block tag starts or ends (SEPI for
 // code / a), formatting tags transparent, and the decoded text of the visible attributes above. Comments, scripts and styles are not rendered.
 // For every character of the view, `at[i]` is its offset in the source and `attr[i]` is the attribute value it came from, if any.
+const UNKNOWN_REF = /&([A-Za-z][A-Za-z0-9]*);/g;
+const unknownRefs = s => [...s.matchAll(UNKNOWN_REF)].map(m => m[1]).filter(n => !Object.hasOwn(NAMED, n));
 const render = raw => {
   let view = '';
-  const at = [], attr = [];
+  const at = [], attr = [], unknown = [];
   const put = (str, i, a) => { for (const ch of str) { view += ch; at.push(i); attr.push(a); } };
   for (let i = 0; i < raw.length;) {
     if (raw.startsWith('<!--', i)) { const e = raw.indexOf('-->', i); i = e < 0 ? raw.length : e + 3; put(SEP, i, null); continue; }
@@ -142,13 +144,13 @@ const render = raw => {
       const rest = raw.slice(i);
       const tag = TAG.exec(rest)?.[0] ?? rest.slice(0, rest.indexOf('>') < 0 ? rest.length : rest.indexOf('>') + 1);
       put(FORMAT.test(tag) ? '' : INLINE.test(tag) ? SEPI : SEP, i, null);
-      for (const m of tag.matchAll(ATTRS)) { const v = decodeAll(m[1] ?? m[2] ?? m[3]); put(`${v}${SEP}`, i, v); }
+      for (const m of tag.matchAll(ATTRS)) { unknown.push(...unknownRefs(m[1] ?? m[2] ?? m[3])); const v = decodeAll(m[1] ?? m[2] ?? m[3]); put(`${v}${SEP}`, i, v); }
       i += tag.length; continue;
     }
-    if (raw[i] === '&') { const d = decodeRef(raw.slice(i, i + 40)); if (d) { put(d.ch, i, null); i += d.len; continue; } }
+    if (raw[i] === '&') { const d = decodeRef(raw.slice(i, i + 40)); if (d) { put(d.ch, i, null); i += d.len; continue; } const u = /^&([A-Za-z][A-Za-z0-9]*);/.exec(raw.slice(i, i + 40)); if (u && !Object.hasOwn(NAMED, u[1])) unknown.push(u[1]); }
     put(raw[i], i, null); i++;
   }
-  return { view, at, attr };
+  return { view, at, attr, unknown };
 };
 const tokensOf = s => s.match(/"[^"]*"|\S+/g) ?? [];
 /** Why these tokens (the words after `attessa`) are not a usable command, or null. Built commands only; UNBUILT is decided by the caller. */
@@ -179,9 +181,9 @@ const reasonFor = tokens => {
 };
 /** Every violation in one rendered document. `isJs`: the source is a script, so the block that must carry the marker is its source line. */
 const violations = (raw, isJs = false) => {
-  const { view, at, attr } = isJs ? (() => { const r = render(raw.replace(/<[^>]*>/g, SEP)); return { view: r.view, at: [...r.view].map((_, i) => i), attr: r.attr }; })() : render(raw);
+  const { view, at, attr, unknown = [] } = isJs ? (() => { const r = render(raw.replace(/<[^>]*>/g, SEP)); return { view: r.view, at: [...r.view].map((_, i) => i), attr: r.attr }; })() : render(raw);
   const source = isJs ? raw.replace(/<[^>]*>/g, SEP) : raw;
-  const bad = [];
+  const bad = isJs ? [] : unknown.map(n => `&${n};: a character reference this scanner cannot read`);
   for (const m of view.matchAll(/(?<![\w/@.:-])attessa\s+(?=[^\s\u0001])/g)) {
     const start = m.index + m[0].length;
     let tail = view.slice(start).split(SEP)[0];
@@ -312,6 +314,14 @@ test('character-reference and whitespace mutants in a built page are caught (Cod
   // Inside a marked-unbuilt block the exact unbuilt shape is still exempt, with an entity for its space as well.
   assert.deepEqual(violations('<p>Coming <code>attessa&#32;verify</code></p>'), []);
   assert.deepEqual(violations('<h2>Coming</h2><p><code>attessa&nbsp;verify</code></p>'), ['attessa verify: not built, and its block does not say so']);
+});
+
+test('a named reference the decoder lacks fails closed, in text and in attributes (Codex site r7 M1)', () => {
+  assert.deepEqual(violations('<p>attessa&NonBreakingSpace;ghost --bogus</p>'), ['&NonBreakingSpace;: a character reference this scanner cannot read']);
+  assert.deepEqual(violations('<p>&Aopf; x</p>'), ['&Aopf;: a character reference this scanner cannot read']);
+  assert.deepEqual(violations('<input value="attessa&NonBreakingSpace;ghost">'), ['&NonBreakingSpace;: a character reference this scanner cannot read']);
+  assert.deepEqual(violations('<p>a&amp;b; and &nbsp; x</p>'), []); // `&amp;b;` shows the text "&b;": no reference was left unread
+  assert.deepEqual(violations('<script>const a = x&y;</script>'), []);
 });
 
 test('real commands written with entities still pass, and a double-encoded space is text, not whitespace (Codex site r7 M1)', () => {

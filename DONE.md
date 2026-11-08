@@ -4652,4 +4652,5 @@ pnpm --filter @attessa/site test: tests 285, pass 285, fail 0
 node v22.23.2: 76 files, 285 tests, 0 failed
 pnpm --filter @attessa/site lint: ok
 ```
+Added by the lead after reading the diff: the name table is partial, and a browser shows names it lacks (`attessa&NonBreakingSpace;ghost` displays as a command), so a `&name;` not in the table is now a violation in text and attributes. 286 tests, 0 failed. Current pages contain no such reference.
 reviewed: pending Codex
