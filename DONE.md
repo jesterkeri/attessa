@@ -4685,3 +4685,19 @@ node v22.23.2: 76 files, 278 tests, 0 failed
 pnpm@10.32.1 install ran no non-allowlisted install script: ok
 ```
 `pnpm -r build`, `typecheck` and `lint` ended Done. reviewed: pending Codex r6.
+
+### T21a Codex r2 fix and CI fix - 2026-11-08
+
+Codex r2 (REVISE) on dbf7766, and CI red on the same commit.
+- The `settlement` row of a reserved call (nothing signed yet) now carries the registry's explorer link, in text and `--json`. The new test fails without the fix (`expected 'FAIL        settlement: nothing was s…' to contain 'https://sepolia.celoscan.io/'`) and passes with it.
+- CI failure: `use-cases-cli-built` refused the branch because `attessa verify` is in the CLI while the site still marked it Coming. The tutorial, reference, explorer, home page and docs index now offer it as built, and the tutorial describes what it really prints (six rows of pass, FAIL or not checked; "Not fully verified" without the proof and answer).
+- Tests that pinned verify as unbuilt now pin it as built. `built-state-consistent` lost its tutorial case, because that page no longer offers anything through verify that needs a mark. The docs-index card and the tutorial's meta description keep their "must carry a mark" tests, with a new true mark: the demo service is not available yet.
+- `feat/site-finish` (Codex r5 fixes) is merged here, because both touch the same test. T21a stays unticked: the run against one real Sepolia call waits for T22.
+
+```
+pnpm --filter @attessa/cli exec vitest run -t verify:  Tests  29 passed | 347 skipped (376)
+pnpm --filter @attessa/cli test:  Test Files  88 passed (88) / Tests  376 passed (376)
+./packages/site/test-count.sh:  node v22.23.2: 76 files, 277 tests, 0 failed
+pnpm -r build, typecheck, lint: Done
+```
+reviewed: pending Codex r3.

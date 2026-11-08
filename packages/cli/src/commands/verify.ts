@@ -156,7 +156,7 @@ export async function verify(g: Global, d: Deps, o: VerifyOpts): Promise<number>
     const set = (check: CheckId, status: CheckStatus, detail: string, link: string | null) => void (rows[check] = { check, status, detail, link });
     let settlement: Settlement | null = null;
     if (!payment) {
-      set('settlement', 'fail', 'nothing was signed for this request, so there is no payment to find', null);
+      set('settlement', 'fail', 'nothing was signed for this request, so there is no payment to find', addr(chain.registry));
     } else {
       const s = await settle(payment, known, entry);
       settlement = s.settlement;

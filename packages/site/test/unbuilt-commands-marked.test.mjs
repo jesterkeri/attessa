@@ -26,10 +26,10 @@ const text = h => h.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;
 const marked = /\b(coming|not built|isn't built|aren't built|not yet built|not available yet)\b/i;
 
 // T21 is ticked, so `attessa agent register` and `attessa call` are built (the reference no longer marks them). `attessa verify` (T21a) is
-// still marked, so a page that offers it must say it isn't built.
-test('the reference marks verify as not built and agent register as built (precondition)', () => {
+// built too, so no page may still call it unbuilt.
+test('the reference marks verify and agent register as built (precondition)', () => {
   const ref = text(page('docs/reference.html'));
-  assert.match(ref, /attessa verify <requestId> Coming/);
+  assert.doesNotMatch(ref, /attessa verify <requestId> Coming/);
   assert.doesNotMatch(ref, /attessa agent register Coming/);
   assert.doesNotMatch(text(page('docs/how-to.html')), /attessa agent register isn't built yet/);
 });
@@ -41,12 +41,8 @@ test('how-it-works offers attessa init, attessa call and attessa agent register 
   assert.doesNotMatch(t, /\b(coming|isn't built|aren't built|not yet built)\b/i, 'how-it-works.html marks a built command as unbuilt');
 });
 
-for (const [p, offers] of [
-  ['explorer.html', /You can run the same check with attessa verify <requestId>/],
-]) {
-  test(`${p} offers an unbuilt command, and says it isn't built`, () => {
-    const t = text(page(p));
-    assert.match(t, offers, `${p} no longer offers it`);
-    assert.match(t, marked, `${p} offers ${offers} as usable today, but the reference / how-to mark it not built (TASKS.md T21, T21a)`);
-  });
-}
+test('explorer.html offers attessa verify as built', () => {
+  const t = text(page('explorer.html'));
+  assert.match(t, /You can run the same check with attessa verify <requestId>/, 'explorer.html no longer offers it');
+  assert.doesNotMatch(t, /attessa verify <requestId> ?\. Coming|It isn't built yet/, 'explorer.html still calls attessa verify unbuilt');
+});

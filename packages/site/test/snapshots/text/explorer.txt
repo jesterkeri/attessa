@@ -31,7 +31,7 @@ Loading
 Not found
 Malformed tx
 Celo unreachable
-The check and this preview need JavaScript. You can run the same check with attessa verify <requestId>. Coming. It isn't built yet.
+The check and this preview need JavaScript. You can run the same check with attessa verify <requestId>.
 Recent calls
 When live, it lists the latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: attessa status shows your recent verdicts (Coming). Planned: looking it up here by its request ID. The rows below are samples until the explorer reads Celo.
 Time (UTC)

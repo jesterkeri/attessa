@@ -31,7 +31,7 @@ Threat model
 Known limits
 Attessa docs
 Attessa is a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with. The docs come in four kinds. Pick the one that matches what you need right now.
-TutorialMake your first pay-if-verified call on Celo Sepolia, in about 10 minutes. Coming: attessa verify. How-tosRun a seller, and revoke a build or a signer. Coming: use Attessa from an MCP agent. Optional, not built yet: use it with buy. ReferenceCLI commands, the nine agent tools, SDK options and every refusal code. ExplanationWhat a proof shows and doesn't, the threat model, and known limits.
+TutorialMake your first pay-if-verified call on Celo Sepolia, in about 10 minutes. The demo service is not available yet. How-tosRun a seller, and revoke a build or a signer. Coming: use Attessa from an MCP agent. Optional, not built yet: use it with buy. ReferenceCLI commands, the nine agent tools, SDK options and every refusal code. ExplanationWhat a proof shows and doesn't, the threat model, and known limits.
 Words used in these docs
 Word
 Meaning

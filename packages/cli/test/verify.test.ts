@@ -327,6 +327,21 @@ describe('verify: one refused case for each check', () => {
     expect(w.row('settlement')).toContain('not charged');
   });
 
+  it('verify of a reserved call (nothing signed yet) still links its settlement row, in text and --json', async () => {
+    await started();
+    const id = await w.call();
+    const pending = join(w.home, '.attessa', 'pending.jsonl');
+    const e = JSON.parse(readFileSync(pending, 'utf8').trim().split('\n').at(-1)!);
+    writeFileSync(pending, `${JSON.stringify({ ...e, state: 'reserved', nonce: null, settlementTx: null })}\n`);
+    expect(await w.verify(id)).toBe(1);
+    expect(w.row('settlement')).toMatch(FAIL);
+    expect(w.row('settlement')).toContain('nothing was signed for this request');
+    expect(w.row('settlement')).toContain(SCAN);
+    expect(await w.verify(id, '--json')).toBe(1);
+    const settlement = (JSON.parse(w.out.at(-1)!) as { checks: Array<{ check: string; link: string | null }> }).checks.find((c) => c.check === 'settlement')!;
+    expect(settlement.link).toContain(SCAN);
+  });
+
   it('verify refuses a settlement tx that is not this payment', async () => {
     await started();
     const id = await w.call();

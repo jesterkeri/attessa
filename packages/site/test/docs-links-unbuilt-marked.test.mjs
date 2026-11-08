@@ -48,7 +48,7 @@ const UNBUILT = [
 test('the target sections mark MCP, buy and the agent tools as not built; revoke and the tutorial are built (precondition)', () => {
   for (const [page, id, says] of UNBUILT) assert.match(section(page, id), says, `${page}#${id}`);
   assert.doesNotMatch(section('how-to.html', 'revoke'), /aren't built yet|Coming/, 'revoke is built (T21) and must not be marked');
-  assert.match(text(read('pages/docs/tutorial.html')), /attessa init and attessa call are built\./);
+  assert.match(text(read('pages/docs/tutorial.html')), /attessa init , attessa call and attessa verify are built\./);
 });
 
 test('the tutorial closing card that offers the MCP server says it is not built', () => {

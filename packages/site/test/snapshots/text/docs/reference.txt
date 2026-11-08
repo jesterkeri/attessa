@@ -44,7 +44,7 @@ Checks the seller, gets the price, signs a payment permission, and pays only if 
 attessa call --via buy <url>
 Optional, not built yet. Buys through buy and records what came back. No payment protection. --accept-unprotected skips the prompt for agents.
 attessa verify <requestId>
-Coming. Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.
+Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment. Give the proof and answer you kept with --proof and --response; without them the proof checks print as not checked.
 attessa cancel <requestId>
 Voids an unused payment permission on chain, for a little gas.
 attessa status

@@ -22,13 +22,12 @@ const marked = /\b(coming|not built|isn't built|aren't built|not yet built|not a
 test('the reference still marks the MCP server and the buyer CLI as not built (precondition)', () => {
   const ref = text(page('docs/reference.html'));
   assert.match(ref, /MCP server isn't built yet/);
-  assert.match(ref, /attessa verify <requestId> Coming/);
+  assert.match(ref, /attessa verify <requestId> Re-checks/, 'the reference must offer verify as built');
 });
 
 for (const [p, offers] of [
   ['index.html', /packages\/mcp\/dist\/bin\.js/],
   ['docs/how-to.html', /packages\/mcp\/dist\/bin\.js/],
-  ['docs/tutorial.html', /attessa verify <requestId>/],
 ]) {
   test(`${p} offers what the reference calls not built, and says it isn't built`, () => {
     const t = text(page(p));

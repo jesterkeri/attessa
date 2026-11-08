@@ -2,7 +2,7 @@
 // The rule stays: the site must agree with TASKS.md and the code. T21 is ticked and packages/cli has the buyer commands, so:
 //   - use-cases tells buyers how to install the CLI (from source, D2) and offers `attessa call` as built;
 //   - every `attessa ...` command any page shows is a real command in packages/cli/src/index.ts, unless that page marks it
-//     Coming / not built (T21a `attessa verify`, `attessa release verify`, `attessa call --via buy` are not built).
+//     Coming / not built (`attessa release verify` and `attessa call --via buy` are not built).
 // (TASKS.md is read from SITE_SRC/../../../TASKS.md or TASKS_MD; the CLI from SITE_SRC/../../cli/src/index.ts or CLI_INDEX.)
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -29,7 +29,7 @@ const isReal = words => {
 test('T21 is ticked and the CLI has the buyer commands (precondition)', () => {
   assert.match(tasks, /^- \[x\] T21 CLI per SPEC §8/m, 'TASKS.md T21 is not ticked: the site must go back to marking the buyer CLI Coming');
   for (const c of ['init', 'call', 'cancel', 'status', 'evidence export']) assert.ok(real.has(c), `packages/cli no longer has ${c}`);
-  assert.ok(!real.has('verify'), 'attessa verify (T21a) is in the CLI now: stop marking it Coming on the site');
+  assert.ok(real.has('verify'), 'packages/cli no longer has verify: the site must go back to marking it Coming');
 });
 
 test('use-cases offers the CLI as built and says how to install it from source', () => {
@@ -68,7 +68,7 @@ import { commandOf, COMMANDS } from './lib/cli-table.mjs';
 // Codex site-finish r5: every displayed command node is parsed. An unknown command fails before its flags are looked at, and only a
 // command named in UNBUILT may be exempt, and only with its marker in the same block (table row, list item, paragraph, heading, figure).
 // A nearby Coming or Optional never blesses a built command, or anything else.
-const UNBUILT = [/^verify\b/, /^release verify\b/, /^call --via\b/];
+const UNBUILT = [/^release verify\b/, /^call --via\b/];
 const BLOCKS = ['tr', 'li', 'p', 'h2', 'h3', 'figure'];
 const enclosing = (raw, at) => {
   const open = BLOCKS.flatMap(tag => {
@@ -108,9 +108,9 @@ test('the command check refuses an unknown terminal command, and a bad flag besi
   const page = n => readFileSync(join(src, 'pages', ...n), 'utf8');
   const swap = (raw, from, to) => { assert.ok(raw.includes(from), `the page lost ${from}`); return raw.replace(from, to); };
   assert.deepEqual(violations(swap(page(['how-it-works.html']), 'attessa enclave build</span></span>', 'attessa ghost --bogus</span></span>')), ['attessa ghost --bogus: no such command']);
-  assert.deepEqual(violations(swap(page(['docs', 'tutorial.html']), '<code>attessa init</code> and', '<code>attessa init --bogus</code> and')), ['attessa init --bogus: no such flag']);
+  assert.deepEqual(violations(swap(page(['docs', 'tutorial.html']), '<code>attessa init</code>,', '<code>attessa init --bogus</code>,')), ['attessa init --bogus: no such flag']);
   assert.deepEqual(violations('<p>Coming. <code>attessa ghost</code></p>'), ['attessa ghost: no such command']);
-  assert.deepEqual(violations('<h2>Coming</h2><p><code>attessa verify</code></p>'), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('<h2>Coming</h2><p><code>attessa release verify</code></p>'), ['attessa release verify: not built, and its block does not say so']);
 });
 
 test('a command with an unbuilt modifier is not accepted just because its first word is real (attessa call --via buy)', () => {

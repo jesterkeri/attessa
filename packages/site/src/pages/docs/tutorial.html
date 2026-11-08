@@ -1,5 +1,5 @@
 <!-- title: Tutorial: pay-if-verified on Celo Sepolia | Attessa -->
-<!-- description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet. -->
+<!-- description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. The demo service is not available yet. -->
 <!-- nav: docs -->
 <!-- doc: tutorial -->
 <!-- body: docs-page -->
@@ -9,7 +9,7 @@
     <span class="mode">Tutorial</span>
     <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
     <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
-    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do. The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.</p></div>
+    <div class="doc-note"><p><strong><code>attessa init</code>, <code>attessa call</code> and <code>attessa verify</code> are built.</strong> The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.</p></div>
     <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
 
     <ol class="doc-steps">
@@ -72,14 +72,13 @@
         {{> cli-refused}}
       </li>
       <li>
-        <h2 id="verify">Re-check it with <code>attessa verify</code> <span class="muted">Coming</span></h2>
-        <p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p>
+        <h2 id="verify">Re-check it with <code>attessa verify</code></h2>
         <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
         <figure class="code" data-copy="commands">
-          <figcaption><span>Terminal (coming)</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
         </figure>
-        <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>
+        <p>It prints one line for each of six checks: release, signer, signature, binding, timing and inputs, and settlement. Each says <code>pass</code>, <code>FAIL</code> or <code>not checked</code>, with its Celoscan link. Your record keeps the proof's hashes but not its signature, so without the proof header and the answer you kept, the proof checks print as not checked and it ends with "Not fully verified". With them, run <code>attessa verify &lt;requestId&gt; --proof &lt;file&gt; --response &lt;file&gt;</code>; it ends with "Verified: every check passed." only if all six pass. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>
       </li>
     </ol>
 

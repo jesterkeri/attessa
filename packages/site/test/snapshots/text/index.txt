@@ -122,10 +122,10 @@ An unused permission expires after
 Checks that must all pass first
 4checks
 Try it on Celo Sepolia
-Celo's test network, so nothing here costs real money. Get gas at faucet.celo.org/celo-sepolia and test USDC at faucet.circle.com (choose Celo Sepolia). The buyer commands below are built, except attessa verify, which is coming; install them from source.
+Celo's test network, so nothing here costs real money. Get gas at faucet.celo.org/celo-sepolia and test USDC at faucet.circle.com (choose Celo Sepolia). The buyer commands below are built; install them from source.
 Install from source (steps), then set upattessa init
 Call a serviceattessa call https://<service> --body input.json --max-amount 0.05
-Re-check it later, with no wallet Comingattessa verify <requestId>
+Re-check it later, with no walletattessa verify <requestId>
 Terminal / attessa call
 Copy
 $ attessa call https://risk.example/v1/evaluate --body tx.json

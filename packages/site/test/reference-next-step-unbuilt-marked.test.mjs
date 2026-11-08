@@ -47,14 +47,14 @@ const cited = next => [
   ...(/(^|[^a-z])--via buy/.test(next) && !/attessa call --via buy/.test(next) ? ['attessa call --via buy'] : []),
 ];
 
-// T21 is ticked: init, call, cancel, status, evidence export and the owner commands are built. Still not built: `attessa call --via buy` (T29),
-// `attessa verify` (T21a) and `attessa release verify`.
-test('the CLI table marks `attessa call --via buy` and `attessa verify` as not built, and the T21 commands as built (precondition)', () => {
+// init, call, cancel, status, evidence export, verify and the owner commands are built. Still not built: `attessa call --via buy` (T29)
+// and `attessa release verify`.
+test('the CLI table marks `attessa call --via buy` and `attessa release verify` as not built, and the built commands as built (precondition)', () => {
   const keys = unbuiltCommands();
-  for (const k of ['attessa call --via buy', 'attessa verify']) {
+  for (const k of ['attessa call --via buy', 'attessa release verify']) {
     assert.ok(keys.includes(k), `CLI table parse lost ${k}; got ${keys.join(', ')}`);
   }
-  for (const k of ['attessa init', 'attessa call', 'attessa cancel', 'attessa status', 'attessa evidence export', 'attessa selflink', 'attessa signer register']) {
+  for (const k of ['attessa verify', 'attessa init', 'attessa call', 'attessa cancel', 'attessa status', 'attessa evidence export', 'attessa selflink', 'attessa signer register']) {
     assert.ok(!keys.includes(k), `${k} is built (T21 / T15) and must not parse as unbuilt`);
   }
 });
