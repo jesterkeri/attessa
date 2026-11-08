@@ -4,7 +4,7 @@
 // The binding values are placeholders: the spike checks field sizes, not a registration.
 // Needs `pnpm -r build`. Usage: node scripts/t12-configure.mjs <port> <out>
 import { writeFileSync } from 'node:fs';
-import { EnclaveClient, TcpEnclaveTransport } from '../packages/seller-host/dist/index.js';
+import { configureMessage, EnclaveClient, TcpEnclaveTransport } from '../packages/seller-host/dist/index.js';
 
 const [port, out] = [Number(process.argv[2]), process.argv[3]];
 if (!Number.isInteger(port) || !out) {
@@ -12,13 +12,13 @@ if (!Number.isInteger(port) || !out) {
   process.exit(2);
 }
 const client = new EnclaveClient(new TcpEnclaveTransport(port));
-const cfg = {
-  chainId: '11142220',
+// configureMessage is what the seller host sends: the enclave takes only lowercase hex, and it lowercases the address.
+const cfg = configureMessage({
+  chainId: 11142220,
   registry: '0x42Bf5Cb440c3C321CB42b0F4c81c3c7435cB92fF', // Celo Sepolia EnclaveRegistry (packages/core/src/deployments.ts)
   agentId: '1',
   origin: 'https://spike.example',
-  rpcAllowedChains: ['11142220'],
-};
+});
 let last;
 for (let i = 0; i < 30; i++) {
   try {
