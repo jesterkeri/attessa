@@ -40,7 +40,7 @@ export function wallet(name) {
   const f = join(DIR, 'keys', name);
   if (!existsSync(f)) {
     const out = JSON.parse(execFileSync('cast', ['wallet', 'new', '--json'], { encoding: 'utf8' }));
-    writeFileSync(f, out[0].private_key, { mode: 0o600 });
+    writeFileSync(f, (out.data ?? out)[0].private_key, { mode: 0o600 });
   }
   const key = readFileSync(f, 'utf8').trim();
   return { account: privateKeyToAccount(key), key, address: privateKeyToAccount(key).address };
