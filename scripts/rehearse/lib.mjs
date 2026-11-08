@@ -4,8 +4,8 @@
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, chmodSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { createPublicClient, createWalletClient, http, defineChain, parseEther, formatEther } from 'viem';
-import { privateKeyToAccount } from 'viem/accounts';
+import { createPublicClient, createWalletClient, http, defineChain, parseEther, formatEther } from '../../packages/core/node_modules/viem/_esm/index.js';
+import { privateKeyToAccount } from '../../packages/core/node_modules/viem/_esm/accounts/index.js';
 
 export const DIR = process.env.REHEARSE_DIR || '/tmp/attessa-rehearse';
 export const PORT = Number(process.env.REHEARSE_PORT || 18546);
