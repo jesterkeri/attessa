@@ -4667,3 +4667,43 @@ fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8  node-v22.23.2-
 Tests (`packages/seller-host/test/host-scripts.test.ts`, 8): constants are 64 and 128 hex, no checksum fetch, verify precedes extraction, and the real `fetch_verified` run with a fake `curl` rejects a tampered archive (prints DIGEST MISMATCH, no install) and accepts the genuine one, for sha256 and sha512.
 Not verified: the new setup script was not run on the host or with real `sudo`; `t12-spike.sh` was exercised only with fakes.
 reviewed: pending Codex
+
+### T12 Codex r2 fixes (M1, M2) - 2026-11-08
+Review: `t12-review-r2.md` (REVISE, 2 major, no critical or minor). T12 stays unticked.
+
+Earlier evidence that r2 did not see (it was frozen out of the review): the real host run at b600504 passed (archive `t12-host-run-b600504.txt`): public_key 65, user_data 160, PCR0 `44df64f8...c2a5`, PCR1 `3b4a7e1b...4d03`, PCR2 `e85759a3...d2ff`, and 3 enclaves running. Afterwards Joshua ran `describe-enclaves | jq length` on the host and it printed 0. That run predates these fixes: the script that ran is the one r2 reviewed. Real Ctrl-C, Caddy, the systemd units, `attessa enclave build` and on-chain attestation validation remain untested.
+
+- M2 `scripts/t12-spike.sh`: admission no longer uses `jq length`. `enclaves()` accepts `nitro-cli describe-enclaves` only if the command succeeded and the output is an array whose every record is an object with a non-empty string `EnclaveID` and a numeric `EnclaveCID`. `null`, `{}`, `{"Enclaves":[]}`, empty output, non-JSON, malformed records and a command failure all print `refusing to run: cannot establish the set of running enclaves ...` and exit 1 before `mkdir build`, Docker or any enclave call. Only a well-formed `[]` counts as empty.
+- M1 `scripts/t12-spike.sh`: `run()` records the requested CID in `ATTEMPTED` before calling `run-enclave`. Whatever happens next (non-zero exit after a start, output without `EnclaveID`, non-JSON output, an interrupt), `cleanup` looks each attempted CID with no known id up in the strict `describe-enclaves` list and terminates that enclave by its id. This is safe because the preflight proved the host had no enclave when the run began. If the list cannot be read at that point, cleanup says `cannot list enclaves to look for CID N; check it and stop it by hand` and the script exits non-zero. Still no `--all`.
+- Tests (`packages/seller-host/test/host-scripts.test.ts`, now 23): the fake `nitro-cli` gained `DESCRIBE_RAW`, `DESCRIBE_FAIL` and `RUN_MODE` (malformed, garbage, failafter: the enclave is recorded as started, then the output is bad or the command fails). New cases: 8 describe-enclaves shapes refuse with no docker/build/run/terminate call and no `build/` directory; describe failure refuses; a well-formed `[]` still runs; 3 launch failure modes each terminate exactly `i-fake-18` by id; cleanup never terminates a pre-existing id; cleanup reports when it cannot list.
+
+Failing without the fix: I copied the test file, the other scripts and the runbook to a scratch tree, put the b600504 `t12-spike.sh` in it and ran the same file with the same vitest:
+```
+ ❯ test/host-scripts.test.ts (23 tests | 13 failed) 358ms
+ Test Files  1 failed (1)
+```
+The 13 failures are the 8 shape cases, the describe-failure case, the 3 launch-failure cases and the cleanup-cannot-list case. The scratch tree is deleted. The other 10 pass on the old script too (the earlier 8 tests, the well-formed `[]` case, and the pre-existing-id case, which holds on the old script because it never looked anything up).
+
+Verification at the fix commit, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/host-files.test.ts (5 tests) 6ms
+ ✓ test/framing.test.ts (4 tests) 4ms
+ ✓ test/units.test.ts (8 tests) 13ms
+ ✓ test/review-t15-r1.test.ts (13 tests) 88ms
+ ✓ test/host-scripts.test.ts (23 tests) 632ms
+ ✓ test/enclave.test.ts (6 tests) 271ms
+ ✓ test/server.test.ts (23 tests) 279ms
+ ✓ test/inputs.test.ts (11 tests) 556ms
+ ✓ test/adversary-t15.test.ts (8 tests) 495ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 877ms
+ Test Files  10 passed (10)
+      Tests  109 passed (109)
+   Duration  1.34s
+$ pnpm --filter @attessa/seller-host lint        -> tsc -p ../core && tsc -p . --noEmit, no output, exit 0
+$ pnpm --filter @attessa/seller-host typecheck   -> same, exit 0
+$ bash -n scripts/t12-spike.sh                   -> ok
+```
+r2 said the full seller-host suite timed out in framing/server/inputs. Here it passed in 1.34 s with nothing skipped or weakened; no test is slow (the longest is 305 ms). The timeouts in r2 were most likely contention on the shared machine, but I did not reproduce them, so that is a guess.
+Not verified: the fixed script was exercised only with fakes. Real nitro-cli output format (that real records carry `EnclaveID` as a string and `EnclaveCID` as a number, as documented) was not re-checked on the host; if a real record differs, the script refuses, which is the safe failure. No full `pnpm -r build` was run here.
+reviewed: pending

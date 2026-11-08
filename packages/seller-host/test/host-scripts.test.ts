@@ -39,12 +39,22 @@ function fakeHost(bin: string): void {
     `echo "nitro-cli $*" >> "$LOG"
 touch "$STATE"
 case "$1" in
-  describe-enclaves) jq -R -s -c 'split("\\n") | map(select(length>0)) | map({EnclaveID: .})' "$STATE" ;;
+  describe-enclaves)
+    [ -z "\${DESCRIBE_FAIL:-}" ] || exit 1
+    if [ -n "\${DESCRIBE_RAW+x}" ]; then printf '%s' "$DESCRIBE_RAW"; exit 0; fi
+    jq -R -s -c 'split("\\n") | map(select(length>0)) | map({EnclaveID: ., EnclaveCID: (try (sub("^i-fake-";"") | tonumber) catch 0)})' "$STATE" ;;
   build-enclave) echo '{"Measurements":{"PCR0":"00"}}' ;;
   run-enclave)
     while [ $# -gt 0 ]; do [ "$1" = --enclave-cid ] && cid=$2; shift; done
     [ "$cid" != "\${FAIL_CID:-}" ] || exit 1
     echo "i-fake-$cid" >> "$STATE"
+    # RUN_MODE: malformed = the enclave starts but the output lacks EnclaveID; garbage = not JSON at all;
+    # failafter = the enclave starts and the command then exits 1 (no usable output).
+    case "\${RUN_MODE:-}" in
+      malformed) echo "{\\"EnclaveCID\\":$cid}"; exit 0 ;;
+      garbage) printf '{"EnclaveCID": 1'; exit 0 ;;
+      failafter) exit 1 ;;
+    esac
     echo "{\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
   terminate-enclave)
     if [ "$2" = --all ]; then : > "$STATE"; exit 0; fi
@@ -95,6 +105,77 @@ describe('t12-spike.sh never terminates an enclave it did not start', () => {
     const { r, terminates } = runSpike({ FAIL_NODE: '1' });
     expect(r.status).not.toBe(0);
     expect(terminates).toEqual(['nitro-cli terminate-enclave --enclave-id i-fake-18']);
+  });
+});
+
+describe('t12-spike.sh fails closed on malformed Nitro CLI results', () => {
+  const noStart = (log: string[]): boolean =>
+    !log.some((l) => /^(docker|nitro-cli (build-enclave|run-enclave|terminate-enclave))/.test(l));
+
+  // Codex T12 r2 M2: `jq length` read null and {} as an empty host.
+  it.each([
+    ['null', 'null'],
+    ['an object', '{}'],
+    ['an object with a list inside', '{"Enclaves":[]}'],
+    ['an empty string', ''],
+    ['not JSON', 'oops'],
+    ['a record with no EnclaveID', '[{"EnclaveCID":18}]'],
+    ['a non-object record', '[1]'],
+    ['a record with no EnclaveCID', '[{"EnclaveID":"i-x"}]'],
+  ])('refuses without building or starting anything when describe-enclaves returns %s', (_n, raw) => {
+    const { r, log, sb } = runSpike({ DESCRIBE_RAW: raw });
+    expect(r.status).not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/refusing to run: cannot establish/);
+    expect(noStart(log)).toBe(true);
+    expect(existsSync(join(sb.dir, 'work', 'build'))).toBe(false);
+  });
+
+  it('refuses when describe-enclaves itself fails', () => {
+    const { r, log } = runSpike({ DESCRIBE_FAIL: '1' });
+    expect(r.status).not.toBe(0);
+    expect(r.stdout + r.stderr).toMatch(/refusing to run: cannot establish/);
+    expect(noStart(log)).toBe(true);
+  });
+
+  it('still accepts a well-formed empty list', () => {
+    const { r, log } = runSpike({ DESCRIBE_RAW: '[]' });
+    expect(r.status, r.stderr).toBe(0);
+    expect(log.some((l) => l.startsWith('nitro-cli run-enclave'))).toBe(true);
+  });
+
+  // Codex T12 r2 M1: the enclave starts, then run-enclave output is unusable; the id must be found by CID.
+  it.each([
+    ['output without EnclaveID', 'malformed'],
+    ['output that is not JSON', 'garbage'],
+    ['a failure after the start', 'failafter'],
+  ])('terminates the enclave it started when run-enclave gives %s', (_n, mode) => {
+    const { r, terminates } = runSpike({ RUN_MODE: mode });
+    expect(r.status).not.toBe(0);
+    // run 18 fails first, so the script stops there; exactly that enclave is found by CID and terminated.
+    expect(terminates).toEqual(['nitro-cli terminate-enclave --enclave-id i-fake-18']);
+  });
+
+  it('cleanup never terminates a pre-existing enclave, even when launches are malformed', () => {
+    const { r, terminates } = runSpike({ RUN_MODE: 'malformed', DESCRIBE_RAW: '[]' });
+    expect(r.status).not.toBe(0);
+    expect(terminates.every((t) => /i-fake-1[678]$/.test(t))).toBe(true);
+  });
+
+  it('reports plainly when cleanup cannot list enclaves to find a started one', () => {
+    // describe-enclaves works for the preflight, then fails: the enclave of CID 18 cannot be located.
+    const sb = sandbox();
+    fakeHost(sb.bin);
+    const real = readFileSync(join(sb.bin, 'nitro-cli'), 'utf8');
+    writeFileSync(join(sb.bin, 'nitro-cli'), real.replace('describe-enclaves)', 'describe-enclaves)\n    if [ -e "$STATE.seen" ]; then exit 1; fi; touch "$STATE.seen"'));
+    writeFileSync(sb.state, '');
+    const cwd = join(sb.dir, 'work');
+    mkdirSync(cwd);
+    const r = spawnSync('bash', [spike], {
+      cwd, encoding: 'utf8',
+      env: { PATH: `${sb.bin}:${process.env.PATH}`, LOG: sb.log, STATE: sb.state, SOCATPID: join(sb.dir, 'socat.pid'), RUN_MODE: 'malformed' },
+    });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).toMatch(/cannot list enclaves to look for CID 18; check it and stop it by hand/);
   });
 });
 
