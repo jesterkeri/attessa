@@ -771,8 +771,11 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     const id = w.pending()[0]!.requestId as string;
     w.out.length = 0;
     delete w.env.LOOPS_ATTRIBUTION_TAG;
+    (w.chain as unknown as { chainId: number }).chainId = 42220; // the rule follows the RPC's real chain, not the --network label
+    const before = w.transcript.length;
     expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
     expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
     w.out.length = 0;
     expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--dry-run')).toBe(0);
     expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG');
@@ -799,7 +802,6 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(await w.call('--no-wait')).toBe(1);
     const id = w.pending()[0]!.requestId as string;
     w.out.length = 0;
-    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234'; // mainnet sends carry the Loops tag, so the tag is not what these tests are about
     expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
     expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'network_mismatch' });
   });

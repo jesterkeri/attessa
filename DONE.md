@@ -4532,3 +4532,14 @@ pnpm -r lint:      packages/site, seller-host, sdk, gateway, cli lint: Done
 ```
 
 reviewed: pending Codex
+
+### Mainnet entry adversary r1 fix - 2026-11-08
+Defect, proved by packages/cli/test/adversary-mainnet-r1.test.ts: `attessa cancel --network mainnet` against an RPC on another chain, with no valid tag, answered no_attribution_tag instead of the FLOWS section 8 network_mismatch, because buyer.ts checked the tag on the --network label before the chain was verified. Nothing untagged could be sent; the error and next action were wrong.
+Fix: removed the label check from cancel. The SDK's requireAttribution refuses on the verified chain id, before the cancel permission is signed, after the wrong-network check.
+Test changes: the new adversary test added. adversary-t21-r4 and the buyer.test.ts network_mismatch case no longer need a tag set, so those lines are gone and both now run tagless. The buyer.test.ts "cancel on mainnet without LOOPS_ATTRIBUTION_TAG" case, added on this branch, expected no_attribution_tag from an RPC reporting Sepolia, which is the behaviour the adversary proved wrong: it now sets the fake chain to 42220, and also asserts nothing was estimated or sent.
+verify (flock, this worktree):
+pnpm --filter @attessa/cli test: Test Files 91 passed (91), Tests 378 passed (378)
+pnpm --filter @attessa/sdk test: Tests 205 passed (205)
+pnpm --filter @attessa/core test: Tests 86 passed (86)
+pnpm --filter @attessa/cli typecheck: exit 0; pnpm --filter @attessa/cli lint: exit 0
+reviewed: pending

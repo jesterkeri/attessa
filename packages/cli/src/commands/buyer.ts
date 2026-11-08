@@ -683,7 +683,8 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     if (g.network === 'mainnet' && !loopsSuffix(d.env)) d.io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real cancel on mainnet is refused until it is)'); // not in FLOWS
     return 0;
   }
-  if (g.network === 'mainnet' && !loopsSuffix(d.env)) throw ERR.attributionRequired(); // before the cancel permission is signed
+  // The tag rule is on the verified chain id, after the wrong-network check: the SDK's requireAttribution refuses
+  // before the cancel permission is signed, and the error maps to ERR.attributionRequired above.
   // FLOWS.md:833: "Cancel no longer prompts".
   try {
     // A chain read the SDK throws as RpcError is one made before anything was signed (cancelAuthorization wraps every
