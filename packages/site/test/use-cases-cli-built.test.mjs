@@ -119,16 +119,28 @@ const decodeRef = s => {
 };
 const decodeAll = s => { let out = ''; for (let i = 0; i < s.length;) { const d = s[i] === '&' ? decodeRef(s.slice(i, i + 40)) : null; if (d) { out += d.ch; i += d.len; } else out += s[i++]; } return out; };
 const SEP = '\u0001'; // a block boundary: a command never runs across it
-const SEPI = '\u0002'; // the edge of an inline element a browser shows inside one line (<code>, <a>, <span>...): a command may start just inside it, not run out of it
-const FORMAT = /^<\/?(?:b|i|em|strong|u|s|small|mark|sub|sup|abbr|font|wbr|bdi|bdo|cite|q|dfn)(?![\w-])/i; // invisible to the text run
-const INLINE = /^<\/?(?:code|a|span|kbd|samp|var|tt)(?![\w-])/i;
+const SEPI = '\u0002'; // the edge of an inline element whose text a command may start just inside of, not run out of (see INLINE)
+// Fails closed (Codex site r8 M1). A tag separates text ONLY if it is on this list: the elements that break a line of text per the HTML
+// Standard's rendering section (flow and sectioning blocks, headings, lists, tables, form blocks, br/hr, option/optgroup, head-only elements).
+// Every other tag, including unknown and custom elements (<x-foo>) and every inline element (label, del, ins, time, output, ruby, data, b, i...),
+// is transparent, so its text joins the text around it. Over-joining can only make a false violation, which a person sees and fixes; it cannot hide a command.
+const BREAKS = new Set(['address', 'article', 'aside', 'blockquote', 'body', 'br', 'caption', 'center', 'col', 'colgroup', 'dd', 'details', 'dialog', 'dir', 'div',
+  'dl', 'dt', 'fieldset', 'figcaption', 'figure', 'footer', 'form', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'head', 'header', 'hgroup', 'hr', 'html', 'legend',
+  'li', 'listing', 'main', 'menu', 'nav', 'ol', 'optgroup', 'option', 'p', 'plaintext', 'pre', 'rp', 'rt', 'search', 'section', 'summary', 'table', 'tbody', 'td',
+  'tfoot', 'th', 'thead', 'title', 'tr', 'ul', 'xmp']);
+// The one kept exception to "transparent": code / a / span / kbd / samp / var / tt mark the edge of an element a command may START just inside
+// (`attessa <code>ghost</code>`) but not run out of, which the real pages need (a `<span class="ln">` output line ends where its span ends, and
+// `<code>attessa init</code> and` must not read "and" as an argument). It only ever shortens what is read as one command at a boundary.
+const INLINE = new Set(['code', 'a', 'span', 'kbd', 'samp', 'var', 'tt']);
+const tagName = tag => /^<\/?([a-zA-Z][^\s/>]*)/.exec(tag)?.[1].toLowerCase() ?? '';
+const separator = tag => { const n = tagName(tag); return BREAKS.has(n) ? SEP : INLINE.has(n) ? SEPI : ''; };
 // Attributes whose value a visitor sees or a search result shows, so a command in one is a displayed command. Policy: all of them are
 // scanned, input `value` and `placeholder` included, in double-quoted, single-quoted and unquoted form. (`title`, `alt` and `aria-label` are
 // read out or shown on hover; `content` is the meta description; `data-*` feeds the site's own JS, which writes it into the page.)
 const ATTRS = /\s(?:title|alt|aria-label|content|placeholder|value|data-[\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
 const TAG = /^<[^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/;
-// The rendered view of a document: text with character references decoded, a SEP wherever a block tag starts or ends (SEPI for
-// code / a), formatting tags transparent, and the decoded text of the visible attributes above. Comments, scripts and styles are not rendered.
+// The rendered view of a document: text with character references decoded, a SEP wherever a BREAKS tag starts or ends (SEPI for
+// INLINE ones), every other tag transparent, and the decoded text of the visible attributes above. Comments, scripts and styles are not rendered.
 // For every character of the view, `at[i]` is its offset in the source and `attr[i]` is the attribute value it came from, if any.
 const UNKNOWN_REF = /&([A-Za-z][A-Za-z0-9]*);/g;
 const unknownRefs = s => [...s.matchAll(UNKNOWN_REF)].map(m => m[1]).filter(n => !Object.hasOwn(NAMED, n));
@@ -143,7 +155,7 @@ const render = raw => {
     if (raw[i] === '<' && /[a-zA-Z/]/.test(raw[i + 1] ?? '')) {
       const rest = raw.slice(i);
       const tag = TAG.exec(rest)?.[0] ?? rest.slice(0, rest.indexOf('>') < 0 ? rest.length : rest.indexOf('>') + 1);
-      put(FORMAT.test(tag) ? '' : INLINE.test(tag) ? SEPI : SEP, i, null);
+      put(separator(tag), i, null);
       for (const m of tag.matchAll(ATTRS)) { unknown.push(...unknownRefs(m[1] ?? m[2] ?? m[3])); const v = decodeAll(m[1] ?? m[2] ?? m[3]); put(`${v}${SEP}`, i, v); }
       i += tag.length; continue;
     }
@@ -179,10 +191,51 @@ const reasonFor = tokens => {
   }
   return positionals > spec.args ? `Unexpected argument: ${rest.filter(t => !t.startsWith('-')).slice(spec.args).join(' ')}` : null;
 };
-/** Every violation in one rendered document. `isJs`: the source is a script, so the block that must carry the marker is its source line. */
+// The string literals of a script (and the template literals, whose range includes their ${} expressions), as { s, e } ranges of their contents.
+// Comments are skipped. A regex literal holding a quote can confuse it; the effect is a literal found wrong, and a wrong literal reports a violation.
+const literalsOf = src => {
+  const out = [];
+  const code = (i, inBraces) => {
+    let depth = 0;
+    while (i < src.length) {
+      const c = src[i];
+      if (c === '/' && src[i + 1] === '/') { i = src.indexOf('\n', i); if (i < 0) return src.length; continue; }
+      if (c === '/' && src[i + 1] === '*') { const e = src.indexOf('*/', i + 2); if (e < 0) return src.length; i = e + 2; continue; }
+      if (c === '"' || c === "'") { let j = i + 1; while (j < src.length && src[j] !== c && src[j] !== '\n') j += src[j] === '\\' ? 2 : 1; out.push({ s: i + 1, e: j }); i = j + 1; continue; }
+      if (c === '`') { i = template(i); continue; }
+      if (inBraces) { if (c === '{') depth++; else if (c === '}') { if (depth === 0) return i + 1; depth--; } }
+      i++;
+    }
+    return i;
+  };
+  const template = i => {
+    const lit = { s: i + 1, e: src.length };
+    out.push(lit);
+    let j = i + 1;
+    while (j < src.length && src[j] !== '`') { if (src[j] === '\\') j += 2; else if (src[j] === '$' && src[j + 1] === '{') j = code(j + 2, true); else j++; }
+    lit.e = Math.min(j, src.length);
+    return j + 1;
+  };
+  code(0, false);
+  return out;
+};
+/** A script with its tags replaced by SEP, and for each character of that text its offset in the original. */
+const flatten = raw => {
+  let flat = '';
+  const map = [];
+  let last = 0;
+  const copy = to => { for (let k = last; k < to; k++) { flat += raw[k]; map.push(k); } };
+  for (const m of raw.matchAll(/<[^>]*>/g)) { copy(m.index); flat += SEP; map.push(m.index); last = m.index + m[0].length; }
+  copy(raw.length);
+  return { flat, map };
+};
+/** Every violation in one rendered document. `isJs`: the source is a script. There an unbuilt command is exempt only when the Coming mark is in the
+ *  very string literal that holds the command (for a template literal: anywhere in that template, which is the fragment it builds). Nearby text is not an association. */
 const violations = (raw, isJs = false) => {
-  const { view, at, attr, unknown = [] } = isJs ? (() => { const r = render(raw.replace(/<[^>]*>/g, SEP)); return { view: r.view, at: [...r.view].map((_, i) => i), attr: r.attr }; })() : render(raw);
-  const source = isJs ? raw.replace(/<[^>]*>/g, SEP) : raw;
+  const js = isJs ? flatten(raw) : null;
+  const { view, at, attr, unknown = [] } = render(isJs ? js.flat : raw);
+  const literals = isJs ? literalsOf(raw) : [];
+  const literalAt = pos => literals.filter(l => l.s <= pos && pos <= l.e).sort((x, y) => (x.e - x.s) - (y.e - y.s))[0];
   const bad = isJs ? [] : unknown.map(n => `&${n};: a character reference this scanner cannot read`);
   for (const m of view.matchAll(/(?<![\w/@.:-])attessa\s+(?=[^\s\u0001])/g)) {
     const start = m.index + m[0].length;
@@ -195,7 +248,8 @@ const violations = (raw, isJs = false) => {
     const tokens = tokensOf(tail);
     const line = tokens.join(' ');
     if (UNBUILT.some(u => u.test(line))) {
-      const block = attr[start] ?? (isJs ? source.slice(Math.max(source.lastIndexOf('\n', at[start]) + 1, at[start] - 300), at[start] + 300) : enclosing(raw, at[start]));
+      const lit = isJs ? literalAt(js.map[at[start]]) : null;
+      const block = attr[start] ?? (isJs ? (lit ? raw.slice(lit.s, lit.e) : '') : enclosing(raw, at[start]));
       if (!marked.test(text(block))) bad.push(`attessa ${line}: not built, and its block does not say so`);
       continue;
     }
@@ -350,4 +404,32 @@ test('commands in visible attributes are scanned: value, placeholder, title, ari
   assert.deepEqual(violations('<input value=attessa_ghost>'), []);
   assert.deepEqual(violations('<a href="x" title="Coming: attessa ghost">go</a>'), ['attessa ghost: no such command']);
   assert.deepEqual(violations('<input type="text" value="a > b" placeholder="attessa ghost">'), ['attessa ghost: no such command']);
+});
+
+// Codex site-finish r8 M1: the tag model fails closed. Only the BREAKS elements separate text; any other element, known or not, is transparent.
+test('a tag not on the line-breaking list never hides a command (Codex site r8 M1)', () => {
+  for (const tag of ['label', 'del', 'ins', 'time', 'output', 'ruby', 'data', 'x-foo', 'my-widget', 'blink', 'notatag', 'b', 'bdi', 'abbr', 'mark']) {
+    assert.deepEqual(violations(`<p>attessa <${tag}>ghost</${tag}> --bogus</p>`), ['attessa ghost --bogus: no such command'], tag);
+    assert.deepEqual(violations(`<p>attessa <${tag} class="x">ghost</${tag}> --bogus</p>`), ['attessa ghost --bogus: no such command'], `${tag} with attributes`);
+    assert.deepEqual(violations(`<p><${tag}>attessa </${tag}>ghost --bogus</p>`), ['attessa ghost --bogus: no such command'], `${tag} around attessa`);
+  }
+  // The elements that do break a line still separate: a command does not run across them.
+  for (const tag of ['p', 'div', 'li', 'td', 'h2', 'section', 'option', 'tr']) assert.deepEqual(violations(`<${tag}>attessa init</${tag}><${tag}>ghost --bogus</${tag}>`), [], tag);
+  assert.deepEqual(violations('<p>attessa init<br>ghost --bogus</p>'), []);
+  assert.deepEqual(violations('<p>attessa init<hr>ghost --bogus</p>'), []);
+  assert.deepEqual(violations('<p>attessa <x-foo>init</x-foo></p>'), []);
+});
+
+// Codex site-finish r8 M2: in a script, an unbuilt command is exempt only inside the string literal (or template) that carries its Coming mark.
+test('a script exempts an unbuilt command only when the mark is in the same literal (Codex site r8 M2)', () => {
+  const raw = 'const unrelated = "Coming";' + ' '.repeat(240) + 'const command = "attessa verify";';
+  assert.deepEqual(violations(raw, true), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('const a = "Coming"; const b = "attessa verify";', true), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('const a = "Coming: " + "attessa verify";', true), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('// Coming\nconst b = "attessa verify";', true), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('const a = "Coming: attessa verify";', true), []);
+  assert.deepEqual(violations("const a = '<p>Coming <code>attessa verify</code></p>';", true), []);
+  assert.deepEqual(violations('const a = `<p>Coming</p><p><code>attessa verify</code></p>${x}`;', true), []);
+  assert.deepEqual(violations('const a = `<p>Coming ${"x"}</p>`; const b = `${y}<code>attessa verify</code>`;', true), ['attessa verify: not built, and its block does not say so']);
+  assert.deepEqual(violations('const a = "attessa ghost --bogus";', true), ['attessa ghost --bogus: no such command']);
 });
