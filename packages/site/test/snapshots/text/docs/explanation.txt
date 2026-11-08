@@ -17,7 +17,7 @@ How-tos
 All how-tos
 Run a seller
 Revoke a build or a signer
-Use it from an MCP agent Coming
+Use it from an MCP agent
 Use it with buy Optional, not built yet
 Reference
 Reference

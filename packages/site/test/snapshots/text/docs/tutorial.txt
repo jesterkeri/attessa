@@ -1,5 +1,5 @@
 title: Tutorial: pay-if-verified on Celo Sepolia | Attessa
-description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet.
+description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify.
 
 Skip to content
 AttessaA check your agent runs
@@ -17,7 +17,7 @@ How-tos
 All how-tos
 Run a seller
 Revoke a build or a signer
-Use it from an MCP agent Coming
+Use it from an MCP agent
 Use it with buy Optional, not built yet
 Reference
 Reference
@@ -103,7 +103,7 @@ $ attessa verify <requestId>
 It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the proof explorer is live, you will be able to paste the call's settlement transaction there to check its on-chain part.
 What you did
 You paid a service only after its answer was signed by the build its owner approved, and you re-checked on Celo that the build your record names was approved when the call settled. The link from that build to its source code stays the owner's claim until someone reproduces the build.
-Give it to your agentAdd the Attessa MCP server. Coming: it isn't built yet. Understand the limitsWhat a proof shows, and what it doesn't.
+Give it to your agentAdd the Attessa MCP server to your agent. Understand the limitsWhat a proof shows, and what it doesn't.
 On this page
 Install
 Set up

@@ -110,7 +110,7 @@ Check
 Request hash Settlement tx Approved build Celo block
 Your agent can't overspend.
 It signs a payment permission, never a blank cheque. These are the defaults attessa init sets, and you can change them. Run attessa init to set them.
-Give it to your agent. Coming. An MCP server with nine tools keeps the same limits. It isn't built yet.
+Give it to your agent. An MCP server with nine tools keeps the same limits. Build this repository, then start it from your clone.
 $ node /path/to/attessa/packages/mcp/dist/bin.js
 Copy
 Most it pays per call

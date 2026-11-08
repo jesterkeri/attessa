@@ -279,12 +279,18 @@ const literalsOf = src => {
 /** A script with its tags replaced by SEP, and for each character of that text its offset in the original. Escape sequences are decoded the way
  *  the browser shows them: a line break or tab escape (\n \t \r \v \f \b \0) is a boundary (SEP), \xNN and \uNNNN are the character, `\\` is a backslash,
  *  so the n of `\n` is not a word character that hides the command after it (Codex site-finish r1). */
-const flatten = raw => {
+const flatten = (raw, literals = literalsOf(raw)) => {
   let flat = '';
   const map = [];
   let last = 0;
   const copy = to => { for (let k = last; k < to; k++) { flat += raw[k]; map.push(k); } };
-  for (const m of raw.matchAll(/<[^>]*>|\\(?:\\|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|[ntrvfb0])/g)) {
+  // In script code only a `<` followed by a tag name, `/` or `!` can open a tag, and only inside a string literal where the tag also ends
+  // (adversary site-finish r2: `n < 3 ? 'attessa verify' : 'ok'; xs.map(x => x)` hid the literal between the `<` and the arrow's `>`).
+  // If the literal boundaries are not certain, any such `<` counts (never a bare `<`), so nothing is hidden by a guess.
+  const inLiteral = (s, e) => literals.uncertain || literals.some(l => l.s <= s && e <= l.e);
+  const re = /<\/?[A-Za-z!][^>]*>|\\(?:\\|x[0-9a-fA-F]{2}|u\{[0-9a-fA-F]{1,6}\}|u[0-9a-fA-F]{4}|[ntrvfb0])/g;
+  for (let m; (m = re.exec(raw)); ) {
+    if (m[0][0] === '<' && !inLiteral(m.index, m.index + m[0].length)) { re.lastIndex = m.index + 1; continue; }
     copy(m.index);
     const t = m[0];
     let out = SEP;
@@ -328,9 +334,9 @@ const readCommand = run => {
  *  very string literal that holds the command (for a template literal: anywhere in that template, which is the fragment it builds). Nearby text is not an association.
  *  If the literal boundaries are not certain (see literalsOf), there is no exemption at all. */
 const violations = (raw, isJs = false) => {
-  const js = isJs ? flatten(raw) : null;
-  const { view, at, attr, unknown = [] } = render(isJs ? js.flat : raw);
   const literals = isJs ? literalsOf(raw) : [];
+  const js = isJs ? flatten(raw, literals) : null;
+  const { view, at, attr, unknown = [] } = render(isJs ? js.flat : raw);
   const literalAt = pos => (literals.uncertain ? undefined : literals.filter(l => l.s <= pos && pos <= l.e).sort((x, y) => (x.e - x.s) - (y.e - y.s))[0]);
   const bad = isJs ? [] : unknown.map(n => `&${n};: a character reference this scanner cannot read`);
   for (const m of view.matchAll(/(?<![\w/@.:-])(?<!\bcd )attessa[\s\u0002]+(?=[^\s\u0001\u0002])/g)) {

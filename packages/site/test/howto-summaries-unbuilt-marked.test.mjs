@@ -25,21 +25,24 @@ const page = p => readFileSync(join(src, 'pages', p), 'utf8');
 const text = h => h.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
 const marked = /\b(coming|planned|preview|not built|isn't built|aren't built|not yet built|not available yet|once live|when live)\b/i;
 
-// T21 is ticked: revoke (release revoke, revoke signer) and status are built, so the how-to no longer marks them. MCP (T21b) and buy (T29) stay marked.
-test('the how-to body marks MCP and buy as not built, and not revoke (precondition)', () => {
+// T21 is ticked: revoke (release revoke, revoke signer) and status are built, so the how-to no longer marks them. MCP (T21b, packages/mcp) is built too, so it is not marked. Only buy (T29) stays marked.
+test('the how-to body marks buy as not built, and not revoke or MCP (precondition)', () => {
   const t = text(page('docs/how-to.html'));
   assert.doesNotMatch(t, /These commands, and attessa status ?, aren't built yet/, 'revoke is built (T21)');
-  assert.match(t, /Coming\. The MCP server isn't built yet\./);
+  assert.doesNotMatch(t, /MCP server isn't built yet/, 'packages/mcp is built (T21b)');
   assert.match(t, /Optional, not built yet\./);
 });
 
-test('the how-to meta description marks the unbuilt recipes it offers', () => {
+test('the how-to meta description marks buy as not built and does not mark MCP', () => {
   const d = page('docs/how-to.html').match(/<!-- description: (.*?) -->/)?.[1] ?? '';
-  assert.match(d, /MCP agent|with buy/, 'the description no longer offers them');
-  assert.match(d, marked, `the how-to meta description "${d}" offers MCP and buy as usable; the page marks both Coming / not built (TASKS.md T21b, T29)`);
+  assert.match(d, /MCP agent/, 'the description no longer offers the MCP recipe');
+  assert.match(d, /with buy/, 'the description no longer offers buy');
+  const unmarked = d.split(/(?<=\.)\s+/).filter(s => /MCP/.test(s) && marked.test(s));
+  assert.deepEqual(unmarked, [], 'the description marks the built MCP recipe as not built');
+  assert.match(d, marked, `the how-to meta description "${d}" offers buy as usable; the page marks it Optional, not built (TASKS.md T29)`);
 });
 
-test('the docs landing card offers revoke as built and marks only the MCP agent and buy as not built', () => {
+test('the docs landing card offers revoke and MCP as built and marks only buy as not built', () => {
   const card = [...page('docs/index.html').matchAll(/<a href="([^"]+)">([\s\S]*?)<\/a>/g)]
     .map(m => ({ href: m[1], t: text(m[2]) }))
     .find(c => c.href === 'how-to.html');
@@ -47,5 +50,7 @@ test('the docs landing card offers revoke as built and marks only the MCP agent 
   assert.match(card.t, /revoke a build/i, 'the card no longer offers revoke');
   const markedSentences = card.t.split(/(?<=\.)\s+/).filter(s => marked.test(s));
   assert.ok(markedSentences.every(s => !/revok/i.test(s)), `docs/index.html card marks revoke as not built, but it is built (TASKS.md T21): ${JSON.stringify(markedSentences)}`);
-  assert.ok(markedSentences.some(s => /MCP/.test(s)) && markedSentences.some(s => /buy/.test(s)), 'the card must still mark MCP and buy');
+  assert.ok(markedSentences.every(s => !/MCP/.test(s)), `docs/index.html card marks MCP as not built, but packages/mcp is built (T21b): ${JSON.stringify(markedSentences)}`);
+  assert.match(card.t, /MCP agent/, 'the card no longer offers the MCP recipe');
+  assert.ok(markedSentences.some(s => /buy/.test(s)), 'the card must still mark buy');
 });

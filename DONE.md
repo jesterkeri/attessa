@@ -4821,3 +4821,21 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+### Site finish: adversary r2 fixes, MCP built, branch brought up to date - 2026-11-08
+
+Branch feat/site-finish (PR #16), local commits only (not pushed).
+
+- Merged origin/staging (packages/mcp, nine tools, Codex SHIP reviews/t21b-mcp-review-r6.md). Only DONE.md conflicted; both sides kept in order (the branch's entries, then staging's).
+- MCP statements flipped to built, from `packages/mcp/src/server.ts` and `bin.ts`: home (index.html), docs landing card, docs menu, tutorial card and meta description, how-to (#mcp now a real short how-to: no published package, build the clone, start `node <clone>/packages/mcp/dist/bin.js`, the env vars it reads, best-effort secret hiding), reference #tools (intro and the nine rows: get_result and status sign a payer message, verify_proof is offline and lists what it did not check, list_pending is the local ledger). Not flipped: `attessa verify`, `call --via buy`, `release verify`.
+- Scanner (`use-cases-cli-built.test.mjs` `flatten()`): in script code a `<` opens a tag only when a tag name, `/` or `!` follows and the whole tag sits inside one string literal (literals uncertain: any such `<`, never a bare one). The adversary's `script-comparison-hides-command.test.mjs` (3 tests) and `reference-status-recent-verdicts.test.mjs` (2 tests) are now permanent tests.
+- reference.html: the `attessa status` row says what the CLI prints (spend today against cap and per-call limit, decides open calls); recent verdicts is a Coming note under the buyer table and in the MCP `status` row. The liveness_failed row ("shows when it last answered") is FLOWS-fixed and untrue against the CLI; left as is, noted in OPEN-QUESTIONS.md with the status/verdicts departure.
+- Tests changed because MCP is now built: built-state-consistent, docs-links-unbuilt-marked, howto-summaries-unbuilt-marked, docs-index-unbuilt-marked (now assert MCP is NOT marked; buy still marked; the docs-index how-to card case moved to howto-summaries), plus text snapshots regenerated (UPDATE_SNAPSHOTS=1, diff reviewed).
+
+Verification, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+pnpm --filter @attessa/site test    -> # tests 297  # pass 297  # fail 0
+pnpm --filter @attessa/site lint, typecheck -> exit 0
+pnpm --filter @attessa/mcp test     -> Tests 66 passed (66)
+```
+reviewed: pending
