@@ -70,6 +70,25 @@ describe('where the suffix goes', () => {
     expect(w.out.join('\n')).toMatch(/LOOPS_ATTRIBUTION_TAG.*not set/);
   });
 
+  it('local on 42220 with no tag: a plan prints no calldata, since sent by hand it could never be credited', async () => {
+    mainnet(null);
+    delete w.env.ATTESSA_PRIVATE_KEY;
+    expect(await w.cli(...REGISTER.slice(0, -1), '--network', 'local', '--rpc', 'http://127.0.0.1:1', '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).not.toContain('calldata');
+    expect(w.out.join('\n')).not.toContain(PLAIN);
+  });
+
+  it('a keyless plan simulates register from a non-zero sender: ERC-721 reverts a mint to the zero address on the real registry', async () => {
+    mainnet();
+    delete w.env.ATTESSA_PRIVATE_KEY;
+    expect(await w.cli(...REGISTER.slice(0, -1), '--network', 'mainnet', '--dry-run')).toBe(0);
+    const sims = w.chain.calls.filter((c) => c.method === 'eth_call' || c.method === 'eth_estimateGas').map((c) => c.params[0] as { to?: string; from?: string });
+    const toIdentity = sims.filter((s) => s.to?.toLowerCase() === IDENTITY);
+    expect(toIdentity.length).toBeGreaterThan(0);
+    for (const s of toIdentity) expect(BigInt(s.from ?? '0x0')).not.toBe(0n);
+    expect(w.out.join('\n')).toContain(`calldata ${PLAIN}${SUFFIX.slice(2)}`);
+  });
+
   it('the signed chain id is the verified one: a labelled-mainnet RPC that reports another chain is refused, nothing signed', async () => {
     w.env.LOOPS_ATTRIBUTION_TAG = TAG; // the fake reports 11142220
     expect(await w.cli(...REGISTER, '--network', 'mainnet')).toBe(1);

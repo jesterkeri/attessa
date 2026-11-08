@@ -10,7 +10,7 @@ import {
   type Hex,
 } from 'viem';
 import { ATTRIBUTION_CHAIN_ID, withAttribution } from '@attessa/core';
-import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
+import { GasCapError, canPayGas, gasTerms, isInsufficientFundsReply, type GasTerms } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
 import type { ChainBase as Chain, Deps, Global } from './context.ts';
 import { CliError, ERR } from './copy.ts';
@@ -144,7 +144,13 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   ]);
   // The shared gas terms and funds rule (@attessa/sdk gas.ts): refused before signing when the balance can't
   // cover gas x maxFeePerGas; eth_call and eth_estimateGas above carry no fee fields, so they never check it.
-  const t = gasTerms(sim.gas, price, tip);
+  let t: GasTerms;
+  try {
+    t = gasTerms(sim.gas, price, tip, c.chainId === ATTRIBUTION_CHAIN_ID ? c.attribution : null);
+  } catch (e) {
+    if (!(e instanceof GasCapError)) throw e;
+    throw new CliError('gas_over_cap', `${step.label} needs more gas than one Celo transaction allows once it carries the attribution tag. Nothing was signed.`, null); // not in FLOWS
+  }
   const noFunds = (tail: 'Nothing was signed.' | 'Nothing was sent.') =>
     ERR.insufficientGasFunds(account.address.toLowerCase(), step.label, t.maxCost, c.chainId, tail);
   if (!canPayGas(balance, t)) throw noFunds('Nothing was signed.');
@@ -211,7 +217,8 @@ export async function planOrSend(
       const sim = plan.simulations[i];
       const simText = sim === null || sim === undefined ? 'simulated after the previous transaction lands' : sim.ok ? `eth_call ok, gas ${sim.gas}` : `eth_call reverts${sim.revert ? ` ${sim.revert.name}` : ''}`;
       io.out(`  (tx ${i + 1}/${plan.steps.length}: ${s.label}; from ${plan.from} to ${s.to}; ${simText})`);
-      io.out(`  (calldata ${withAttribution(s.data, c.attribution)})`);
+      // Never print calldata for mainnet without its tag: sent by hand, it could never be credited.
+      if (!missingTag) io.out(`  (calldata ${withAttribution(s.data, c.attribution)})`);
     });
     // not in FLOWS: a plan on mainnet shows what a send would carry, or that it would be refused.
     if (missingTag) io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real send on mainnet is refused until it is)');

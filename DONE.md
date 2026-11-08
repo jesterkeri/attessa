@@ -4543,3 +4543,15 @@ pnpm --filter @attessa/sdk test: Tests 205 passed (205)
 pnpm --filter @attessa/core test: Tests 86 passed (86)
 pnpm --filter @attessa/cli typecheck: exit 0; pnpm --filter @attessa/cli lint: exit 0
 reviewed: pending
+
+### Mainnet entry adversary r2 fixes - 2026-11-08
+Defects, proved by packages/cli/test/adversary-mainnet-r2.test.ts and the adversary's read-only cast call on Forno:
+1. `gasTerms` clamps to TX_GAS_CAP - 1 from an estimate made without the attribution suffix. An estimate within 788 gas of the cap signed a tagged transaction that could not cover its own calldata.
+2. A keyless `agent register --dry-run` simulated from the zero address, which the real ERC-8004 registry reverts with ERC721InvalidReceiver(0x0).
+3. Suspicion taken up: a keyless plan on 42220 with no tag printed untagged calldata with exit 0. Sent by hand, it could never be credited.
+Fixes:
+1. `gasTerms` takes the suffix, adds its intrinsic gas (EIP-2028) before the 20% pad, and throws `GasCapError` when estimate + suffix gas reaches the cap, before signing. The CLI maps it to `gas_over_cap` ("Nothing was signed.", not in FLOWS). Without a suffix the clamp is unchanged, and the 14.5M control still signs at the cap minus 1.
+2. Keyless register simulates from 0x...dead. ZERO stays for the mint Transfer match.
+3. A plan on 42220 with no tag prints the missing-tag note and no calldata.
+Verify (flock, this worktree): pnpm --filter @attessa/cli test: Tests 384 passed (384); pnpm --filter @attessa/sdk test: Tests 205 passed (205); cli typecheck and lint: no errors (a full `pnpm -r typecheck` and `pnpm -r lint` before the two added tests: every package Done).
+reviewed: pending

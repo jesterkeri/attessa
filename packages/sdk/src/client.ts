@@ -505,7 +505,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       read('eth_getTransactionCount', [from, 'pending']),
       read('eth_getBalance', [from, 'latest']),
     ]);
-    const t = gasTerms(estimate, price, tip);
+    const t = gasTerms(estimate, price, tip, n.chainId === ATTRIBUTION_CHAIN_ID ? opts.dataSuffix : null);
     if (!canPayGas(balance, t)) throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, false);
     const raw = await cfg.account.signTransaction({
       type: 'eip1559',

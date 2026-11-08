@@ -22,6 +22,8 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
 const DEC = /^(0|[1-9][0-9]*)$/;
 const ZERO: Address = '0x0000000000000000000000000000000000000000';
+/** Who a keyless register is simulated from. Not ZERO: the identity registry mints to msg.sender, and ERC-721 reverts for the zero address. */
+const KEYLESS_REGISTER_SIMULATOR: Address = '0x000000000000000000000000000000000000dead';
 
 type EventName = 'ReleaseApproved' | 'EndpointAdded' | 'SignerRegistered';
 
@@ -113,7 +115,7 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
     }
   };
   if (!c.account && !g.dryRun && !registered()) deps.writeFile(file, doc([]));
-  const from = (c.account?.address.toLowerCase() as Address | undefined) ?? ZERO;
+  const from = (c.account?.address.toLowerCase() as Address | undefined) ?? KEYLESS_REGISTER_SIMULATOR;
   const step: Step = { label: 'register', to: identity, data: encodeFunctionData({ abi: IDENTITY_ABI, functionName: 'register', args: [o.uri] }) };
   return write(c, g, deps, {
     from,
