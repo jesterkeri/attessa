@@ -26,3 +26,6 @@ enclave/target/
 .attessa/
 .claude/worktrees/
 .worktrees/
+# T12 spike output on the host
+/att.bin
+/build/

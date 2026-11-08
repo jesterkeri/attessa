@@ -49,7 +49,7 @@ if ! /usr/local/bin/caddy version 2>/dev/null | grep -q "v$CADDY_VERSION"; then
   base=https://github.com/caddyserver/caddy/releases/download/v$CADDY_VERSION
   curl -fsSLo "$TMP/$f" "$base/$f"
   curl -fsSLo "$TMP/checksums.txt" "$base/caddy_${CADDY_VERSION}_checksums.txt"
-  (cd "$TMP" && grep " $f\$" checksums.txt | sha256sum -c -)
+  (cd "$TMP" && grep " $f\$" checksums.txt | sha512sum -c -)   # Caddy publishes SHA-512
   sudo tar -xzf "$TMP/$f" -C /usr/local/bin caddy
 fi
 
