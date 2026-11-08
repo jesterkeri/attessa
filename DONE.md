@@ -4529,12 +4529,22 @@ Codex r1 (reviews/t21a-verify-review-r1.md, REVISE). Merged origin/staging first
 - Existing assertions only grew: the five-row JSON list and the "not run" count now include the new row (4 to 5).
 
 verify (`flock -w 3600 /home/hr/.cache/attessa-heavy.lock bash -c 'pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/cli test'`, exit 0; per-test lines trimmed):
+### Website Codex r4 fixes - 2026-11-07
+
+Codex r4 (REVISE) on 08c4a66; origin/staging merged first (fast-forward). Failing tests first, alone (e5468d5), then the fix.
+- The reference row now spells `attessa agent transfer`, `attessa agent wallet-sig` and `attessa agent set-wallet` in full.
+- It no longer calls `attessa --help` the full command list: `--help` (and `attessa seller --help`) print only the seller steps (`COPY.sellerHelp`), and the page says so.
+- `test/lib/cli-table.mjs` reads the command table and each command's flags from `packages/cli/src/index.ts`. `reference-commands-exact` checks every first-column command is a full `attessa ...` command in that table (unless the row is marked) and every flag its row shows is accepted by it; `use-cases-cli-built` now resolves each command exactly and checks the flags on every page, and keeps `attessa call --via buy` marked.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
 ```
 Scope: 6 of 7 workspace projects
 packages/core build$ tsc -p .
 packages/core build: Done
 packages/gateway build$ tsc -p .
 packages/sdk build$ tsc -p .
+packages/sdk build$ tsc -p .
+packages/gateway build$ tsc -p .
 packages/seller-host build$ tsc -p .
 packages/site build$ node build.mjs
 packages/site build: built 12 pages into dist
@@ -4579,3 +4589,99 @@ packages/cli lint: Done
    Duration  18.66s (transform 2.40s, setup 35.31s, collect 21.17s, tests 103.35s, environment 22ms, prepare 9.43s)
 ```
 reviewed: pending (Codex r2)
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+18 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+5 tests, 0 failed, exit 0: test/reference-commands-exact.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+5 tests, 0 failed, exit 0: test/use-cases-cli-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 76 files, 277 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r5)
+
+### Website Codex r5 fixes - 2026-11-08
+
+Codex r5 (REVISE) on 6488d29.
+- `use-cases-cli-built` now parses every displayed command node (`<code>`, terminal `span.c`, and `Next:`-style output). An unknown command fails before its flags are looked at. Only `verify`, `release verify` and `call --via` may be exempt, and only with the marker in the same table row, list item, paragraph, heading or figure.
+- Regressions added for the r5 mutants: `attessa ghost --bogus` in a terminal block, `attessa init --bogus` beside a Coming mark, an unknown command in a marked paragraph, and an unbuilt command with the mark only in its section heading.
+- The stricter test found two unmarked terminal blocks, so their captions now say "Terminal (coming)" and "Example output (not built yet)".
+- The reference says `--help` and `seller --help` print "only the seller summary and its steps". Three text snapshots changed, for those three wordings only.
+
+```
+node v22.23.2: 76 files, 278 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
+`pnpm -r build`, `typecheck` and `lint` ended Done. reviewed: pending Codex r6.

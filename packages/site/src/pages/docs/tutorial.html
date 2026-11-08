@@ -76,7 +76,7 @@
         <p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p>
         <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
         <figure class="code" data-copy="commands">
-          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <figcaption><span>Terminal (coming)</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
         </figure>
         <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>

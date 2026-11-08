@@ -76,7 +76,7 @@ Copy
 Two tools have side effects, and say so in their descriptions: pay_and_verify signs a payment within your bounds, and cancel_authorization sends a transaction. The full list is in the reference.
 Use it with buy
 Optional, not built yet. buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.
-Example output
+Example output (not built yet)
 Copy
 $ attessa call --via buy https://<buy-capability>
 → Price: 0.005 USDC. buy (usebuy.ai, Celo's pay-per-call API marketplace) takes payment before the service runs, so this call isn't protected by the check: you pay even if the answer fails it. [pay/cancel]

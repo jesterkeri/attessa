@@ -62,3 +62,60 @@ test('every attessa command a page shows is a real CLI command, or the page mark
   }
   assert.deepEqual(bad, [], 'commands shown as usable but not in packages/cli/src/index.ts');
 });
+
+import { commandOf, COMMANDS } from './lib/cli-table.mjs';
+
+// Codex site-finish r5: every displayed command node is parsed. An unknown command fails before its flags are looked at, and only a
+// command named in UNBUILT may be exempt, and only with its marker in the same block (table row, list item, paragraph, heading, figure).
+// A nearby Coming or Optional never blesses a built command, or anything else.
+const UNBUILT = [/^verify\b/, /^release verify\b/, /^call --via\b/];
+const BLOCKS = ['tr', 'li', 'p', 'h2', 'h3', 'figure'];
+const enclosing = (raw, at) => {
+  const open = BLOCKS.flatMap(tag => {
+    const starts = [...raw.slice(0, at).matchAll(new RegExp(`<${tag}[\\s>]`, 'g'))];
+    const start = starts.length ? starts[starts.length - 1].index : -1;
+    return start > raw.lastIndexOf(`</${tag}>`, at) ? [{ tag, start }] : [];
+  }).sort((x, y) => y.start - x.start)[0];
+  return open ? raw.slice(open.start, raw.indexOf(`</${open.tag}>`, at)) : '';
+};
+const NODE = /(?:<code>|<span class="c">|(?:Next:|restart:|key\):|, then) )(?:<[^>]*>)*\s*attessa ([^<]*(?:<span[^>]*>[^<]*<\/span>[^<]*)*)/g;
+const violations = raw => {
+  const bad = [];
+  for (const m of raw.matchAll(NODE)) {
+    const line = text(m[1]).split(/\. |, then |\s\(/)[0].replace(/\.$/, '');
+    if (UNBUILT.some(u => u.test(line))) {
+      if (!marked.test(text(enclosing(raw, m.index)))) bad.push(`attessa ${line}: not built, and its block does not say so`);
+      continue;
+    }
+    if (line === '--help' || line === 'seller --help') continue; // the two usage paths index.ts answers before the table
+    const tokens = line.split(/\s+/);
+    const words = tokens.slice(0, tokens.findIndex(w => !/^[a-z][a-z|-]*$/.test(w)) + 1 || tokens.length).filter(w => /^[a-z][a-z|-]*$/.test(w));
+    const key = commandOf(words);
+    if (!key) { bad.push(`attessa ${line}: no such command`); continue; }
+    for (const flag of line.matchAll(/(?<![\w-])--([a-z][a-z-]*)/g)) {
+      if (!COMMANDS.get(key).has(flag[1])) bad.push(`attessa ${key} --${flag[1]}: no such flag`);
+    }
+  }
+  return bad;
+};
+
+test('every displayed attessa command and flag exists, or that exact command is marked not built in its own block', () => {
+  const nodes = walk(src).filter(f => f.endsWith('.html')).flatMap(f => violations(readFileSync(f, 'utf8')).map(v => `${f.slice(src.length + 1)}: ${v}`));
+  assert.deepEqual(nodes, []);
+});
+
+test('the command check refuses an unknown terminal command, and a bad flag beside a Coming mark (Codex site r5 mutants)', () => {
+  const page = n => readFileSync(join(src, 'pages', ...n), 'utf8');
+  const swap = (raw, from, to) => { assert.ok(raw.includes(from), `the page lost ${from}`); return raw.replace(from, to); };
+  assert.deepEqual(violations(swap(page(['how-it-works.html']), 'attessa enclave build</span></span>', 'attessa ghost --bogus</span></span>')), ['attessa ghost --bogus: no such command']);
+  assert.deepEqual(violations(swap(page(['docs', 'tutorial.html']), '<code>attessa init</code> and', '<code>attessa init --bogus</code> and')), ['attessa init --bogus: no such flag']);
+  assert.deepEqual(violations('<p>Coming. <code>attessa ghost</code></p>'), ['attessa ghost: no such command']);
+  assert.deepEqual(violations('<h2>Coming</h2><p><code>attessa verify</code></p>'), ['attessa verify: not built, and its block does not say so']);
+});
+
+test('a command with an unbuilt modifier is not accepted just because its first word is real (attessa call --via buy)', () => {
+  assert.ok(!COMMANDS.get('call').has('via'), 'call accepts --via now: remove the Optional / not built marks (T29)');
+  const ref = readFileSync(join(src, 'pages', 'docs', 'reference.html'), 'utf8');
+  const row = ref.split('\n').find(l => l.includes('attessa call --via buy'));
+  assert.ok(row && marked.test(text(row)), 'the reference row for attessa call --via buy must stay marked Optional / not built');
+});
