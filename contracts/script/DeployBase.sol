@@ -115,22 +115,40 @@ abstract contract ValidatorStackChecker {
 }
 
 /// SPEC §3.5: `EnclaveRegistry(identity, nitroValidator, self, false)` with the §3.5 table's addresses.
+/// Exactly two chains are known; the pair is chosen by block.chainid, never by an env var, so the
+/// deployer cannot point the registry at other contracts. These must equal packages/core/src/deployments.ts
+/// and the PINS in scripts/check-deploy.mjs.
 abstract contract RegistryDeployer {
     uint256 internal constant CELO_SEPOLIA = 11142220;
+    uint256 internal constant CELO_MAINNET = 42220;
     address internal constant SEPOLIA_IDENTITY = 0x8004A818BFB912233c491871b3d84c89A494BD9e;
     address internal constant SEPOLIA_SELF = 0x043DaCac8b0771DD5b444bCC88f2f8BBDBEdd379;
+    address internal constant MAINNET_IDENTITY = 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432;
+    address internal constant MAINNET_SELF = 0xaC3DF9ABf80d0F5c020C06B04Cced27763355944;
+
+    /// Reverts on any chain other than Celo Sepolia (11142220) and Celo mainnet (42220).
+    function _registries() internal view returns (address identity, address self) {
+        if (block.chainid == CELO_SEPOLIA) return (SEPOLIA_IDENTITY, SEPOLIA_SELF);
+        if (block.chainid == CELO_MAINNET) return (MAINNET_IDENTITY, MAINNET_SELF);
+        revert("Celo mainnet (42220) or Celo Sepolia (11142220) only");
+    }
 
     function _deployRegistry(address nitroValidator) internal returns (EnclaveRegistry) {
-        return new EnclaveRegistry(SEPOLIA_IDENTITY, nitroValidator, SEPOLIA_SELF, false);
+        (address identity, address self) = _registries();
+        return new EnclaveRegistry(identity, nitroValidator, self, false);
     }
 }
 
-/// Shared by the two deploy scripts. Celo Sepolia only: mainnet is T30, after Gate 5.
+/// Shared by the two deploy scripts. Celo mainnet (42220) and Celo Sepolia (11142220) only.
 abstract contract DeployScript is Script {
-    uint256 internal constant SEPOLIA_CHAIN_ID = 11142220;
+    uint256 internal constant SUPPORTED_CHAIN_A = 11142220;
+    uint256 internal constant SUPPORTED_CHAIN_B = 42220;
 
-    function _requireSepolia() internal view {
-        require(block.chainid == SEPOLIA_CHAIN_ID, "Celo Sepolia (11142220) only until Gate 5");
+    function _requireSupportedChain() internal view {
+        require(
+            block.chainid == SUPPORTED_CHAIN_A || block.chainid == SUPPORTED_CHAIN_B,
+            "Celo mainnet (42220) or Celo Sepolia (11142220) only"
+        );
     }
 
     /// The key comes from `--account <keystore>` (or `--ledger`), or from env PRIVATE_KEY; never inline.

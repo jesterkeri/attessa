@@ -26,6 +26,7 @@ import { execFileSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { runForge, failure as forgeFailure } from './forge-run.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PINNED_VALIDATOR_COMMIT = '0ea0d12366b4fa44f9e07e4755f2ad36561cb674';
@@ -239,10 +240,9 @@ function referenceBuild(withScripts = false) {
     const paths = ['src', ...['P384Verifier', 'CertManager', 'NitroValidator', ...(withScripts ? SCRIPTS : [])].map((n) => SOURCES[n])];
     const out = join(dir, 'contracts', 'out');
     // cwd is the temp dir too, so forge loads no .env from wherever check-deploy was started.
-    execFileSync('forge', ['build', '--force', '--root', join(dir, 'contracts'), '--out', out, ...paths.map((p) => join(dir, 'contracts', p))], {
+    runForge(['build', '--force', '--root', join(dir, 'contracts'), '--out', out, ...paths.map((p) => join(dir, 'contracts', p))], {
       cwd: dir,
       env: { ...FORGE_ENV, HOME: home },
-      stdio: ['ignore', 'ignore', 'pipe'],
     });
     const arts = selectArtifacts(out, names);
     const blobs = {};
@@ -254,7 +254,7 @@ function referenceBuild(withScripts = false) {
     return { arts, blobs, head, pinned };
   } catch (e) {
     if (e instanceof Refuse) throw e;
-    throw new Refuse(`reference build failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+    throw new Refuse(`reference build failed: ${forgeFailure(e)}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -561,9 +561,9 @@ function preDeploy() {
   const { arts: ref, blobs, head, pinned } = referenceBuild(true);
   console.log(`REF   reference build from HEAD ${head.slice(0, 12)} and nitro-validator ${pinned}`);
   try {
-    for (const cmd of ['clean', 'build']) execFileSync('forge', [cmd], { cwd: contracts, stdio: ['ignore', 'ignore', 'pipe'] });
+    for (const cmd of ['clean', 'build']) runForge([cmd], { cwd: contracts });
   } catch (e) {
-    throw new Refuse(`forge clean/build in contracts/ failed: ${(e.stderr?.toString() || e.message).trim().split('\n').slice(-3).join(' | ')}`);
+    throw new Refuse(`forge clean/build in contracts/ failed: ${forgeFailure(e)}`);
   }
   let local;
   try {
