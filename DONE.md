@@ -4625,3 +4625,32 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+### T12 Spike S2 on the real EC2 host - 2026-11-08
+Host `i-01d8e704fba8616b3`, c6g.xlarge, eu-north-1 (OPEN-QUESTIONS has the region deviation), Amazon Linux 2023 aarch64, allocator 3 vCPU / 3072 MiB. Commit a4eda89 at /opt/attessa, run by `ec2-host-setup.sh` then `t12-spike.sh`. Deviation: Nitro CLI 1.5.0, not 1.5.2 (OPEN-QUESTIONS). The image was built before the spike with the allocator stopped, so the build had all 4 vCPUs; the spike's own `docker build` then reused it (same sha256).
+
+Two real-host bugs were fixed on the way: Caddy publishes SHA-512 checksums, so the setup script's check moved from sha256sum to sha512sum (3c1edec); and the spike sent a checksummed registry address where the enclave takes only lowercase hex, answering `bad_frame` (a4eda89).
+
+```
+Nitro CLI 1.5.0
+memory_mib: 3072
+cpu_count: 3
+Enclave Image successfully created.
+{"HashAlgorithm":"Sha512_48 { .. }","PCR0":"44df64f80030e7355a32e656408a7df9aa77984edca74116f9c450f69300211ba7867188d8c409e6176339f313dac2a5","PCR1":"3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03","PCR2":"e85759a34cf295e261dcaad5abfd1cec1d9d2cc565b6fdbf0724c3752d89f2464e5fcd1d617df47904329cbb993cd2ff"}
+Started enclave with enclave-cid: 18, memory: 1024 MiB, cpu-ids: [1]
+attestation written to att.bin (signer 0x3ce58ab2a892fac34f1bc8987be990badadb3fb0, configured now)
+== verify, part 1
+ok   public_key length 65
+ok   user_data length 160
+ok   PCR0 0x44df64f80030e7355a32e656408a7df9aa77984edca74116f9c450f69300211ba7867188d8c409e6176339f313dac2a5
+ok   PCR1 0x3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03
+ok   PCR2 0xe85759a34cf295e261dcaad5abfd1cec1d9d2cc565b6fdbf0724c3752d89f2464e5fcd1d617df47904329cbb993cd2ff
+ok   timestamp 2026-11-08T21:06:43.704Z (0 s ago)
+Started enclave with enclave-cid: 16, memory: 1024 MiB, cpu-ids: [2]
+Started enclave with enclave-cid: 17, memory: 1024 MiB, cpu-ids: [3]
+== verify, part 2: enclaves running
+3
+T12_JOB_END exit=0 2026-11-08T21:06:45Z
+```
+The spike stopped its enclaves on exit. These PCRs are the spike build's, not a release. Not exercised: Caddy, the systemd units, `attessa enclave build`, a real on-chain registration. The binding values were placeholders, and the attestation was not verified against the on-chain validator.
+reviewed: pending Codex

@@ -1,7 +1,7 @@
 # EC2 runbook: from a logged-in AWS CLI to T12 passing
 
-**These scripts have not yet run on a real instance.** They were written and checked with `bash -n` and a
-test that reads them; no AWS command was run. Expect to fix a line or two. Stop at the first surprise.
+`ec2-host-setup.sh` and `t12-spike.sh` ran on the real host on 2026-11-08 (DONE.md, T12). `ec2-launch.sh` did not: the host
+already existed. Caddy and the systemd units are installed but have not been started. Stop at the first surprise.
 Steps marked **[Joshua]** spend money or broadcast; everything else only prepares. Variable names only below.
 
 ## 0. The host already exists: skip step 1
@@ -38,7 +38,7 @@ exit        # log back in so the docker and ne groups apply
 ```
 cd /opt/attessa
 pnpm install --frozen-lockfile && pnpm -r build     # already done by setup; harmless
-nitro-cli --version                                  # expect 1.5.2
+nitro-cli --version                                  # SPEC pins 1.5.2; the AL2023 repo gives 1.5.0 (OPEN-QUESTIONS.md)
 grep -E 'memory_mib|cpu_count' /etc/nitro_enclaves/allocator.yaml
 ./scripts/t12-spike.sh
 node scripts/inspect-attestation.mjs att.bin && nitro-cli describe-enclaves | jq length

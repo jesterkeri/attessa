@@ -2,7 +2,7 @@
 # Prepare a fresh Amazon Linux 2023 arm64 host (made by scripts/ec2-launch.sh) to run the Attessa seller.
 # Run on the instance as ec2-user (not root; it calls sudo):  ./ec2-host-setup.sh <40-hex-commit-sha>
 # Safe to run again. Starts no Attessa service and holds no key. After it: log out and back in (new groups),
-# fill /etc/attessa as docs/EC2-RUNBOOK.md says. Not yet run on a real instance.
+# fill /etc/attessa as docs/EC2-RUNBOOK.md says. Ran on the real host on 2026-11-08 (DONE.md, T12).
 #
 # Pinned: Node 22.23.2 (.nvmrc says 22), pnpm 10.32.1 (package.json packageManager, via corepack), Caddy 2.10.2,
 #   the repo commit you pass, every JS dependency (pnpm-lock.yaml).
