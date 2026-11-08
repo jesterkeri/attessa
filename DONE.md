@@ -4477,3 +4477,22 @@ Joshua changed the GoDaddy DNS: `attessa.xyz` A 185.199.108.153, .109.153, .110.
 status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attessa.xyz"] expires=2027-02-04
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
+
+### T30 prep: deploy scripts target Celo mainnet (simulated only, nothing sent) - 2026-11-08
+Branch feat/t30-mainnet-deploy. DeployBase now picks identity/Self by block.chainid: 11142220 unchanged, 42220 uses 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 and 0xaC3DF9ABf80d0F5c020C06B04Cced27763355944 (equal to deployments.ts and check-deploy PINS), any other chain reverts "Celo mainnet (42220) or Celo Sepolia (11142220) only". Admin != deployer guard kept; no env var selects the chain or registries. check-deploy `--pre-deploy` failure confirmed as ENOBUFS (forge build exit 0, 7,610,779 bytes on stderr vs execFileSync's 1 MB default); fixed in scripts/forge-run.mjs (256 MB buffer; a non-zero exit still throws with status and stderr tail).
+```
+$ forge fmt --check                       -> FMT_OK
+$ forge test                              -> Ran 12 test suites: 253 tests passed, 0 failed, 3 skipped (256 total)
+$ forge test --match-path 'test/deploy/*' -> 18 passed (13 DeployRegistry, 5 DeployValidatorStack)
+$ node --test scripts/forge-run.test.mjs  -> tests 3, pass 3, fail 0
+$ node scripts/check-deploy.mjs --pre-deploy
+REF   reference build from HEAD d9ae7cd31489 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ forge script DeployValidatorStack --rpc-url https://forno.celo.org --sender <discarded address>   (dry run)
+Chain 42220  Estimated total gas used for script: 13938801
+P384Verifier 2255020, CertManager 6975844, NitroValidator 4707937 (per tx)
+$ forge script DeployRegistry (Sepolia, existing validator, dry run) -> EnclaveRegistry 4477814 gas
+$ forge script DeployRegistry on 42220 -> reverts "ATTESSA_NITRO_VALIDATOR has no code" (stack not deployed; expected)
+$ node scripts/check-deploy.mjs celo -> exit 2, "Admin is still TODO" (nothing deployed)
+```
+reviewed: pending Codex
