@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { DEPLOYMENTS, normalizeOrigin } from '@attessa/core';
+import { validateBuyConfig, type BuyConfig } from './buy.ts';
 import { FORNO_URL, NETWORK_PORTS } from './networks.ts';
 
 /**
@@ -24,6 +25,8 @@ export interface SellerHostConfigFile {
   gatewayDbPath?: string;
   /** Where the budget guard keeps its daily counter. */
   stateDir: string;
+  /** Paid chain reads through buy. Mainnet only; needs `gatewayDbPath`. No default: absent means Forno only. */
+  buy?: { capabilityId: string; url: string; maxAmount: string; binary?: string; account?: string; home?: string };
 }
 
 export interface LoadedConfig {
@@ -37,6 +40,7 @@ export interface LoadedConfig {
   fornoUrl: string;
   gatewayDbPath: string | null;
   stateDir: string;
+  buy: BuyConfig | null;
 }
 
 const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
@@ -72,7 +76,28 @@ export function parseConfig(raw: unknown): LoadedConfig {
   if (typeof fornoUrl !== 'string') throw new Error('config: fornoUrl is required for local');
   const host = c.listen?.host ?? '127.0.0.1';
   if (host !== '127.0.0.1' && host !== '::1') throw new Error('config: seller-host listens on loopback only');
+  let buy: BuyConfig | null = null;
+  if (c.buy !== undefined) {
+    // Paid reads spend real money: mainnet only, and only with the revenue source the budget guard needs.
+    if (c.network !== 'mainnet') throw new Error('config: buy reads are mainnet only');
+    if (typeof c.gatewayDbPath !== 'string' || c.gatewayDbPath === '') throw new Error('config: buy needs gatewayDbPath');
+    const b = c.buy as Record<string, unknown>;
+    if (typeof b !== 'object' || b === null) throw new Error('config: buy must be an object');
+    if (typeof b.maxAmount !== 'string' || !/^[0-9]+(\.[0-9]{1,6})?$/.test(b.maxAmount)) throw new Error('config: buy.maxAmount must be a decimal USDC string');
+    const [whole, frac = ''] = b.maxAmount.split('.');
+    for (const k of ['binary', 'account', 'home'] as const) if (b[k] !== undefined && (typeof b[k] !== 'string' || b[k] === '')) throw new Error(`config: buy.${k} must be a non-empty string`);
+    buy = {
+      capabilityId: b.capabilityId as string,
+      url: b.url as string,
+      maxAmountAtomic: BigInt(whole!) * 1_000_000n + BigInt(frac.padEnd(6, '0')),
+      ...(b.binary !== undefined ? { binary: b.binary as string } : {}),
+      ...(b.account !== undefined ? { account: b.account as string } : {}),
+      ...(b.home !== undefined ? { home: b.home as string } : {}),
+    };
+    validateBuyConfig(buy);
+  }
   return {
+    buy,
     network: c.network,
     chainId,
     registry: c.registry.toLowerCase(),

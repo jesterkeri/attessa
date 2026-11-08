@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 import { realpathSync } from 'node:fs';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.ts';
 import { EnclaveClient, TcpEnclaveTransport } from './enclave.ts';
+import { BuyCliSource } from './buy.ts';
+import { BuySpendGuard, GatewayDbRevenue } from './guard.ts';
 import { HttpRpcSource, InputFetcher } from './inputs.ts';
 import { SellerHost } from './server.ts';
 
 /**
- * `attessa-seller-host <config.json>`, run by `attessa-seller@<network>.service`. Reads go to Forno for now:
- * the buy RPC capability (S7) plugs in as a `BuySource` behind the budget guard once its API is known.
+ * `attessa-seller-host <config.json>`, run by `attessa-seller@<network>.service`. Reads go to Forno unless the
+ * config has a `buy` block (mainnet only): then buy is primary behind the budget guard, Forno the fallback.
  */
 function log(event: string, fields: Record<string, unknown> = {}): void {
   process.stdout.write(`${JSON.stringify({ t: new Date().toISOString(), event, ...fields })}\n`);
@@ -19,7 +22,13 @@ export async function main(path: string): Promise<void> {
   const host = new SellerHost({
     config: cfg,
     enclave: new EnclaveClient(new TcpEnclaveTransport(cfg.enclavePort)),
-    inputs: new InputFetcher({ forno: new HttpRpcSource('forno', cfg.fornoUrl), log }),
+    inputs: new InputFetcher({
+      forno: new HttpRpcSource('forno', cfg.fornoUrl),
+      ...(cfg.buy
+        ? { buy: new BuyCliSource(cfg.buy), guard: new BuySpendGuard(join(cfg.stateDir, 'buy-guard.json'), new GatewayDbRevenue(cfg.gatewayDbPath!, log), log) }
+        : {}),
+      log,
+    }),
     log,
   });
   // Serve only once the enclave is known to be bound to this config (fail closed).

@@ -4614,3 +4614,16 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+## T28 seller-host input fetch through buy, Forno fallback, `source` recorded (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 (capability id, price, first paid transaction) is not done because the agent wallet is not funded, so T27 and T28 stay unticked. Every buy test uses a test double for the `buy` binary (an `exec` stub answering from an in-process fake JSON-RPC node); the capability id, URL and price in the tests are placeholders.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` runs the `buy` binary's `curl` subcommand with `--max-amount <decimal>`, `--silent`, a POST and the JSON-RPC batch as the request body, through an injectable exec. One attempt, never retried. The key is never read by seller-host, never in argv or the child's environment (minimal env: PATH, HOME, LANG, BUY_HOME), and buy's stderr/stdout is never put in an error. Config check: https URL without credentials, 1-128 visible ASCII id, per-call maximum > 0 and <= 0.10 USDC ceiling. The same maximum is passed to buy and counted by the budget guard as one evaluate's cost.
+- `src/inputs.ts`: `parseBatchReply` shared by Forno and buy. A paid primary gets the head number from Forno (free), then asks buy once for the four reads (block, code, nonce, balance) at latest - 1, in one batch. A buy reply that fails validation (not JSON, not an array, a per-call error, wrong block number, bad hash, bad code) counts as failed and falls back once to Forno with `source:"forno"`; the paid attempt is still counted.
+- `src/config.ts`, `src/main.ts`: optional `buy` block (capabilityId, url, maxAmount as decimal USDC, optional binary, account, home). Refused on sepolia and local, and without `gatewayDbPath`. Absent means Forno only. Wired with `BuySpendGuard`/`GatewayDbRevenue`.
+- Tests: `test/buy-inputs.test.ts` (new). Two assertions in `test/inputs.test.ts` changed because the head read moved to Forno: Forno now sees 1 request when buy succeeds (was 0), and the guard test counts 4 paid requests for 4 fetches (was 8). They encode SPEC's "one batch per evaluate"; what is checked is not relaxed.
+
+Verification: `pnpm --filter @attessa/seller-host exec vitest run -t "inputs"` 16 passed | 76 skipped; full seller-host suite 92 passed (92); typecheck and lint exit 0 (see the build report for the output).
+reviewed: pending

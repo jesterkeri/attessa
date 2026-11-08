@@ -51,20 +51,24 @@ export class HttpRpcSource implements RpcSource {
       signal,
     });
     if (!res.ok) throw new Error(`${this.id}: HTTP ${res.status}`);
-    const json = (await res.json()) as unknown;
-    if (!Array.isArray(json)) throw new Error(`${this.id}: batch reply is not an array`);
-    const byId = new Map<unknown, Record<string, unknown>>();
-    for (const r of json) {
-      if (typeof r === 'object' && r !== null) byId.set((r as Record<string, unknown>).id, r as Record<string, unknown>);
-    }
-    return calls.map((c, i) => {
-      const r = byId.get(i + 1);
-      if (!r) throw new Error(`${this.id}: no reply for ${c.method}`);
-      if (r.error !== undefined) throw new Error(`${this.id}: ${c.method} failed`);
-      if (!('result' in r)) throw new Error(`${this.id}: ${c.method} has no result`);
-      return r.result;
-    });
+    return parseBatchReply(this.id, calls, (await res.json()) as unknown);
   }
+}
+
+/** Matches a JSON-RPC batch reply to `calls` (ids 1..n). Throws on anything but a result for every call. */
+export function parseBatchReply(sourceId: string, calls: RpcCall[], json: unknown): unknown[] {
+  if (!Array.isArray(json)) throw new Error(`${sourceId}: batch reply is not an array`);
+  const byId = new Map<unknown, Record<string, unknown>>();
+  for (const r of json) {
+    if (typeof r === 'object' && r !== null) byId.set((r as Record<string, unknown>).id, r as Record<string, unknown>);
+  }
+  return calls.map((c, i) => {
+    const r = byId.get(i + 1);
+    if (!r) throw new Error(`${sourceId}: no reply for ${c.method}`);
+    if (r.error !== undefined) throw new Error(`${sourceId}: ${c.method} failed`);
+    if (!('result' in r)) throw new Error(`${sourceId}: ${c.method} has no result`);
+    return r.result;
+  });
 }
 
 export interface Inputs {
@@ -82,10 +86,14 @@ function quantity(v: unknown, what: string): bigint {
   return BigInt(v);
 }
 
-/** Reads the four inputs from one source at latest − 1. */
-export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs: number): Promise<Inputs> {
+/**
+ * Reads the four inputs from `source` at latest − 1. The head number comes from `headSource` (default:
+ * `source` itself). A paid source gets the free Forno head, so it is asked once, with the four reads in
+ * one batch; its block is checked against the number asked for, and `source` names where the values came from.
+ */
+export async function readInputsFrom(source: RpcSource, payTo: string, timeoutMs: number, headSource: RpcSource = source): Promise<Inputs> {
   const signal = AbortSignal.timeout(timeoutMs);
-  const [head] = await source.batch([{ method: 'eth_blockNumber', params: [] }], signal);
+  const [head] = await headSource.batch([{ method: 'eth_blockNumber', params: [] }], signal);
   const latest = quantity(head, 'eth_blockNumber');
   if (latest < 1n) throw new Error('chain has no block before latest');
   const n = latest - 1n;
@@ -146,7 +154,7 @@ export class InputFetcher {
       }
     }
     try {
-      return await readInputsFrom(primary, payTo, this.timeoutMs);
+      return await readInputsFrom(primary, payTo, this.timeoutMs, forno);
     } catch (e) {
       this.o.log?.('inputs_primary_failed', { source: primary.id, reason: (e as Error).message });
     }

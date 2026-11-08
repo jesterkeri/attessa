@@ -85,7 +85,8 @@ describe('input fetch (SPEC §5)', () => {
     const i = await f.fetch(PAY_TO, new Date('2026-11-10T12:00:00Z'));
     expect(i.source).toBe('buy:celo-rpc');
     expect(buy.calls.at(-1)!.map((c) => c.method)).toEqual(['eth_getBlockByNumber', 'eth_getCode', 'eth_getTransactionCount', 'eth_getBalance']);
-    expect(forno.requests).toHaveLength(0);
+    expect(forno.requests).toHaveLength(1); // only the free head number
+    expect(buy.calls).toHaveLength(1); // one paid request per evaluate
     expect(guard.state(new Date('2026-11-10T13:00:00Z')).spentAtomic).toBe('5000');
   });
 
@@ -118,7 +119,7 @@ describe('buy-spend guard (SPEC §5)', () => {
     expect(guard.state(now)).toEqual({ day: '2026-11-10', spentAtomic: '1040000', tripped: false });
     expect((await f.fetch(PAY_TO, now)).source).toBe('forno');
     expect((await f.fetch(PAY_TO, now)).source).toBe('forno');
-    expect(buy.calls.length).toBe(8); // two requests per paid fetch, none after the trip
+    expect(buy.calls.length).toBe(4); // one paid request per evaluate, none after the trip
     expect(JSON.parse(readFileSync(path, 'utf8'))).toEqual({ day: '2026-11-10', spentAtomic: '1040000', tripped: true });
     expect(logs.filter(([e]) => e === 'buy_budget_tripped')).toHaveLength(1);
     // The revenue window starts at 00:00 UTC.
