@@ -9,6 +9,7 @@ import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeChain } from '../../sdk/test/fakes/chain.ts';
 import { FakeGateway } from '../../sdk/test/fakes/gateway.ts';
+import { takeEnvironment } from '../src/env.ts';
 import { createMcpServer, scrub } from '../src/index.ts';
 
 // The MCP server through a real MCP client over an in-memory transport, against the SDK's fake chain and x402 gateway.
@@ -85,6 +86,20 @@ async function world(config: unknown = { network: 'local', limits: { usdc: { max
       const text = (r.content as Array<{ text: string }>)[0]!.text;
       return { isError: r.isError === true, text, json: JSON.parse(text) as Record<string, any> };
     },
+    /**
+     * Puts `text` through a real result path that still carries a string: a verified call's kept answer (a service's answer passed
+     * through) comes back in `response` of `get_result`. The first call pays once (fake gateway), later ones rewrite the kept file.
+     */
+    async echo(text: string) {
+      if (w.echoId === undefined) {
+        const paid = await w.tool('pay_and_verify', { url: w.url, body: w.body });
+        w.echoId = paid.json.requestId as string;
+      }
+      writeFileSync(join(dataDir, `${w.echoId}.json`), text);
+      const r = await w.tool('get_result', { requestId: w.echoId });
+      return { ...r, response: r.json.response as string | undefined };
+    },
+    echoId: undefined as string | undefined,
     pending() {
       const p = join(dataDir, 'pending.jsonl');
       return existsSync(p) ? readFileSync(p, 'utf8').trim().split('\n').filter(Boolean).map((l) => JSON.parse(l)) : [];
@@ -310,13 +325,12 @@ describe('mcp: Codex r1 Major 1, short and encoded secrets never reach a result'
     w.env.ATTESSA_KEYSTORE_PASSWORD = 'abc123';
     w.env.FACILITATOR_API_KEY = 'p@ss w/rd&1';
     w.env.SERVICE_TOKEN = 'x"y\\zzz';
-    // An unknown tool's error names the tool, so what the caller types comes back through the real result path.
+    // A service's answer passed through (a verified call's kept answer) carries any string back through the real result path.
     for (const leak of ['abc123', 'p@ss w/rd&1', encodeURIComponent('p@ss w/rd&1'), 'x"y\\zzz']) {
-      const r = await w.tool(`prefix-${leak}-suffix`);
-      expect(r.isError).toBe(true);
+      const r = await w.echo(`prefix-${leak}-suffix`);
       expect(r.text).not.toContain(leak);
       expect(r.text).not.toContain(JSON.stringify(leak).slice(1, -1));
-      expect(r.text).toContain('prefix-');
+      expect(r.response).toBe('prefix-[hidden]-suffix');
     }
   });
 
@@ -327,6 +341,14 @@ describe('mcp: Codex r1 Major 1, short and encoded secrets never reach a result'
     expect(out.startsWith('pw ')).toBe(true);
   });
 });
+
+const UNKNOWN_TOOL_MESSAGE = 'There is no tool with that name.';
+const WITHHELD_RESULT = {
+  ok: false,
+  error: 'redaction_withheld',
+  message: 'The result was withheld because it would have shown a secret this server holds, or hiding it would have changed a number or a hash.',
+  next: 'Check what you passed in and what the service returned; if the secret was exposed outside this server, replace it.',
+};
 
 const VECTOR_REQUEST_HASH = '0xd0e8ee59691076ca21a43abc5a48d77229446eb7025e5c07063fdc9a8419ed00';
 const vectorArgs = () => ({ proof: SEPOLIA_VECTOR.header, chainId: Number(SEPOLIA_VECTOR.chainId), registry: SEPOLIA_VECTOR.verifyingContract });
@@ -523,11 +545,11 @@ describe('mcp: Codex r2 Major 1 (r3: refuse, never run with an unredactable secr
   it('a secret of 4 or more characters is hidden inside strings only; 3 is refused', async () => {
     w = await world();
     w.env.LONG_TOKEN = 'abcd';
-    const a = await w.tool('prefix-abcd-suffix');
+    const a = await w.echo('prefix-abcd-suffix');
     expect(a.text).not.toContain('abcd');
-    expect(a.json.error).toBe('unknown_tool');
+    expect(a.response).toBe('prefix-[hidden]-suffix');
     w.env.SHORT_TOKEN = 'abc';
-    const b = await w.tool('prefix-abc-suffix');
+    const b = await w.echo('prefix-abc-suffix');
     expect(b.json.error).toBe('unsafe_secret');
     expect(b.text).not.toContain('abc-suffix');
   });
@@ -635,26 +657,42 @@ describe('mcp: Codex r3 Major 1, an unredactable secret stops the server; every 
     w.env.JSON_TOKEN = 'tok"en\\q';
     w.env.PCT_SECRET = 'k/e:y!~x';
     w.env.SPACE_PASSWORD = 'a b+c d';
-    const leaks = [
-      'tok\\"en\\\\q', // the JSON-escaped spelling of JSON_TOKEN
-      'tok"en\\q',
-      'k%2fe%3Ay%21~x', // mixed-case percent escapes
-      'k%2Fe%3ay%21~x',
-      'k%2fe%3ay%21~x',
-      'k/e:y!~x',
-      'k%2Fe%3Ay!~x',
-      'a+b%2Bc+d',
-      'a%20b%2bc%20d',
-      'a b+c d',
+    // One explicit outcome per spelling, through a real result path (a service's answer passed through):
+    // `hidden` = replaced in place, the text around it kept; `withheld` = the exact fixed redaction_withheld result.
+    const leaks: Array<[string, 'hidden' | 'withheld']> = [
+      ['tok\\"en\\\\q', 'withheld'], // the JSON-escaped spelling of JSON_TOKEN, typed as text: reads back as the secret once unescaped
+      ['tok"en\\q', 'hidden'],
+      ['k%2fe%3Ay%21~x', 'hidden'], // mixed-case percent escapes
+      ['k%2Fe%3ay%21~x', 'hidden'],
+      ['k%2fe%3ay%21~x', 'hidden'],
+      ['k/e:y!~x', 'hidden'],
+      ['k%2Fe%3Ay!~x', 'hidden'],
+      ['a+b%2Bc+d', 'hidden'],
+      ['a%20b%2bc%20d', 'hidden'],
+      ['a b+c d', 'hidden'],
     ];
-    for (const leak of leaks) {
-      const r = await w.tool(`pre-${leak}-post`);
-      expect(r.isError, leak).toBe(true);
-      // Hidden in place, or (an escaped spelling that reads back as the secret) withheld whole: never shown.
-      expect(['unknown_tool', 'redaction_withheld'], leak).toContain(r.json.error);
+    for (const [leak, outcome] of leaks) {
+      const r = await w.echo(`pre-${leak}-post`);
       expect(r.text, leak).not.toContain(leak);
       expect(r.text, leak).not.toContain(JSON.stringify(leak).slice(1, -1));
-      if (r.json.error === 'unknown_tool') expect(r.text).toContain('pre-');
+      if (outcome === 'hidden') {
+        expect(r.response, leak).toBe('pre-[hidden]-post');
+        expect(r.json.ok, leak).toBe(true);
+      } else {
+        expect(r.isError, leak).toBe(true);
+        expect(r.json, leak).toEqual(WITHHELD_RESULT);
+      }
+    }
+  });
+
+  it('an unknown tool name is never echoed, in any spelling', async () => {
+    w = await world();
+    w.env.JSON_TOKEN = 'tok"en\\q';
+    for (const name of ['pre-x-post', 'tok"en\\q', 'pre-tok%22en-post', 'a\nb', '', 'x'.repeat(5000)]) {
+      const r = await w.tool(name);
+      expect(r.isError).toBe(true);
+      expect(r.json).toEqual({ ok: false, error: 'unknown_tool', message: UNKNOWN_TOOL_MESSAGE, next: 'List the tools with tools/list.' });
+      if (name !== '') expect(r.text).not.toContain(name);
     }
   });
 });
@@ -713,20 +751,27 @@ describe('mcp: Codex r4, the secrets are exactly what the server consumes, and n
   it('Major 1: a declared secret does not leave through safe(), \\xNN, \\u{N}, \\uNNNN or \\/ spellings; the result is withheld, never altered', async () => {
     w = await world();
     declared(w, 'ab\ncd');
-    for (const name of ['pre-ab\ncd-post', 'pre-ab\\x0acd-post', 'pre-ab\\u{a}cd-post', 'pre-ab\\u000acd-post', 'pre-ab\\ncd-post']) {
-      const r = await w.tool(name);
-      expect(r.isError, name).toBe(true);
-      expect(r.text, name).not.toContain('ab\\ncd');
-      expect(r.text, name).not.toContain('ab\\\\x0acd');
-      expect(r.text, name).not.toContain('x0a');
-      expect(['redaction_withheld', 'unknown_tool']).toContain(r.json.error);
+    // Raw: hidden in place. Every escaped spelling reads back as the secret once unescaped: the fixed withheld result.
+    const raw = await w.echo('pre-ab\ncd-post');
+    expect(raw.response).toBe('pre-[hidden]-post');
+    for (const text of ['pre-ab\\x0acd-post', 'pre-ab\\u{a}cd-post', 'pre-ab\\u000acd-post', 'pre-ab\\ncd-post']) {
+      const r = await w.echo(text);
+      expect(r.isError, text).toBe(true);
+      expect(r.json, text).toEqual(WITHHELD_RESULT);
+      expect(r.text, text).not.toContain('x0a');
     }
     declared(w, 'token');
-    for (const name of ['pre-\\u0074oken-post', 'pre-t\\u006fken-post', 'pre-\\x74oken-post', 'pre-%74oken-post', 'pre-tok%65n-post', 'pre-\\/token-post']) {
-      const r = await w.tool(name);
-      expect(r.isError, name).toBe(true);
-      expect(r.text, name).not.toMatch(/u0074|u006f|x74|%74|%65|token/i);
+    const plain = await w.echo('pre-token-post');
+    expect(plain.response).toBe('pre-[hidden]-post');
+    // Each escaped spelling of an unreserved letter reads back as the secret: withheld. Only a literal `token` is hidden in place.
+    for (const text of ['pre-\\u0074oken-post', 'pre-t\\u006fken-post', 'pre-\\x74oken-post', 'pre-%74oken-post', 'pre-tok%65n-post']) {
+      const r = await w.echo(text);
+      expect(r.isError, text).toBe(true);
+      expect(r.json, text).toEqual(WITHHELD_RESULT);
+      expect(r.text, text).not.toMatch(/u0074|u006f|x74|%74|%65|token/i);
     }
+    const slash = await w.echo('pre-\\/token-post');
+    expect(slash.response).toBe('pre-\\/[hidden]-post');
   });
 
   it('Major 2: a key under any other variable name is neither required nor touched, and nothing about its name matters', async () => {
@@ -736,13 +781,13 @@ describe('mcp: Codex r4, the secrets are exactly what the server consumes, and n
     w.env.DATABASE_URL = 'postgres://user:pw@db/x';
     w.env.SOME_TOKEN = '1'; // undeclared: the server reads it for nothing, so it is not its to hide or refuse
     w.env.KEYBOARD = 'us';
-    const r = await w.tool(`pre-${wallet}-post`);
-    expect(r.json.error).toBe('unknown_tool');
+    const r = await w.echo(`pre-${wallet}-post`);
+    expect(r.response).toBe(`pre-${wallet}-post`);
     expect(r.text).toContain(wallet); // not declared in ATTESSA_REDACT: documented, not hidden
     const ok = await w.tool('list_pending');
     expect(ok.json.ok).toBe(true);
     w.env.ATTESSA_REDACT = 'WALLET';
-    const hidden = await w.tool(`pre-${wallet}-post`);
+    const hidden = await w.echo(`pre-${wallet}-post`);
     expect(hidden.text).not.toContain(wallet);
   });
 
@@ -751,7 +796,7 @@ describe('mcp: Codex r4, the secrets are exactly what the server consumes, and n
     const pw = 'hunter2-hunter2';
     w.env.ATTESSA_KEYSTORE_PASSWORD = pw;
     for (const leak of [pw, w.key, w.key.slice(2)]) {
-      const r = await w.tool(`pre-${leak}-post`);
+      const r = await w.echo(`pre-${leak}-post`);
       expect(r.text).not.toContain(leak);
     }
     w.env.ATTESSA_KEYSTORE_PASSWORD = 'ab';
@@ -766,7 +811,7 @@ describe('mcp: Codex r4, the secrets are exactly what the server consumes, and n
     expect(r.isError).toBe(true);
     expect(r.text).not.toMatch(/rpcuser|pw-s3cret|APIKEY-abc123|queryTok99|fragTok77/);
     for (const part of ['rpcuser', 'pw-s3cret', 'APIKEY-abc123', 'queryTok99', 'fragTok77', 'pw%2Ds3cret']) {
-      const e = await w.tool(`pre-${part}-post`);
+      const e = await w.echo(`pre-${part}-post`);
       expect(e.text, part).not.toContain(part);
     }
   });
@@ -784,10 +829,213 @@ describe('mcp: Codex r4, the secrets are exactly what the server consumes, and n
 
   it('final layer: a structure-breaking secret withholds the result and the text still parses', async () => {
     w = await world();
-    declared(w, 'unknown_tool","message":"'); // present in the serialised error: replacing it would merge two members
-    const r = await w.tool('prefix-x-suffix');
+    const r0 = await w.echo('x'); // pays once, so the serialised result below is a verified one
+    expect(r0.json.state).toBe('verified');
+    declared(w, 'verified","amount":"'); // present in the serialised result: replacing it would merge two members
+    const r = await w.tool('get_result', { requestId: w.echoId });
     expect(r.isError).toBe(true);
     expect(() => JSON.parse(r.text)).not.toThrow();
     expect(r.json.error).toBe('redaction_withheld');
+  });
+});
+
+describe('mcp: Codex r5, removing the paths first', () => {
+  it('takeEnvironment returns a private copy and removes the key and keystore password from the source', () => {
+    const source: Record<string, string | undefined> = { ATTESSA_PRIVATE_KEY: `0x${'11'.repeat(32)}`, ATTESSA_KEYSTORE_PASSWORD: 'pw-pw-pw-pw', ATTESSA_NETWORK: 'local', HOME: '/h' };
+    const copy = takeEnvironment(source);
+    expect(copy).toEqual({ ATTESSA_PRIVATE_KEY: `0x${'11'.repeat(32)}`, ATTESSA_KEYSTORE_PASSWORD: 'pw-pw-pw-pw', ATTESSA_NETWORK: 'local', HOME: '/h' });
+    expect(source).toEqual({ ATTESSA_NETWORK: 'local', HOME: '/h' });
+    expect('ATTESSA_PRIVATE_KEY' in source).toBe(false);
+    expect('ATTESSA_KEYSTORE_PASSWORD' in source).toBe(false);
+    copy.ATTESSA_NETWORK = 'mainnet'; // the copy is not the source
+    expect(source.ATTESSA_NETWORK).toBe('local');
+  });
+
+  it('takeEnvironment works on the real process.env', () => {
+    const saved = { k: process.env.ATTESSA_PRIVATE_KEY, p: process.env.ATTESSA_KEYSTORE_PASSWORD };
+    process.env.ATTESSA_PRIVATE_KEY = `0x${'22'.repeat(32)}`;
+    process.env.ATTESSA_KEYSTORE_PASSWORD = 'synthetic-pw-1';
+    try {
+      const copy = takeEnvironment(process.env);
+      expect(copy.ATTESSA_PRIVATE_KEY).toBe(`0x${'22'.repeat(32)}`);
+      expect(process.env.ATTESSA_PRIVATE_KEY).toBeUndefined();
+      expect(process.env.ATTESSA_KEYSTORE_PASSWORD).toBeUndefined();
+    } finally {
+      for (const [n, v] of [['ATTESSA_PRIVATE_KEY', saved.k], ['ATTESSA_KEYSTORE_PASSWORD', saved.p]] as const) {
+        if (v === undefined) delete process.env[n];
+        else process.env[n] = v;
+      }
+    }
+  });
+
+  it('nothing on the MCP call path reads the key from process.env: the server wallet is the deps.env one', async () => {
+    w = await world();
+    const other = generatePrivateKey();
+    const saved = process.env.ATTESSA_PRIVATE_KEY;
+    process.env.ATTESSA_PRIVATE_KEY = other;
+    try {
+      // deps.env has no key and process.env has one: the wallet must not be found.
+      delete w.env.ATTESSA_PRIVATE_KEY;
+      const r = await w.tool('status');
+      expect(r.isError).toBe(true);
+      expect(r.text).not.toContain(privateKeyToAccount(other).address.toLowerCase());
+      // and with deps.env's key, the wallet that answers is that one, not process.env's
+      w.env.ATTESSA_PRIVATE_KEY = w.key;
+      const ok = await w.tool('status');
+      expect(ok.isError).toBe(false);
+      expect(ok.text.toLowerCase()).not.toContain(privateKeyToAccount(other).address.toLowerCase());
+    } finally {
+      if (saved === undefined) delete process.env.ATTESSA_PRIVATE_KEY;
+      else process.env.ATTESSA_PRIVATE_KEY = saved;
+    }
+  });
+
+  it('r5 reproduction: a nonexistent keystore path with a marker never reaches a bad_key result', async () => {
+    w = await world();
+    delete w.env.ATTESSA_PRIVATE_KEY;
+    w.env.ATTESSA_KEYSTORE = '/nonexistent/KSMARKER-7731/keystore.json';
+    w.env.ATTESSA_KEYSTORE_PASSWORD = 'synthetic-safe-pw';
+    const r = await w.tool('status');
+    expect(r.isError).toBe(true);
+    expect(r.json.error).toBe('bad_key');
+    expect(r.text).not.toContain('KSMARKER');
+    expect(r.text).not.toContain('/nonexistent');
+  });
+
+  it('ATTESSA_KEYSTORE is a path, not a secret: a short value is never refused as unsafe_secret, and is still hidden whole', async () => {
+    w = await world();
+    await w.echo('x'); // pays once, with the key
+    delete w.env.ATTESSA_PRIVATE_KEY;
+    w.env.ATTESSA_KEYSTORE = 'ks';
+    w.env.ATTESSA_KEYSTORE_PASSWORD = 'synthetic-safe-pw';
+    expect((await w.tool('list_pending')).json.ok).toBe(true);
+    w.env.ATTESSA_REDACT = `${w.env.ATTESSA_REDACT},ATTESSA_KEYSTORE,ATTESSA_DATA_DIR`;
+    expect((await w.tool('list_pending')).json.ok).toBe(true); // even when the operator lists a path in ATTESSA_REDACT
+    const r = await w.echo('opened ks and ksx and /tmp/ks/y');
+    expect(r.response).toBe('opened [hidden] and ksx and /tmp/ks/y');
+    const st = await w.tool('status');
+    expect(st.json.error).toBe('bad_key');
+    expect(st.text).not.toMatch(/\bks\b/);
+  });
+
+  it('ATTESSA_DATA_DIR, as typed and in its ~/ display form, never appears whole in a result', async () => {
+    w = await world();
+    const rel = w.dataDir.slice(w.home.length); // /.attessa
+    for (const form of [w.dataDir, `~${rel}`, `${w.dataDir}/evidence.jsonl`, `~${rel}/evidence.jsonl`]) {
+      const r = await w.echo(`see ${form}, which holds records`);
+      expect(r.text, form).not.toContain(w.dataDir);
+      expect(r.text, form).not.toContain(`~${rel}`);
+      expect(r.response, form).toMatch(/^see \[hidden\]/);
+    }
+    // the CLI's own error path: a config.json that is not JSON names its path
+    writeFileSync(join(w.dataDir, 'config.json'), 'not json');
+    const st = await w.tool('status');
+    expect(st.isError).toBe(true);
+    expect(st.text).not.toContain(w.dataDir);
+    expect(st.text).not.toContain(`~${rel}`);
+    expect(st.json.error).toBe('usage');
+  });
+
+  it('a short ATTESSA_DATA_DIR is not an unsafe_secret either', async () => {
+    w = await world();
+    w.env.ATTESSA_DATA_DIR = 'd';
+    expect((await w.tool('list_pending')).json.error).not.toBe('unsafe_secret');
+  });
+
+  it('ATTESSA_NETWORK and ATTESSA_REGISTRY are public configuration: a bad value is a fixed refusal that does not echo it', async () => {
+    w = await world();
+    w.env.ATTESSA_NETWORK = 'NETMARKER-5521';
+    const n = await w.tool('resolve_endpoint', { url: w.url });
+    expect(n.isError).toBe(true);
+    expect(n.json).toMatchObject({ error: 'usage', message: '--network must be sepolia, mainnet or local.' });
+    expect(n.text).not.toContain('NETMARKER');
+    w.env.ATTESSA_NETWORK = 'local';
+    w.env.ATTESSA_REGISTRY = 'REGMARKER-9942';
+    const g = await w.tool('resolve_endpoint', { url: w.url });
+    expect(g.isError).toBe(true);
+    expect(g.json).toMatchObject({ error: 'usage', message: 'ATTESSA_REGISTRY must be an address.' });
+    expect(g.text).not.toContain('REGMARKER');
+  });
+
+  it('maxAmount is not echoed when it is over the limit', async () => {
+    w = await world();
+    const r = await w.tool('pay_and_verify', { url: w.url, body: w.body, maxAmount: '987654.321' });
+    expect(r.json.error).toBe('over_max_amount');
+    expect(r.text).not.toContain('987654');
+  });
+});
+
+describe('mcp: Codex r5, encodings are matched to a fixed point and in base64 and hex', () => {
+  const SECRET = 'sYnth3tic-S3cret!Value';
+  const layers = (s: string, n: number): string => {
+    let t = [...Buffer.from(s, 'utf8')].map((b) => `%${b.toString(16).padStart(2, '0')}`).join('');
+    for (let i = 1; i < n; i++) t = t.replace(/%/g, '%25');
+    return t;
+  };
+  const b64s = (bytes: Buffer): string[] => {
+    const std = bytes.toString('base64');
+    return [std, std.replace(/=+$/, ''), std.replace(/\+/g, '-').replace(/\//g, '_'), std.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')];
+  };
+
+  it('five and more percent layers are hidden or withheld, never shown', async () => {
+    w = await world();
+    w.env.DEMO_TOKEN = SECRET;
+    for (const n of [4, 5, 6, 9, 20, 60]) {
+      const r = await w.echo(`pre-${layers(SECRET, n)}-post`);
+      expect(r.text, `${n}`).not.toContain(layers(SECRET, n));
+      expect(r.json, `${n}`).toEqual(WITHHELD_RESULT);
+    }
+  });
+
+  it('a nesting deeper than the bound is withheld whole, even when no secret is in it', async () => {
+    w = await world();
+    let s = '%41';
+    for (let i = 0; i < 200; i++) s = s.replace(/%/g, '%25');
+    const r = await w.echo(`x ${s} y`);
+    expect(r.isError).toBe(true);
+    expect(r.json).toEqual(WITHHELD_RESULT);
+  });
+
+  it('base64 (standard and URL-safe, padded or not, at all three alignments) and hex (either case) of a secret are withheld', async () => {
+    w = await world();
+    w.env.DEMO_TOKEN = SECRET;
+    const forms: Array<[string, string]> = [];
+    for (const k of [0, 1, 2]) {
+      const bytes = Buffer.concat([Buffer.from('x'.repeat(k)), Buffer.from(SECRET), Buffer.from('tail!')]);
+      for (const f of b64s(bytes)) forms.push([`b64 k=${k}`, f]);
+      for (const f of b64s(Buffer.concat([Buffer.from('x'.repeat(k)), Buffer.from(SECRET)]))) forms.push([`b64 end k=${k}`, f]);
+    }
+    const hex = Buffer.from(SECRET).toString('hex');
+    forms.push(['hex lower', hex], ['hex upper', hex.toUpperCase()], ['hex 0x', `0x${hex}`], ['hex in text', `data=${hex}ff`]);
+    forms.push(['b64 then percent', encodeURIComponent(Buffer.from(`k${SECRET}`).toString('base64'))]);
+    for (const [label, f] of forms) {
+      const r = await w.echo(`pre-${f}-post`);
+      expect(r.isError, `${label} ${f}`).toBe(true);
+      expect(r.json, `${label} ${f}`).toEqual(WITHHELD_RESULT);
+    }
+  });
+
+  it('the base64 of a hex key as bytes is withheld too', async () => {
+    w = await world();
+    const bytes = Buffer.from(w.key.slice(2), 'hex');
+    for (const f of b64s(bytes)) {
+      const r = await w.echo(`k ${f}`);
+      expect(r.json, f).toEqual(WITHHELD_RESULT);
+    }
+  });
+
+  it('ordinary data is not withheld: a long base64 answer, 0x hashes, and the encoded form of a secret under 8 characters', async () => {
+    w = await world();
+    w.env.DEMO_TOKEN = SECRET;
+    w.env.LONG_TOKEN = 'abcd1'; // 5 characters: hidden raw, but its encoded forms are not looked for
+    const blob = Buffer.from(Array.from({ length: 600 }, (_, i) => (i * 37 + 11) % 256)).toString('base64');
+    const hash = keccak256(stringToBytes('ordinary'));
+    const text = JSON.stringify({ score: 0.91, blob, hash, hashes: [hash, `0x${'ab'.repeat(32)}`] });
+    const r = await w.echo(text);
+    expect(r.isError).toBe(false);
+    expect(r.response).toBe(text);
+    const short = await w.echo(`enc ${Buffer.from('abcd1').toString('base64')} ${Buffer.from('abcd1').toString('hex')}`);
+    expect(short.isError).toBe(false);
+    expect(short.response).toBe(`enc ${Buffer.from('abcd1').toString('base64')} ${Buffer.from('abcd1').toString('hex')}`);
   });
 });

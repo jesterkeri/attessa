@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { existsSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { basename, join, resolve } from 'node:path';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { CallToolRequestSchema, ListToolsRequestSchema, type Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
@@ -148,16 +149,33 @@ interface ToolResult {
 }
 
 /**
- * The secrets this server holds are exactly what it consumes, plus what the operator declares:
- *   - ATTESSA_PRIVATE_KEY and ATTESSA_KEYSTORE_PASSWORD (the wallet; the key only ever goes to the signer),
- *   - the userinfo, path segments, query values and fragment of ATTESSA_RPC (results show an RPC as scheme://host[:port] only),
- *   - every variable named in ATTESSA_REDACT (comma-separated names), for anything the operator knows could reach a result.
- * The server reads no other secret, so no other variable is its to hide, require or refuse, whatever its name.
+ * What this server does about secrets, and what it does not. Not a closed guarantee.
+ *
+ * Removed by construction (no code path puts it in a result):
+ *   - the private key goes only to the wallet signer; the server reads it from its own copy of the environment (bin.ts removes
+ *     it from process.env at start); RPC URLs are shown as scheme://host[:port] by the CLI's `rpcShownSafe`;
+ *   - the requested tool name and `maxAmount` are not echoed by any MCP error.
+ *
+ * Matched (best effort, on the serialised result, after rendering):
+ *   - secrets: ATTESSA_PRIVATE_KEY, ATTESSA_KEYSTORE_PASSWORD, the credential pieces of ATTESSA_RPC and every variable named in
+ *     ATTESSA_REDACT. Raw, JSON-escaped and URL-encoded spellings are hidden in place; a string that reads back as one once
+ *     escaping is undone to a fixed point (bounded), or that holds its base64 or hex form (secrets of 8+ characters only),
+ *     withholds the whole result;
+ *   - paths: ATTESSA_KEYSTORE and ATTESSA_DATA_DIR (as typed, resolved, and in `~/` form) are hidden as whole values. They are
+ *     not secrets, so a short value is never refused.
+ *
+ * Not covered: a secret split across fields or strings; an encoding not listed; the encoded form of a value under 8
+ * characters; a service's answer passed through unchanged apart from the matching above; a secret in a variable that is
+ * neither consumed nor named in ATTESSA_REDACT. The per-call limit and the daily cap bound what can be spent either way; the
+ * OS keychain, or a keystore holding a low-balance wallet, is the safer setup than a key in the environment.
  */
 const CONSUMED = ['ATTESSA_PRIVATE_KEY', 'ATTESSA_KEYSTORE_PASSWORD'];
+/** Consumed values that are file paths: public configuration, hidden whole wherever they appear. */
+const PATH_VARS = ['ATTESSA_KEYSTORE', 'ATTESSA_DATA_DIR'];
 
 function declared(env: Record<string, string | undefined>): Array<[string, string]> {
-  const names = [...CONSUMED, ...(env.ATTESSA_REDACT ?? '').split(',').map((n) => n.trim()).filter((n) => n !== '')];
+  // The path variables are hidden as paths (see `pathForms`), never as secrets: a short one must not stop the server.
+  const names = [...CONSUMED, ...(env.ATTESSA_REDACT ?? '').split(',').map((n) => n.trim()).filter((n) => n !== '' && !PATH_VARS.includes(n))];
   return [...new Set(names)].flatMap((n): Array<[string, string]> => (env[n] !== undefined && env[n] !== '' ? [[n, env[n]!]] : []));
 }
 
@@ -219,8 +237,8 @@ const escRe = (x: string): string => x.replace(/[.*+?^${}()|[\]\\\/-]/g, '\\$&')
 const UNRESERVED = /^[A-Za-z0-9\-_.~]$/;
 const URI_LITERAL = ";,/?:@&=+$#!'()*";
 
-/** A pattern for `b` as it appears raw, JSON-escaped, or URL-encoded in any mix of upper and lower case hex, with `+` for a space, and reserved characters left literal (encodeURI). */
-function secretPattern(b: string): RegExp {
+/** The source of a pattern for `b` as it appears raw, JSON-escaped, or URL-encoded in any mix of upper and lower case hex, with `+` for a space, and reserved characters left literal (encodeURI). */
+function patternSource(b: string): string {
   const pct = [...b]
     .map((ch) => {
       if (UNRESERVED.test(ch)) return escRe(ch);
@@ -228,13 +246,52 @@ function secretPattern(b: string): RegExp {
       return `(?:${[enc, ...(ch === ' ' ? ['\\+'] : []), ...(URI_LITERAL.includes(ch) ? [escRe(ch)] : [])].join('|')})`;
     })
     .join('');
-  return new RegExp(`${pct}|${escRe(JSON.stringify(b).slice(1, -1))}|${escRe(b)}`, 'g');
+  return `${pct}|${escRe(JSON.stringify(b).slice(1, -1))}|${escRe(b)}`;
 }
 
-/** Text with the secrets (raw, JSON-escaped, URL-encoded) and URL userinfo removed: the first, cheap layer. */
-export function scrub(text: string, env: Record<string, string | undefined>): string {
+function secretPattern(b: string): RegExp {
+  return new RegExp(patternSource(b), 'g');
+}
+
+/** Where a path value counts as the whole value: not inside a longer word or name (`ks` is not `ksx`, nor `/tmp/ks/y`). */
+function pathPattern(b: string, flags: string): RegExp {
+  const before = /^[/~]/.test(b) ? '(?<![\\w.-])' : '(?<![\\w./~-])';
+  return new RegExp(`${before}(?:${patternSource(b)})(?![\\w-]|\\.\\w)`, flags);
+}
+
+/** Where the process lives, for the forms a path takes in a message. */
+export interface PathContext {
+  home?: string | undefined;
+  cwd?: string | undefined;
+}
+
+/** Every form ATTESSA_KEYSTORE and ATTESSA_DATA_DIR can take in a result: as typed, resolved, real, with `safe()` escapes, and as `~/…`. */
+function pathForms(env: Record<string, string | undefined>, ctx: PathContext): string[] {
+  const out = new Set<string>();
+  for (const n of PATH_VARS) {
+    const v = env[n];
+    if (v === undefined || v === '') continue;
+    const abs = ctx.cwd !== undefined ? resolve(ctx.cwd, v) : v;
+    let real = abs;
+    try {
+      real = realpathSync(abs);
+    } catch {
+      // not there yet: the path as resolved
+    }
+    for (const f of [v, v.replace(/\/+$/, ''), abs, real]) {
+      out.add(f);
+      out.add(safe(f));
+      if (ctx.home !== undefined && (f === ctx.home || f.startsWith(`${ctx.home}/`))) out.add(`~${f.slice(ctx.home.length)}`);
+    }
+  }
+  return [...out].filter((f) => /[A-Za-z0-9]/.test(f)).sort((x, y) => y.length - x.length);
+}
+
+/** Text with the secrets (raw, JSON-escaped, URL-encoded), the path values and URL userinfo removed: the first, cheap layer. */
+export function scrub(text: string, env: Record<string, string | undefined>, ctx: PathContext = {}): string {
   let t = text;
   for (const b of secretBases(env)) t = t.replace(secretPattern(b), '[hidden]');
+  for (const f of pathForms(env, ctx)) t = t.replace(pathPattern(f, 'g'), '[hidden]');
   return t.replace(/([a-z][a-z0-9+.-]*:\/\/)[^/\s"'@\\]*@/gi, '$1');
 }
 
@@ -256,17 +313,54 @@ function unescapeOnce(s: string): string {
     });
 }
 
-/** Every reading of `s` after undoing up to four levels of escaping, with `+` also read as a space. */
-function readings(s: string): string[] {
+/** Most layers of escaping undone, and most characters read in all, for one string. Past either, `readings` gives up. */
+const MAX_LAYERS = 64;
+const MAX_READ_CHARS = 8 * 1024 * 1024;
+
+/**
+ * Every reading of `s` with escaping undone until nothing changes (each layer is shorter than the last, so it ends), and with
+ * `+` also read as a space. Null when a bound is hit: the caller treats that as "may hold a secret" and withholds.
+ */
+function readings(s: string): string[] | null {
   const out = [s];
   let cur = s;
-  for (let i = 0; i < 4; i++) {
+  let chars = s.length;
+  for (let i = 0; ; i++) {
     const next = unescapeOnce(cur);
     if (next === cur) break;
+    chars += next.length;
+    if (i >= MAX_LAYERS || chars > MAX_READ_CHARS) return null;
     out.push(next);
     cur = next;
   }
-  return [...out, ...out.map((x) => x.replace(/\+/g, ' '))];
+  return [...out, ...out.flatMap((x) => (x.includes('+') ? [x.replace(/\+/g, ' ')] : []))];
+}
+
+/** Secrets shorter than this are not looked for in base64 or hex: those forms would collide with ordinary data. */
+export const MIN_ENCODED_SECRET_LENGTH = 8;
+
+/**
+ * The base64 (standard and URL-safe, padding dropped: the forms are substrings of the padded ones) and lowercase hex a secret
+ * takes inside a longer text. Base64 at each of the three byte alignments, cut to the characters the secret alone decides.
+ * For a secret that is itself hex (a key), the bytes it spells are encoded too.
+ */
+function encodedForms(secret: string): { b64: string[]; hex: string[] } {
+  if (secret.length < MIN_ENCODED_SECRET_LENGTH) return { b64: [], hex: [] };
+  const byteSets = [Buffer.from(secret, 'utf8')];
+  const bare = secret.replace(/^0x/i, '');
+  if (bare.length >= 16 && /^(?:[0-9a-fA-F]{2})+$/.test(bare)) byteSets.push(Buffer.from(bare, 'hex'));
+  const b64 = new Set<string>();
+  const hex = new Set<string>();
+  for (const bytes of byteSets) {
+    hex.add(bytes.toString('hex'));
+    for (const k of [0, 1, 2]) {
+      const full = Buffer.concat([Buffer.alloc(k, 0x78), bytes]).toString('base64').replace(/=+$/, '');
+      const cut = full.slice([0, 2, 3][k]!, (k + bytes.length) % 3 === 0 ? undefined : -1);
+      b64.add(cut);
+      b64.add(cut.replace(/\+/g, '-').replace(/\//g, '_'));
+    }
+  }
+  return { b64: [...b64], hex: [...hex] };
 }
 
 const PROTOCOL_STRING = /^(?:0x[0-9a-fA-F]{40,}|\d+(?:\.\d+)?)$/;
@@ -298,15 +392,26 @@ const WITHHELD = {
   next: 'Check what you passed in and what the service returned; if the secret was exposed outside this server, replace it.',
 };
 
+/** What the final layer needs to know: the live environment, and where the process lives (for `~/` and relative paths). */
+interface Hide extends PathContext {
+  env: Record<string, string | undefined>;
+}
+
 /**
  * The final layer, after every rendering: the serialised text has the secrets removed, and the result is sent only if it
  * still parses, has the same keys, numbers and booleans, has unchanged amounts and hashes, and no string in it, with its
- * escaping undone (\xNN, \uNNNN, %XX, …), still holds a secret. Otherwise a fixed result without any of it is sent instead.
+ * escaping undone (\xNN, \uNNNN, %XX, …), still holds a secret, its base64 or hex form (8+ characters), or a path value; or whose escaping does not settle within a bound.
+ * Otherwise a fixed result without any of it is sent instead.
  */
-function render(env: Record<string, string | undefined>, v: unknown): { text: string; withheld: boolean } {
+function render(h: Hide, v: unknown): { text: string; withheld: boolean } {
+  const { env } = h;
   const original = jsonOut(v);
   const bases = secretBases(env);
-  const redacted = scrub(original, env);
+  const paths = pathForms(env, h).map((f) => pathPattern(f, ''));
+  const encoded = bases.map(encodedForms);
+  const b64 = encoded.flatMap((e) => e.b64);
+  const hex = encoded.flatMap((e) => e.hex);
+  const redacted = scrub(original, env, h);
   const fail = { text: jsonOut(WITHHELD), withheld: true };
   let parsedOriginal: unknown;
   let parsed: unknown;
@@ -317,16 +422,24 @@ function render(env: Record<string, string | undefined>, v: unknown): { text: st
     return fail;
   }
   if (!sameShape(parsedOriginal, parsed)) return fail;
-  if (!everyString(parsed, (s) => !readings(s).some((r) => bases.some((b) => r.includes(b))))) return fail;
+  const clean = (s: string): boolean => {
+    const rs = readings(s);
+    if (rs === null) return false;
+    return !rs.some((r) => {
+      const lower = hex.length > 0 ? r.toLowerCase() : '';
+      return bases.some((b) => r.includes(b)) || paths.some((p) => p.test(r)) || b64.some((e) => r.includes(e)) || hex.some((e) => lower.includes(e));
+    });
+  };
+  if (!everyString(parsed, clean)) return fail;
   return { text: redacted, withheld: false };
 }
 
-const text = (env: Record<string, string | undefined>, v: unknown, isError = false): ToolResult => {
-  const r = render(env, v);
+const text = (h: Hide, v: unknown, isError = false): ToolResult => {
+  const r = render(h, v);
   return { content: [{ type: 'text', text: r.text }], ...(isError || r.withheld ? { isError: true } : {}) };
 };
 
-const failure = (env: Record<string, string | undefined>, e: CliError): ToolResult => text(env, { ok: false, error: e.code, message: e.message, next: e.next }, true);
+const failure = (h: Hide, e: CliError): ToolResult => text(h, { ok: false, error: e.code, message: e.message, next: e.next }, true);
 
 function str(a: Record<string, unknown>, k: string): string | undefined {
   const v = a[k];
@@ -357,6 +470,7 @@ function bodyText(a: Record<string, unknown>): string {
 
 export function createMcpServer(opts: ServerOptions): Server {
   const env = opts.deps.env;
+  const hide: Hide = { env, home: opts.deps.home ?? homedir(), cwd: opts.deps.cwd };
   const unsafe = unsafeSecrets(env)[0];
   if (unsafe !== undefined) throw unsafeSecretError(unsafe);
   const server = new Server({ name: 'attessa', version: '0.0.0' }, { capabilities: { tools: {} } });
@@ -368,12 +482,13 @@ export function createMcpServer(opts: ServerOptions): Server {
     try {
       // The environment is read live: a secret that became unsafe after start stops every tool, not just the next start.
       const bad = unsafeSecrets(env)[0];
-      if (bad !== undefined) return failure(env, unsafeSecretError(bad));
+      if (bad !== undefined) return failure(hide, unsafeSecretError(bad));
       return await call(name, args);
     } catch (e) {
-      if (e instanceof CliError) return failure(env, e);
+      if (e instanceof CliError) return failure(hide, e);
       // Never an error's own text: a parser or an RPC library may quote a key or a credentialed URL.
-      return failure(env, new CliError('unexpected', `${name} failed unexpectedly. Nothing was signed unless a result above says so.`, 'Run `status` to see your open calls, then retry.'));
+      const known = TOOLS.some((t) => t.name === name);
+      return failure(hide, new CliError('unexpected', `${known ? name : 'The tool'} failed unexpectedly. Nothing was signed unless a result above says so.`, 'Run `status` to see your open calls, then retry.'));
     }
   });
 
@@ -386,7 +501,7 @@ export function createMcpServer(opts: ServerOptions): Server {
     const full = [...argv, '--json'];
     if (env.ATTESSA_NETWORK) full.push('--network', env.ATTESSA_NETWORK);
     if (env.ATTESSA_RPC) full.push('--rpc', env.ATTESSA_RPC);
-    if (wallet && keystore) full.push('--keystore', keystore);
+    if (wallet && keystore) full.push('--keystore', resolve(opts.deps.cwd, keystore)); // the CLI resolves against VIRTUAL_CWD otherwise
     const d: Deps = {
       ...opts.deps,
       cwd: VIRTUAL_CWD,
@@ -440,7 +555,7 @@ export function createMcpServer(opts: ServerOptions): Server {
     if (asked !== undefined && saved !== undefined && parseAmount(asked, 'maxAmount') > parseAmount(saved, 'maxAmount'))
       throw new CliError(
         'over_max_amount', // not in FLOWS: the CLI lets a flag raise the limit; an agent's argument may not
-        `maxAmount ${asked} is above the per-call limit of ${saved} that was set for this wallet. Nothing was signed.`,
+        `That maxAmount is above the per-call limit of ${saved} that was set for this wallet. Nothing was signed.`,
         `Pass a maxAmount of ${saved} or less, or ask the owner to raise the limit with \`attessa init --max-amount\`.`,
       );
     return ['--max-amount', asked ?? saved!, '--asset', asset];
@@ -467,9 +582,9 @@ export function createMcpServer(opts: ServerOptions): Server {
       request = { method: q.method, pathAndQuery: q.pathAndQuery, body: q.body };
     }
     const res = await verifyProof({ proof, chainId, registry, response: str(a, 'response'), requestId, requestHash, request }, registry);
-    if (res.ok) return text(env, res);
+    if (res.ok) return text(hide, res);
     const words = CHECK_WORDS[res.check!]?.[0] ?? res.check;
-    return text(env, { ...res, error: 'proof_rejected', message: `The proof failed a check: ${safe(words ?? 'unnamed')}.`, next: "Don't use this answer. If you paid for it, run `get_result` with its request id to see what was charged." }, true);
+    return text(hide, { ...res, error: 'proof_rejected', message: `The proof failed a check: ${safe(words ?? 'unnamed')}.`, next: "Don't use this answer. If you paid for it, run `get_result` with its request id to see what was charged." }, true);
   }
 
   async function call(name: string, a: Record<string, unknown>): Promise<ToolResult> {
@@ -477,14 +592,14 @@ export function createMcpServer(opts: ServerOptions): Server {
       case 'resolve_endpoint':
       case 'check_liveness': {
         const r = await cli(['status', requireUrl(a)], false);
-        if (r.json.ok !== true) return text(env, r.json, true);
+        if (r.json.ok !== true) return text(hide, r.json, true);
         const { lines, ...rest } = r.json;
         const view = name === 'resolve_endpoint' ? { ok: true, origin: rest.origin, agentId: rest.agentId, endpoint: rest.endpoint } : { ok: true, origin: rest.origin, liveness: rest.liveness };
-        return text(env, { ...view, lines });
+        return text(hide, { ...view, lines });
       }
       case 'quote': {
         const r = await cli(['call', requireUrl(a), '--body', bodyText(a), ...boundedMaxAmount(a), '--dry-run'], true);
-        return text(env, r.json, r.json.ok !== true);
+        return text(hide, r.json, r.json.ok !== true);
       }
       case 'pay_and_verify': {
         const argv = ['call', requireUrl(a), '--body', bodyText(a), ...boundedMaxAmount(a), '--out', 'answer.json'];
@@ -493,14 +608,14 @@ export function createMcpServer(opts: ServerOptions): Server {
         const r = await cli(argv, true);
         keep(r.answers, r.json.requestId);
         const response = r.answers.get('answer.json');
-        return text(env, { ...r.json, ...(response !== undefined ? { response } : {}) }, r.json.ok !== true);
+        return text(hide, { ...r.json, ...(response !== undefined ? { response } : {}) }, r.json.ok !== true);
       }
       case 'verify_proof':
         try {
           return await verifyProofTool(a);
         } catch (e) {
           // Refused before any check ran: still say that none of them did.
-          if (e instanceof CliError) return text(env, { ok: false, error: e.code, message: e.message, next: e.next, scope: 'offline', notChecked: allSkipped() }, true);
+          if (e instanceof CliError) return text(hide, { ok: false, error: e.code, message: e.message, next: e.next, scope: 'offline', notChecked: allSkipped() }, true);
           throw e;
         }
       case 'get_result': {
@@ -515,10 +630,10 @@ export function createMcpServer(opts: ServerOptions): Server {
             // a payment), so the FLOWS §6/§8 words and next action are its. It loads the wallet, as `attessa cancel` does.
             const r = await cli(['cancel', id], true);
             const lines = Array.isArray(r.json.lines) ? (r.json.lines as string[]).filter((l) => l.trim() !== '') : [];
-            if (r.json.ok === true || r.json.error !== undefined || lines.length === 0) return text(env, r.json, r.json.ok !== true);
+            if (r.json.ok === true || r.json.error !== undefined || lines.length === 0) return text(hide, r.json, r.json.ok !== true);
             const warning = entry.state === 'not_charged' ? null : lines[0]!;
             return text(
-              env,
+              hide,
               {
                 ...r.json,
                 requestId: id,
@@ -530,7 +645,7 @@ export function createMcpServer(opts: ServerOptions): Server {
           }
           const evidence = ledger.readEvidence().filter((e) => e.requestId === id).at(-1);
           const answer = join(dir, `${id}.json`);
-          return text(env, {
+          return text(hide, {
             ok: true,
             requestId: id,
             state: entry.state,
@@ -543,16 +658,16 @@ export function createMcpServer(opts: ServerOptions): Server {
           });
         }
         const r = await cli(['status', '--pending'], true);
-        if (r.json.ok !== true && !Array.isArray(r.json.pending)) return text(env, r.json, true);
+        if (r.json.ok !== true && !Array.isArray(r.json.pending)) return text(hide, r.json, true);
         const row = (r.json.pending as Array<Record<string, unknown>>).find((p) => p.requestId === id);
         keep(r.answers);
         const response = r.answers.get(`${id}.json`);
-        return text(env, { ok: row?.outcome === 'verified', requestId: id, ...(row ?? { state: entry.state }), ...(response !== undefined ? { response } : {}), lines: r.json.lines });
+        return text(hide, { ok: row?.outcome === 'verified', requestId: id, ...(row ?? { state: entry.state }), ...(response !== undefined ? { response } : {}), lines: r.json.lines });
       }
       case 'list_pending': {
         const dir = buyerDataDir(opts.deps as Deps);
         const open = existsSync(join(dir, 'pending.jsonl')) ? new Ledger(dir).list().filter((e) => !TERMINAL_STATES.includes(e.state)) : [];
-        return text(env, {
+        return text(hide, {
           ok: true,
           pending: open.map((e) => ({ requestId: e.requestId, origin: e.origin, amount: e.amount, asset: e.asset, state: e.state, validBefore: e.validBefore, payTo: e.payTo })),
           ...(open.length === 0 ? { lines: [BUY.noPending] } : {}),
@@ -560,14 +675,15 @@ export function createMcpServer(opts: ServerOptions): Server {
       }
       case 'cancel_authorization': {
         const r = await cli(['cancel', requireId(a)], true);
-        return text(env, r.json, r.json.ok !== true);
+        return text(hide, r.json, r.json.ok !== true);
       }
       case 'status': {
         const r = await cli(['status'], true);
-        return text(env, r.json, r.json.ok !== true);
+        return text(hide, r.json, r.json.ok !== true);
       }
     }
-    throw new CliError('unknown_tool', `There is no tool called ${safe(name)}.`, 'List the tools with tools/list.');
+    // Never the requested name, in any spelling: the caller already knows what it asked for.
+    throw new CliError('unknown_tool', 'There is no tool with that name.', 'List the tools with tools/list.'); // not in FLOWS
   }
 
   return server;

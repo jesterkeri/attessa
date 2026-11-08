@@ -4590,3 +4590,24 @@ Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filt
 exit=0
 ```
 reviewed: pending (Codex r5)
+
+### T21b Codex r5 fixes - 2026-11-08
+
+Codex r5 (REVISE, bb56af3). Tests written first: on the unchanged server 12 of 66 failed (the `takeEnvironment` stubs, the keystore and data-folder echoes, the maxAmount echo, five and more percent layers, base64, hex, the bound). Then fixed:
+
+- Echoes removed: `unknown_tool` is the fixed message "There is no tool with that name."; `over_max_amount` no longer repeats the typed amount; the `unexpected` message names only a known tool.
+- `bin.ts` keeps a private copy of the environment (`takeEnvironment`, tested) and deletes ATTESSA_PRIVATE_KEY and ATTESSA_KEYSTORE_PASSWORD from `process.env` first. A test shows the MCP call path does not read the key from `process.env` (a different key there is never used). The MCP also passes an absolute keystore path (the CLI resolved it against the virtual folder).
+- Major 2: ATTESSA_KEYSTORE and ATTESSA_DATA_DIR are paths: hidden as whole values (as typed, resolved, real, `safe()`, `~/`), never refused as `unsafe_secret`. ATTESSA_NETWORK and ATTESSA_REGISTRY are public configuration; a bad value gives the CLI's fixed refusal without the value (tested).
+- Major 1: escaping is undone to a fixed point (64 layers, 8 MiB, then withheld); base64 (standard and URL-safe, three alignments) and hex (either case) of secrets of 8+ characters withhold the result. Tests: 5 to 60 percent layers, base64 and hex forms, a hex key's bytes, and that a long base64 answer, 0x hashes and the encoded form of a 5-character secret are not withheld.
+- Minor 1: the r3 spelling table now runs through a real result path (`get_result` with the kept answer) with one explicit outcome per spelling (hidden in place with the text around it, or the exact `redaction_withheld` object); a separate test shows an unknown tool name is never echoed. The earlier tests that used the unknown-tool echo as their result path were moved to the same path unchanged in what they assert.
+- The "closed guarantee" wording is gone from the code comments and from the OPEN-QUESTIONS "MCP secret design" entry, which now says what is removed, matched and not covered.
+
+Verification: `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint` exit 0; tails of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  66 passed (66)
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+```
+reviewed: pending Codex r6
