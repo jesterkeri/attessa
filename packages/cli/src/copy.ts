@@ -331,7 +331,7 @@ export const ERR = {
   attributionRequired: () =>
     new CliError(
       'no_attribution_tag',
-      'LOOPS_ATTRIBUTION_TAG is not set, and a mainnet transaction sent without it can never be credited to your Loops entry. Nothing was signed.',
+      'LOOPS_ATTRIBUTION_TAG is not set (or is not a valid code), and a mainnet transaction sent without it can never be credited to your Loops entry. Nothing was signed.',
       'Set LOOPS_ATTRIBUTION_TAG to the attribution tag from your Loops entry, then run the command again.',
     ),
   signerExists: (signer: string, renewable = true) =>

@@ -821,3 +821,66 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(JSON.stringify(w.pending())).toBe(before);
   });
 });
+
+// Review r2, finding 2: a malformed LOOPS_ATTRIBUTION_TAG matters only to a real send on verified chain 42220.
+describe('buyer: a malformed LOOPS_ATTRIBUTION_TAG', () => {
+  const BAD = 'Not A Tag!';
+  const LOCAL = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
+  const MAINNET = ['--network', 'mainnet', '--rpc', 'http://127.0.0.1:1'];
+  const noTagError = () => expect(w.transcript.join('\n')).not.toMatch(/LOOPS_ATTRIBUTION_TAG|Not A Tag/);
+
+  it('does not block `status` on --network local (same result as with no tag)', async () => {
+    await initialized();
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const clean = await w.cli('status', '--pending', ...LOCAL);
+    w.transcript.length = 0;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    expect(await w.cli('status', '--pending', ...LOCAL)).toBe(clean);
+    noTagError();
+    expect(await w.cli('status', w.origin, ...LOCAL)).not.toBe(2);
+    noTagError();
+  });
+
+  it('does not block `status` on --network mainnet (a chain reporting 42220)', async () => {
+    await initialized();
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    await w.cli('status', '--pending', ...MAINNET);
+    noTagError();
+    await w.cli('status', w.origin, ...MAINNET);
+    noTagError();
+  });
+
+  it('does not block `call` on --network local: the x402 call completes as it does with no tag', async () => {
+    await initialized();
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    expect(await w.call()).toBe(0);
+    noTagError();
+  });
+
+  it('does not block `call` on --network mainnet: no tag error, nothing about the variable', async () => {
+    await initialized();
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    await run(['call', w.url, '--body', 'tx.json', ...MAINNET], w.deps());
+    noTagError();
+  });
+
+  for (const [label, route] of [['a local route on 42220', LOCAL], ['the mainnet route', MAINNET]] as const) {
+    it(`cancel on verified 42220 through ${label}: no_attribution_tag before signing, the bad value is never echoed`, async () => {
+      await initialized();
+      w.gw.behavior = { paid: 'pending_no_settle' };
+      expect(await w.call('--no-wait')).toBe(1);
+      const id = w.pending()[0]!.requestId as string;
+      w.out.length = 0;
+      w.transcript.length = 0;
+      (w.chain as unknown as { chainId: number }).chainId = 42220;
+      w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+      const before = w.transcript.length;
+      expect(await w.cli('cancel', id, ...route, '--yes', '--json')).toBe(1);
+      expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+      expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+      expect(w.transcript.join('\n')).not.toContain('Not A Tag');
+    });
+  }
+});

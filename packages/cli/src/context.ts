@@ -113,14 +113,18 @@ export function loadAccount(env: Deps['env']): PrivateKeyAccount | null {
 export type ChainBase = Omit<Chain, 'registry'>;
 export type RegistrylessChain = ChainBase & { registry: Address | null };
 
-/** The suffix from env `LOOPS_ATTRIBUTION_TAG` (not a secret), null when unset; a malformed value is a usage error. */
+/**
+ * The suffix from env `LOOPS_ATTRIBUTION_TAG` (not a secret): null when unset or malformed. It never throws and never
+ * echoes the value, so a bad tag cannot block a read or an x402 call; a send on verified chain 42220 treats null as
+ * `attributionRequired` and refuses before signing.
+ */
 export function loopsSuffix(env: Deps['env']): Hex | null {
   const tag = env.LOOPS_ATTRIBUTION_TAG;
   if (tag === undefined || tag === '') return null;
   try {
     return attributionSuffix(tag);
   } catch {
-    throw ERR.usage('LOOPS_ATTRIBUTION_TAG must be 1 to 32 characters of a-z, 0-9 or _ (the code from your Loops entry).'); // not in FLOWS
+    return null;
   }
 }
 

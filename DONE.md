@@ -4515,3 +4515,20 @@ pnpm -r lint       exit 0
 Correction to the entry above: its claims "every non-x402 transaction on mainnet" and "`--network local` ... no suffix" were false for a local route on chain 42220, and `sendCancel` was not guarded in the SDK; the entry's "no assertion changed" holds only for its own three tests. Superseded by this section.
 
 reviewed: pending Codex
+
+### Mainnet entry r2 fixes (Codex REVISE: 2 major, 1 minor) - 2026-11-08
+1. Major: `isAttributionSuffix` (`packages/core/src/attribution.ts`) is now strict Schema 0: strict hex, total size 19..50 bytes, code `[a-z0-9_]{1,32}` decoded from the leading bytes, and `attributionSuffix(code)` must reproduce the input (hex case ignored), so length byte, schema byte 0 and the marker are all checked and it cannot drift from the writer. The review case `0x00000080218021802180218021802180218021` is rejected in core and refused by `cancelAuthorization` on 42220 (`no_attribution_tag`, nothing estimated, signed or sent). Core tests also pin three `ox/erc8021` vectors (1-char, 32-char, assigned-shaped).
+2. Major: `loopsSuffix` (`packages/cli/src/context.ts`) no longer throws; a malformed `LOOPS_ATTRIBUTION_TAG` is null and its value is never echoed. `buyer.ts makeClient` therefore never blocks `status` or `call` on any network; a send on verified 42220 treats null as absent and the SDK refuses with `no_attribution_tag` before signing (also behind `--network local` on a 42220 RPC). The `no_attribution_tag` copy now reads "is not set (or is not a valid code)".
+3. Minor: the r1 entry above said three tests set a synthetic tag; four `it` cases do (`adversary-t21-r4.test.ts`, `buyer.test.ts`, and two in `t21-r7-fix.test.ts`). The "Verification" block of the original mainnet entry was a hand-written summary; the block below is real output.
+New tests: core `isAttributionSuffix: Schema 0 shape`, sdk `cancelAuthorization refuses a malformed Schema 0 suffix on chain 42220`, cli `buyer: a malformed LOOPS_ATTRIBUTION_TAG` (status and call on local and mainnet, cancel on verified 42220 through both routes).
+Verification (real output, under the heavy lock):
+```
+pnpm -r build: ... packages/cli build: Done
+@attessa/core test: Test Files  10 passed (10)   Tests  86 passed (86)
+@attessa/sdk test:  Test Files  21 passed (21)   Tests  205 passed (205)
+@attessa/cli test:  Test Files  90 passed (90)   Tests  376 passed (376)
+pnpm -r typecheck: packages/site, seller-host, sdk, gateway, cli typecheck: Done
+pnpm -r lint:      packages/site, seller-host, sdk, gateway, cli lint: Done
+```
+
+reviewed: pending Codex
