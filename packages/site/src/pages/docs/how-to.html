@@ -51,7 +51,7 @@
 
     <h2 id="mcp">Use Attessa from an MCP-capable agent</h2>
     <p>The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. There is no published package: build this repository (<code>pnpm install --frozen-lockfile &amp;&amp; pnpm -r build</code>, as in the <a href="tutorial.html#install">install steps</a>) and point your agent's MCP client at <code>packages/mcp/dist/bin.js</code> in your clone.</p>
-    <p>The server reads the same wallet as the CLI: <code>ATTESSA_PRIVATE_KEY</code>, a keystore (<code>ATTESSA_KEYSTORE</code> with <code>ATTESSA_KEYSTORE_PASSWORD</code>), or the OS keychain. <code>ATTESSA_NETWORK</code>, <code>ATTESSA_RPC</code>, <code>ATTESSA_REGISTRY</code> and <code>ATTESSA_DATA_DIR</code> work as the CLI's network, RPC, registry and data-folder settings. Name more variables to hide in <code>ATTESSA_REDACT</code> (comma-separated). The server removes the wallet secrets from its own process environment at start and hides matching secrets in what it returns. That matching is best effort, not a guarantee, so use the keychain or a keystore holding a low-balance wallet rather than a key in the environment.</p>
+    <p>The server reads the same wallet as the CLI: <code>ATTESSA_PRIVATE_KEY</code>, or a keystore (<code>ATTESSA_KEYSTORE</code> with <code>ATTESSA_KEYSTORE_PASSWORD</code>). The OS keychain is used only if the optional <code>keytar</code> package is installed, and a source build doesn't install it. <code>ATTESSA_NETWORK</code>, <code>ATTESSA_RPC</code>, <code>ATTESSA_REGISTRY</code> and <code>ATTESSA_DATA_DIR</code> work as the CLI's network, RPC, registry and data-folder settings. Name more variables to hide in <code>ATTESSA_REDACT</code> (comma-separated). The server removes the wallet secrets from its own process environment at start and hides matching secrets in what it returns. That matching is best effort, not a guarantee, so use a keystore holding a low-balance wallet rather than a key in the environment.</p>
     <figure class="code">
       <figcaption><span>MCP client config</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
       <pre tabindex="0"><code>{
@@ -63,7 +63,7 @@
   }
 }</code></pre>
     </figure>
-    <p>Two tools have side effects, and say so in their descriptions: <code>pay_and_verify</code> signs a payment within your bounds, and <code>cancel_authorization</code> sends a transaction. Run <code>attessa init</code> first, or pass <code>maxAmount</code> on each paid call. The full list is in the <a href="reference.html#tools">reference</a>.</p>
+    <p>Two tools spend or send, and say so in their descriptions: <code>pay_and_verify</code> signs a payment within your bounds, and <code>cancel_authorization</code> sends a transaction. <code>get_result</code> and <code>status</code> sign a payer message, with no payment and no transaction. Run <code>attessa init</code> first, or pass <code>maxAmount</code> on each paid call. The full list is in the <a href="reference.html#tools">reference</a>.</p>
 
     <h2 id="buy">Use it with buy</h2>
     <p><span class="muted">Optional, not built yet.</span> buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.</p>

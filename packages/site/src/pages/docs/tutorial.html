@@ -26,7 +26,7 @@
       </li>
       <li>
         <h2 id="init">Set up with <code>attessa init</code></h2>
-        <p>This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.</p>
+        <p>This sets up your wallet and spending limits, and starts on Celo Sepolia. A source build has no OS keychain, because the optional <code>keytar</code> package is not installed, so set <code>ATTESSA_PRIVATE_KEY</code> or pass <code>--keystore &lt;file&gt;</code> first. With neither, it tells you no wallet was created. The output below is what you see when a keychain is available.</p>
         <figure class="code">
           <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa init</span>

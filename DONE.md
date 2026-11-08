@@ -4839,3 +4839,8 @@ pnpm --filter @attessa/site lint, typecheck -> exit 0
 pnpm --filter @attessa/mcp test     -> Tests 66 passed (66)
 ```
 reviewed: pending
+
+### Site adversary r3 fixes - 2026-11-08
+Defect, proved by packages/site/test/keychain-not-shipped.test.mjs: the tutorial, the reference and the MCP how-to presented the OS keychain as available, but `keytar` is in no package.json or lockfile, so a source build has none and `attessa init` says "no wallet was created". Prose now says to use ATTESSA_PRIVATE_KEY or a keystore. FLOWS-verbatim sample output stays in `<pre>`, with a note above it. The how-to also now says `get_result` and `status` sign a payer message.
+Verify (flock): pnpm --filter @attessa/site test: # tests 298, # pass 298, # fail 0 (snapshots regenerated with UPDATE_SNAPSHOTS=1, diff read: only the four copy changes); lint: no errors.
+reviewed: pending

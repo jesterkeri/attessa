@@ -43,7 +43,7 @@ $ pnpm install --frozen-lockfile && pnpm -r build
 $ cd packages/cli && pnpm link --global
 Attessa isn't on npm. Until launch the code is on the staging branch. This builds it from source and puts attessa on your PATH. If pnpm says there is no global bin directory, run pnpm setup, open a new terminal, and run the last line again.
 Set up with attessa init
-This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.
+This sets up your wallet and spending limits, and starts on Celo Sepolia. A source build has no OS keychain, because the optional keytar package is not installed, so set ATTESSA_PRIVATE_KEY or pass --keystore <file> first. With neither, it tells you no wallet was created. The output below is what you see when a keychain is available.
 Example output
 Copy
 $ attessa init

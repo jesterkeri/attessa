@@ -63,7 +63,7 @@ $ attessa revoke signer <signerAddress>
 Run them from the agent owner's wallet. attessa status --agent <id> lists your releases, endpoints and signers with their states.
 Use Attessa from an MCP-capable agent
 The Attessa MCP server gives your agent nine tools over stdio, with the same bounds as the CLI: a limit per call and a cap per day. There is no published package: build this repository (pnpm install --frozen-lockfile && pnpm -r build, as in the install steps) and point your agent's MCP client at packages/mcp/dist/bin.js in your clone.
-The server reads the same wallet as the CLI: ATTESSA_PRIVATE_KEY, a keystore (ATTESSA_KEYSTORE with ATTESSA_KEYSTORE_PASSWORD), or the OS keychain. ATTESSA_NETWORK, ATTESSA_RPC, ATTESSA_REGISTRY and ATTESSA_DATA_DIR work as the CLI's network, RPC, registry and data-folder settings. Name more variables to hide in ATTESSA_REDACT (comma-separated). The server removes the wallet secrets from its own process environment at start and hides matching secrets in what it returns. That matching is best effort, not a guarantee, so use the keychain or a keystore holding a low-balance wallet rather than a key in the environment.
+The server reads the same wallet as the CLI: ATTESSA_PRIVATE_KEY, or a keystore (ATTESSA_KEYSTORE with ATTESSA_KEYSTORE_PASSWORD). The OS keychain is used only if the optional keytar package is installed, and a source build doesn't install it. ATTESSA_NETWORK, ATTESSA_RPC, ATTESSA_REGISTRY and ATTESSA_DATA_DIR work as the CLI's network, RPC, registry and data-folder settings. Name more variables to hide in ATTESSA_REDACT (comma-separated). The server removes the wallet secrets from its own process environment at start and hides matching secrets in what it returns. That matching is best effort, not a guarantee, so use a keystore holding a low-balance wallet rather than a key in the environment.
 MCP client config
 Copy
 {
@@ -74,7 +74,7 @@ Copy
 }
 }
 }
-Two tools have side effects, and say so in their descriptions: pay_and_verify signs a payment within your bounds, and cancel_authorization sends a transaction. Run attessa init first, or pass maxAmount on each paid call. The full list is in the reference.
+Two tools spend or send, and say so in their descriptions: pay_and_verify signs a payment within your bounds, and cancel_authorization sends a transaction. get_result and status sign a payer message, with no payment and no transaction. Run attessa init first, or pass maxAmount on each paid call. The full list is in the reference.
 Use it with buy
 Optional, not built yet. buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before it calls the service, so a call through buy isn't protected by the check: you pay even if the answer fails it. Attessa still records what you got.
 Example output (not built yet)

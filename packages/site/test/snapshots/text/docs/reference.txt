@@ -38,7 +38,7 @@ Buyer
 Command
 What it does
 attessa init
-Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
+Sets up your wallet (ATTESSA_PRIVATE_KEY or --keystore; it creates one in the OS keychain only if the keytar package is installed, and a source build doesn't install it), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
 attessa call <url>
 Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. --body, --max-amount, --asset usdc|usat, --new, --no-wait, --out <file>, --keystore <file>, --dry-run (stops before signing), --json, --yes.
 attessa call --via buy <url>
