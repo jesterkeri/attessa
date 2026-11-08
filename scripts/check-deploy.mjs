@@ -21,14 +21,15 @@
 // Needs git and forge on PATH. Exit 0: every check printed OK. Exit 1: a check failed. Exit 2:
 // could not run (bad input, TODO addresses, reference build failed, RPC error).
 
-import { existsSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, realpathSync, readFileSync, readdirSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { runForge, failure as forgeFailure } from './forge-run.mjs';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+export const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PINNED_VALIDATOR_COMMIT = '0ea0d12366b4fa44f9e07e4755f2ad36561cb674';
 const DEFAULT_RPC = {
   'celo-sepolia': 'https://forno.celo-sepolia.celo-testnet.org',
@@ -37,7 +38,7 @@ const DEFAULT_RPC = {
 // SPEC §2.6 and §3.5, per network: the chain id and the identity and Self registries the
 // EnclaveRegistry must embed. Fixed here, not read from deployments.ts or DEPLOYMENTS.md, so an
 // edit to both of those cannot move them (T10 Codex r1 M1).
-const PINS = {
+export const PINS = {
   'celo-sepolia': {
     chainId: 11142220,
     identityRegistry: '0x8004a818bfb912233c491871b3d84c89a494bd9e',
@@ -49,7 +50,7 @@ const PINS = {
     selfRegistry: '0xac3df9abf80d0f5c020c06b04cced27763355944',
   },
 };
-const OURS = ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'];
+export const OURS = ['P384Verifier', 'CertManager', 'NitroValidator', 'EnclaveRegistry'];
 // --pre-deploy also checks the deploy scripts; DeployBase.sol is in both scripts' metadata sources.
 const SCRIPTS = ['DeployValidatorStack', 'DeployRegistry'];
 // The source each reference artifact must be compiled from (its metadata compilationTarget), so a
@@ -71,7 +72,7 @@ const IMMUTABLES = {
   EnclaveRegistry: ['identityRegistry', 'nitroValidator', 'selfRegistry', 'allowLocalOrigins'],
 };
 
-class Refuse extends Error {}
+export class Refuse extends Error {}
 
 function parseArgs(argv) {
   const args = { network: null, rpcUrl: null, deployments: null, core: null };
@@ -141,6 +142,16 @@ const git = (dir, ...a) => gitRaw(dir, a, { encoding: 'utf8' }).trim();
 // FOUNDRY_* and DAPP_* variables (e.g. FOUNDRY_OPTIMIZER_RUNS, FOUNDRY_PROFILE) are dropped.
 const FORGE_ENV = envWithout(['FOUNDRY_', 'DAPP_']);
 const SOLC_VERSION = '0.8.26';
+// The EVM version the pinned pins were compiled for. forge 1.8.1 defaults to it under solc 0.8.26; it
+// is set in the generated foundry.toml so a different forge default cannot change the bytecode, and
+// every reference artifact's metadata must say it (a mismatch refuses).
+export const EVM_VERSION = 'cancun';
+// sha256 of the solc 0.8.26 binary, per platform, as installed by svm (`forge build` downloads it).
+// A different binary, even one that reports the same version, is refused. Only linux x86_64 is
+// recorded; on any other platform the reference build refuses rather than trust an unpinned compiler.
+export const SOLC_SHA256 = {
+  'linux-x64': 'd5f23436f443edb85d8e76906d12f0a86ce0490e7663a9e608efeb7a93f149ef',
+};
 // The production compiler settings, fixed here rather than read from the committed foundry.toml or
 // remappings.txt: a remapping there can redirect the pinned sources' own relative imports, e.g.
 // `lib/nitro-validator/src/LibBytes.sol=src/evil/LibBytes.sol` (T10 adversary r5 M). They must
@@ -154,11 +165,21 @@ out = "out"
 libs = ["lib"]
 optimizer = true
 optimizer_runs = 10000
+evm_version = ${JSON.stringify(EVM_VERSION)}
 solc = ${JSON.stringify(solc)}
 offline = true
 auto_detect_remappings = false
 remappings = ${JSON.stringify(REMAPPINGS)}
 `;
+
+/** Refuses a solc binary whose sha256 is not the pinned one for this platform. Returns `path`. */
+export function requireSolcPin(path, platform = `${process.platform}-${process.arch}`, hashOf = (p) => createHash('sha256').update(readFileSync(p)).digest('hex')) {
+  const want = SOLC_SHA256[platform];
+  if (!want) throw new Refuse(`no pinned solc ${SOLC_VERSION} sha256 for ${platform}; the reference build will not trust an unpinned compiler`);
+  const got = hashOf(path);
+  if (got !== want) throw new Refuse(`${path} has sha256 ${got}, not the pinned solc ${SOLC_VERSION} ${want}`);
+  return path;
+}
 
 /** The svm-installed solc binary forge would use; HOME is replaced for the build itself. */
 function solcPath() {
@@ -166,13 +187,13 @@ function solcPath() {
   const dirs = [join(home, '.svm'), process.env.XDG_DATA_HOME && join(process.env.XDG_DATA_HOME, 'svm'), join(home, '.local', 'share', 'svm')];
   for (const d of dirs.filter(Boolean)) {
     const p = join(d, SOLC_VERSION, `solc-${SOLC_VERSION}`);
-    if (existsSync(p)) return p;
+    if (existsSync(p)) return requireSolcPin(p);
   }
   throw new Refuse(`no solc ${SOLC_VERSION} under ~/.svm or ~/.local/share/svm; run \`cd contracts && forge build\` once to install it`);
 }
 
 // Hex on stdin, not argv: forge-std sources exceed the argument size limit.
-const keccak = (buf) => execFileSync('cast', ['keccak'], { input: '0x' + buf.toString('hex'), env: FORGE_ENV, encoding: 'utf8' }).trim().toLowerCase();
+export const keccak = (buf) => execFileSync('cast', ['keccak'], { input: '0x' + buf.toString('hex'), env: FORGE_ENV, encoding: 'utf8' }).trim().toLowerCase();
 
 /**
  * Writes the committed blobs under `paths` at `rev` into `dest`, byte for byte. Not `git archive`
@@ -205,7 +226,7 @@ function exportBlobs(repo, rev, paths, dest) {
  * With `withScripts`, also HEAD's contracts/script and the forge-std commit nitro-validator pins.
  * Returns the artifacts, the committed blob for each source path, and what they were built from.
  */
-function referenceBuild(withScripts = false) {
+export function referenceBuild(withScripts = false) {
   let head, gitlink;
   try {
     head = git(ROOT, 'rev-parse', 'HEAD');
@@ -249,7 +270,7 @@ function referenceBuild(withScripts = false) {
     for (const [p, buf] of Object.entries(validator)) blobs[`lib/nitro-validator/${p}`] = buf;
     for (const [p, buf] of Object.entries(forgeStd)) blobs[`lib/nitro-validator/lib/forge-std/${p}`] = buf;
     for (const [p, buf] of Object.entries(own)) blobs[p.replace(/^contracts\//, '')] = buf;
-    const bad = sourceProblems(arts, names, blobs, 'reference');
+    const bad = [...sourceProblems(arts, names, blobs, 'reference'), ...settingsProblems(arts, names)];
     if (bad.length) throw new Refuse(bad[0]);
     return { arts, blobs, head, pinned };
   } catch (e) {
@@ -283,6 +304,20 @@ function sourceProblems(arts, names, blobs, label) {
   return problems;
 }
 
+/** Each artifact's recorded compiler settings must be the production ones: solc, evm version, optimizer. */
+export function settingsProblems(arts, names) {
+  const problems = [];
+  for (const n of names) {
+    const m = arts[n].metadata ?? {};
+    const st = m.settings ?? {};
+    if (!String(m.compiler?.version ?? '').startsWith(`${SOLC_VERSION}+`)) problems.push(`${n} reference artifact was compiled by solc ${m.compiler?.version}, not ${SOLC_VERSION}`);
+    if (st.evmVersion !== EVM_VERSION) problems.push(`${n} reference artifact was compiled for evm_version ${st.evmVersion}, not ${EVM_VERSION}`);
+    if (st.optimizer?.enabled !== true || st.optimizer?.runs !== 10000) problems.push(`${n} reference artifact optimizer is ${JSON.stringify(st.optimizer)}, not enabled with 10000 runs`);
+    if (st.viaIR) problems.push(`${n} reference artifact was compiled with via_ir`);
+  }
+  return problems;
+}
+
 /**
  * For each of `names`, the one artifact under `out` whose metadata compilationTarget is exactly
  * { SOURCES[n]: n }. Not out/<n>.sol/<n>.json: forge moves an artifact to out/<its path>/ when
@@ -308,14 +343,14 @@ function selectArtifacts(out, names = OURS) {
   return arts;
 }
 
-const word = (addrOrBool) =>
+export const word = (addrOrBool) =>
   typeof addrOrBool === 'boolean' ? (addrOrBool ? '1' : '0').padStart(64, '0') : addrOrBool.slice(2).toLowerCase().padStart(64, '0');
 
 /**
  * The artifact's deployedBytecode with `values[name]` spliced into every immutableReferences
  * offset. Throws Refuse if the artifact's immutables don't match IMMUTABLES[name].
  */
-function expectedRuntime(art, name, values) {
+export function expectedRuntime(art, name, values) {
   let hex = art.deployedBytecode.object.replace(/^0x/, '').toLowerCase();
   const refs = art.deployedBytecode.immutableReferences ?? {};
   const ids = Object.keys(refs).map(Number).sort((a, b) => a - b);
@@ -333,13 +368,13 @@ function expectedRuntime(art, name, values) {
   return '0x' + hex;
 }
 
-function firstDiff(a, b) {
+export function firstDiff(a, b) {
   const n = Math.min(a.length, b.length);
   for (let i = 2; i < n; i += 2) if (a.slice(i, i + 2) !== b.slice(i, i + 2)) return (i - 2) / 2;
   return a.length === b.length ? -1 : (n - 2) / 2;
 }
 
-async function rpc(url, method, params) {
+export async function rpc(url, method, params) {
   let res;
   try {
     res = await fetch(url, {
@@ -583,10 +618,13 @@ function preDeploy() {
   return report(problems);
 }
 
-(process.argv[2] === '--pre-deploy' && process.argv.length === 3 ? Promise.resolve().then(preDeploy) : main()).then(
-  (code) => process.exit(code),
-  (e) => {
-    console.error(e instanceof Refuse ? `check-deploy: ${e.message}` : e);
-    process.exit(2);
-  },
-);
+// Run as a script, not when scripts/tagged-deploy.mjs imports the reference build from here.
+if (process.argv[1] && pathToFileURL(realpathSync(process.argv[1])).href === import.meta.url) {
+  (process.argv[2] === '--pre-deploy' && process.argv.length === 3 ? Promise.resolve().then(preDeploy) : main()).then(
+    (code) => process.exit(code),
+    (e) => {
+      console.error(e instanceof Refuse ? `check-deploy: ${e.message}` : e);
+      process.exit(2);
+    },
+  );
+}
