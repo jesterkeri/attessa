@@ -4626,3 +4626,6 @@ Why: `ts` runs near the limit, and on 2026-11-08 it was cancelled at the limit. 
 ```
 The same job's duration on one commit ranged from 157 to 244 s, so the difference is the runner, not the tests. Successful `ts` jobs on 2026-11-08 took 157 to 236 s.
 reviewed: pending Codex
+
+### CI ts budget review recorded - 2026-11-08
+reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
