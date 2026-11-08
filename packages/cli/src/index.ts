@@ -253,3 +253,6 @@ export async function run(argv: string[], deps: Deps): Promise<number> {
     return code;
   }
 }
+// For @attessa/mcp: the same limit file, defaults and amount grammar the buyer commands use.
+export { DEFAULT_LIMITS, dataDir as buyerDataDir, parseAmount, readConfig, type BuyerConfig } from './commands/buyer.ts';
+export { HttpRpc, type Rpc } from './rpc.ts';
