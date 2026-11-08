@@ -22,7 +22,7 @@ ME=$(id -un)
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 
 echo "== packages"
-sudo dnf install -y docker aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel socat jq git tar gzip gcc-c++ make python3
+sudo dnf install -y docker aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel socat jq git tar gzip xz gcc-c++ make python3
 nitro-cli --version | grep -q 1.5.2 || echo "WARNING: nitro-cli is not 1.5.2 (ADR-008, SPEC §2); say so in DONE.md"
 
 echo "== enclave allocator: 3 vCPU, 3072 MiB (SPEC §5)"
