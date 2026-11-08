@@ -4690,4 +4690,46 @@ Fixes:
 2. Keyless register simulates from 0x...dead. ZERO stays for the mint Transfer match.
 3. A plan on 42220 with no tag prints the missing-tag note and no calldata.
 Verify (flock, this worktree): pnpm --filter @attessa/cli test: Tests 384 passed (384); pnpm --filter @attessa/sdk test: Tests 205 passed (205); cli typecheck and lint: no errors (a full `pnpm -r typecheck` and `pnpm -r lint` before the two added tests: every package Done).
+### T30 prep: deploy scripts target Celo mainnet (simulated only, nothing sent) - 2026-11-08
+Branch feat/t30-mainnet-deploy. DeployBase now picks identity/Self by block.chainid: 11142220 unchanged, 42220 uses 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 and 0xaC3DF9ABf80d0F5c020C06B04Cced27763355944 (equal to deployments.ts and check-deploy PINS), any other chain reverts "Celo mainnet (42220) or Celo Sepolia (11142220) only". Admin != deployer guard kept; no env var selects the chain or registries. check-deploy `--pre-deploy` failure confirmed as ENOBUFS (forge build exit 0, 7,610,779 bytes on stderr vs execFileSync's 1 MB default); fixed in scripts/forge-run.mjs (256 MB buffer; a non-zero exit still throws with status and stderr tail).
+```
+$ forge fmt --check                       -> FMT_OK
+$ forge test                              -> Ran 12 test suites: 253 tests passed, 0 failed, 3 skipped (256 total)
+$ forge test --match-path 'test/deploy/*' -> 18 passed (13 DeployRegistry, 5 DeployValidatorStack)
+$ node --test scripts/forge-run.test.mjs  -> tests 3, pass 3, fail 0
+$ node scripts/check-deploy.mjs --pre-deploy
+REF   reference build from HEAD d9ae7cd31489 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ forge script DeployValidatorStack --rpc-url https://forno.celo.org --sender <discarded address>   (dry run)
+Chain 42220  Estimated total gas used for script: 13938801
+P384Verifier 2255020, CertManager 6975844, NitroValidator 4707937 (per tx)
+$ forge script DeployRegistry (Sepolia, existing validator, dry run) -> EnclaveRegistry 4477814 gas
+$ forge script DeployRegistry on 42220 -> reverts "ATTESSA_NITRO_VALIDATOR has no code" (stack not deployed; expected)
+$ node scripts/check-deploy.mjs celo -> exit 2, "Admin is still TODO" (nothing deployed)
+```
+Correction, same day: the first version of `test/deploy/DeployValidatorStack.t.sol` above was flaky. The lead's re-run failed 5 of 6 times without `-j 1`, because `vm.setEnv` is process-wide and its tests overwrote one another's ATTESSA_ADMIN. The "18 passed" above was a lucky run. `DeployValidatorStack` now has an internal `_run(admin)` as `DeployRegistry` has, and only one test sets the variable. Results after the fix are in the commit that changed it.
+reviewed: pending Codex
+
+### T30 fixes: pins on the reference build, unconditional creation-input check, mainnet script guard, safe output dir - 2026-11-08
+Branch feat/t30-mainnet-deploy. Defects proven by the adversary (`tagged-deploy.attack.test.mjs`, 2 of 3 failed before the fix) and fixed:
+1. `prepare`/`check` now call `verifyReference`: for all four contracts the runtime embedded in the creation bytecode (immutables zeroed) must equal `PINNED` and the whole creation bytecode `CREATION_PINNED`. P384Verifier, CertManager, NitroValidator runtime pins are the `DeployBase.sol` constants; EnclaveRegistry has no `DeployBase.sol` constant, so its runtime and creation pins exist only in `scripts/tagged-deploy.mjs` (recorded from the reference build at this commit; re-record in the same commit whenever EnclaveRegistry.sol or the submodule changes). check-deploy pins the solc 0.8.26 binary sha256 (linux x86_64 only), writes `evm_version = "cancun"` into the generated foundry.toml, and refuses artifacts whose metadata says another solc/evm_version/optimizer. Not pinned: the forge binary itself.
+2. `check --tx` rebuilds reference bytecode ++ args ++ suffix and compares the whole input; no data file is read.
+3. `DeployBase.sol`: `_requireSupportedChain` and `_startBroadcast` revert on 42220 under `vm.isContext(ScriptBroadcast | ScriptResume)`. Simulation on 42220 still works (below). Limit: the test runner cannot enter a broadcast context without sending, so the guard is tested through the `_inBroadcastContext()` seam; the real cheatcode answering true under a send was not exercised (the send flag is blocked here).
+4. Output dir: symlink, foreign owner, or group/other-writable refused; created 0700; default `<tmp>/attessa-tagged-deploy-<uid>`. `insideRepo` fixed for a directory named `..x` (and for a new directory under a symlink into the repo).
+5. Comment corrected: the tag is public on chain; the printed suffix contains it; only error messages never show it.
+```
+$ node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs   -> tests 37, pass 37, fail 0
+$ cd contracts && forge test (run 1 and run 2, each) -> Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total)   (was 261 passed; +7 MainnetSendGuard)
+$ forge fmt --check -> exit 0
+$ node scripts/check-deploy.mjs --pre-deploy -> PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ anvil --chain-id 42220; forge script script/DeployValidatorStack.s.sol --rpc-url <anvil> --sender <anvil dev account>   (no send flag)
+Estimated total gas used for script: 13938801 ... SIMULATION COMPLETE
+$ node scripts/tagged-deploy.e2e.mjs (clean tree at e2d8fea) -> E2E OK: all four tagged creations passed every check, exit 0
+  P384Verifier    0x5fbdb2315678afecb367f032d93f642f64180aa3  gas 1735181   (verifyTx tag found, runtime = control, storage 0..31 = control, check OK, creation input equals reference bytecode ++ args ++ suffix, 7858 bytes)
+  CertManager     0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0  gas 5366590
+  NitroValidator  0xdc64a140aa3e981100a9beca4e685f962f0cf6c9  gas 3622046
+  EnclaveRegistry 0x0165878a594ca255338adfa4d48449f69242eb8f  gas 3445017
+  check-deploy celo against the local stack: OK: all 27 checks passed
+```
+Full e2e output kept at /tmp/claude-1000/-home-hr-myvscode-linux-attessa/03e05dc1-b5af-45ec-8609-89d159bfc040/scratchpad/e2e.txt. Not fixed (outside this task): `node --test scripts/check-deploy.test.mjs` has 12 failing tests that read the now-deployed Sepolia data (deployments.ts and DEPLOYMENTS.md disagree for the fixtures; "the repo as committed (TODO addresses)" expects a Sepolia Admin TODO that no longer exists). Their failure messages are about those fixtures, not the reference build.
 reviewed: pending
