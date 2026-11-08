@@ -41,7 +41,7 @@ TOP = {"name", "on", "permissions", "concurrency", "jobs"}
 TRIGGERS = {"pull_request", "push"}
 JOB = {"name", "runs-on", "timeout-minutes", "steps"}
 # PIPELINE.md minutes per job, keyed by job id and by job name; anything not listed gets 1.
-BUDGET = {"ts": 4, "contracts": 4, "slither": 3, "enclave": 5, "guardrails": 1, "secrets": 1, "no secrets in client output": 1}
+BUDGET = {"ts": 6, "contracts": 4, "slither": 3, "enclave": 5, "guardrails": 1, "secrets": 1, "no secrets in client output": 1}
 STEP = {"name", "id", "uses", "with", "run", "env", "working-directory"}
 
 class Loader(yaml.SafeLoader):

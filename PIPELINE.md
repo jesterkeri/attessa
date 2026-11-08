@@ -6,7 +6,7 @@ Joshua, this is system design phase 13.5: CI, environments, secrets, supply chai
 
 | When | Job | Budget | Required? |
 |---|---|---|---|
-| PR | `ts`: `pnpm install --frozen-lockfile`, `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test` | ≤ 4 min | required |
+| PR | `ts`: `pnpm install --frozen-lockfile`, `pnpm -r lint`, `pnpm -r typecheck`, `pnpm -r test` | ≤ 6 min | required |
 | PR | `contracts`: `forge fmt --check`, `forge build`, `forge test` (unit + invariant at 64 runs) | ≤ 4 min | required |
 | PR | `slither`: `slither contracts --config-file contracts/slither.config.json --fail-high` | ≤ 3 min | required |
 | PR | `enclave`: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test --locked` | ≤ 5 min | required |

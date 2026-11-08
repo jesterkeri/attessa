@@ -4614,3 +4614,7 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
+Joshua's decision. `ts` took 186 to 255 s on recent runs and hit the 4-minute limit three times on 2026-11-08, on tests that then passed on re-run. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table in `scripts/check-workflows.sh` and the test that holds that table moved with it. This is an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list.
+reviewed: pending Codex
