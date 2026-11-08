@@ -4674,7 +4674,7 @@ $ pnpm --filter @attessa/seller-host test
       Tests  119 passed (119)
 $ pnpm --filter @attessa/seller-host typecheck   -> exit 0
 $ pnpm --filter @attessa/seller-host lint        -> exit 0
-$ bash scripts/check-install-scripts.sh          -> see below (run on the commit)
+$ bash scripts/check-install-scripts.sh          -> "pnpm@10.32.1 install ran no non-allowlisted install script: ok", exit 0
 (previous count 109 passed)
 ```
 reviewed: pending
