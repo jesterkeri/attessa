@@ -4638,3 +4638,18 @@ pnpm --filter @attessa/site test: tests 282, pass 282, fail 0
 node v22.23.2: 76 files, 282 tests, 0 failed
 ```
 reviewed: pending Codex r7
+
+### Website Codex r7 fix - 2026-11-08
+
+Codex r7 (REVISE) on 36e2abc: one major finding (M1), in `packages/site/test/use-cases-cli-built.test.mjs`. No page was wrong; no page text changed.
+- `render()` now decodes character references once, as a browser does (decimal and hex, with or without the semicolon, named incl. `&nbsp; &Tab; &NewLine; &amp;`, legacy names without the semicolon). `&amp;#32;` shows as the text `&#32;`. No HTML-decoder package is in the lockfile, so the named table is in the test.
+- `attessa` is followed by any rendered whitespace (`\s`: NBSP, Unicode spaces, line breaks), not only space and tab. Formatting tags (`b i em strong ...`) are invisible to the text run; `code`, `a`, `span` end a command at their edge but a command may start just inside one (`attessa <code>ghost</code>`).
+- Attribute policy: SCANNED (title, alt, aria-label, content, placeholder, value, data-*; double-quoted, single-quoted, unquoted). Tag end now respects quotes.
+- New tests: 26 mutants in a built page (`&#32;`, `&#x20;`, `&nbsp;`, `&#160;`, `&#97;ttessa`, `init&#32;--bogus`, `<b>` split ...), entity-written real commands pass, `&amp;#32;` is not whitespace, and per-attribute tests.
+
+```
+pnpm --filter @attessa/site test: tests 285, pass 285, fail 0
+node v22.23.2: 76 files, 285 tests, 0 failed
+pnpm --filter @attessa/site lint: ok
+```
+reviewed: pending Codex

@@ -87,11 +87,49 @@ const enclosing = (raw, at) => {
   }).sort((x, y) => y.start - x.start)[0];
   return open ? raw.slice(open.start, raw.indexOf(`</${open.tag}>`, at)) : '';
 };
-const ENT = { lt: '<', gt: '>', amp: '&', quot: '"', '#39': "'", apos: "'" };
-const SEP = '\u0001';
-// The rendered view of a document: text with entities decoded, a SEP wherever a tag starts or ends, and the text of title / alt / aria-label /
-// content / data-* attributes (a meta description is shown in search results). Comments, scripts and styles are not rendered. For every
-// character of the view, `at[i]` is its offset in the source and `attr[i]` is the attribute value it came from, if any.
+// Character references, decoded once, the way a browser does (HTML Living Standard "character reference state"): decimal and hex
+// numeric forms with or without the semicolon, named references (the legacy ones also without it), nothing else. A reference that
+// does not match is left as literal text, and the decoded character is never decoded again (`&amp;#32;` shows as the text "&#32;").
+// No HTML-decoder package is in the lockfile, so the table below holds the names that matter here (whitespace, quoting, the
+// punctuation the site uses); an unknown name stays literal, which cannot hide a command a visitor sees as text.
+const NAMED = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', Tab: '\t', NewLine: '\n', ensp: ' ', emsp: ' ',
+  emsp13: ' ', emsp14: ' ', numsp: ' ', puncsp: ' ', thinsp: ' ', ThinSpace: ' ', hairsp: ' ', VeryThinSpace: ' ',
+  MediumSpace: ' ', ZeroWidthSpace: '​', NoBreak: '⁠', shy: '­', copy: '©', reg: '®', hellip: '…', mdash: '—',
+  ndash: '–', middot: '·', rarr: '→', larr: '←', lsquo: '‘', rsquo: '’', ldquo: '“', rdquo: '”', times: '×',
+  lpar: '(', rpar: ')', lbrack: '[', rbrack: ']', lsqb: '[', rsqb: ']', lbrace: '{', rbrace: '}', lcub: '{', rcub: '}', comma: ',', period: '.',
+  colon: ':', semi: ';', excl: '!', quest: '?', num: '#', percnt: '%', dollar: '$', ast: '*', plus: '+', equals: '=', sol: '/', bsol: '\\',
+  lowbar: '_', grave: '`', hyphen: '-', dash: '-', verbar: '|', vert: '|', commat: '@', Hat: '^', tilde: '˜' };
+const LEGACY = new Set(['amp', 'lt', 'gt', 'quot', 'nbsp', 'shy', 'copy', 'reg', 'times']); // decoded even without the semicolon
+const CP1252 = { 0x80: 0x20ac, 0x82: 0x201a, 0x83: 0x192, 0x84: 0x201e, 0x85: 0x2026, 0x86: 0x2020, 0x87: 0x2021, 0x88: 0x2c6, 0x89: 0x2030, 0x8a: 0x160, 0x8b: 0x2039,
+  0x8c: 0x152, 0x8e: 0x17d, 0x91: 0x2018, 0x92: 0x2019, 0x93: 0x201c, 0x94: 0x201d, 0x95: 0x2022, 0x96: 0x2013, 0x97: 0x2014, 0x98: 0x2dc, 0x99: 0x2122,
+  0x9a: 0x161, 0x9b: 0x203a, 0x9c: 0x153, 0x9e: 0x17e, 0x9f: 0x178 };
+const REF = /^&(?:#([0-9]+)|#[xX]([0-9a-fA-F]+)|([A-Za-z][A-Za-z0-9]*))(;?)/;
+/** The reference starting at s[0] === '&': { ch, len } or null (literal). */
+const decodeRef = s => {
+  const m = REF.exec(s);
+  if (!m) return null;
+  if (m[1] !== undefined || m[2] !== undefined) {
+    let cp = m[1] !== undefined ? Number(m[1]) : parseInt(m[2], 16);
+    if (!Number.isFinite(cp) || cp === 0 || cp > 0x10ffff || (cp >= 0xd800 && cp <= 0xdfff)) cp = 0xfffd;
+    return { ch: String.fromCodePoint(CP1252[cp] ?? cp), len: m[0].length };
+  }
+  if (m[4] && Object.hasOwn(NAMED, m[3])) return { ch: NAMED[m[3]], len: m[0].length };
+  for (let n = m[3].length; n >= 2; n--) { const name = m[3].slice(0, n); if (LEGACY.has(name)) return { ch: NAMED[name], len: 1 + n }; }
+  return null;
+};
+const decodeAll = s => { let out = ''; for (let i = 0; i < s.length;) { const d = s[i] === '&' ? decodeRef(s.slice(i, i + 40)) : null; if (d) { out += d.ch; i += d.len; } else out += s[i++]; } return out; };
+const SEP = '\u0001'; // a block boundary: a command never runs across it
+const SEPI = '\u0002'; // the edge of an inline element a browser shows inside one line (<code>, <a>, <span>...): a command may start just inside it, not run out of it
+const FORMAT = /^<\/?(?:b|i|em|strong|u|s|small|mark|sub|sup|abbr|font|wbr|bdi|bdo|cite|q|dfn)(?![\w-])/i; // invisible to the text run
+const INLINE = /^<\/?(?:code|a|span|kbd|samp|var|tt)(?![\w-])/i;
+// Attributes whose value a visitor sees or a search result shows, so a command in one is a displayed command. Policy: all of them are
+// scanned, input `value` and `placeholder` included, in double-quoted, single-quoted and unquoted form. (`title`, `alt` and `aria-label` are
+// read out or shown on hover; `content` is the meta description; `data-*` feeds the site's own JS, which writes it into the page.)
+const ATTRS = /\s(?:title|alt|aria-label|content|placeholder|value|data-[\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+const TAG = /^<[^>"']*(?:(?:"[^"]*"|'[^']*')[^>"']*)*>/;
+// The rendered view of a document: text with character references decoded, a SEP wherever a block tag starts or ends (SEPI for
+// code / a), formatting tags transparent, and the decoded text of the visible attributes above. Comments, scripts and styles are not rendered.
+// For every character of the view, `at[i]` is its offset in the source and `attr[i]` is the attribute value it came from, if any.
 const render = raw => {
   let view = '';
   const at = [], attr = [];
@@ -101,13 +139,13 @@ const render = raw => {
     const hide = /^<(script|style)\b/i.exec(raw.slice(i, i + 9));
     if (hide) { const e = raw.toLowerCase().indexOf(`</${hide[1].toLowerCase()}>`, i); i = e < 0 ? raw.length : e + hide[1].length + 3; put(SEP, i, null); continue; }
     if (raw[i] === '<' && /[a-zA-Z/]/.test(raw[i + 1] ?? '')) {
-      const e = raw.indexOf('>', i);
-      const tag = raw.slice(i, e < 0 ? raw.length : e + 1);
-      put(SEP, i, null);
-      for (const m of tag.matchAll(/\s(?:title|alt|aria-label|content|placeholder|data-[\w-]+)="([^"]*)"/g)) put(`${m[1]}${SEP}`, i, m[1]);
+      const rest = raw.slice(i);
+      const tag = TAG.exec(rest)?.[0] ?? rest.slice(0, rest.indexOf('>') < 0 ? rest.length : rest.indexOf('>') + 1);
+      put(FORMAT.test(tag) ? '' : INLINE.test(tag) ? SEPI : SEP, i, null);
+      for (const m of tag.matchAll(ATTRS)) { const v = decodeAll(m[1] ?? m[2] ?? m[3]); put(`${v}${SEP}`, i, v); }
       i += tag.length; continue;
     }
-    if (raw[i] === '&') { const m = /^&(#39|lt|gt|amp|quot|apos);/.exec(raw.slice(i, i + 7)); if (m) { put(ENT[m[1]], i, null); i += m[0].length; continue; } }
+    if (raw[i] === '&') { const d = decodeRef(raw.slice(i, i + 40)); if (d) { put(d.ch, i, null); i += d.len; continue; } }
     put(raw[i], i, null); i++;
   }
   return { view, at, attr };
@@ -144,9 +182,11 @@ const violations = (raw, isJs = false) => {
   const { view, at, attr } = isJs ? (() => { const r = render(raw.replace(/<[^>]*>/g, SEP)); return { view: r.view, at: [...r.view].map((_, i) => i), attr: r.attr }; })() : render(raw);
   const source = isJs ? raw.replace(/<[^>]*>/g, SEP) : raw;
   const bad = [];
-  for (const m of view.matchAll(/(?<![\w/@.:-])attessa[ \t]+(?=[^\s\u0001])/g)) {
+  for (const m of view.matchAll(/(?<![\w/@.:-])attessa\s+(?=[^\s\u0001])/g)) {
     const start = m.index + m[0].length;
     let tail = view.slice(start).split(SEP)[0];
+    // A command may begin just inside an inline element (`attessa <code>ghost</code>`), and ends at that element's edge.
+    tail = tail.startsWith(SEPI) ? tail.replace(/^\u0002+/, '').split(SEPI)[0] : tail.split(SEPI)[0];
     if (isJs) tail = tail.split(/["'`\\]/)[0]; // the end of the string literal
     tail = tail.split(/\.(?=\s|$)|,\s|;\s|:\s|\s\(|\s(?:and|or|then)\s/)[0].trim();
     if (PROSE.some(p => p.test(tail))) continue;
@@ -229,4 +269,75 @@ test('a command with an unbuilt modifier is not accepted just because its first 
   const ref = readFileSync(join(src, 'pages', 'docs', 'reference.html'), 'utf8');
   const row = ref.split('\n').find(l => l.includes('attessa call --via buy'));
   assert.ok(row && marked.test(text(row)), 'the reference row for attessa call --via buy must stay marked Optional / not built');
+});
+
+// Codex site-finish r7 (M1): the scanner reads what a browser shows. Character references are decoded once, rendered whitespace of every kind
+// separates tokens, and a command split by markup that does not break the line is still one command.
+test('character-reference and whitespace mutants in a built page are caught (Codex site r7 M1)', () => {
+  const page = n => readFileSync(join(built, ...n), 'utf8');
+  const swap = (raw, from, to) => { assert.ok(raw.includes(from), `the page lost ${from}`); return raw.replace(from, to); };
+  const mutants = [
+    ['attessa&#32;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&#x20;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&#X20;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&#32ghost --bogus', 'attessa ghost --bogus: no such command'], // no semicolon
+    ['attessa&nbsp;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&nbsp ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&#160;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&Tab;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&NewLine;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa&ensp;ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa\nghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['&#97;ttessa ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['&#x61;ttessa ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['&amp;#97;ttessa ghost --bogus', null], // literal text "&#97;ttessa": not a command at all
+    ['attessa init&#32;--bogus', 'attessa init --bogus: --bogus: no such flag'],
+    ['attessa init&nbsp;--bogus', 'attessa init --bogus: --bogus: no such flag'],
+    ['attessa init --bogus', 'attessa init --bogus: --bogus: no such flag'],
+    ['attessa <b>ghost</b> --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa <code>ghost</code> --bogus', 'attessa ghost: no such command'],
+    ['attessa <i>gh</i>ost --bogus', 'attessa ghost --bogus: no such command'],
+    ['attessa init <em>--bogus</em>', 'attessa init --bogus: --bogus: no such flag'],
+    ['attessa init<b></b> --bogus', 'attessa init --bogus: --bogus: no such flag'],
+    ['<b>attessa</b> ghost --bogus', 'attessa ghost --bogus: no such command'],
+    ['att<b>essa</b> ghost --bogus', 'attessa ghost --bogus: no such command'],
+  ];
+  for (const [mutant, want] of mutants) {
+    const raw = swap(page(['how-it-works.html']), 'attessa enclave build</span></span>', `${mutant}</span></span>`);
+    const got = violations(raw).filter(v => !v.startsWith('attessa enclave build'));
+    assert.deepEqual(got, want ? [want] : [], `mutant ${JSON.stringify(mutant)}`);
+  }
+  // Inside a marked-unbuilt block the exact unbuilt shape is still exempt, with an entity for its space as well.
+  assert.deepEqual(violations('<p>Coming <code>attessa&#32;verify</code></p>'), []);
+  assert.deepEqual(violations('<h2>Coming</h2><p><code>attessa&nbsp;verify</code></p>'), ['attessa verify: not built, and its block does not say so']);
+});
+
+test('real commands written with entities still pass, and a double-encoded space is text, not whitespace (Codex site r7 M1)', () => {
+  assert.deepEqual(violations('<p><code>attessa&#32;init</code> and <code>attessa&nbsp;status</code></p>'), []);
+  assert.deepEqual(violations('<p><code>attessa call&#x20;https://x&#32;--body&nbsp;tx.json&#160;--new</code></p>'), []);
+  assert.deepEqual(violations('<p><code>attessa&Tab;init</code> <code>att&#101;ssa&NewLine;status</code></p>'), []);
+  assert.deepEqual(violations('<p><code>attessa call --body&#32;tx.json https://x</code></p>'), []);
+  assert.deepEqual(violations('<p><code>attessa <b>init</b></code> <code>attessa gateway&nbsp;pause</code></p>'), []);
+  // `&amp;#32;` decodes once to the text "&#32;": it does not separate `attessa` from what follows, nor tokens within a command.
+  assert.deepEqual(violations('<p>attessa&amp;#32;ghost --bogus</p>'), []);
+  assert.deepEqual(violations('<p><code>attessa init&amp;#32;--bogus</code></p>'), ['attessa init&#32;--bogus: no such command']);
+  assert.equal(render('a&amp;#32;b').view, 'a&#32;b');
+  assert.equal(render('a&#32;b&#x20;c&nbsp;d&Tab;e').view, 'a b c d\te');
+  assert.equal(render('&ampx &lt &unknown; &#0;').view, '&x < &unknown; �');
+});
+
+// Policy on visible attributes (Codex site r7): SCANNED. title, alt, aria-label, content (meta description), placeholder and input value are text a
+// visitor sees, hears or finds in search results, so a command in one is a displayed command; data-* is copied into the page by the site's own JS.
+test('commands in visible attributes are scanned: value, placeholder, title, aria-label, alt (Codex site r7 M1)', () => {
+  for (const a of ['value', 'placeholder', 'title', 'aria-label', 'alt']) {
+    assert.deepEqual(violations(`<input ${a}="attessa ghost --bogus">`), ['attessa ghost --bogus: no such command'], a);
+    assert.deepEqual(violations(`<img ${a}='attessa ghost --bogus'>`), ['attessa ghost --bogus: no such command'], `${a} single-quoted`);
+    assert.deepEqual(violations(`<p ${a}="attessa&#32;ghost --bogus">x</p>`), ['attessa ghost --bogus: no such command'], `${a} entity`);
+    assert.deepEqual(violations(`<input ${a}="attessa init">`), [], `${a} real command`);
+  }
+  assert.deepEqual(violations('<input value=attessa_ghost>'), []);
+  assert.deepEqual(violations('<a href="x" title="Coming: attessa ghost">go</a>'), ['attessa ghost: no such command']);
+  assert.deepEqual(violations('<input type="text" value="a > b" placeholder="attessa ghost">'), ['attessa ghost: no such command']);
 });
