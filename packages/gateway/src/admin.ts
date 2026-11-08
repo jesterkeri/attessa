@@ -13,18 +13,26 @@ export function pause(db: CallStore): string {
 
 export type ResumeResult = { ok: true; message: string } | { ok: false; message: string };
 
-/** SPEC §6.6: `resume` first calls `/supported` with the API key and refuses on 401/402. */
-export async function resume(db: CallStore, facilitator: Facilitator, timeoutMs = 10_000): Promise<ResumeResult> {
+/**
+ * SPEC §6.6: the check `resume` makes before it unpauses: `/supported` with the API key, refused on 401/402.
+ * Returns the refusal, or null when resuming may go ahead. Changes nothing, so `resume --dry-run` runs it too.
+ */
+export async function resumeCheck(facilitator: Facilitator, timeoutMs = 10_000): Promise<string | null> {
   let status: number;
   try {
     status = (await facilitator.supported(timeoutMs)).status;
   } catch {
-    return { ok: false, message: 'Not resumed: the facilitator did not answer /supported.' };
+    return 'Not resumed: the facilitator did not answer /supported.';
   }
-  if (status === 401 || status === 402) {
-    return { ok: false, message: `Not resumed: the facilitator refused the API key or credit (HTTP ${status}).` };
-  }
-  if (status < 200 || status >= 300) return { ok: false, message: `Not resumed: the facilitator answered /supported with HTTP ${status}.` };
+  if (status === 401 || status === 402) return `Not resumed: the facilitator refused the API key or credit (HTTP ${status}).`;
+  if (status < 200 || status >= 300) return `Not resumed: the facilitator answered /supported with HTTP ${status}.`;
+  return null;
+}
+
+/** SPEC §6.6: `resume` first calls `/supported` with the API key and refuses on 401/402. */
+export async function resume(db: CallStore, facilitator: Facilitator, timeoutMs = 10_000): Promise<ResumeResult> {
+  const refused = await resumeCheck(facilitator, timeoutMs);
+  if (refused) return { ok: false, message: refused };
   db.setPaused(false);
   return { ok: true, message: 'Gateway resumed.' };
 }
@@ -50,6 +58,13 @@ function exportRow(r: CallRow): Record<(typeof EXPORT_COLUMNS)[number], string> 
     proof_verified: PROOF_VERIFIED.has(r.state) ? 'true' : 'false',
     created_at: new Date(r.created_at * 1000).toISOString(),
   };
+}
+
+/** The export rows as objects (the SPEC §6.4 columns), for `attessa gateway export --json`. */
+export function exportRecords(db: CallStore, since: string): Array<Record<(typeof EXPORT_COLUMNS)[number], string>> {
+  const ms = Date.parse(since);
+  if (Number.isNaN(ms)) throw new Error(`--since: not a date: ${since}`);
+  return db.since(Math.floor(ms / 1000)).map(exportRow);
 }
 
 /** SPEC §6.4 export. `since` is an ISO date (`2026-11-01`) or date-time. */

@@ -1,4 +1,4 @@
-import { CliError, ERR, RENEW } from './copy.ts';
+import { CliError, ERR, RENEW, safe } from './copy.ts';
 import type { Revert } from './tx.ts';
 
 /** What a command knows when a simulated or sent transaction reverts, to fill the FLOWS §8 slots. */
@@ -16,7 +16,11 @@ export interface RevertContext {
   renewing?: boolean | undefined;
 }
 
-/** Maps a registry or CertManager revert to its FLOWS §8 line. Unknown reverts keep their name. */
+/**
+ * Maps a registry or CertManager revert to its FLOWS §8 line. Unknown reverts keep their name. `message` is the
+ * node's reply text and is never printed: it is free text from the RPC and can carry the node URL's credentials.
+ * Only what is decoded from the ABI (an error's name, an `Error(string)` reason, escaped) reaches the terminal.
+ */
 export function revertToError(r: Revert | null, message: string, c: RevertContext): CliError {
   const origin = c.origin ?? 'this origin';
   // `signer renew` shares registerSigner's checks; its refusals read "Not renewed" (FLOWS §8 R: renew refused).
@@ -60,8 +64,8 @@ export function revertToError(r: Revert | null, message: string, c: RevertContex
       return ERR.renewRefused('release_mismatch', 'this report is from a different build', false);
     case 'Error':
       if (String(r.args[0]).includes('cert expired')) return E.certExpired();
-      return new CliError('reverted', `The transaction would revert: ${String(r.args[0])}. Nothing was sent.`);
+      return new CliError('reverted', `The transaction would revert: ${safe(String(r.args[0]))}. Nothing was sent.`); // not in FLOWS
     default:
-      return new CliError('reverted', `The transaction would revert${r ? ` (${r.name})` : ''}: ${message}. Nothing was sent.`);
+      return new CliError('reverted', `The transaction would revert${r ? ` (${r.name})` : ''}. Nothing was sent.`); // not in FLOWS
   }
 }

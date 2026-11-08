@@ -1,0 +1,86 @@
+title: What a proof shows | Attessa
+description: What attested execution provenance proves and doesn't, the threat model in plain words, and the known limits.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Docs menu
+Start
+Overview
+Tutorial
+Pay-if-verified in 10 minutes
+How-tos
+All how-tos
+Run a seller
+Revoke a build or a signer
+Use it from an MCP agent Coming
+Use it with buy Optional, not built yet
+Reference
+Reference
+CLI commands
+Agent tools Coming
+SDK payAndVerify
+Refusal codes
+Explanation
+What it proves
+Threat model
+Known limits
+Explanation
+What a proof shows, and what it doesn't
+Attessa gives you attested execution provenance: a signed statement of which approved build produced an answer, for which request, with which inputs, and for which payment permission. The proof is signed before anything is paid; whether the payment settled is read from Celo. That is a narrower claim than "the answer is right". This page explains where the line sits.
+The claim, in full
+What a proof shows
+Which approved build answered, for this request, with these inputs.
+That it ran in a sealed machine, attested by AWS, with its key registered on Celo.
+Which Celo data it used, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.
+Which payment it answers for. The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.
+What it doesn't show
+That the answer is correct. A bad answer is a rules problem you can read in the source.
+That the service is available. An operator can still withhold or delay answers.
+That the build matches its source. That link is the owner's claim, shown as "Owner says it's built from github.com/… @ commit" until someone reproduces the build.
+That requests are private. Request bodies are visible to the service's gateway and to the server the sealed machine runs on.
+Protection when paying through buy. buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.
+An instant "not charged". After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.
+The threat model, in plain words
+Who could cheat, and what stops them.
+If someone tries to
+What happens
+Swap in different code
+Unless the agent's owner approves the new build, the sealed machine's measurements match no approved build, so its key can't be registered and its proofs are rejected. The owner can approve any build, including a bad one: the proof then names that build, and the link to its source stays the owner's claim.
+Edit an answer after signing
+The answer's hash no longer matches the proof. If the edit happens before the gateway, the gateway refuses it and nothing settles. If the gateway itself makes the edit, it can still settle: you are charged, and the SDK reports paid_but_rejected with a record that proves it.
+Pose as a registered service
+The buyer only pays the address registered for that origin, and checks the agent it claims to be. A mismatch stops the call before anything is signed.
+Keep selling from a revoked build
+Gateways and SDKs stop accepting its signers within 60 seconds.
+Take the money despite a refusal
+This is possible for a dishonest gateway, and can't be reversed on chain. The buyer's record proves the payment and the failed check, so it can be reported.
+Feed the buyer false chain data
+A malicious RPC can lie, as it can to any app. Choose the RPC you use.
+Known limits
+These are accepted for now, written down so nobody has to discover them.
+The demo gateway is run by the seller. So paying through it doesn't protect you from a dishonest seller. Your protection is the short payment window, cancel, the registered pay-to address, your own re-check, and the on-chain "not charged" confirmation.
+Paying through buy has no payment protection. buy settles before it calls the service; Attessa can only check afterwards.
+A proof shows which code ran, not that the service is available. An operator can withhold, delay or reorder answers.
+Request bodies are visible to the gateway and to the server the sealed machine runs on. Today's requests are public chain addresses.
+The source link is the owner's claim. It stays "owner says" until the build is reproduced.
+Checks answer "valid now". Whether a build was approved at the time of an old call is rebuilt from Celo events off chain.
+Every restart costs a registration. The signing key never leaves the machine, so a restart makes a new one.
+USA₮ settles on mainnet only. Test payments on Celo Sepolia use USDC.
+Confirming "not charged" takes time. Up to about two minutes after a refusal, or cancel sooner for a little gas.
+The ERC-8004 identity registry is upgradeable. Whoever holds its keys could change who owns an agent. Attessa's own registry is immutable and can't be more trustworthy than that.
+The full list, with when each one will be revisited, is in KNOWN-LIMITS.md on GitHub.
+On this page
+The claim, in full
+Threat model
+Known limits
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

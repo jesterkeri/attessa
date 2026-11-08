@@ -1,0 +1,119 @@
+title: Tutorial: pay-if-verified on Celo Sepolia | Attessa
+description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Docs menu
+Start
+Overview
+Tutorial
+Pay-if-verified in 10 minutes
+How-tos
+All how-tos
+Run a seller
+Revoke a build or a signer
+Use it from an MCP agent Coming
+Use it with buy Optional, not built yet
+Reference
+Reference
+CLI commands
+Agent tools Coming
+SDK payAndVerify
+Refusal codes
+Explanation
+What it proves
+Threat model
+Known limits
+Tutorial
+Pay-if-verified on Celo Sepolia in 10 minutes
+You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.
+attessa init and attessa call are built. Coming. attessa verify isn't built yet, so the last step shows what it will do. The output shown for init and call is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.
+You need Node.js 22.13 or later, pnpm (corepack enable), git and a terminal. No browser wallet.
+Install
+Terminal
+Copy
+$ git clone https://github.com/jesterkeri/attessa -b staging
+$ cd attessa
+$ pnpm install --frozen-lockfile && pnpm -r build
+$ cd packages/cli && pnpm link --global
+Attessa isn't on npm. Until launch the code is on the staging branch. This builds it from source and puts attessa on your PATH. If pnpm says there is no global bin directory, run pnpm setup, open a new terminal, and run the last line again.
+Set up with attessa init
+This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.
+Example output
+Copy
+$ attessa init
+→ attessa checks which build a service runs before you pay it, and only pays if the answer checks out.
+→ Network: Celo Sepolia (test money). Use --network mainnet for real payments.
+→ Wallet: none found. Created one for this computer: 0x51c2…9e (key stored in your OS keychain, never printed)
+→ Fund it: CELO for gas at faucet.celo.org/celo-sepolia, test USDC at faucet.circle.com (choose Celo Sepolia)
+→ Spending limits: at most 0.10 USDC per call and 1.00 USDC per day, unless you pass --max-amount / set --daily-cap.
+→ Next: attessa call https://<service> --body input.json --max-amount 0.05
+Already have a key? Set ATTESSA_PRIVATE_KEY or pass --keystore <file> and Attessa uses it instead.
+Get test funds
+Gas: faucet.celo.org/celo-sepolia
+Test USDC: faucet.circle.com, then choose Celo Sepolia
+Paste the address attessa init printed into both. The test USDC pays for calls. The CELO is for gas only if you ever cancel a payment permission on chain yourself; signing a permission is free.
+Make a call with attessa call
+Point it at an attested service and give it the request body. Attessa checks the seller, shows the price, and signs a payment permission within your limits. Money only moves if the answer's proof checks out.
+The demo service is a payment check: send it the address you're about to pay and it answers allow, review or deny, with reasons. Its address is {demoServiceUrl}sample
+once it's live. Save this as tx.json (any name works), with the address you want checked in payTo, in lowercase:
+tx.json
+Copy
+{
+"chainId": "11142220",
+"payTo": "0x<40 lowercase hex characters>",
+"asset": "0x01c5c0122039549ad1493b8220cabedd739bc44e",
+"amount": "1000000"
+}
+11142220 is Celo Sepolia, asset is its test USDC, and amount is in USDC's six-decimal units, so 1000000 is 1 USDC.
+Terminal
+Copy
+$ attessa call {demoServiceUrl}/v1/evaluate --body tx.json
+Here is what a successful call prints, against an illustrative service:
+Terminal / attessa call
+Copy
+$ attessa call https://risk.example/v1/evaluate --body tx.json
+→ Checking risk.example before paying
+Runs agent 412's approved build in a sealed machine the seller can't change (release 0x9c4e…a1, Nitro enclave)
+Owner says it's built from github.com/acme/risk @ a1b2c3d (not checked by attessa)
+→ It's up and answering for this address right now (liveness check, 0.4 s)
+→ Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way (EIP-3009 authorization)
+→ Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118 (settled: tx 0xabc…, signer 0x7f3b…22)
+→ Answer saved to result.json. Record: ~/.attessa/evidence.jsonl
+Example output. risk.example and the hashes above are illustrative.
+The answer lands in result.json in the folder you ran the command from.
+If the answer had been tampered with, you would see this instead, ending once Celo shows your permission expired unused:
+Example output when the answer was tampered with. Illustrative values.
+Copy
+→ Refused: the answer doesn't match what the sealed machine signed (response hash differs from the proof)
+→ Confirming you weren't charged: your payment permission expires unused at 14:02:11 UTC (in 94 s). Waiting…
+→ Not charged: confirmed on Celo, your payment permission expired unused (block 31,204,245)
+Re-check it with attessa verify Coming
+Coming. attessa verify isn't built yet; this step shows what it will do.
+Every call adds one line to your record, ~/.attessa/evidence.jsonl. The newest line is the call you just made, and its entry ID is the request ID: 0x followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.
+Terminal
+Copy
+$ attessa verify <requestId>
+It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the proof explorer is live, you will be able to paste the call's settlement transaction there to check its on-chain part.
+What you did
+You paid a service only after its answer was signed by the build its owner approved, and you re-checked on Celo that the build your record names was approved when the call settled. The link from that build to its source code stays the owner's claim until someone reproduces the build.
+Give it to your agentAdd the Attessa MCP server. Coming: it isn't built yet. Understand the limitsWhat a proof shows, and what it doesn't.
+On this page
+Install
+Set up
+Get test funds
+Make a call
+Re-check it
+What you did
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

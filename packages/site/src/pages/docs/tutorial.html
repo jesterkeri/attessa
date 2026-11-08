@@ -1,0 +1,101 @@
+<!-- title: Tutorial: pay-if-verified on Celo Sepolia | Attessa -->
+<!-- description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet. -->
+<!-- nav: docs -->
+<!-- doc: tutorial -->
+<!-- body: docs-page -->
+<div class="wrap docs">
+  {{> docs-nav}}
+  <article class="docs-main">
+    <span class="mode">Tutorial</span>
+    <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
+    <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
+    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do. The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.</p></div>
+    <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
+
+    <ol class="doc-steps">
+      <li>
+        <h2 id="install">Install</h2>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">git clone https://github.com/jesterkeri/attessa -b staging</span>
+<span class="p">$ </span><span class="c">cd attessa</span>
+<span class="p">$ </span><span class="c">pnpm install --frozen-lockfile &amp;&amp; pnpm -r build</span>
+<span class="p">$ </span><span class="c">cd packages/cli &amp;&amp; pnpm link --global</span></code></pre>
+        </figure>
+        <p>Attessa isn't on npm. Until launch the code is on the <code>staging</code> branch. This builds it from source and puts <code>attessa</code> on your PATH. If pnpm says there is no global bin directory, run <code>pnpm setup</code>, open a new terminal, and run the last line again.</p>
+      </li>
+      <li>
+        <h2 id="init">Set up with <code>attessa init</code></h2>
+        <p>This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.</p>
+        <figure class="code">
+          <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa init</span>
+<span class="k">→</span> attessa checks which build a service runs before you pay it, and only pays if the answer checks out.
+<span class="k">→</span> Network: Celo Sepolia (test money). Use --network mainnet for real payments.
+<span class="k">→</span> Wallet: none found. Created one for this computer: 0x51c2…9e <span class="m">(key stored in your OS keychain, never printed)</span>
+<span class="k">→</span> Fund it: CELO for gas at faucet.celo.org/celo-sepolia, test USDC at faucet.circle.com (choose Celo Sepolia)
+<span class="k">→</span> Spending limits: at most 0.10 USDC per call and 1.00 USDC per day, unless you pass --max-amount / set --daily-cap.
+<span class="k">→</span> Next: attessa call https://&lt;service&gt; --body input.json --max-amount 0.05</code></pre>
+        </figure>
+        <p>Already have a key? Set <code>ATTESSA_PRIVATE_KEY</code> or pass <code>--keystore &lt;file&gt;</code> and Attessa uses it instead.</p>
+      </li>
+      <li>
+        <h2 id="funds">Get test funds</h2>
+        <ul>
+          <li>Gas: <a href="https://faucet.celo.org/celo-sepolia">faucet.celo.org/celo-sepolia</a></li>
+          <li>Test USDC: <a href="https://faucet.circle.com">faucet.circle.com</a>, then choose Celo Sepolia</li>
+        </ul>
+        <p>Paste the address <code>attessa init</code> printed into both. The test USDC pays for calls. The CELO is for gas only if you ever cancel a payment permission on chain yourself; signing a permission is free.</p>
+      </li>
+      <li>
+        <h2 id="call">Make a call with <code>attessa call</code></h2>
+        <p>Point it at an attested service and give it the request body. Attessa checks the seller, shows the price, and signs a payment permission within your limits. Money only moves if the answer's proof checks out.</p>
+        <p>The demo service is a payment check: send it the address you're about to pay and it answers allow, review or deny, with reasons. Its address is [[slot:demoServiceUrl]] once it's live. Save this as <code>tx.json</code> (any name works), with the address you want checked in <code>payTo</code>, in lowercase:</p>
+        <figure class="code">
+          <figcaption><span>tx.json</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code>{
+  <span class="k">"chainId"</span>: "11142220",
+  <span class="k">"payTo"</span>: "0x<span class="m">&lt;40 lowercase hex characters&gt;</span>",
+  <span class="k">"asset"</span>: "{{chain:celo-sepolia.usdc}}",
+  <span class="k">"amount"</span>: "1000000"
+}</code></pre>
+          <p class="code-note"><code>11142220</code> is Celo Sepolia, <code>asset</code> is its test USDC, and <code>amount</code> is in USDC's six-decimal units, so 1000000 is 1 USDC.</p>
+        </figure>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa call {demoServiceUrl}/v1/evaluate --body tx.json</span></code></pre>
+        </figure>
+        <p>Here is what a successful call prints, against an illustrative service:</p>
+        {{> cli-call}}
+        <p>The answer lands in <code>result.json</code> in the folder you ran the command from.</p>
+        <p>If the answer had been tampered with, you would see this instead, ending once Celo shows your permission expired unused:</p>
+        {{> cli-refused}}
+      </li>
+      <li>
+        <h2 id="verify">Re-check it with <code>attessa verify</code> <span class="muted">Coming</span></h2>
+        <p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p>
+        <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
+        <figure class="code" data-copy="commands">
+          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
+        </figure>
+        <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>
+      </li>
+    </ol>
+
+    <h2 id="next">What you did</h2>
+    <p>You paid a service only after its answer was signed by the build its owner approved, and you re-checked on Celo that the build your record names was approved when the call settled. The link from that build to its source code stays the owner's claim until someone reproduces the build.</p>
+    <div class="doc-cards">
+      <a href="how-to.html#mcp"><strong>Give it to your agent</strong><span>Add the Attessa MCP server. Coming: it isn't built yet.</span></a>
+      <a href="explanation.html"><strong>Understand the limits</strong><span>What a proof shows, and what it doesn't.</span></a>
+    </div>
+  </article>
+  <nav class="toc" aria-label="On this page"><h2>On this page</h2><ol>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#init">Set up</a></li>
+    <li><a href="#funds">Get test funds</a></li>
+    <li><a href="#call">Make a call</a></li>
+    <li><a href="#verify">Re-check it</a></li>
+    <li><a href="#next">What you did</a></li>
+  </ol></nav>
+</div>
