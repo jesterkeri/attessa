@@ -4623,3 +4623,18 @@ node v22.23.2: 76 files, 278 tests, 0 failed
 pnpm@10.32.1 install ran no non-allowlisted install script: ok
 ```
 `pnpm -r build`, `typecheck` and `lint` ended Done. reviewed: pending Codex r6.
+
+### Website Codex r6 fixes - 2026-11-08
+
+Codex r6 (REVISE) on 38039f5: three major findings, all in `packages/site/test/use-cases-cli-built.test.mjs`. No page was wrong and no page text or snapshot changed.
+- The page-wide check now builds the site (partials expanded) and scans the rendered text of every page, meta descriptions and the shipped scripts, finding every `attessa ...`, not only `<code>` and `span.c`. Every command in an output line is checked, not just the first.
+- Built commands are held to the CLI table (`packages/site/test/lib/cli-table.mjs` now also reads each flag's type and each command's `args`): the command must be a table key (or `gateway <sub>`), each option must exist spelled exactly (`--BOGUS` and `--0` fail), a string option takes a value, and extra positionals fail.
+- The unbuilt exemption is three exact shapes (`verify [<id>]`, `release verify [<id>]`, `call --via buy [<url>]`) with the marker in the same block; any other trailing token or option fails.
+- Regressions for every r6 mutant (3 tests plus real-page swaps). Run against the old checker (HEAD 38039f5 plus the new tests) they fail: tests 6, 7, 8 not ok.
+
+```
+pnpm -r build / typecheck / lint: Done (all packages)
+pnpm --filter @attessa/site test: tests 282, pass 282, fail 0
+node v22.23.2: 76 files, 282 tests, 0 failed
+```
+reviewed: pending Codex r7
