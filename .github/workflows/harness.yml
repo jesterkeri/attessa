@@ -71,4 +71,4 @@ jobs:
       # Replace with your real build. The check is only meaningful against built output.
       # - run: npm ci --ignore-scripts && npm run build
       - name: Scan build output
-        run: ./scripts/check-secrets.sh .next dist build out || true   # set to blocking once a build step exists above
+        run: ./scripts/check-secrets.sh .next dist build out   # the real scan of the built site runs in ci.yml, job ts

@@ -4763,3 +4763,14 @@ reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+### Audit fixes - 2026-11-09
+
+An outside audit by Codex found these and each was confirmed before fixing. The credential scan could not fail CI: the harness job scanned no build output and ended in `|| true`. CI's `ts` job now scans the built site and can fail, and the `|| true` is gone (workflow change applied by Joshua). `.gitignore` covers more credential file names. The README's typecheck command runs the build first, because packages read each other's built types, and the README records the hand-run paid call. T21b is ticked to match its recorded SHIP. Gate 2 is recorded as open in OPEN-QUESTIONS.md and STATUS.md. `AGENTS.md` and `PIPELINE.md` still list the bare typecheck command.
+```
+./scripts/check-secrets.sh <dir with a planted sk_live_ string>: FAIL, exit 1
+./scripts/check-secrets.sh packages/site/dist: no credential-shaped strings in client output, exit 0
+pnpm -r typecheck on a fresh checkout: fails; pnpm -r build && pnpm -r typecheck: passes
+./scripts/check-workflows.sh: workflows clean
+```
+reviewed: pending Codex (reviews/audit-hygiene-review-r1.md)
