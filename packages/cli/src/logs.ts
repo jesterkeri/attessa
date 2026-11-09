@@ -1,5 +1,5 @@
 import type { Hex } from 'viem';
-import type { Rpc } from './rpc.ts';
+import { RpcError, type Rpc } from './rpc.ts';
 
 /** Forno rejects an eth_getLogs range above 5000 blocks ("query exceeds range, retry smaller (max block range 5000)"). */
 export const LOG_WINDOW = 4000n;
@@ -17,7 +17,9 @@ export async function creationBlock(rpc: Rpc, address: string, head: bigint): Pr
   };
   let lo = 0n;
   let hi = head;
-  if (!(await hasCode(hi))) return hi; // no code yet: nothing to scan before head
+  // No code at head doesn't prove there are no events: it can be a pruned or inconsistent node, or the wrong address.
+  // This runs only after a range error, so report an RPC failure, never an empty history.
+  if (!(await hasCode(hi))) throw new RpcError(-32000, `no contract code at ${address} at block ${head}, so its events can't be read`, undefined);
   while (lo < hi) {
     const mid = (lo + hi) / 2n;
     if (await hasCode(mid)) hi = mid;

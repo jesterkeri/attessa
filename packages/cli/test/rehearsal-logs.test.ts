@@ -55,3 +55,22 @@ it('no environment variable can move the scan past the events (adversary: a stal
     delete process.env.ATTESSA_REGISTRY_FROM_BLOCK;
   }
 });
+
+it('no code at head after a range error is an RPC failure, not an empty history (Codex r1 M1: events existed)', async () => {
+  const base = forno();
+  const rpc: Rpc = { url: 'http://pruned.test', async request(m, p) { return m === 'eth_getCode' ? '0x' : base.request(m, p); } };
+  await expect(getLogsChunked(rpc, A, [null])).rejects.toBeInstanceOf(RpcError);
+});
+
+it('a failure in a later window is an RPC failure, not a partial history', async () => {
+  const base = forno();
+  let windows = 0;
+  const rpc: Rpc = {
+    url: 'http://flaky.test',
+    async request(m, p) {
+      if (m === 'eth_getLogs' && (p[0] as { toBlock: string }).toBlock !== 'latest' && ++windows === 2) throw new RpcError(-32000, 'boom', undefined);
+      return base.request(m, p);
+    },
+  };
+  await expect(getLogsChunked(rpc, A, [null])).rejects.toThrow('boom');
+});

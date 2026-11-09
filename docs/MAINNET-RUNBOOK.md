@@ -2,12 +2,22 @@
 
 Legend. Who: **[J]** Joshua in his own terminal (keystores, anything that signs), **[H]** on the EC2 host `ec2-user@16.192.129.244` (his terminal), **[A]** an agent may run it (read-only).
 Status: **R** = run in the rehearsal on a fork with the same command; **P** = partly run (differences named); **N** = not run, cannot be run on a fork.
-Times are measured wall-clock on the rehearsal. Every send needs `LOOPS_ATTRIBUTION_TAG=<real tag>` in that shell (public value; never a key).
+Times are measured wall-clock on the rehearsal. Every send needs `LOOPS_ATTRIBUTION_TAG` in the shell that sends it (public value; never a key). The **tag check** below runs in that shell, on each machine, before each section that sends:
+
+```
+export LOOPS_ATTRIBUTION_TAG=celo_06e50884040b; [ "$LOOPS_ATTRIBUTION_TAG" = celo_06e50884040b ] && echo tag ok || echo STOP
+```
+
 Known so far, real: ERC-8004 `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, Self registry `0xaC3DF9ABf80d0F5c020C06B04Cced27763355944`, USDC `0xcebA9300f2b948710d2653dD7B07f33A8B32118C`,
 USA₮ `0xd2ab3c9a02dbbab236bfec45d1d755df4267f771`, host IP `16.192.129.244`, CertManager root-cert pin in the repo. Placeholders in `<angle brackets>` are not known yet.
 
 ## 0. Before anything (stop here if any line fails)
 
+0. **[A] STOP: the gates come first.** A rehearsal is not permission. The registry is immutable and a live seller takes money, so nothing below runs, DNS and signing included, until this prints `gates ok` on the commit being deployed, that commit is on `staging` with CI green and a Codex SHIP, and Joshua has said go:
+   ```
+   grep -qx 'VERDICT: implementation-ready' reviews/gate-2-review.md && grep -qx 'VERDICT: implementation-ready' reviews/gate-3-4-review.md && grep -qE '^- \[x\] T11 ' TASKS.md && grep -qE '^- \[x\] T25 ' TASKS.md && echo 'gates ok' || echo 'STOP: a gate has not passed'
+   ```
+   Gate 2 was still open when this was written: `reviews/gate-2-review.md` requires a successful real-attestation registration (T16, T16b) first. Section 7 (first paid call) also needs the operational proof in section 6, and Gate 5 closes only after it (T33).
 1. **[J] [N]** Funding at today's gas price (Forno 202.5 gwei when measured; re-read it: `cast gas-price --rpc-url https://forno.celo.org`). Measured need: deployer 2.87 CELO used, 3.73 worst case, so 6 is fine.
    Agent wallet 0.5 CELO is plenty (register 0.033 + transfer 0.014). Owner 0.1 CELO. **Operator: `signer register` is 8.63 CELO used and needs about 12.5 CELO in the wallet at the moment of the last transaction; 16 CELO is enough only up to about 250 gwei.** Renewal is 2.94 CELO every 7 days.
 2. **[J] [N]** Staging contains `enclave/Dockerfile`: `git ls-tree origin/staging enclave/Dockerfile` must print a line. (In the rehearsal it was only on `feat/t12-enclave-spike`, merged in `e90e3fc`.) Also cherry-pick the two CLI fixes `475006a` and `a75333c`; without the second, `attessa status` fails on Forno.
@@ -21,6 +31,8 @@ USA₮ `0xd2ab3c9a02dbbab236bfec45d1d755df4267f771`, host IP `16.192.129.244`, C
 
 ## 2. Deploy the validator stack and registry (tagged route) [J]
 
+First: **[J]** the tag check, in the terminal that sends.
+
 Each step: run `prepare`, then the `cast send --create` line it prints (from the keystore), then `check`. **[R]** with viem sends in place of `cast send` (a hook blocks `cast send` for agents). Prepare takes 2-3 s; the whole local deploy took 45 s; on mainnet add block time per send.
 
 5. `node scripts/tagged-deploy.mjs p384 --deployer $DEPLOYER --account <keystore-name>` -> run the printed `cast send --create ...` (gas 1,735,133 used) -> `node scripts/tagged-deploy.mjs check p384 <addr> --deployer $DEPLOYER --tx <hash>` -> `export ATTESSA_P384_VERIFIER=<addr>`
@@ -32,7 +44,7 @@ Each step: run `prepare`, then the `cast send --create` line it prints (from the
 
 ## 3. Identity [J]
 
-10. `export ATTESSA_PRIVATE_KEY` must come from his own shell and never be pasted anywhere. Register: `attessa agent register --name "<name>" --uri https://seller.attessa.xyz/agent.json --network mainnet` (run from a directory where `docs/agent.json` should land; 161,066 gas). **[R]** (2.4 s). Note the printed agent id `<AGENT_ID>`.
+10. Done, do not repeat: the agent is registered as **10061** in `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432`, owned by the agent wallet `0x08eeF13fD03088aE1dB72ED84a7eed7B255CBfe1` (tx `0x58e6d1cc47c9d1a15ab5e1492dc3efe74a4cb8c28aba65a25762f43c9841ac0b`). Use `<AGENT_ID>` = 10061 below.
 11. Optional by OPEN-QUESTIONS: `attessa agent transfer --agent <AGENT_ID> --to <cold owner> --network mainnet` **[R]** (3.4 s).
 12. **[H]** within 5 minutes of each other (the signature deadline is 5 minutes): on the host with the agent wallet key in its own env: `attessa agent wallet-sig --agent <AGENT_ID> --owner <cold owner> --json --network mainnet`; then **[J]** from the cold owner: `attessa agent set-wallet --agent <AGENT_ID> --wallet <agent wallet> --sig <sig> --deadline <deadline> --network mainnet`. **[R]** (1.2 s + 3.0 s).
 
@@ -41,18 +53,18 @@ Each step: run `prepare`, then the `cast send --create` line it prints (from the
 13. Update the host: `cd /opt/attessa && git fetch origin && git checkout --detach <deploy commit> && pnpm install --frozen-lockfile && pnpm -r build` **[R]** (54 s).
 14. Build the image. Stop the allocator first (3 enclave vCPUs): `sudo systemctl stop nitro-enclaves-allocator.service`, `docker build -f enclave/Dockerfile -t attessa/enclave:<tag> .` (clean build 157 s, cached 1 s), `sudo systemctl start nitro-enclaves-allocator.service`, `nitro-cli build-enclave --docker-uri attessa/enclave:<tag> --output-file build/enclave.eif | tee build/measurements.json` **[R]**. The reproducible path `attessa enclave build` needs `ATTESSA_KANIKO_IMAGE=<kaniko executor @sha256:digest>`, which no document gives: **[N]**. **Build once. A second docker build gives different PCRs.** Approve the PCRs of this exact `.eif` and start this `.eif`.
 15. Bridge: `socat TCP-LISTEN:5005,bind=127.0.0.1,fork,reuseaddr VSOCK-CONNECT:16:5000 &` (or `sudo systemctl start attessa-vsock@mainnet`, units are installed by the setup script and were **not** run in the rehearsal: **P**).
-16. Approve the release **[J]** (copy `build/measurements.json` to his machine): `attessa release approve --agent <AGENT_ID> --from-build measurements.json --source https://github.com/jesterkeri/attessa/commit/<sha> --network mainnet` **[R]** (2.8 s, 68,642 gas).
+16. Run the tag check in **[J]**'s terminal. Approve the release **[J]** (copy `build/measurements.json` to his machine): `attessa release approve --agent <AGENT_ID> --from-build measurements.json --source https://github.com/jesterkeri/attessa/commit/<sha> --network mainnet` **[R]** (2.8 s, 68,642 gas).
 17. **[J]** `attessa endpoint add --agent <AGENT_ID> --origin https://seller.attessa.xyz --pay-to <payTo address> --operator <operator address> --network mainnet` **[R]** (2.9 s, 105,141 gas). Registry has `allowLocalOrigins=false`, so only the https origin works.
 18. **[H]** `attessa enclave start --agent <AGENT_ID> --origin https://seller.attessa.xyz --network mainnet --eif build/enclave.eif --out att.bin` **[R]** (1.4 s; against a fork RPC through a tunnel; on the real host the default Forno RPC is used). `nitro-cli describe-enclaves` must show `"Flags": "NONE"` (non-debug) and CID 16.
 
 ## 5. Signer [operator wallet]
 
-19. **[H or J]** within 30 minutes of the attestation (`MAX_ATTESTATION_AGE` = 1800 s): `attessa signer register --agent <AGENT_ID> --attestation att.bin --network mainnet` (or `--fresh` through seller-host once it runs). **[R]** 19.6 s, 5 transactions: 4 certificate transactions (6.9-7.2M gas each) and `registerSigner` 14,639,544 gas (87.3% of the 16,777,215 cap). If it prints `gas_over_cap` or reverts, stop and tell the team: it is a blocker. Cost 8.63 CELO at 202.5 gwei.
+19. **[H or J]** Run the tag check in the shell that will send: the host's shell is a different shell from Joshua's, and needs its own. Then, within 30 minutes of the attestation (`MAX_ATTESTATION_AGE` = 1800 s): `attessa signer register --agent <AGENT_ID> --attestation att.bin --network mainnet` (or `--fresh` through seller-host once it runs). **[R]** 19.6 s, 5 transactions: 4 certificate transactions (6.9-7.2M gas each) and `registerSigner` 14,639,544 gas (87.3% of the 16,777,215 cap). If it prints `gas_over_cap` or reverts, stop and tell the team: it is a blocker. Cost 8.63 CELO at 202.5 gwei.
 20. **[J]** `attessa status --agent <AGENT_ID> --network mainnet` -> release Approved, endpoint Active, signer Active, valid 7 days. **[R]** (works only with fix `a75333c`).
 
 ## 6. Host services [H]
 
-21. Create the config files described in `docs/EC2-RUNBOOK.md` section 5 in his own terminal (`seller-mainnet.json`, `gateway-mainnet.json` with `network: celo`, `facilitatorUrl` the real one, secrets 0600). The gateway config is the one used in the rehearsal plus the real `facilitatorUrl` and no `RPC_URL` (defaults to Forno). Rehearsal gateway/seller-host config shapes: **R** as plain processes, **N** as systemd units.
+21. **[N]** Host setup: `scripts/ec2-host-setup.sh` installs the units from `packages/seller-host/systemd/`; it ran on the real host for T12, but the units have never served traffic. Create the config files described in `docs/EC2-RUNBOOK.md` section 5 in his own terminal (`seller-mainnet.json`, `gateway-mainnet.json` with `network: celo`, `facilitatorUrl` the real one, secrets 0600). The gateway config is the one used in the rehearsal plus the real `facilitatorUrl` and no `RPC_URL` (defaults to Forno). Rehearsal gateway/seller-host config shapes: **R** as plain processes, **N** as systemd units.
 22. `sudo systemctl enable --now attessa-vsock@mainnet attessa-seller@mainnet attessa-gw@mainnet` **[N]** (only plain `node` processes were run). `journalctl -u attessa-seller@mainnet` must show `enclave_already_configured` and `listening`; the seller-host config must contain the same registry, agent id and origin as steps 8-17.
 23. Caddy (TLS) **[N]**: `/etc/attessa/caddy.env` needs **both** `ATTESSA_ORIGIN_MAINNET=seller.attessa.xyz` and a non-empty `ATTESSA_ORIGIN_SEPOLIA` (an empty value stops Caddy from loading; a name that does not resolve only fails its own certificate). Then `sudo systemctl enable --now caddy`. Check: `curl -sI https://seller.attessa.xyz/v1/evaluate` from another machine answers (402 or 405), valid certificate.
 

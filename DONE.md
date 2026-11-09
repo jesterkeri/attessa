@@ -4730,3 +4730,14 @@ reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 en
 pnpm --filter @attessa/cli test: Tests  392 passed (392)
 ```
 reviewed: pending Codex (reviews/rehearsal-fixes-review-r1.md)
+
+## Rehearsal fixes: Codex r1 findings (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`reviews/rehearsal-fixes-review-r1.md` (REVISE, 4 Major). M1: `getLogsChunked` now raises `RpcError` when the registry has no code at head after a range error, so a pruned or wrong node reports `rpc_unavailable`, never an empty history; tests added for that and for a failure in a later window. M2: the runbook opens with a literal gate stop that prints `STOP: a gate has not passed` on this commit. M3: a tag check, run in the shell that sends, before each sending section, separately for Joshua's terminal and the host. M4: `docs/EC2-RUNBOOK.md` and `scripts/ec2-host-setup.sh` are copied from `feat/t12-enclave-spike` so the runbook's references exist in this commit; systemd and Caddy stay marked not run. Step 10 now says agent 10061 is already registered. Limit: a node that answers `0x` for old blocks, rather than an error, can still move the search's start block later; nothing here detects that.
+
+`pnpm test` in packages/cli:
+```
+ Test Files  95 passed (95)
+      Tests  394 passed (394)
+```
