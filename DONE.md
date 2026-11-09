@@ -5018,3 +5018,8 @@ check-secrets: all passed
 $ ./scripts/check-workflows.sh
 workflows clean
 ```
+
+## Audit hygiene: Codex r5 SHIP (feat/audit-hygiene, 2026-11-09)
+reviewed: reviews/audit-hygiene-review-r5.md | verdict: SHIP (r1 to r4 ended REVISE; archived outside the repo)
+
+Reviewed at 146f2f8. Order, stated plainly: Joshua merged this to staging (PR 26, b974ee4) and to main (PR 27, b4cde82, 08:58:14 UTC) before the verdict, to land before the 09:00 submission deadline, so main held this for a time without a SHIP. The verdict came afterwards and covers the same content. No adversary round ran on the last two commits. Gate 2 stays open.
