@@ -84,6 +84,18 @@ test('the test deploy record is no input to a build: with or without an output d
   assert.doesNotMatch(readFileSync(join(site, 'config.mjs'), 'utf8'), /SITE_TEST_DEPLOYMENTS|process\.env/);
 });
 
+test('the test hook cannot reach a build through NODE_OPTIONS, nor write outside the temp directory (adversary r14)', () => {
+  const record = JSON.stringify(MAINNET_RECORD);
+  const out = mkdtempSync(join(tmpdir(), 'site-no-hook-'));
+  const hook = join(site, 'test', 'lib', 'test-record.mjs');
+  const { NODE_OPTIONS: _n, SITE_OUT: _o, ...env } = process.env;
+  assert.throws(() => execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: { ...env, SITE_OUT: out, NODE_OPTIONS: `--import ${hook}`, SITE_TEST_DEPLOYMENTS: record } }), /must be named on the node command line/);
+  assert.equal(existsSync(join(out, 'security.html')), false);
+  for (const e of [{ ...env, SITE_TEST_DEPLOYMENTS: record }, { ...env, SITE_OUT: join(site, 'dist'), SITE_TEST_DEPLOYMENTS: record }]) {
+    assert.throws(() => execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], { cwd: site, stdio: 'pipe', env: e }), /only into the temp directory/);
+  }
+});
+
 test('a spaced status comment stops the build', () => {
   assert.throws(() => applyStatus('<!--  live:seller-->x<!--/live-->', readLive({})), /unbalanced/);
 });
