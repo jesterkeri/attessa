@@ -1,0 +1,10 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "Attessa",
+  "description": "Attessa is a trust layer for x402 sellers on Celo: a seller runs approved code in an AWS Nitro Enclave, and each paid response carries a signed proof from that code, checked before payment settles. Status: not yet serving paid calls on Celo mainnet. Source: https://github.com/jesterkeri/attessa",
+  "services": [
+    { "name": "web", "endpoint": "https://attessa.xyz" }
+  ],
+  "x402Support": false,
+  "registrations": []
+}
