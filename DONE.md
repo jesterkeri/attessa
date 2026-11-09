@@ -4614,3 +4614,18 @@ reviewed: pending Codex r6
 
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
+Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
+
+Why: `ts` runs near the limit, and on 2026-11-08 it was cancelled at the limit. `gh run view <id> --attempt <n> --json jobs`; `gh run view` without `--attempt` shows only the latest attempt:
+```
+3c1edec 42500812715 attempt 1 cancelled 244 s; attempt 2 success 157 s
+804f4aa 42501256160 attempt 1 cancelled 242 s; attempt 2 success 194 s
+9b6dc4c 42522705467 attempt 1 cancelled 255 s; attempt 2 cancelled 256 s (the same commit's push run 42522701434 passed)
+```
+The same job's duration on one commit ranged from 157 to 244 s, so the difference is the runner, not the tests. Successful `ts` jobs on 2026-11-08 took 157 to 236 s.
+reviewed: pending Codex
+
+### CI ts budget review recorded - 2026-11-08
+reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
