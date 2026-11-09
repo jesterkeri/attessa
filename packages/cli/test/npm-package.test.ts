@@ -11,10 +11,9 @@ const pkg = () => JSON.parse(readFileSync(join(out, 'package.json'), 'utf8'));
 const cwd = mkdtempSync(join(tmpdir(), 'attessa-npm-'));
 // Run a copy outside the repo, so no node_modules up the tree can hide a missing dependency.
 const installed = join(cwd, 'pkg');
-const run = (...args: string[]) => {
-  const { ATTESSA_PRIVATE_KEY: _k, ...env } = process.env;
-  return spawnSync('node', [join(installed, 'dist', 'attessa.mjs'), ...args], { encoding: 'utf8', cwd, env: { ...env, HOME: cwd }, timeout: 30_000 });
-};
+// A setting on the build machine that changes how Node treats warnings must not change what these tests see.
+const { ATTESSA_PRIVATE_KEY: _key, NODE_NO_WARNINGS: _nnw, NODE_OPTIONS: _no, ...cleanEnv } = process.env;
+const run = (...args: string[]) => spawnSync('node', [join(installed, 'dist', 'attessa.mjs'), ...args], { encoding: 'utf8', cwd, env: { ...cleanEnv, HOME: cwd }, timeout: 30_000 });
 
 beforeAll(() => {
   execFileSync('node', [join(here, 'npm', 'build.mjs')], { stdio: 'pipe' });
@@ -47,8 +46,7 @@ it('runs from the package alone', () => {
 it('a command that opens the ledger prints no SQLite warning, and only because of the filter', () => {
   const key = generatePrivateKey(); // made here for this run; holds nothing
   const args = [join(installed, 'dist', 'attessa.mjs'), 'status', '--rpc', 'http://127.0.0.1:1'];
-  const { ATTESSA_PRIVATE_KEY: _k, ...env } = process.env;
-  const opts = { encoding: 'utf8' as const, cwd, env: { ...env, HOME: cwd, ATTESSA_PRIVATE_KEY: key }, timeout: 30_000 };
+  const opts = { encoding: 'utf8' as const, cwd, env: { ...cleanEnv, HOME: cwd, ATTESSA_PRIVATE_KEY: key }, timeout: 30_000 };
   expect(spawnSync('node', args, opts).stderr).not.toMatch(/ExperimentalWarning/);
   // The same bundle without the entry point's filter does warn, so the line above can fail.
   args[0] = join(installed, 'dist', 'bin.mjs');
@@ -65,7 +63,7 @@ it('the filter drops only that one warning', () => {
     "process.emitWarning('SQLite is an experimental feature: the database is corrupt', 'ExperimentalWarning');",
     "process.emitWarning('SQLite is an experimental feature and might change at any time', 'SomeOtherWarning');",
   ].join('\n'));
-  const r = spawnSync('node', [join(dir, 'attessa.mjs')], { encoding: 'utf8' });
+  const r = spawnSync('node', [join(dir, 'attessa.mjs')], { encoding: 'utf8', env: cleanEnv });
   expect(r.stderr).toContain('something else went wrong');
   expect(r.stderr).toContain('the database is corrupt'); // same opening words, a different warning
   expect(r.stderr).toContain('SomeOtherWarning: SQLite'); // same words, a different type
@@ -84,6 +82,14 @@ it('the parts left out say so and exit non-zero', () => {
   expect(r.stdout + r.stderr).toContain('not in the npm package');
 });
 
+it('the parts left out keep to one JSON object on stdout under --json', () => {
+  const r = run('gateway', 'status', '--json');
+  expect(r.status).toBe(2);
+  expect(JSON.parse(r.stdout)).toMatchObject({ ok: false, error: 'usage' });
+  expect(r.stderr).toBe('');
+});
+
+// This and the mainnet test above fail on purpose once a mainnet registry is recorded: the README has to change that day.
 it('the README claims nothing is live on mainnet', () => {
   const readme = readFileSync(join(out, 'README.md'), 'utf8');
   expect(readme).toContain('not live on Celo mainnet yet');
