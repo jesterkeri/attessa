@@ -27,23 +27,17 @@ export async function creationBlock(rpc: Rpc, address: string, head: bigint): Pr
   return lo;
 }
 
-/**
- * eth_getLogs for one contract over its whole life, in windows a public RPC accepts. The scan starts at
- * `ATTESSA_REGISTRY_FROM_BLOCK` when set, else at the block the contract was created in.
- */
-export async function getLogsChunked(rpc: Rpc, address: string, topics: Array<Hex | null>, env: Record<string, string | undefined> = process.env): Promise<Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>> {
+/** eth_getLogs for one contract over its whole life, in windows a public RPC accepts, from the block it was created in. */
+export async function getLogsChunked(rpc: Rpc, address: string, topics: Array<Hex | null>): Promise<Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>> {
   // The whole range in one call first: a local node or a small chain answers it. A public RPC that caps the range
   // (Forno: 5000 blocks) rejects it, and only then does the windowed scan below run.
-  if (env.ATTESSA_REGISTRY_FROM_BLOCK === undefined) {
-    try {
-      return (await rpc.request('eth_getLogs', [{ address, topics, fromBlock: '0x0', toBlock: 'latest' }])) as Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
-    } catch (e) {
-      if (!/range|limit|exceed|too (many|large|big)|10000|5000/i.test((e as Error).message ?? '')) throw e;
-    }
+  try {
+    return (await rpc.request('eth_getLogs', [{ address, topics, fromBlock: '0x0', toBlock: 'latest' }])) as Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
+  } catch (e) {
+    if (!/range|limit|exceed|too (many|large|big)|10000|5000/i.test((e as Error).message ?? '')) throw e;
   }
   const head = BigInt((await rpc.request('eth_blockNumber', [])) as string);
-  const override = env.ATTESSA_REGISTRY_FROM_BLOCK;
-  const from = override !== undefined && /^[0-9]+$/.test(override) ? BigInt(override) : await creationBlock(rpc, address, head);
+  const from = await creationBlock(rpc, address, head);
   const out: Array<{ topics: Hex[]; data: Hex; blockNumber?: string }> = [];
   for (let start = from; start <= head; start += LOG_WINDOW) {
     const end = start + LOG_WINDOW - 1n < head ? start + LOG_WINDOW - 1n : head;

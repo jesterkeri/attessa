@@ -28,7 +28,7 @@ function forno(): Rpc & { windows: Array<[bigint, bigint]> } {
 
 it('scans a registry on an RPC that caps eth_getLogs at 5000 blocks (status and signer register read from block 0 and failed on Forno)', async () => {
   const rpc = forno();
-  const logs = await getLogsChunked(rpc, A, [null], {});
+  const logs = await getLogsChunked(rpc, A, [null]);
   expect(logs).toHaveLength(1);
   expect(rpc.windows[0]![0]).toBe(1_000_000n); // started at the creation block, not 0
   expect(rpc.windows.every(([a, b]) => b - a + 1n <= LOG_WINDOW)).toBe(true);
@@ -38,11 +38,20 @@ it('scans a registry on an RPC that caps eth_getLogs at 5000 blocks (status and 
 it('a node without a cap still answers in one call', async () => {
   const calls: string[] = [];
   const rpc: Rpc = { url: 'x', async request(m) { calls.push(m); return []; } };
-  expect(await getLogsChunked(rpc, A, [null], {})).toEqual([]);
+  expect(await getLogsChunked(rpc, A, [null])).toEqual([]);
   expect(calls).toEqual(['eth_getLogs']);
 });
 
 it('another RPC error is not swallowed', async () => {
   const rpc: Rpc = { url: 'x', async request() { throw new RpcError(-32000, 'boom', undefined); } };
-  await expect(getLogsChunked(rpc, A, [null], {})).rejects.toThrow('boom');
+  await expect(getLogsChunked(rpc, A, [null])).rejects.toThrow('boom');
+});
+
+it('no environment variable can move the scan past the events (adversary: a stale start block returned "no events")', async () => {
+  process.env.ATTESSA_REGISTRY_FROM_BLOCK = '99999999999';
+  try {
+    expect(await getLogsChunked(forno(), A, [null])).toHaveLength(1);
+  } finally {
+    delete process.env.ATTESSA_REGISTRY_FROM_BLOCK;
+  }
 });

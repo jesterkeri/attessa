@@ -4722,3 +4722,11 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+### Rehearsal fix: registry logs on Forno - 2026-11-09
+
+`attessa status` and `signer register` read registry logs from block 0, which Forno rejects above 5000 blocks, so on mainnet `status` would have said "Can't reach Celo". Logs are now read in windows from the registry's creation block, found by binary search on `eth_getCode`. Forno serves `eth_getCode` at old blocks: on the ERC-8004 registry it answered `0x` at blocks 1,000,000 and 41,000,000, and code at 70,000,000 and 82,000,000. Adversary round 1 (Sonnet) found that an undocumented start-block variable could hide every event; the variable is removed. The rehearsal record and runbook are added under docs/.
+```
+pnpm --filter @attessa/cli test: Tests  392 passed (392)
+```
+reviewed: pending Codex (reviews/rehearsal-fixes-review-r1.md)
