@@ -35,6 +35,10 @@ importers:
       viem:
         specifier: 2.57.13
         version: 2.57.13(typescript@5.9.3)(zod@4.6.7)
+    devDependencies:
+      esbuild:
+        specifier: 0.28.2
+        version: 0.28.2
 
   packages/core:
     dependencies:

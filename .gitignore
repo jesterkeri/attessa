@@ -26,3 +26,6 @@ enclave/target/
 .attessa/
 .claude/worktrees/
 .worktrees/
+
+# The npm package, built by packages/cli/npm/build.mjs
+packages/cli/npm/out/
