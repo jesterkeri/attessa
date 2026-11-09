@@ -37,3 +37,6 @@ enclave/target/
 .attessa/
 .claude/worktrees/
 .worktrees/
+
+# working tracker, not part of the project
+task.md
