@@ -18,6 +18,7 @@ import { COPY, CliError, ERR, RENEW, celo, host, rpcShownSafe, short, utcShort }
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Simulation, type Step } from '../tx.ts';
 import { parseAgent } from './owner.ts';
+import { getLogsChunked } from '../logs.ts';
 
 /**
  * Operator commands `signer register` and `signer renew` (SPEC §3.4, §8; FLOWS §6 J3). Both cache only the
@@ -113,9 +114,7 @@ function normalizedOrigin(flag: string, local: boolean): string {
 async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boolean): Promise<string> {
   if (flag) return normalizedOrigin(flag, local);
   try {
-    const logs = (await c.rpc.request('eth_getLogs', [
-      { address: c.registry, fromBlock: '0x0', toBlock: 'latest', topics: [toEventSelector(ENDPOINT_ADDED), oh] },
-    ])) as Array<{ data: Hex }>;
+    const logs = await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh]);
     const last = logs.at(-1);
     if (last) {
       const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
