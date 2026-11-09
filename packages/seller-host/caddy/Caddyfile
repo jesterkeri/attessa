@@ -1,0 +1,23 @@
+# Caddy for the Attessa seller host (SPEC §5, §6.5). Caddy gets Let's Encrypt certificates by itself
+# (needs ports 80 and 443 open and each origin's DNS A record pointing at this host).
+# The origins are bare host names (no https://) read from the environment, set in /etc/attessa/caddy.env:
+#   ATTESSA_ORIGIN_MAINNET, ATTESSA_ORIGIN_SEPOLIA
+# Each site proxies to the loopback gateway for its network and to nothing else. The test gateway and
+# every enclave, socat and seller-host port stay off this file on purpose (scripts and tests check it).
+# No `encode` directive: SPEC §3 needs the response bytes sent as hashed, so nothing is compressed.
+
+(gateway) {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+	}
+	reverse_proxy 127.0.0.1:{args[0]}
+}
+
+{$ATTESSA_ORIGIN_MAINNET} {
+	import gateway 8080
+}
+
+{$ATTESSA_ORIGIN_SEPOLIA} {
+	import gateway 8081
+}

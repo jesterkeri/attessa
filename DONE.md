@@ -4571,6 +4571,17 @@ status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attes
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
 
+### Host-setup files for the EC2 seller (T12 prep) - 2026-11-08
+Added `scripts/ec2-launch.sh` (prints; launches only with `--run`), `scripts/ec2-host-setup.sh` (run on the instance), `packages/seller-host/caddy/{Caddyfile,caddy.service}`, `docs/EC2-RUNBOOK.md`, and `packages/seller-host/test/host-files.test.ts`. No AWS command was run; none of these has run on a real instance. shellcheck is not installed here; `bash -n` passes on both scripts and `ec2-launch.sh mykey 203.0.113.7/32` prints the full command list.
+```
+pnpm --filter @attessa/seller-host test   -> Test Files 9 passed (9), Tests 86 passed (86)
+mutation: 8083 added to the Caddyfile and to ec2-launch.sh -> 2 of 5 new tests fail, then reverted
+pnpm -r lint EXIT=0; pnpm -r typecheck EXIT=0
+check-workflows: workflows clean; check-reviews: reviews ok; check-error-coverage: ok; check-install-scripts: ok
+```
+Unpinned: dnf packages (nitro-cli only warned against 1.5.2), Node and Caddy downloads (checked against the checksum file from the same site). Deviation: `/etc/attessa` is root:attessa-gw 0750, not 700, because the units read their JSON there.
+reviewed: pending Codex
+
 ### T21b Codex r4 fixes - 2026-11-07
 
 Codex r4 (REVISE, 3466a30). First merged origin/staging (T21 merged; DONE.md and OPEN-QUESTIONS.md keep both sides, lockfile regenerated, MCP builds against the merged CLI). Failing tests first (commit message ends "(failing)"), then the design fix:
@@ -4732,4 +4743,119 @@ $ node scripts/tagged-deploy.e2e.mjs (clean tree at e2d8fea) -> E2E OK: all four
   check-deploy celo against the local stack: OK: all 27 checks passed
 ```
 Full e2e output kept at /tmp/claude-1000/-home-hr-myvscode-linux-attessa/03e05dc1-b5af-45ec-8609-89d159bfc040/scratchpad/e2e.txt. Not fixed (outside this task): `node --test scripts/check-deploy.test.mjs` has 12 failing tests that read the now-deployed Sepolia data (deployments.ts and DEPLOYMENTS.md disagree for the fixtures; "the repo as committed (TODO addresses)" expects a Sepolia Admin TODO that no longer exists). Their failure messages are about those fixtures, not the reference build.
+
+### T12 Spike S2 on the real EC2 host - 2026-11-08
+Host `i-01d8e704fba8616b3`, c6g.xlarge, eu-north-1 (OPEN-QUESTIONS has the region deviation), Amazon Linux 2023 aarch64, allocator 3 vCPU / 3072 MiB. Commit a4eda89 at /opt/attessa, run by `ec2-host-setup.sh` then `t12-spike.sh`. Deviation: Nitro CLI 1.5.0, not 1.5.2 (OPEN-QUESTIONS). The image was built before the spike with the allocator stopped, so the build had all 4 vCPUs; the spike's own `docker build` then reused it (same sha256).
+
+Two real-host bugs were fixed on the way: Caddy publishes SHA-512 checksums, so the setup script's check moved from sha256sum to sha512sum (3c1edec); and the spike sent a checksummed registry address where the enclave takes only lowercase hex, answering `bad_frame` (a4eda89).
+
+```
+Nitro CLI 1.5.0
+memory_mib: 3072
+cpu_count: 3
+Enclave Image successfully created.
+{"HashAlgorithm":"Sha512_48 { .. }","PCR0":"44df64f80030e7355a32e656408a7df9aa77984edca74116f9c450f69300211ba7867188d8c409e6176339f313dac2a5","PCR1":"3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03","PCR2":"e85759a34cf295e261dcaad5abfd1cec1d9d2cc565b6fdbf0724c3752d89f2464e5fcd1d617df47904329cbb993cd2ff"}
+Started enclave with enclave-cid: 18, memory: 1024 MiB, cpu-ids: [1]
+attestation written to att.bin (signer 0x3ce58ab2a892fac34f1bc8987be990badadb3fb0, configured now)
+== verify, part 1
+ok   public_key length 65
+ok   user_data length 160
+ok   PCR0 0x44df64f80030e7355a32e656408a7df9aa77984edca74116f9c450f69300211ba7867188d8c409e6176339f313dac2a5
+ok   PCR1 0x3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03
+ok   PCR2 0xe85759a34cf295e261dcaad5abfd1cec1d9d2cc565b6fdbf0724c3752d89f2464e5fcd1d617df47904329cbb993cd2ff
+ok   timestamp 2026-11-08T21:06:43.704Z (0 s ago)
+Started enclave with enclave-cid: 16, memory: 1024 MiB, cpu-ids: [2]
+Started enclave with enclave-cid: 17, memory: 1024 MiB, cpu-ids: [3]
+== verify, part 2: enclaves running
+3
+T12_JOB_END exit=0 2026-11-08T21:06:45Z
+```
+The spike stopped its enclaves on exit. These PCRs are the spike build's, not a release. Not exercised: Caddy, the systemd units, `attessa enclave build`, a real on-chain registration. The binding values were placeholders, and the attestation was not verified against the on-chain validator.
+reviewed: pending Codex
+
+### T12 Codex r1 fixes (M1, M2, M3) - 2026-11-08
+Review: `t12-review-r1.md` (REVISE, 3 major). T12 stays unticked.
+- M1 `scripts/t12-spike.sh`: no `terminate-enclave --all`. It refuses to start when `describe-enclaves` is not empty, records each enclave id as `run-enclave` returns, and on exit or interrupt terminates only those ids and stops its socat. Regression tests with fake `nitro-cli`, `docker`, `socat`, `node`, `uname`: pre-existing enclave means refusal and no terminate call; a normal run terminates exactly i-fake-16/17/18 by id; a failure midway (node fails after CID 18) terminates only 18.
+- M2 `docs/EC2-RUNBOOK.md` step 5: `seller-<n>.secret` and `gateway-<n>.secret` are 0600 root:root. Both units read them via `EnvironmentFile=` (attessa-seller@.service:14 with `-`, attessa-gw@.service:12), which PID 1 reads as root before dropping to the service user; no unit uses `LoadCredential` or reads the files itself, and no source file references `.secret`. 0640 root:attessa-gw remains only for the `*.json` and `*.env` files the services read themselves. Test reads the runbook and fails on a wider mode.
+- M3 `scripts/ec2-host-setup.sh`: `NODE_SHA256` and `CADDY_SHA512` constants, `fetch_verified` checks them before each `sudo tar`, no checksum file is fetched, and Node and Caddy are always downloaded, verified and installed (idempotent; closes the gap for binaries installed by the old check). Header comment now says dnf packages stay unpinned. I downloaded both archives into a scratch directory, did not execute them, and hashed them here:
+```
+fff4078c5def658577f92c88db7db3bc0072924bfb93fe52c1e744a54e94abb8  node-v22.23.2-linux-arm64.tar.xz   (computed == published SHASUMS256.txt)
+6ce061a690312ab38367df3c5d5f89a2e4a263e7300d300d87356211bb81e79b15933e6d6203e03fbf26f15cc0311f264805f336147dbdd24938d84b57a4421c  caddy_2.10.2_linux_arm64.tar.gz   (computed == published caddy_2.10.2_checksums.txt)
+```
+Tests (`packages/seller-host/test/host-scripts.test.ts`, 8): constants are 64 and 128 hex, no checksum fetch, verify precedes extraction, and the real `fetch_verified` run with a fake `curl` rejects a tampered archive (prints DIGEST MISMATCH, no install) and accepts the genuine one, for sha256 and sha512.
+Not verified: the new setup script was not run on the host or with real `sudo`; `t12-spike.sh` was exercised only with fakes.
+reviewed: pending Codex
+
+### T12 Codex r2 fixes (M1, M2) - 2026-11-08
+Review: `t12-review-r2.md` (REVISE, 2 major, no critical or minor). T12 stays unticked.
+
+Earlier evidence that r2 did not see (it was frozen out of the review): the real host run at b600504 passed (archive `t12-host-run-b600504.txt`): public_key 65, user_data 160, PCR0 `44df64f8...c2a5`, PCR1 `3b4a7e1b...4d03`, PCR2 `e85759a3...d2ff`, and 3 enclaves running. Afterwards Joshua ran `describe-enclaves | jq length` on the host and it printed 0. That run predates these fixes: the script that ran is the one r2 reviewed. Real Ctrl-C, Caddy, the systemd units, `attessa enclave build` and on-chain attestation validation remain untested.
+
+- M2 `scripts/t12-spike.sh`: admission no longer uses `jq length`. `enclaves()` accepts `nitro-cli describe-enclaves` only if the command succeeded and the output is an array whose every record is an object with a non-empty string `EnclaveID` and a numeric `EnclaveCID`. `null`, `{}`, `{"Enclaves":[]}`, empty output, non-JSON, malformed records and a command failure all print `refusing to run: cannot establish the set of running enclaves ...` and exit 1 before `mkdir build`, Docker or any enclave call. Only a well-formed `[]` counts as empty.
+- M1 `scripts/t12-spike.sh`: `run()` records the requested CID in `ATTEMPTED` before calling `run-enclave`. Whatever happens next (non-zero exit after a start, output without `EnclaveID`, non-JSON output, an interrupt), `cleanup` looks each attempted CID with no known id up in the strict `describe-enclaves` list and terminates that enclave by its id. This is safe because the preflight proved the host had no enclave when the run began. If the list cannot be read at that point, cleanup says `cannot list enclaves to look for CID N; check it and stop it by hand` and the script exits non-zero. Still no `--all`.
+- Tests (`packages/seller-host/test/host-scripts.test.ts`, now 23): the fake `nitro-cli` gained `DESCRIBE_RAW`, `DESCRIBE_FAIL` and `RUN_MODE` (malformed, garbage, failafter: the enclave is recorded as started, then the output is bad or the command fails). New cases: 8 describe-enclaves shapes refuse with no docker/build/run/terminate call and no `build/` directory; describe failure refuses; a well-formed `[]` still runs; 3 launch failure modes each terminate exactly `i-fake-18` by id; cleanup never terminates a pre-existing id; cleanup reports when it cannot list.
+
+Failing without the fix: I copied the test file, the other scripts and the runbook to a scratch tree, put the b600504 `t12-spike.sh` in it and ran the same file with the same vitest:
+```
+ ❯ test/host-scripts.test.ts (23 tests | 13 failed) 358ms
+ Test Files  1 failed (1)
+```
+The 13 failures are the 8 shape cases, the describe-failure case, the 3 launch-failure cases and the cleanup-cannot-list case. The scratch tree is deleted. The other 10 pass on the old script too (the earlier 8 tests, the well-formed `[]` case, and the pre-existing-id case, which holds on the old script because it never looked anything up).
+
+Verification at the fix commit, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/host-files.test.ts (5 tests) 6ms
+ ✓ test/framing.test.ts (4 tests) 4ms
+ ✓ test/units.test.ts (8 tests) 13ms
+ ✓ test/review-t15-r1.test.ts (13 tests) 88ms
+ ✓ test/host-scripts.test.ts (23 tests) 632ms
+ ✓ test/enclave.test.ts (6 tests) 271ms
+ ✓ test/server.test.ts (23 tests) 279ms
+ ✓ test/inputs.test.ts (11 tests) 556ms
+ ✓ test/adversary-t15.test.ts (8 tests) 495ms
+ ✓ test/adversary-t15-r2.test.ts (8 tests) 877ms
+ Test Files  10 passed (10)
+      Tests  109 passed (109)
+   Duration  1.34s
+$ pnpm --filter @attessa/seller-host lint        -> tsc -p ../core && tsc -p . --noEmit, no output, exit 0
+$ pnpm --filter @attessa/seller-host typecheck   -> same, exit 0
+$ bash -n scripts/t12-spike.sh                   -> ok
+```
+r2 said the full seller-host suite timed out in framing/server/inputs. Here it passed in 1.34 s with nothing skipped or weakened; no test is slow (the longest is 305 ms). The timeouts in r2 were most likely contention on the shared machine, but I did not reproduce them, so that is a guess.
+Not verified: the fixed script was exercised only with fakes. Real nitro-cli output format (that real records carry `EnclaveID` as a string and `EnclaveCID` as a number, as documented) was not re-checked on the host; if a real record differs, the script refuses, which is the safe failure. No full `pnpm -r build` was run here.
+reviewed: pending
+
+### T12 host-script fixes after adversary r3 - 2026-11-08
+T12 stays unticked. The fixed scripts have only run against fakes (fake `nitro-cli`, `curl`, `sudo`, sha tools); the real EC2 host needs a re-run of both `scripts/ec2-host-setup.sh` and `scripts/t12-spike.sh`. Nothing touched the real host, SSH or AWS.
+
+`scripts/t12-spike.sh`
+- Ownership is never inferred from a CID. `run()` takes a strict `describe-enclaves` snapshot immediately before each `run-enclave`. If the CID is already held, or the host cannot be listed, that step is refused (`refusing to start CID N ...`, run-enclave not called, final exit non-zero).
+- Every launch carries `--enclave-name t12spike-<pid>` and writes its output to a file. In cleanup an enclave is ours only if run-enclave printed its id for that CID, or it is absent from that attempt's pre-launch snapshot and reports our `EnclaveName`. Any other enclave on an attempted CID is named on stderr, left running, and the exit is non-zero. Malformed output or a failure after a real start still terminates our own enclave.
+- A failed `terminate-enclave` is no longer swallowed: `terminate-enclave FAILED: enclave <id> is still running; stop it by hand ...`, exit non-zero.
+- Cleanup ignores INT and TERM while it runs, and ends with `exit` (not `return`, which an EXIT trap ignores) so the status is truthful: an earlier non-zero status (130 after a signal) is kept, else 1 if anything was left in doubt or running.
+- Assumption to confirm on the host: real `nitro-cli run-enclave` accepts `--enclave-name` and `describe-enclaves` returns it as `EnclaveName`.
+
+`scripts/ec2-host-setup.sh`: both archives are downloaded and checked against the pinned digests before the first `sudo` (before `dnf`, allocator.yaml, docker, usermod, Node extraction). curl, sha256sum, sha512sum, cut and mktemp are checked, not installed (they ship with AL2023); if one is missing the script stops with `missing: <tool>. Nothing was installed.` Installing first was avoidable, so nothing is installed before the check. A failed download is also a stop.
+
+Tests: `host-scripts.test.ts` 23 -> 38; `adversary-t12-r3.test.ts` added (9 tests, unchanged except one number, see below). New: real SIGINT/SIGTERM, second signals during a 3-enclave cleanup, foreign enclave on an attempted CID, CID seized after the preflight, snapshot failure, terminate failure, exit status, exact NODE_SHA256 and CADDY_SHA512 values, first-sudo ordering, curl missing. Mutants run by hand, each caught: removing `trap 'exit 130' INT TERM` (5 fail), removing the cleanup `trap '' INT TERM` (3 fail), exit forced to 0 (16 fail), name check forced true (1), refusal of a held CID removed (1), terminate failure swallowed (1).
+Adjusted tests, disclosed: `adversary-t12-r3.test.ts` `DESCRIBE_FAIL_FROM` 3 -> 6, because the per-run snapshots add describe-enclaves calls before cleanup (same intent: the failing call is cleanup's lookup); and the host-scripts "cannot list" test lets the first 2 describe calls through for the same reason.
+
+Verification, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+$ pnpm --filter @attessa/seller-host test
+ ✓ test/adversary-t12-r3.test.ts (9 tests) 3164ms
+ ✓ test/host-scripts.test.ts (38 tests) 16083ms
+ Test Files  11 passed (11)
+      Tests  133 passed (133)
+$ pnpm --filter @attessa/seller-host typecheck   -> tsc -p ../core && tsc -p . --noEmit, exit 0
+$ pnpm --filter @attessa/seller-host lint        -> same, no output
+$ bash -n scripts/t12-spike.sh scripts/ec2-host-setup.sh -> ok
+```
+reviewed: pending
+
+### T12 adversary r2 fixes - 2026-11-08
+Defect, proved by packages/seller-host/test/adversary-t12-r4.test.ts: real nitro-cli makes enclave names unique among running enclaves (aws-nitro-enclaves-cli src/lib.rs new_enclave_name), so a shared name reached CIDs 16 and 17 as `<name>_1` and `<name>_2`. The ownership check then failed for an enclave this run had started, and left it running on a host shared with the seller.
+Fix: each launch has its own name, `t12spike-<pid>-<cid>`, and cleanup requires that exact name. Also taken from the round's suspicions: more than one JSON document from describe-enclaves counts as unreadable (`jq -se`), cleanup tolerates a signal between recording a CID and its snapshot, and cleanup polls for socat's exit instead of `wait`, which could hang.
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 135 passed (135). `bash -n scripts/t12-spike.sh`: ok. Fakes only; the real host needs a re-run of the script.
 reviewed: pending
