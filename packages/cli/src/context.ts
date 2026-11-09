@@ -82,6 +82,8 @@ export interface Chain {
   /** The RPC as the user set it (`--rpc`) or the network's default: the one copy names (FLOWS §8 "Can't reach Celo at {rpc}"). */
   url: string;
   registry: Address;
+  /** The deployed registry's creation transaction, when the deploy record has it. */
+  registryCreation?: { block: number; tx: `0x${string}` } | null;
   /**
    * The Loops ERC-8021 data suffix every transaction this CLI sends carries: set only on mainnet with a wallet and
    * `LOOPS_ATTRIBUTION_TAG` set. Null on Sepolia and local, and on mainnet when the variable is unset (sending is
@@ -147,14 +149,18 @@ export async function connect(g: Global, deps: Deps, o: { wallet?: boolean; regi
   }
   let chainId: number;
   let deployed: Address | null = null;
+  let creation: { block: number; tx: `0x${string}` } | null = null;
   if (g.network === 'local') {
     // SPEC §2.6: the deployments entry and pins come from the network whose chain id the RPC reports.
     chainId = reported;
-    deployed = Object.values(DEPLOYMENTS).find((d) => d.chainId === reported)?.enclaveRegistry ?? null;
+    const d = Object.values(DEPLOYMENTS).find((x) => x.chainId === reported);
+    deployed = d?.enclaveRegistry ?? null;
+    creation = d?.enclaveRegistryCreation ?? null;
   } else {
     const d = DEPLOYMENTS[g.network === 'mainnet' ? 'celo' : 'celo-sepolia'];
     chainId = d.chainId;
     deployed = d.enclaveRegistry;
+    creation = d.enclaveRegistryCreation;
     if (reported !== chainId) throw ERR.networkMismatch(reported, chainId);
   }
   // A deployed registry is authoritative; ATTESSA_REGISTRY only fills in before deploy, or on a chain with no pins.
@@ -168,6 +174,8 @@ export async function connect(g: Global, deps: Deps, o: { wallet?: boolean; regi
     rpc,
     url,
     registry: registry ? (registry.toLowerCase() as Address) : null,
+    // Only the deployed registry has a recorded creation; an ATTESSA_REGISTRY address has none.
+    registryCreation: deployed ? creation : null,
     // Only a command that can send looks at the tag; a read never fails on it. The decision follows the VERIFIED chain id
     // (the one signed into the transaction), so `--network local` against a 42220 RPC is tagged or refused like mainnet.
     attribution: wallet && chainId === ATTRIBUTION_CHAIN_ID ? loopsSuffix(deps.env) : null,
