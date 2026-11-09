@@ -4694,3 +4694,17 @@ Test changes: "head: Forno down and buy up, the head is a second counted paid re
 Left open: code, nonce and balance from the paid service are not cross-checked (only block hash and timestamp). A paid request ending in a transport error or abort leaves no receipt, because the library calls onPayment only after a non-402 reply.
 Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 126 passed (126); typecheck and lint: no errors.
 reviewed: pending
+### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
+Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
+
+Why: `ts` runs near the limit, and on 2026-11-08 it was cancelled at the limit. `gh run view <id> --attempt <n> --json jobs`; `gh run view` without `--attempt` shows only the latest attempt:
+```
+3c1edec 42500812715 attempt 1 cancelled 244 s; attempt 2 success 157 s
+804f4aa 42501256160 attempt 1 cancelled 242 s; attempt 2 success 194 s
+9b6dc4c 42522705467 attempt 1 cancelled 255 s; attempt 2 cancelled 256 s (the same commit's push run 42522701434 passed)
+```
+The same job's duration on one commit ranged from 157 to 244 s, so the difference is the runner, not the tests. Successful `ts` jobs on 2026-11-08 took 157 to 236 s.
+reviewed: pending Codex
+
+### CI ts budget review recorded - 2026-11-08
+reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
