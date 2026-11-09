@@ -4221,6 +4221,99 @@ test=0
 ```
 reviewed: pending (Codex r3)
 
+### T21b MCP server - 2026-11-05
+
+Built `packages/mcp` (@attessa/mcp): a stdio MCP server on `@modelcontextprotocol/sdk` 1.32.2 (exact, no install scripts) with the 9 FLOWS agent tools: `resolve_endpoint`, `check_liveness`, `quote`, `pay_and_verify`, `verify_proof`, `get_result`, `list_pending`, `cancel_authorization`, `status`. Each has a JSON input schema and description; `pay_and_verify` and `cancel_authorization` say SIDE EFFECT (signs and spends / sends a transaction). Tools drive the CLI `run()` with `--json` (so the SDK bounds, key loading, FLOWS §6/§8 strings and credential-safe errors are the CLI's), `verify_proof` is offline, `get_result`/`list_pending` read the ledger. maxAmount may lower the saved per-call limit, never raise it; dailyCap is the CLI's; keys only from ATTESSA_PRIVATE_KEY / ATTESSA_KEYSTORE / keychain; every result is scrubbed of configured secrets and URL userinfo. 17 vitest tests, including an in-process MCP client that lists exactly 9 tools and runs `verify_proof` on the recorded Sepolia vector (vectors/headers.json), bounds refusals and no-key-in-output. Design choices not in FLOWS are in OPEN-QUESTIONS.md.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && ./scripts/check-install-scripts.sh`. Build, typecheck, lint and the mcp tests passed; the last step FAILED on checks outside this package (pre-existing: other packages' manifests and a lockfile integrity entry), tail of the real output:
+
+```
+
+ Test Files  1 passed (1)
+      Tests  17 passed (17)
+   Start at  22:18:27
+   Duration  1.06s (transform 290ms, setup 248ms, collect 338ms, tests 251ms, environment 0ms, prepare 83ms)
+
+FAIL packages/cli/package.json: keys not allowed: ['bin']
+FAIL packages/core/package.json: scripts not allowed: ['gen:vectors']
+FAIL packages/gateway/package.json: keys not allowed: ['bin']
+FAIL packages/sdk/package.json: keys not allowed: ['engines']
+FAIL packages/seller-host/package.json: keys not allowed: ['bin']
+FAIL packages/seller-host/package.json: scripts not allowed: ['render-units']
+FAIL pnpm-lock.yaml: better-sqlite3@13.0.3: allowlisted package without its pinned registry integrity
+FAIL: repo install config is outside the allow-list
+```
+reviewed: pending (Codex r1)
+Note on `./scripts/check-install-scripts.sh` (exit 1 above): the base commit d4567fc fails with the same 7 FAIL lines (bin/engines/gen:vectors/render-units and the unpinned better-sqlite3 integrity), fixed by the open branch fix/install-allowlist, not by this task. That branch's guard (9909372) run on this commit, under the lock:
+```
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+rc=0
+```
+So @modelcontextprotocol/sdk 1.32.2 and its new transitive packages pass the allow-list. Not covered by tests yet: a successful `cancel_authorization`, and `get_result`/`status` on an open call (left for Codex r1).
+
+### T21b Codex r1 fixes - 2026-11-06
+
+Codex r1 (REVISE, 4 major, 2 minor) on 9f4c76a. Each defect got a failing test first (commits 5cc6c8e, fe271d8, 38bd213), then its fix:
+
+- Major 1 (scrub leaked short and encoded secrets): scrub now hides every non-empty configured secret of any length, raw, JSON-escaped, percent-encoded (both cases, + for space) and without 0x; tests go through the real result path.
+- Major 2 (verify_proof could not check the request): it takes `requestHash` or `request {method, pathAndQuery, body}`, hashes by SPEC 2.2 and compares with the proof (request_mismatch); the description no longer claims request binding.
+- Major 3 (notChecked incomplete): result has `scope: offline` and notChecked names signer, release, endpoint/agent/operator, payment binding, settlement, time anchors, expiry now, inputs block and values, plus any of request id, request hash, response hash, inputs hash not asked for. No chain read added (OPEN-QUESTIONS).
+- Major 4 (status/get_result sign payer messages, said they do not): descriptions say SIGNS A PAYER MESSAGE, readOnlyHint false; a spy test shows the payer signature on an open call and none from quote, resolve_endpoint, check_liveness, list_pending, verify_proof.
+- Minor 1 (get_result terminal failures had no copy): a call decided against the buyer is reported through the CLI stored-outcome report: FLOWS warning as message, last line as next, isError.
+- Minor 2 (untested paths): tests for a successful cancel_authorization (cancel tx, not_charged recorded) and an open call through list_pending, get_result and status (decided from chain evidence only). These passed on 9f4c76a: coverage, not a defect.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  29 passed (29)
+   Duration  2.16s (transform 320ms, setup 280ms, collect 410ms, tests 1.23s, environment 0ms, prepare 69ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  13.62s (transform 2.21s, setup 31.84s, collect 16.93s, tests 105.57s, environment 25ms, prepare 8.53s)
+```
+reviewed: pending (Codex r2)
+
+### T21b Codex r2 fixes - 2026-11-06
+
+Codex r2 (REVISE, 54179d8). Failing tests first (commit after 54179d8, message ends "(failing)"), then:
+
+- Major 1 (short secret corrupted results): redaction is now structural, applied to string values of the parsed result before serialising; keys, numbers and JSON structure are never touched. Minimum secret length 4 (shorter values cannot be told from protocol data and are not redacted; stated in OPEN-QUESTIONS). Tests: a one-character DEMO_TOKEN=0 leaves verify_proof and pay_and_verify results identical, amounts and hashes intact; 3 characters left alone, 4 hidden.
+- Major 2 (notChecked incomplete on early failures): notChecked is derived on every path: each offline check not passed and not the failing one, plus the always-skipped chain checks. Tests cover request id mismatch, malformed proof, bad signature and response mismatch.
+- Minor 1 (status overstated signing): description says it signs only for an open call whose answer can still come, and that an open call already refused is checked on the chain with no signature. Separate status spy tests: none for a refused call, a payer signature for a pending one.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  35 passed (35)
+   Duration  2.19s (transform 289ms, setup 235ms, collect 361ms, tests 1.35s, environment 0ms, prepare 48ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  13.80s (transform 2.09s, setup 32.63s, collect 18.01s, tests 105.69s, environment 20ms, prepare 8.70s)
+```
+reviewed: pending (Codex r3)
+
+### T21b Codex r3 fixes - 2026-11-06
+
+Codex r3 (REVISE, 6152342). Failing tests first (commit before f94c813, ends "(failing)"). The two r2 short-secret tests were rewritten to assert refusal, the stricter policy Joshua/coordinator asked for; no assertion was loosened.
+
+- Major 1 (short and encoded secrets escaped): the server refuses to start, and every tool call refuses (`unsafe_secret`, variable name only, with a next action), while a secret-named env var is under 4 characters or digits-only under 8. The rest are hidden in string values in their raw, JSON-escaped and URL-encoded spellings (any mix of upper and lower case hex, + or %20 for a space, reserved characters literal or encoded) and 0x-less. End-to-end result-path tests cover each. Policy in OPEN-QUESTIONS.
+- Major 2 (validation errors lacked notChecked): every verify_proof refusal before a check runs (no proof, bad chainId, bad registry, unpinned chain, bad requestId, requestHash or request) now returns scope offline and the full notChecked list; one test per path.
+- Minor 1 (get_result overstated signing): description now says an open call already refused is checked against the chain with no signature; spy test added.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  45 passed (45)
+   Duration  2.53s (transform 315ms, setup 267ms, collect 399ms, tests 1.60s, environment 0ms, prepare 51ms)
+ Test Files  85 passed (85)
+      Tests  338 passed (338)
+   Duration  14.14s (transform 2.24s, setup 34.12s, collect 18.37s, tests 106.48s, environment 20ms, prepare 9.24s)
+exit=0
+```
+reviewed: pending (Codex r4)
 ### T21 Codex r3 fixes - 2026-11-06
 Codex r3 (reviews/t21-cli-review-r3.md, on d4567fc): REVISE, 2 major.
 - M1: a dry run (or a run with no wallet) prints the calldata of `release approve --source` and `agent register --uri`, which holds the URL as given. The CLI now refuses a URL with a user name, password, query or fragment before anything is read, encoded or signed (`secret_in_url`), since it would be published on Celo for good.
@@ -4566,3 +4659,61 @@ Codex r3: REVISE, with two majors (.worktrees/archive/codex/mainnet-entry-review
 2. A gas-cap refusal in `sendCancel` became CancelInterruptedError and then the false "Can't reach Celo" row. GasCapError now passes through, and the CLI maps it to `gas_over_cap` ("The cancel permission was signed, but nothing was sent.", not in FLOWS).
 Verify (flock): pnpm --filter @attessa/sdk test: Tests 206 passed (206); pnpm --filter @attessa/cli test: Tests 388 passed (388); pnpm -r typecheck and pnpm -r lint: no errors.
 reviewed: pending
+### T21b Codex r4 fixes - 2026-11-07
+
+Codex r4 (REVISE, 3466a30). First merged origin/staging (T21 merged; DONE.md and OPEN-QUESTIONS.md keep both sides, lockfile regenerated, MCP builds against the merged CLI). Failing tests first (commit message ends "(failing)"), then the design fix:
+
+- Major 1 (rendered secrets leaked after safe()) and Major 2 (names outside the classifier): the name-pattern guess is gone. Secrets are exactly what the server consumes (ATTESSA_PRIVATE_KEY, ATTESSA_KEYSTORE_PASSWORD, the userinfo/path/query/fragment of ATTESSA_RPC) plus variables named in ATTESSA_REDACT; other variables are neither required nor touched. The final layer removes those values from the serialised text, then sends the result only if it still parses, keeps keys, numbers, amounts and hashes unchanged, and no string, with escaping undone (\xNN, \u{N}, \uNNNN, \n, \/, %XX), still holds a secret; otherwise it sends a fixed redaction_withheld error. A declared secret under 4 characters (digits-only under 8) stops the server. Tests cover every r3 and r4 reproduction plus the RPC credentials, an undeclared WALLET key, and the final-layer integrity. Existing tests now declare their secret variables in ATTESSA_REDACT; one r3 test accepts redaction_withheld as well as unknown_tool for an escaped spelling.
+- Design for Joshua is in OPEN-QUESTIONS.md.
+
+Verification: `pnpm -r build && pnpm -r typecheck && pnpm -r lint && pnpm --filter @attessa/mcp test && pnpm --filter @attessa/cli test`, exit 0. Tail of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  51 passed (51)
+   Duration  2.67s (transform 376ms, setup 305ms, collect 449ms, tests 1.67s, environment 0ms, prepare 88ms)
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+   Duration  17.98s (transform 2.75s, setup 44.27s, collect 24.89s, tests 139.03s, environment 27ms, prepare 11.98s)
+exit=0
+```
+reviewed: pending (Codex r5)
+
+### T21b Codex r5 fixes - 2026-11-08
+
+Codex r5 (REVISE, bb56af3). Tests written first: on the unchanged server 12 of 66 failed (the `takeEnvironment` stubs, the keystore and data-folder echoes, the maxAmount echo, five and more percent layers, base64, hex, the bound). Then fixed:
+
+- Echoes removed: `unknown_tool` is the fixed message "There is no tool with that name."; `over_max_amount` no longer repeats the typed amount; the `unexpected` message names only a known tool.
+- `bin.ts` keeps a private copy of the environment (`takeEnvironment`, tested) and deletes ATTESSA_PRIVATE_KEY and ATTESSA_KEYSTORE_PASSWORD from `process.env` first. A test shows the MCP call path does not read the key from `process.env` (a different key there is never used). The MCP also passes an absolute keystore path (the CLI resolved it against the virtual folder).
+- Major 2: ATTESSA_KEYSTORE and ATTESSA_DATA_DIR are paths: hidden as whole values (as typed, resolved, real, `safe()`, `~/`), never refused as `unsafe_secret`. ATTESSA_NETWORK and ATTESSA_REGISTRY are public configuration; a bad value gives the CLI's fixed refusal without the value (tested).
+- Major 1: escaping is undone to a fixed point (64 layers, 8 MiB, then withheld); base64 (standard and URL-safe, three alignments) and hex (either case) of secrets of 8+ characters withhold the result. Tests: 5 to 60 percent layers, base64 and hex forms, a hex key's bytes, and that a long base64 answer, 0x hashes and the encoded form of a 5-character secret are not withheld.
+- Minor 1: the r3 spelling table now runs through a real result path (`get_result` with the kept answer) with one explicit outcome per spelling (hidden in place with the text around it, or the exact `redaction_withheld` object); a separate test shows an unknown tool name is never echoed. The earlier tests that used the unknown-tool echo as their result path were moved to the same path unchanged in what they assert.
+- The "closed guarantee" wording is gone from the code comments and from the OPEN-QUESTIONS "MCP secret design" entry, which now says what is removed, matched and not covered.
+
+Verification: `pnpm -r build`, `pnpm -r typecheck`, `pnpm -r lint` exit 0; tails of the real output:
+
+```
+ Test Files  1 passed (1)
+      Tests  66 passed (66)
+ Test Files  87 passed (87)
+      Tests  347 passed (347)
+```
+reviewed: pending Codex r6
+
+Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
+reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
+
+### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
+Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
+
+Why: `ts` runs near the limit, and on 2026-11-08 it was cancelled at the limit. `gh run view <id> --attempt <n> --json jobs`; `gh run view` without `--attempt` shows only the latest attempt:
+```
+3c1edec 42500812715 attempt 1 cancelled 244 s; attempt 2 success 157 s
+804f4aa 42501256160 attempt 1 cancelled 242 s; attempt 2 success 194 s
+9b6dc4c 42522705467 attempt 1 cancelled 255 s; attempt 2 cancelled 256 s (the same commit's push run 42522701434 passed)
+```
+The same job's duration on one commit ranged from 157 to 244 s, so the difference is the runner, not the tests. Successful `ts` jobs on 2026-11-08 took 157 to 236 s.
+reviewed: pending Codex
+
+### CI ts budget review recorded - 2026-11-08
+reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
