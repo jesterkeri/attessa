@@ -92,9 +92,10 @@ run() {
   ATT_CID+=("$cid"); ATT_PRE+=("$(jq -r '.[].EnclaveID' <<<"$snap" | tr '\n' ' ')")   # before the call
   nitro-cli run-enclave --eif-path build/enclave-spike.eif --cpu-count 1 --memory 1024 --enclave-cid "$cid" --enclave-name "$NAME-$cid" >"$OUTD/$cid.out" || return 1
   out=$(<"$OUTD/$cid.out")
-  id=$(jq -r .EnclaveID <<<"$out") && [ -n "$id" ] && [ "$id" != null ] || { echo "cannot read the EnclaveID of CID $cid; cleanup will look it up"; return 1; }
+  # Trust the printed id only if the output is exactly one object bound to this launch: our CID (numeric) and our name.
+  id=$(jq -sr --argjson c "$cid" --arg n "$NAME-$cid" 'if length == 1 and (.[0] | type == "object" and (.EnclaveID | type == "string" and length > 0) and (.EnclaveCID | type == "number") and .EnclaveCID == $c and .EnclaveName == $n) then .[0].EnclaveID else empty end' <<<"$out" 2>/dev/null) && [ -n "$id" ] || { echo "cannot confirm the run-enclave response for CID $cid; cleanup will look it up"; return 1; }
   KNOWN+="$cid "; STARTED+=("$id")   # recorded at once so cleanup terminates exactly this enclave
-  jq -r '"started CID \(.EnclaveCID), \(.NumberOfCPUs) CPU, \(.MemoryMiB) MiB"' <<<"$out"
+  jq -r '"started CID \(.EnclaveCID), \(.NumberOfCPUs) CPU, \(.MemoryMiB) MiB"' <<<"$out" || true
 }
 
 echo "== first enclave (test layout: CID 18, port 5006)"
@@ -105,7 +106,10 @@ echo "== verify, part 1"
 node scripts/inspect-attestation.mjs att.bin
 
 echo "== two more (CIDs 16, 17)"
-run 16 || echo "CID 16 did not start"
-run 17 || echo "CID 17 did not start"
+run 16
+run 17
 echo "== verify, part 2: enclaves running"
-nitro-cli describe-enclaves | jq length
+FINAL=$(enclaves) || { echo "cannot list the running enclaves for the final count"; exit 1; }
+COUNT=$(jq length <<<"$FINAL")
+echo "$COUNT"
+[ "$COUNT" = 3 ] || { echo "expected exactly 3 enclaves side by side, found $COUNT"; exit 1; }

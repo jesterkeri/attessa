@@ -4863,3 +4863,47 @@ ok   timestamp 2026-11-09T05:51:42.440Z (0 s ago)
 3
 ```
 reviewed: pending Codex (reviews/t12-review-r3.md)
+
+### T14 on the EC2 host at fdde52a - 2026-11-09
+
+Two clean `attessa enclave build` runs of fdde52a on the same EC2 host (c6g.xlarge), kaniko `gcr.io/kaniko-project/executor@sha256:4e7a52dd1f14872430652bb3b027405b8dfd17c4538751c620ac005741ef9698`. The two `measurements.json` are identical. The EIF sha256 differs between the runs because of unmeasured metadata in the EIF, so compare PCRs, not the EIF hash. This is one machine only: T14 asks for a second machine or a fresh instance, so T14 stays unticked in TASKS.md. Output as recorded (EIF hashes, then each run's measurements):
+```
+0b3d72b3e3d246ff0f9f67613ef35f1d0d739047d8b3fa13e83f252625be7667  a/build/attessa.eif
+8d9093dba36e18bc82da9839922c51a605bae77069ea478243918a83c1cb2b33  b/build/attessa.eif
+{
+  "Measurements": {
+    "HashAlgorithm": "Sha512_48 { .. }",
+    "PCR0": "0b31722cecd811d7fcab3bf1082facca3beacbe71e9d124b7e4fbd5e3aee8cde8995d58eda33b7c30e94730e9dd66e01",
+    "PCR1": "3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03",
+    "PCR2": "4feeb253745a973ee072fd44a34eda50be150e93abf2e1917ca8ea28733ed86e595785927e68d25a5f95efb4d47f6b6c"
+  }
+}
+{
+  "Measurements": {
+    "HashAlgorithm": "Sha512_48 { .. }",
+    "PCR0": "0b31722cecd811d7fcab3bf1082facca3beacbe71e9d124b7e4fbd5e3aee8cde8995d58eda33b7c30e94730e9dd66e01",
+    "PCR1": "3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03",
+    "PCR2": "4feeb253745a973ee072fd44a34eda50be150e93abf2e1917ca8ea28733ed86e595785927e68d25a5f95efb4d47f6b6c"
+  }
+}
+```
+reviewed: none (evidence only)
+
+### T12 Codex r3 fixes (M1, M2, minor) - 2026-11-09
+
+Review: `t12-review-r3.md` (REVISE, 2 major, 1 minor). T12 stays unticked. The real host run above (cb076e2) stays as evidence of that run only; the fixed `scripts/t12-spike.sh` has NOT itself been re-run on the host, only against fakes.
+- M1: `run 16` and `run 17` no longer swallow a failure; after the launches the count comes from the strict `enclaves()` parser and must be exactly 3. Tests: pre-start failure of CID 16 and CID 17 exit non-zero and terminate only what was started; an empty final list exits non-zero.
+- M2: a `run-enclave` response is trusted only if it is exactly one object with `EnclaveID`, numeric `EnclaveCID` equal to the requested CID and the exact `EnclaveName`; otherwise the snapshot/name fallback applies. Test: a foreign id/wrong CID response never reaches `terminate-enclave`.
+- Minor: `scripts/inspect-attestation.mjs` compares `Math.abs(Date.now() - timestampMs) <= 60_000` in milliseconds. Tests: 59 s passes, 60.499 s past and future and 61 s fail.
+Existing host-script tests were adjusted, none removed or loosened: the r3 and host-scripts fakes now print `EnclaveName` in the run-enclave response as the real CLI does; a failed CID 16 now ends the run before CID 17, so expected terminate lists drop `i-fake-17` and the `DESCRIBE_FAIL_FROM` call indices for the cleanup lookup move from 6 to 4; the "well-formed empty list" test now asserts only that the preflight accepts `[]` (the run then fails at the final count of 0).
+```
+$ pnpm --filter @attessa/seller-host lint && pnpm --filter @attessa/seller-host test
+ Test Files  12 passed (12)
+      Tests  139 passed (139)
+$ pnpm --filter @attessa/cli exec vitest run test/inspect-attestation.test.ts
+ Test Files  1 passed (1)
+      Tests  3 passed (3)
+$ bash -n scripts/t12-spike.sh
+exit 0
+```
+reviewed: pending Codex r4

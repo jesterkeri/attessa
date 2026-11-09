@@ -19,7 +19,7 @@ function fake(bin: string, name: string, body: string): void {
 }
 
 // State file STATE holds one "<EnclaveID> <EnclaveCID>" per running enclave. Knobs (env):
-//   DESCRIBE_FAIL_FROM=n    describe-enclaves exits 1 from its n-th call on (1 = preflight, 2-4 = snapshots before runs 18/16/17, 5 = final report, 6 = cleanup).
+//   DESCRIBE_FAIL_FROM=n    describe-enclaves exits 1 from its n-th call on (1 = preflight, 2-4 = snapshots before runs 18/16/17, 5 = final report, then cleanup; a failed launch skips the later calls, so cleanup is call 4 after a CID 16 failure).
 //   Edited after the t12-spike.sh fix: the knob was 3 (cleanup) before the per-run snapshots existed; only that number and this comment changed.
 //   TERMINATE_FAILS=1       terminate-enclave exits 1 and leaves the enclave running
 //   START_THEN_FAIL_CID=c   run-enclave for CID c starts the enclave and then exits 1
@@ -48,11 +48,11 @@ case "$1" in
     jq -R -s -c 'split("\\n") | map(select(length>0) | split(" ")) | map({EnclaveID: .[0], EnclaveCID: (.[1]|tonumber), NumberOfCPUs: 1, MemoryMiB: 1024, State: "RUNNING"})' "$STATE" ;;
   build-enclave) echo '{"Measurements":{"PCR0":"00"}}' ;;
   run-enclave)
-    while [ $# -gt 0 ]; do [ "$1" = --enclave-cid ] && cid=$2; shift; done
+    while [ $# -gt 0 ]; do { [ "$1" = --enclave-cid ] && cid=$2; [ "$1" = --enclave-name ] && ename=$2; }; shift; done
     if [ "$cid" = "\${FOREIGN_CID:-}" ]; then echo "i-seller-$cid $cid" >> "$STATE"; exit 1; fi
     echo "i-fake-$cid $cid" >> "$STATE"
     [ "$cid" != "\${START_THEN_FAIL_CID:-}" ] || exit 1
-    echo "{\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
+    echo "{\\"EnclaveName\\":\\"$ename\\",\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
   terminate-enclave)
     [ -z "\${TERMINATE_FAILS:-}" ] || exit 1
     grep -v "^$3 " "$STATE" > "$STATE.new" || true; mv "$STATE.new" "$STATE" ;;
@@ -81,7 +81,7 @@ describe('t12-spike.sh exit status when it cannot be sure (adversary, T12 r3)', 
   // cannot list enclaves, it prints "check it and stop it by hand" but `return $rc` in an EXIT trap does not change
   // the exit status of a script that was exiting 0, so the host is left with an enclave and the script says success.
   it('a started-then-failed CID 16 that cleanup cannot locate leaves the enclave and must not exit 0', () => {
-    const { r, left, calls } = runSpike({ START_THEN_FAIL_CID: '16', DESCRIBE_FAIL_FROM: '6' });
+    const { r, left, calls } = runSpike({ START_THEN_FAIL_CID: '16', DESCRIBE_FAIL_FROM: '4' });
     const detail = JSON.stringify({ out: r.stdout, err: r.stderr, calls });
     expect(left, detail).toEqual(['i-fake-16 16']); // proves the enclave really is still running
     expect(r.stderr).toMatch(/cannot list enclaves to look for CID 16/);
@@ -132,10 +132,10 @@ describe('t12-spike.sh signals (adversary, T12 r3)', () => {
     jq -R -s -c 'split("\\n") | map(select(length>0) | split(" ")) | map({EnclaveID: .[0], EnclaveCID: (.[1]|tonumber)})' "$STATE" ;;
   build-enclave) echo '{"Measurements":{}}' ;;
   run-enclave)
-    while [ $# -gt 0 ]; do [ "$1" = --enclave-cid ] && cid=$2; shift; done
+    while [ $# -gt 0 ]; do { [ "$1" = --enclave-cid ] && cid=$2; [ "$1" = --enclave-name ] && ename=$2; }; shift; done
     echo "i-fake-$cid $cid" >> "$STATE"
     touch "$STATE.inrun"; sleep 1
-    echo "{\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1}" ;;
+    echo "{\\"EnclaveName\\":\\"$ename\\",\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1}" ;;
   terminate-enclave) grep -v "^$3 " "$STATE" > "$STATE.new" || true; mv "$STATE.new" "$STATE" ;;
 esac`,
     );

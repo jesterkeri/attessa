@@ -19,12 +19,13 @@ try {
 }
 const len = (h) => (h === null ? 0 : (h.length - 2) / 2);
 const nonZero = (h) => h !== undefined && /[1-9a-f]/i.test(h.slice(2));
-const ageS = Math.round((Date.now() - Number(a.timestampMs)) / 1000);
+const ageMs = Date.now() - Number(a.timestampMs);
+const ageS = Math.round(ageMs / 1000);
 const checks = [
   [`public_key length ${len(a.publicKey)}`, len(a.publicKey) === 65],
   [`user_data length ${len(a.userData)}`, len(a.userData) === 160],
   ...[0, 1, 2].map((i) => [`PCR${i} ${a.pcrs.get(i) ?? 'missing'}`, nonZero(a.pcrs.get(i))]),
-  [`timestamp ${new Date(Number(a.timestampMs)).toISOString()} (${ageS} s ago)`, Math.abs(ageS) <= 60],
+  [`timestamp ${new Date(Number(a.timestampMs)).toISOString()} (${ageS} s ago)`, Math.abs(ageMs) <= 60_000],
 ];
 for (const [line, ok] of checks) console.log(`${ok ? 'ok  ' : 'FAIL'} ${line}`);
 process.exit(checks.every(([, ok]) => ok) ? 0 : 1);

@@ -65,8 +65,10 @@ case "$1" in
       garbage) printf '{"EnclaveCID": 1'; exit 0 ;;
       failafter) exit 1 ;;
     esac
+    # WRONG_RESP_CID: the enclave for this CID starts, but the printed response is a well-formed foreign one
+    if [ "$cid" = "\${WRONG_RESP_CID:-}" ]; then echo '{"EnclaveID":"i-seller-16","EnclaveCID":16,"EnclaveName":"someone-else","NumberOfCPUs":1,"MemoryMiB":1024}'; exit 0; fi
     if [ "$(cat "$STATE.slowrun" 2>/dev/null)" = "$cid" ]; then touch "$STATE.inrun"; sleep 1; fi
-    echo "{\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
+    echo "{\\"EnclaveName\\":\\"$ename\\",\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
   terminate-enclave)
     if [ "$2" = --all ]; then : > "$STATE"; exit 0; fi
     [ -z "\${TERMINATE_FAILS:-}" ] || exit 1
@@ -151,8 +153,8 @@ describe('t12-spike.sh fails closed on malformed Nitro CLI results', () => {
   });
 
   it('still accepts a well-formed empty list', () => {
-    const { r, log } = runSpike({ DESCRIBE_RAW: '[]' });
-    expect(r.status, r.stderr).toBe(0);
+    // The preflight accepts []; the run then fails at the end because the fake keeps listing [] (fewer than three).
+    const { log } = runSpike({ DESCRIBE_RAW: '[]' });
     expect(log.some((l) => l.startsWith('nitro-cli run-enclave'))).toBe(true);
   });
 
@@ -200,7 +202,7 @@ describe('t12-spike.sh ownership and truthful exit status', () => {
     const { r, log, terminates } = runSpike({ SEIZE_CID: '16' });
     expect(log.some((l) => /run-enclave .*--enclave-cid 16\b/.test(l))).toBe(false);
     expect(terminates).not.toContain(T('i-seller-16'));
-    expect(terminates.sort()).toEqual([T('i-fake-17'), T('i-fake-18')]);
+    expect(terminates).toEqual([T('i-fake-18')]);   // a refused CID 16 now stops the run before CID 17
     expect(r.status).not.toBe(0);
     expect(r.stdout).toMatch(/refusing to start CID 16/);
   });
@@ -219,7 +221,7 @@ describe('t12-spike.sh ownership and truthful exit status', () => {
     expect(readFileSync(sb.state, 'utf8')).toMatch(/^i-seller-16$/m);
     expect(r.status).not.toBe(0);
     expect(r.stderr).toMatch(/i-seller-16 holds CID 16.*NOT terminating/);
-    expect(terminates.sort()).toEqual([T('i-fake-17'), T('i-fake-18')]);
+    expect(terminates).toEqual([T('i-fake-18')]);   // the failed CID 16 launch stops the run before CID 17
   });
 
   it('an enclave carrying our name is ours even when run-enclave printed nothing usable', () => {
@@ -237,8 +239,8 @@ describe('t12-spike.sh ownership and truthful exit status', () => {
   });
 
   it('a cleanup that cannot locate a started enclave exits non-zero even when the run itself was fine', () => {
-    // calls: preflight 1, snapshots 2-4, final report 5, cleanup lookup 6. CID 16 starts and then fails; 17 and 18 are clean.
-    const { r, sb } = runSpike({ FAILAFTER_CID: '16', DESCRIBE_FAIL_FROM: '6' });
+    // calls: preflight 1, snapshots 2-3 (18, 16), cleanup lookup 4. CID 16 starts and then fails, which ends the run.
+    const { r, sb } = runSpike({ FAILAFTER_CID: '16', DESCRIBE_FAIL_FROM: '4' });
     expect(r.stderr).toMatch(/cannot list enclaves to look for CID 16; check it and stop it by hand/);
     expect(readFileSync(sb.state, 'utf8')).toContain('i-fake-16');
     expect(r.status).not.toBe(0);
@@ -246,6 +248,32 @@ describe('t12-spike.sh ownership and truthful exit status', () => {
 
   it('a clean run exits 0 (guards the non-zero paths above)', () => {
     expect(runSpike().r.status).toBe(0);
+  });
+});
+
+// Codex T12 r3: a failed CID 16/17 launch must fail the spike; a run-enclave response is trusted only if bound to the request.
+describe('t12-spike.sh requires all three launches and a bound run-enclave response', () => {
+  const T = (id: string) => `nitro-cli terminate-enclave --enclave-id ${id}`;
+
+  it.each([
+    ['16', ['i-fake-18']],
+    ['17', ['i-fake-16', 'i-fake-18']],
+  ])('exits non-zero when run-enclave fails before starting CID %s, and cleans up only what it started', (cid, started) => {
+    const { r, terminates } = runSpike({ FAIL_CID: cid });
+    expect(r.status).not.toBe(0);
+    expect(terminates.sort()).toEqual(started.map(T));
+  });
+
+  it('exits non-zero when fewer than three enclaves are listed at the end', () => {
+    const { r } = runSpike({ DESCRIBE_RAW: '[]' });
+    expect(r.status).not.toBe(0);
+  });
+
+  it('never passes a foreign id from a wrong-CID run-enclave response to terminate-enclave', () => {
+    const { r, terminates } = runSpike({ WRONG_RESP_CID: '18' });
+    expect(r.status).not.toBe(0);
+    expect(terminates.join('\n')).not.toContain('i-seller-16');
+    expect(terminates).toEqual([T('i-fake-18')]);
   });
 });
 

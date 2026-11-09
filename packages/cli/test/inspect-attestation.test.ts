@@ -11,9 +11,9 @@ const SCRIPT = join(import.meta.dirname, '../../../scripts/inspect-attestation.m
 const nitro = new FakeNitroChain();
 const dir = mkdtempSync(join(tmpdir(), 'attessa-inspect-'));
 
-function inspect(o: { publicKey?: Buffer; userData?: Buffer; ageS?: number; pcr0?: Buffer }) {
+function inspect(o: { publicKey?: Buffer; userData?: Buffer; ageS?: number; ageMs?: number; pcr0?: Buffer }) {
   const doc = nitro.attest({
-    timestampMs: BigInt(Date.now() - (o.ageS ?? 2) * 1000),
+    timestampMs: BigInt(Date.now() - (o.ageMs ?? (o.ageS ?? 2) * 1000)),
     publicKey: o.publicKey ?? Buffer.concat([Buffer.from([4]), randomBytes(64)]),
     userData: o.userData ?? randomBytes(160),
     ...(o.pcr0 ? { pcrs: [o.pcr0, randomBytes(48), randomBytes(48)] as [Buffer, Buffer, Buffer] } : {}),
@@ -39,5 +39,12 @@ describe('scripts/inspect-attestation.mjs (T12)', () => {
     const f = join(dir, 'junk.bin');
     writeFileSync(f, Buffer.from([0]));
     expect(spawnSync(process.execPath, [SCRIPT, f], { encoding: 'utf8' })).toMatchObject({ status: 1, stdout: expect.stringContaining('FAIL not an attestation') });
+  });
+  // Codex T12 r3: the bound is 60,000 ms exactly, not 60 rounded seconds. A few hundred ms of slack covers spawn time.
+  it('passes a timestamp just inside 60 s and fails one just over, past and future', () => {
+    expect(inspect({ ageMs: 59_000 }).code).toBe(0);
+    expect(inspect({ ageMs: 60_499 })).toMatchObject({ code: 1, out: expect.stringContaining('FAIL timestamp') });
+    expect(inspect({ ageMs: -60_499 })).toMatchObject({ code: 1, out: expect.stringContaining('FAIL timestamp') });
+    expect(inspect({ ageMs: 61_000 }).code).toBe(1);
   });
 });
