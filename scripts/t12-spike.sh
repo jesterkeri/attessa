@@ -60,7 +60,7 @@ cleanup() {
       pre=$OUTD/$cid.pre
       [ -s "$pre" ] || echo '[]' >"$pre"
       # jq does the matching, on exact strings: the id reaches STARTED as the host wrote it, and anything else is only named.
-      if ! list=$(jq -r --argjson c "$cid" --slurpfile pre "$pre" --arg n "$NAME-$cid" "$ID_OK"'.[] | select(.EnclaveCID == $c) | .EnclaveID as $i | select(any($pre[0][]; . == $i) | not) | if ($i | idok) and .EnclaveName == $n then "ours\t\($i)" else "other\t\(if ($i | idok) then $i else ($i | tojson) end)" end' <<<"$found"); then
+      if ! list=$(jq -r --argjson c "$cid" --slurpfile pre "$pre" --arg n "$NAME-$cid" "$ID_OK"'.[] | select(.EnclaveCID == $c) | .EnclaveID as $i | if ($i | idok) and .EnclaveName == $n and (any($pre[0][]; . == $i) | not) then "ours\t\($i)" else "other\t\(if ($i | idok) then $i else ($i | tojson) end)" end' <<<"$found"); then
         echo "cannot read the enclave list to look for CID $cid; check it and stop it by hand" >&2; rc=1; continue
       fi
       while IFS=$'\t' read -r kind id; do
@@ -106,7 +106,7 @@ run() {
   nitro-cli run-enclave --eif-path build/enclave-spike.eif --cpu-count 1 --memory 1024 --enclave-cid "$cid" --enclave-name "$NAME-$cid" >"$OUTD/$cid.out" || return 1
   out=$(<"$OUTD/$cid.out")
   id=$(printed_id "$cid") && [ -n "$id" ] || { echo "cannot confirm the run-enclave response for CID $cid; cleanup will look it up"; return 1; }
-  KNOWN+="$cid "; STARTED+=("$id")   # recorded at once so cleanup terminates exactly this enclave
+  STARTED+=("$id"); KNOWN+="$cid "   # recorded at once so cleanup terminates exactly this enclave, id first so a signal between the two can't lose it
   jq -r '"started CID \(.EnclaveCID), \(.NumberOfCPUs) CPU, \(.MemoryMiB) MiB"' <<<"$out" || true
 }
 
