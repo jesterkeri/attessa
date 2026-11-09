@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, linkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { originHash } from '@attessa/core';
+import { DEPLOYMENTS, originHash } from '@attessa/core';
 import type { Keychain } from '@attessa/sdk';
 import { keccak256, stringToBytes, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
@@ -794,6 +794,49 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(await w.cli('cancel', id, ...LOCAL, '--yes', '--json')).toBe(1);
     expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
     expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+  });
+
+  // Codex mainnet r3: a dry run makes the same promise as a real cancel, on the verified chain, not the --network label.
+  it('cancel --dry-run via --network local on an RPC that reports 42220, no tag: says a real cancel would be refused, and signs nothing', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const before = w.transcript.length;
+    expect(await w.cli('cancel', id, ...LOCAL, '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG is not set or not a valid code');
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+    w.out.length = 0;
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234';
+    expect(await w.cli('cancel', id, ...LOCAL, '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).not.toContain('LOOPS_ATTRIBUTION_TAG');
+  });
+
+  it('cancel on 42220 whose estimate leaves no room for the tag: gas_over_cap, never the rpc row, nothing sent', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234';
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_estimateGas' ? '0xffffff' : orig(m, p));
+    const before = w.transcript.length;
+    // This file's fake token stands in for a pinned mainnet asset, so the cancel reaches its transaction.
+    const assets = DEPLOYMENTS.celo.assets as unknown as Record<string, unknown>;
+    assets.fake = { address: w.chain.asset, name: 'USD Coin', version: '2', decimals: 6, symbol: 'USDC' };
+    try {
+      expect(await w.cli('cancel', id, ...LOCAL, '--yes', '--json')).toBe(1);
+    } finally {
+      delete assets.fake;
+    }
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'gas_over_cap' });
+    expect(w.out.join('\n')).not.toMatch(/Can't reach Celo/);
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction/);
   });
 
   it('cancel --json against an RPC on another chain: error code network_mismatch', async () => {
