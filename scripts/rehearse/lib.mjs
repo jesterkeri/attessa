@@ -57,3 +57,18 @@ export const celoCost = (gas, price) => formatEther(BigInt(gas) * price);
 export function cleanupKeys() { rmSync(join(DIR, 'keys'), { recursive: true, force: true }); }
 export const state = () => { const f = join(DIR, 'state.json'); return existsSync(f) ? JSON.parse(readFileSync(f, 'utf8')) : {}; };
 export const save = (o) => writeFileSync(join(DIR, 'state.json'), JSON.stringify({ ...state(), ...o }, null, 2), { mode: 0o600 });
+
+// ---- the real attessa CLI, pointed at the fork. The key goes in env ATTESSA_PRIVATE_KEY only, never argv or output.
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname } from 'node:path';
+export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
+export function cli(args, { as, cwd, env = {}, input } = {}) {
+  const e = { ...process.env, ...env };
+  delete e.ATTESSA_PRIVATE_KEY;
+  if (as) e.ATTESSA_PRIVATE_KEY = wallet(as).key;
+  const r = spawnSync('node', [join(ROOT, 'packages/cli/dist/bin.js'), ...args, '--network', 'local', '--rpc', RPC], { cwd: cwd ?? DIR, env: e, encoding: 'utf8', input });
+  let text = (r.stdout ?? '') + (r.stderr ?? '');
+  if (as) text = text.split(wallet(as).key).join('<key>');
+  return { code: r.status, text, stdout: r.stdout ?? '' };
+}
