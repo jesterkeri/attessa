@@ -55,6 +55,10 @@ export async function read<const abi extends Abi, fn extends ContractFunctionNam
 ): Promise<any> {
   const data = encodeFunctionData({ abi, functionName, args } as never);
   const out = await chainRead(c, () => c.rpc.request('eth_call', [{ to, data }, 'latest']));
+  // An address with no code answers "0x". On the configured registry that is a leftover setting, not a crash.
+  if (out === '0x' && (c as { registry?: Address | null }).registry?.toLowerCase() === to.toLowerCase()) {
+    throw new CliError('registry_no_code', `The registry ${to} (ATTESSA_REGISTRY) has no contract on chain ${c.chainId}. Nothing was signed.`, 'Unset ATTESSA_REGISTRY, or set it to the registry on this chain.'); // not in FLOWS
+  }
   return decodeFunctionResult({ abi, functionName, data: out as Hex } as never);
 }
 

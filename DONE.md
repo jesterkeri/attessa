@@ -4555,3 +4555,7 @@ Fixes:
 3. A plan on 42220 with no tag prints the missing-tag note and no calldata.
 Verify (flock, this worktree): pnpm --filter @attessa/cli test: Tests 384 passed (384); pnpm --filter @attessa/sdk test: Tests 205 passed (205); cli typecheck and lint: no errors (a full `pnpm -r typecheck` and `pnpm -r lint` before the two added tests: every package Done).
 reviewed: pending
+
+### Mainnet entry adversary r3 fix, and the rehearsal's register fix - 2026-11-09
+1. Proved by packages/cli/test/adversary-mainnet-r3.test.ts: a leftover ATTESSA_REGISTRY with no code on the chain made `agent register` answer "Unexpected error (AbiDecodingZeroDataError)". A read of the configured registry that answers `0x` now refuses with `registry_no_code`, which names the variable ("Nothing was signed.", not in FLOWS). Round 3's other attacks failed.
+2. Found by the mainnet rehearsal (cherry-picked): `agent register` crashed with ENOENT after sending when docs/ did not exist, so a real transaction could land with no agent id reported. writeFile now creates the directory.
