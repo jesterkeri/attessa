@@ -59,10 +59,17 @@ it('the filter drops only that one warning', () => {
   const dir = join(cwd, 'filter');
   mkdirSync(dir);
   cpSync(join(here, 'npm', 'attessa.mjs'), join(dir, 'attessa.mjs'));
-  writeFileSync(join(dir, 'bin.mjs'), "process.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');\nprocess.emitWarning('something else went wrong');\n");
+  writeFileSync(join(dir, 'bin.mjs'), [
+    "process.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');",
+    "process.emitWarning('something else went wrong');",
+    "process.emitWarning('SQLite is an experimental feature: the database is corrupt', 'ExperimentalWarning');",
+    "process.emitWarning('SQLite is an experimental feature and might change at any time', 'SomeOtherWarning');",
+  ].join('\n'));
   const r = spawnSync('node', [join(dir, 'attessa.mjs')], { encoding: 'utf8' });
   expect(r.stderr).toContain('something else went wrong');
-  expect(r.stderr).not.toContain('SQLite');
+  expect(r.stderr).toContain('the database is corrupt'); // same opening words, a different warning
+  expect(r.stderr).toContain('SomeOtherWarning: SQLite'); // same words, a different type
+  expect(r.stderr).not.toContain('ExperimentalWarning: SQLite is an experimental feature and might change');
 });
 
 it('mainnet says there is no registry yet, rather than pretending', () => {

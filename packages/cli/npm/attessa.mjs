@@ -3,7 +3,7 @@
 // using this tool. Only that one warning is dropped, and it has to happen before the bundle's imports load.
 const emit = process.emitWarning;
 process.emitWarning = function (warning, ...rest) {
-  if (String(warning).startsWith('SQLite is an experimental feature')) return;
+  if (warning === 'SQLite is an experimental feature and might change at any time' && rest[0] === 'ExperimentalWarning') return;
   return emit.call(process, warning, ...rest);
 };
 await import('./bin.mjs');
