@@ -62,7 +62,7 @@ jobs:
           echo "pack integrity ok"
 
   secrets:
-    name: no secrets in client output
+    name: credential scanner self-test
     runs-on: ubuntu-latest
     timeout-minutes: 1   # PIPELINE.md budget (jobs take 3-7 s)
     steps:
@@ -70,5 +70,6 @@ jobs:
         with: { persist-credentials: false }
       # Replace with your real build. The check is only meaningful against built output.
       # - run: npm ci --ignore-scripts && npm run build
-      - name: Scan build output
-        run: ./scripts/check-secrets.sh .next dist build out || true   # set to blocking once a build step exists above
+      # This job builds nothing, so it proves the scanner works. The real scan of the built site runs in ci.yml, job ts.
+      - name: Scanner finds a planted credential and refuses to scan nothing
+        run: ./scripts/check-secrets.test.sh
