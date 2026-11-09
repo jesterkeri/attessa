@@ -1,27 +1,27 @@
 title: Proof explorer | Attessa
-description: A preview of the explorer that, when live, checks the on-chain part of any past Attessa call from public Celo data, with no wallet and no payment.
+description: Check the payment of any past Attessa call on Celo Sepolia, from public data, with no wallet and no payment. The other four checks are planned.
 
 Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Check a
 settlement
-Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and when live, the explorer checks its on-chain part from public Celo data: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. Planned: looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.
+Attessa lets an agent pay a service only when the answer is signed by the code the seller approved. Paste a call's settlement transaction, and the explorer checks its payment from public Celo data: who paid, which address was paid, how much, and in which block. An address alone doesn't tell which endpoint or build answered; that needs the call's proof. No wallet, no payment. Planned: looking a call up by its request ID and checking its proof, which needs a public copy of the proof that nothing serves yet.
 Paste a settlement transaction
 Check
-0x and 64 hex characters. When live, it checks against Celo Sepolia. Celo mainnet comes after launch.
-The five checks it runs
+0x and 64 hex characters. It checks the payment on Celo Sepolia. Celo mainnet comes after launch.
+The five checks
 Approved buildregistry, planned
 Sealed machineAWS attestation, planned
 This exact request and answersigned hashes, planned
 Real Celo datablock read, planned
 Paymentsettlement
-When live, it runs the payment check. The other four are planned.
-UI previewSample states, not a check of any transaction: pick one to see how each result looks, with sample slots. Nothing is read from Celo yet for the rejected states: they need request-ID lookup and the call's proof, which are planned.
+It runs the payment check. The other four are planned.
+UI previewSample states, not a check of any transaction: pick one to see how each result looks, with sample slots. Pasting a transaction above runs the real payment check instead. The rejected states need request-ID lookup and the call's proof, which are planned.
 Preview state
 Settled on Celo
 Rejected: tampered answer
@@ -33,7 +33,7 @@ Malformed tx
 Celo unreachable
 The check and this preview need JavaScript. You can run the same check with attessa verify <requestId>. Coming. It isn't built yet.
 Recent calls
-When live, it lists the latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: attessa status shows your recent verdicts (Coming). Planned: looking it up here by its request ID. The rows below are samples until the explorer reads Celo.
+This list isn't built yet. It will show the latest settlements, read from Celo events. Each row shows what Celo shows: the payment and the address paid, not the endpoint or the proof. A refused call usually has no settlement, so it usually isn't listed here. If it was your call, your own record has it: attessa status shows your recent verdicts (Coming). Planned: looking it up here by its request ID. The rows below are samples until it's built.
 Time (UTC)
 Paid to
 Outcome

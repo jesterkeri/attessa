@@ -20,7 +20,7 @@ const num = s => WORDS[s.toLowerCase()] ?? Number(s);
 
 // The site's own list of the checks, and how many of them can happen before anyone is paid.
 const explorer = readFileSync(join(src, 'pages', 'explorer.html'), 'utf8');
-const list = explorer.match(/checks it runs<\/p>\s*<ol>([\s\S]*?)<\/ol>/);
+const list = explorer.match(/The five checks<\/p>\s*<ol>([\s\S]*?)<\/ol>/);
 const items = list ? [...list[1].matchAll(/<li>([\s\S]*?)<\/li>/g)].map(m => m[1].replace(/<[^>]+>/g, ' ').trim()) : [];
 const prePay = items.filter(t => !/\b(payment|settlement)\b/i.test(t)).length;
 

@@ -5,14 +5,14 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes
+Pay-if-verified Preview
 How-tos
 All how-tos
 Run a seller
@@ -22,7 +22,7 @@ Use it with buy Optional, not built yet
 Reference
 Reference
 CLI commands
-Agent tools Coming
+Agent tools
 SDK payAndVerify
 Refusal codes
 Explanation
@@ -31,7 +31,7 @@ Threat model
 Known limits
 Attessa docs
 Attessa is a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with. The docs come in four kinds. Pick the one that matches what you need right now.
-TutorialMake your first pay-if-verified call on Celo Sepolia, in about 10 minutes. Coming: attessa verify. How-tosRun a seller, and revoke a build or a signer. Use Attessa from an MCP agent. Optional, not built yet: use it with buy. ReferenceCLI commands, the nine agent tools, SDK options and every refusal code. ExplanationWhat a proof shows and doesn't, the threat model, and known limits.
+TutorialPreview. Make your first pay-if-verified call on Celo Sepolia once a public seller is live; none is yet. Coming: attessa verify. How-tosRun a seller, and revoke a build or a signer. Use Attessa from an MCP agent. Optional, not built yet: use it with buy. ReferenceCLI commands, the nine agent tools, SDK options and every refusal code. ExplanationWhat a proof shows and doesn't, the threat model, and known limits.
 Words used in these docs
 Word
 Meaning

@@ -4951,3 +4951,16 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+## Site: one launch switch, and the explorer says what it does (feat/site-finish, 2026-11-09)
+reviewed: pending adversary and Codex r9
+
+Joshua: "use the switch"; "update the explorer test". Not-live labels now come from one list, `live` in `packages/site/site.config.json`, resolved by `packages/site/status.mjs`. Flip a key and rebuild, and its labels change on every page. `test/status-switch.test.mjs` refuses a true key while its task is unticked (seller T32 and T37, verify T21a, viaBuy T29, recentCalls T45) or while the CLI has no such command (releaseVerify, statusVerdicts). All keys are false.
+
+Explorer wording: `assets/explorer.js` really reads Celo Sepolia for a pasted transaction, so "when live" and "Nothing is read from Celo yet" were false. The page now says the payment check runs and the other four are planned. Recent calls stays marked not built. Tests rewritten on Joshua's instruction, keeping the rule that nothing may claim more than the payment check: `explorer-reads-nothing-yet` became `explorer-claims-payment-check-only`, `explorer-reads-nothing-elsewhere` became `explorer-claims-elsewhere`; `explorer-refused-no-settlement-tx`, `explorer-runs-only-onchain` and `home-checks-before-pay` re-pointed to the new wording. `site-config.test.mjs` copies status.mjs into its package copy. Snapshots refreshed: Joshua approves the copy through that diff (T48).
+
+`./packages/site/test-count.sh`:
+```
+node v22.23.2: 80 files, 305 tests, 0 failed
+```
+Not converted: `assets/site.js` isn't templated, so sample-state labels there stay fixed. Not deployed.

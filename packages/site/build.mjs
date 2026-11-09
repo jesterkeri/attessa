@@ -10,12 +10,14 @@
 //   {{> name}}        src/partials/name.html
 //   [[slot:name]]     a sample slot chip, shown as {name} with a "sample" marker
 //   [[hash:0x...]]    a hash chip with a middle ellipsis, full value on hover or tap
+//   <!--notlive:key-->..<!--/notlive-->, <!--live:key-->..<!--/live-->  the launch switch: status.mjs, site.config.json `live`
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, cpSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
 import { csp } from './csp.mjs';
 import { config, chainValue, deployedSlotNames } from './config.mjs';
+import { applyStatus, readLive } from './status.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = process.env.SITE_SRC ?? join(here, 'src');
@@ -25,6 +27,7 @@ const layout = readFileSync(join(src, 'layout.html'), 'utf8');
 const siteConfig = JSON.parse(readFileSync(process.env.SITE_CONFIG ?? join(here, 'site.config.json'), 'utf8'));
 if (!/^https:\/\/[a-z0-9.-]+$/.test(siteConfig.siteOrigin)) throw new Error('site.config.json: siteOrigin must be https://<host> with no path');
 const SITE_ORIGIN_HOST = new URL(siteConfig.siteOrigin).host;
+const live = readLive(siteConfig);
 const contactSet = siteConfig.securityContact != null && siteConfig.securityTxtExpires != null;
 if (contactSet) {
   if (!/^(mailto:\S+@\S+|https:\/\/\S+|tel:\S+)$/.test(siteConfig.securityContact)) throw new Error('site.config.json: securityContact must be a mailto:, https: or tel: URI');
@@ -242,6 +245,8 @@ for (const file of walk(pagesDir)) {
     .replace(/\{\{chain:([\w.-]+)\}\}/g, (_, r) => chainValue(r))
     .replace(/\[\[hash:(0x[0-9a-fA-F]+)\]\]/g, (_, h) => hashChip(h))
     .replace(/\{\{root\}\}/g, () => (depth ? '../'.repeat(depth) : ''));
+
+  html = applyStatus(html, live);
 
   html = html.replace('{{csp}}', () => csp(html));
 

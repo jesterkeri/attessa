@@ -1,16 +1,17 @@
 <!-- title: Tutorial: pay-if-verified on Celo Sepolia | Attessa -->
-<!-- description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify. -->
+<!-- description: {{#notlive seller}}Preview. {{/notlive}}Make your first pay-if-verified call on Celo Sepolia{{#notlive seller}} once a public seller is live; none is yet{{/notlive}}.{{#notlive verify}} Coming: attessa verify.{{/notlive}} -->
 <!-- nav: docs -->
 <!-- doc: tutorial -->
 <!-- body: docs-page -->
 <div class="wrap docs">
   {{> docs-nav}}
   <article class="docs-main">
-    <span class="mode">Tutorial</span>
-    <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
+    <span class="mode">Tutorial<!--notlive:seller--> preview<!--/notlive--></span>
+    <h1>Pay-if-verified on Celo Sepolia</h1>
+    <!--notlive:seller--><div class="doc-note"><p><strong>No public seller is live yet, so you can't complete the paid call today.</strong> You can install the CLI and set up a wallet now. This page shows how the rest will go.</p></div><!--/notlive-->
     <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
-    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do. The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.</p></div>
-    <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
+    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <!--notlive:verify--><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do.<!--/notlive--> The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS<!--notlive:seller-->; the service in it is illustrative, because the demo service isn't live yet<!--/notlive-->.</p></div>
+    <div class="doc-note"><p><strong>You need</strong> Node.js 22.14 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
 
     <ol class="doc-steps">
       <li>
@@ -72,8 +73,8 @@
         {{> cli-refused}}
       </li>
       <li>
-        <h2 id="verify">Re-check it with <code>attessa verify</code> <span class="muted">Coming</span></h2>
-        <p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p>
+        <h2 id="verify">Re-check it with <code>attessa verify</code> <!--notlive:verify--><span class="muted">Coming</span><!--/notlive--></h2>
+        <!--notlive:verify--><p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p><!--/notlive-->
         <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
         <figure class="code" data-copy="commands">
           <figcaption><span>Terminal (coming)</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>

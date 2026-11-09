@@ -5,9 +5,9 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Where a proof
 changes what
 you pay for
@@ -19,7 +19,7 @@ A lending agent asks a risk service to score a borrower's address before it lend
 What the proof addsThe score came from the risk model the seller approved, run on Celo data read at a stated block, and not from different code the operator swapped in.
 Yield or route recommendations
 An agent asks which pool or route to use for a deposit or a swap.
-What the proof addsEach recommendation is tied to the approved build and the block it read, so the logic behind it is the build the seller approved, and anyone can check the call's payment on Celo later, in the proof explorer once live.
+What the proof addsEach recommendation is tied to the approved build and the block it read, so the logic behind it is the build the seller approved, and anyone can check the call's payment on Celo later, in the proof explorer.
 Payment-risk checks before sending stablecoins
 Before an agent sends USDC or USA₮, it asks a service whether the recipient looks risky.
 What the proof addsIf the answer was changed after the sealed machine signed it, the agent never acts on it. An honest gateway refuses it without using the agent's payment permission; if the gateway itself made the change and settled anyway, the agent is charged and Attessa reports paid_but_rejected, with a record that proves it.
@@ -34,7 +34,7 @@ Sellers of paid APIs
 Run your service in a sealed machine, approve the build on Celo, and buyers can check every answer you sell.
 Marketplaces like buy
 buy (usebuy.ai) is Celo's marketplace of pay-per-call APIs for agents. It takes payment before calling the API today; Attessa's gateway can check first.
-Step by step, both sidesHow it works Explorer previewOpen the explorer
+Step by step, both sidesHow it works Proof explorerOpen the explorer
 Attessa
 A check your agent runs before paying for a service. Built for Celo.
 GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
