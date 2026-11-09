@@ -19,15 +19,15 @@ const page = p => readFileSync(join(src, 'pages', p), 'utf8');
 const text = h => h.replace(/<[^>]*>/g, ' ').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/\s+/g, ' ');
 const marked = /\b(coming|not built|isn't built|aren't built|not yet built|not available yet)\b/i;
 
-test('the reference still marks the MCP server and the buyer CLI as not built (precondition)', () => {
+test('the reference marks the buyer CLI verify as not built, and the MCP server as built (T21b ticked on staging) (precondition)', () => {
   const ref = text(page('docs/reference.html'));
-  assert.match(ref, /MCP server isn't built yet/);
+  assert.doesNotMatch(ref, /MCP server isn't built yet/, 'packages/mcp is built: the reference must not call it unbuilt');
+  assert.match(ref, /The MCP server is built/);
   assert.match(ref, /attessa verify <requestId> Coming/);
 });
 
+// The MCP entries (index.html, docs/how-to.html) are built since T21b merged: docs-links-unbuilt-marked.test.mjs now asserts they are NOT marked.
 for (const [p, offers] of [
-  ['index.html', /packages\/mcp\/dist\/bin\.js/],
-  ['docs/how-to.html', /packages\/mcp\/dist\/bin\.js/],
   ['docs/tutorial.html', /attessa verify <requestId>/],
 ]) {
   test(`${p} offers what the reference calls not built, and says it isn't built`, () => {

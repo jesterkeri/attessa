@@ -27,18 +27,17 @@ const marked = /\b(coming|planned|preview|not built|isn't built|aren't built|not
 const cards = () => [...page('docs/index.html').matchAll(/<a href="([^"]+)">([\s\S]*?)<\/a>/g)].map(m => ({ href: m[1], t: text(m[2]) }));
 
 // T21 is ticked (the buyer CLI: init, call, cancel, status, evidence export): the tutorial says so. What it still marks
-// Coming is T21a `attessa verify`; the how-to still marks the MCP server (T21b).
-test('the tutorial says init and call are built and verify is not; the how-to marks the MCP server not built (precondition)', () => {
+// Coming is T21a `attessa verify`; the MCP server (T21b, packages/mcp) is built, so the how-to no longer marks it.
+test('the tutorial says init and call are built and verify is not; the how-to does not mark the MCP server (precondition)', () => {
   const t = text(page('docs/tutorial.html'));
   assert.match(t, /attessa init and attessa call are built\./);
   assert.match(t, /Coming\. attessa verify isn't built yet/);
   assert.doesNotMatch(t, /buyer commands aren't built yet/, 'the tutorial still calls the built buyer commands unbuilt');
-  assert.match(text(page('docs/how-to.html')), /Coming\. The MCP server isn't built yet\./);
+  assert.doesNotMatch(text(page('docs/how-to.html')), /MCP server isn't built yet/, 'packages/mcp is built (T21b)');
 });
 
 for (const [href, offers] of [
   ['tutorial.html', /Make your first pay-if-verified call on Celo Sepolia/],
-  ['how-to.html', /use Attessa from an MCP agent/],
 ]) {
   test(`docs/index.html card for ${href} offers an unbuilt surface, and says it isn't built`, () => {
     const card = cards().find(c => c.href === href);

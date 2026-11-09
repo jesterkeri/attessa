@@ -36,7 +36,7 @@ test('the site says proof checks are Planned for the explorer (precondition)', (
 });
 
 test('the explorer does not list the proof checks as checks it runs today', () => {
-  const block = explorer.match(/<p class="label">The five checks it runs<\/p>[\s\S]*?<\/ol>/);
+  const block = explorer.match(/<p class="label">The five checks<\/p>[\s\S]*?<\/ol>/);
   assert.ok(block, 'the "checks it runs" list moved; re-point this test');
   const t = text(block[0]);
   const proofChecks = ['This exact request and answer', 'Real Celo data'].filter(c => t.includes(c));

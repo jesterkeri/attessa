@@ -1,16 +1,17 @@
 <!-- title: Tutorial: pay-if-verified on Celo Sepolia | Attessa -->
-<!-- description: Make your first pay-if-verified call on Celo Sepolia in about 10 minutes. Coming: attessa verify and the MCP server aren't built yet. -->
+<!-- description: {{#notlive seller}}Preview. {{/notlive}}Make your first pay-if-verified call on Celo Sepolia{{#notlive seller}} once a public seller is live; none is yet{{/notlive}}.{{#notlive verify}} Coming: attessa verify.{{/notlive}} -->
 <!-- nav: docs -->
 <!-- doc: tutorial -->
 <!-- body: docs-page -->
 <div class="wrap docs">
   {{> docs-nav}}
   <article class="docs-main">
-    <span class="mode">Tutorial</span>
-    <h1>Pay-if-verified on Celo Sepolia in 10 minutes</h1>
+    <span class="mode">Tutorial<!--notlive:seller--> preview<!--/notlive--></span>
+    <h1>Pay-if-verified on Celo Sepolia</h1>
+    <!--notlive:seller--><div class="doc-note"><p><strong>No public seller is live yet, so you can't complete the paid call today.</strong> You can install the CLI and set up a wallet now. This page shows how the rest will go.</p></div><!--/notlive-->
     <p>You'll install the CLI, fund a test wallet, pay a service only if its answer checks out, and then re-check that call with no wallet. Everything here uses test money.</p>
-    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do. The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS; the service in it is illustrative, because the demo service isn't live yet.</p></div>
-    <div class="doc-note"><p><strong>You need</strong> Node.js 22.13 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
+    <div class="doc-note"><p><strong><code>attessa init</code> and <code>attessa call</code> are built.</strong> <!--notlive:verify--><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet, so the last step shows what it will do.<!--/notlive--> The output shown for <code>init</code> and <code>call</code> is the CLI's, from FLOWS<!--notlive:seller-->; the service in it is illustrative, because the demo service isn't live yet<!--/notlive-->.</p></div>
+    <div class="doc-note"><p><strong>You need</strong> Node.js 22.14 or later, pnpm (<code>corepack enable</code>), git and a terminal. No browser wallet.</p></div>
 
     <ol class="doc-steps">
       <li>
@@ -26,7 +27,7 @@
       </li>
       <li>
         <h2 id="init">Set up with <code>attessa init</code></h2>
-        <p>This creates a wallet for this computer, keeps the key in your OS keychain, and sets spending limits. It starts on Celo Sepolia.</p>
+        <p>This sets up your wallet and spending limits, and starts on Celo Sepolia. A source build has no OS keychain, because the optional <code>keytar</code> package is not installed, so set <code>ATTESSA_PRIVATE_KEY</code> or pass <code>--keystore &lt;file&gt;</code> first. With neither, it tells you no wallet was created. The output below is what you see when a keychain is available.</p>
         <figure class="code">
           <figcaption><span>Example output</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa init</span>
@@ -72,21 +73,21 @@
         {{> cli-refused}}
       </li>
       <li>
-        <h2 id="verify">Re-check it with <code>attessa verify</code> <span class="muted">Coming</span></h2>
-        <p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p>
+        <h2 id="verify">Re-check it with <code>attessa verify</code> <!--notlive:verify--><span class="muted">Coming</span><!--/notlive--></h2>
+        <!--notlive:verify--><p><span class="muted">Coming.</span> <code>attessa verify</code> isn't built yet; this step shows what it will do.</p><!--/notlive-->
         <p>Every call adds one line to your record, <code>~/.attessa/evidence.jsonl</code>. The newest line is the call you just made, and its entry ID is the request ID: <code>0x</code> followed by 64 hex characters. Check that call again against public Celo data, using your record. This needs no payment.</p>
         <figure class="code" data-copy="commands">
-          <figcaption><span>Terminal</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+          <figcaption><span>Terminal<!--notlive:verify--> (coming)<!--/notlive--></span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
           <pre tabindex="0"><code><span class="p">$ </span><span class="c">attessa verify &lt;requestId&gt;</span></code></pre>
         </figure>
-        <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. Once the <a href="../explorer.html">proof explorer</a> is live, you will be able to paste the call's settlement transaction there to check its on-chain part.</p>
+        <p>It checks what your record and Celo can show: that the build your record names was approved, and its signer registered, when the call settled, and that the payment settled or your permission expired unused. It marks each check passed, failed or not applicable, and ends with one verdict: verified, rejected with the failing check named, or unattested. Your record keeps the proof's hashes but not its signature, so the request, answer and Celo data checks are the ones your agent ran when it paid. You can also paste the call's settlement transaction into the <a href="../explorer.html">proof explorer</a> to check its payment.</p>
       </li>
     </ol>
 
     <h2 id="next">What you did</h2>
     <p>You paid a service only after its answer was signed by the build its owner approved, and you re-checked on Celo that the build your record names was approved when the call settled. The link from that build to its source code stays the owner's claim until someone reproduces the build.</p>
     <div class="doc-cards">
-      <a href="how-to.html#mcp"><strong>Give it to your agent</strong><span>Add the Attessa MCP server. Coming: it isn't built yet.</span></a>
+      <a href="how-to.html#mcp"><strong>Give it to your agent</strong><span>Add the Attessa MCP server to your agent.</span></a>
       <a href="explanation.html"><strong>Understand the limits</strong><span>What a proof shows, and what it doesn't.</span></a>
     </div>
   </article>

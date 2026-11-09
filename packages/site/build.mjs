@@ -6,16 +6,18 @@
 //   {{seal}}          the proof seal SVG (guilloche ring + five check segments); {{seal:pass pass fail na pass}} bakes states
 //   {{sealMini:...}}  the small seal for outcome rows, no guilloche
 //   {{ring:...}}      the five-segment proof ring used by the dark homepage
-//   {{logo}}          the small seal glyph
+//   {{logo}}          the Attessa logo
 //   {{> name}}        src/partials/name.html
 //   [[slot:name]]     a sample slot chip, shown as {name} with a "sample" marker
 //   [[hash:0x...]]    a hash chip with a middle ellipsis, full value on hover or tap
+//   <!--notlive:key-->..<!--/notlive-->, <!--live:key-->..<!--/live-->  the launch switch: status.mjs, site.config.json `live`
 import { readFileSync, writeFileSync, mkdirSync, readdirSync, statSync, cpSync, rmSync, existsSync } from 'node:fs';
 import { join, dirname, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSync } from 'esbuild';
 import { csp } from './csp.mjs';
 import { config, chainValue, deployedSlotNames } from './config.mjs';
+import { applyStatus, readLive } from './status.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const src = process.env.SITE_SRC ?? join(here, 'src');
@@ -25,6 +27,7 @@ const layout = readFileSync(join(src, 'layout.html'), 'utf8');
 const siteConfig = JSON.parse(readFileSync(process.env.SITE_CONFIG ?? join(here, 'site.config.json'), 'utf8'));
 if (!/^https:\/\/[a-z0-9.-]+$/.test(siteConfig.siteOrigin)) throw new Error('site.config.json: siteOrigin must be https://<host> with no path');
 const SITE_ORIGIN_HOST = new URL(siteConfig.siteOrigin).host;
+const live = readLive(siteConfig);
 const contactSet = siteConfig.securityContact != null && siteConfig.securityTxtExpires != null;
 if (contactSet) {
   if (!/^(mailto:\S+@\S+|https:\/\/\S+|tel:\S+)$/.test(siteConfig.securityContact)) throw new Error('site.config.json: securityContact must be a mailto:, https: or tel: URI');
@@ -91,9 +94,9 @@ function ring(states) {
   return `<svg class="ring" viewBox="0 0 100 100" aria-hidden="true" focusable="false"><circle class="ring-track" cx="50" cy="50" r="40"/>${segs}</svg>`;
 }
 
-const logo = `<svg class="logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">` +
-  Array.from({ length: SEGMENTS }, (_, i) => `<path d="${arc(12, 12, 9, i * 72 + 8, (i + 1) * 72 - 8)}"/>`).join('') +
-  `<circle cx="12" cy="12" r="3"/></svg>`;
+// Traced from Joshua's original logo (1024 x 1024). assets/favicon.svg holds the same shape on its black ground.
+const logo = `<svg class="logo" viewBox="215 215 594 594" aria-hidden="true" focusable="false">` +
+  `<path fill-rule="evenodd" d="M 638.4 234.4 C 555.8 255.8, 491.3 283.7, 423.5 327.3 C 336.2 383.4, 281.9 448.0, 270.3 509.5 C 267.6 524.0, 267.8 546.3, 270.8 558.4 C 280.1 596.1, 310.9 622.6, 359.5 634.8 C 378.2 639.5, 387.1 640.5, 413 640.4 C 498.8 640.3, 580.5 604.6, 604.9 556.6 C 612.3 542.0, 609.5 524.9, 598.9 519.4 C 590.5 515.1, 584.0 519.8, 581.5 532 C 578.9 544.5, 565.0 563.7, 552.8 571.6 C 537.9 581.2, 530.0 583.5, 511 583.4 C 498.5 583.3, 495.6 583.0, 490.5 581.1 C 475.1 575.4, 477.5 575.4, 459.5 580.9 C 410.3 596.2, 358.6 587.7, 330.8 559.8 C 315.5 544.5, 308.9 528.3, 309.0 505.6 C 309.0 456.7, 343.5 403.5, 410.5 348.9 C 470.4 300.0, 555.5 258.9, 642.5 236.9 C 650.2 235.0, 653.5 233.7, 653.8 232.5 C 654.2 230.4, 653.5 230.5, 638.4 234.4 M 590.5 383.6 C 512.6 391.9, 454.5 417.5, 425.8 456.0 C 412.6 473.8, 411.1 492.9, 422.2 502.4 C 430.4 509.4, 438.4 506.5, 441.5 495.3 C 448.6 469.6, 464.8 451.9, 489.1 443.2 C 495.8 440.8, 497.9 440.6, 511.5 440.5 C 527.0 440.5, 526.8 440.4, 542 445.9 C 548.1 448.1, 548.3 448.1, 563.3 443.3 C 612.7 427.7, 664.5 435.9, 692.9 463.8 C 708.2 478.9, 715 495.5, 715 518.4 C 715 567.0, 680.1 620.8, 613.5 675.0 C 564.7 714.7, 500.1 749.1, 430.6 772.4 C 412.2 778.5, 381.0 787.6, 374.7 788.6 C 371.2 789.2, 368.9 791.2, 370.2 792.6 C 371.5 793.8, 415.7 781.7, 442 772.9 C 551.3 736.5, 655.3 670.1, 710.5 601.4 C 727.4 580.5, 741.5 555.6, 748.3 535 C 758.6 503.3, 758.1 472.0, 746.9 448.1 C 731.7 415.7, 694.0 392.3, 645 385.0 C 637.3 383.8, 597.7 382.8, 590.5 383.6"/><circle cx="512" cy="512" r="45"/></svg>`;
 
 // Icons are Phosphor (regular weight, @phosphor-icons/core, exact version in package.json), inlined as SVG so the
 // pages load no icon font. The class names stay (ph, ph-<name>): site.css and the status rules key off them.
@@ -242,6 +245,8 @@ for (const file of walk(pagesDir)) {
     .replace(/\{\{chain:([\w.-]+)\}\}/g, (_, r) => chainValue(r))
     .replace(/\[\[hash:(0x[0-9a-fA-F]+)\]\]/g, (_, h) => hashChip(h))
     .replace(/\{\{root\}\}/g, () => (depth ? '../'.repeat(depth) : ''));
+
+  html = applyStatus(html, live);
 
   html = html.replace('{{csp}}', () => csp(html));
 

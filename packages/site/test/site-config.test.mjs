@@ -69,7 +69,7 @@ test('site config: the default config refuses to build without a security contac
   // A copy of the package whose committed site.config.json has both values null.
   const copy = join(tmp, 'pkg-copy');
   mkdirSync(copy);
-  for (const f of ['build.mjs', 'csp.mjs', 'config.mjs', 'networks.json']) cpSync(join(pkg, f), join(copy, f));
+  for (const f of ['build.mjs', 'csp.mjs', 'config.mjs', 'status.mjs', 'networks.json']) cpSync(join(pkg, f), join(copy, f));
   cpSync(join(pkg, 'src'), join(copy, 'src'), { recursive: true });
   symlinkSync(join(pkg, 'node_modules'), join(copy, 'node_modules'));
   writeFileSync(join(copy, 'site.config.json'), JSON.stringify({ ...real, securityContact: null, securityTxtExpires: null }));

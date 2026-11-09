@@ -5,24 +5,24 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Docs menu
 Start
 Overview
 Tutorial
-Pay-if-verified in 10 minutes
+Pay-if-verified Preview
 How-tos
 All how-tos
 Run a seller
 Revoke a build or a signer
-Use it from an MCP agent Coming
+Use it from an MCP agent
 Use it with buy Optional, not built yet
 Reference
 Reference
 CLI commands
-Agent tools Coming
+Agent tools
 SDK payAndVerify
 Refusal codes
 Explanation
@@ -33,12 +33,12 @@ Reference
 Reference
 Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.
 CLI commands
-These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. Run attessa --help for the full list; --network sepolia is the only network Attessa is deployed on today.
+These commands are built: they are in packages/cli. Rows marked Coming are planned but not built yet. Rows marked Optional may not ship. The CLI has no full command list of its own yet: attessa --help and attessa seller --help print only the seller summary and its steps (agent register, enclave build, release approve, endpoint add, enclave start, signer register). --network sepolia is the only network Attessa is deployed on today.
 Buyer
 Command
 What it does
 attessa init
-Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
+Sets up your wallet (ATTESSA_PRIVATE_KEY or --keystore; it creates one in the OS keychain only if the keytar package is installed, and a source build doesn't install it), picks the network, sets spending limits. --network sepolia|mainnet, --max-amount, --daily-cap, --keystore <file>.
 attessa call <url>
 Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. --body, --max-amount, --asset usdc|usat, --new, --no-wait, --out <file>, --keystore <file>, --dry-run (stops before signing), --json, --yes.
 attessa call --via buy <url>
@@ -48,17 +48,18 @@ Coming. Re-checks a past call against public Celo data, by request ID or settlem
 attessa cancel <requestId>
 Voids an unused payment permission on chain, for a little gas.
 attessa status
-Spend today against your cap, pending permissions, recent verdicts. --pending, --agent <id>, or an origin.
+Spend today against your cap and per-call limit, and decides your open calls. --pending, --agent <id>, or an origin.
 attessa evidence export
 Exports your call records. --format csv|jsonl.
 attessa release verify
 Optional, not built yet. Rebuilds a release from the source you name and compares its measurements.
+Coming. attessa status does not list your recent verdicts yet.
 Seller
 Command
 What it does
 attessa agent register
 Creates your agent's ERC-8004 identity from this wallet.
-attessa agent transfer, wallet-sig, set-wallet
+attessa agent transfer, attessa agent wallet-sig, attessa agent set-wallet
 Moves your agent to a cold owner wallet, then sets the agent wallet from it.
 attessa enclave build
 Builds the sealed machine image and writes its measurements. Refuses a dirty tree.
@@ -85,37 +86,37 @@ Links a Self Agent ID to your agent. Informational only.
 attessa gateway pause|resume|status|export
 Stops and restarts new paid calls at your gateway, shows its state, and exports its records.
 Agent tools
-Coming. The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.
+The MCP server is built: it exposes these nine tools over stdio, started with node <clone>/packages/mcp/dist/bin.js. See the how-to for the environment it reads.
 Tool
 What it does
 Side effect
 resolve_endpoint
-Looks a service up in the registry: agent, approved builds, pay-to address.
+Looks a service up in the Celo registry: which agent runs it, whether the endpoint is active or retired, and who it pays.
 None
 check_liveness
-Checks the sealed machine is answering at this address.
+Asks a registered service for a fresh liveness proof, checked against the registry.
 None
 quote
-Gets the price without signing anything.
+Shows the price against your limits after the registry and liveness checks, and stops before anything is signed.
 None
 pay_and_verify
-Signs a payment within your bounds and returns the answer only if its proof checks out.
+Signs a payment within your per-call limit (maxAmount) and daily cap, and returns the answer only if its proof checks out.
 Signs a payment
 verify_proof
-Checks a proof against the registry.
+Checks a proof header offline, with no chain read: the signature, the proof's lifetime, and the request and response hashes you give it. It lists what it did not check, so a success is not a verified paid result.
 None
 get_result
-Fetches a stored answer by request ID.
-None
+Reports what happened to an earlier call, by request ID. A verified call is read from your local record. A call still open is decided now.
+Signs a payer message (no payment, no transaction) when the call is still open or was decided against you
 list_pending
-Lists payment permissions not yet settled or expired.
+Lists the open calls recorded on this computer, from the local ledger.
 None
 cancel_authorization
 Voids an unused payment permission on chain.
 Sends a transaction
 status
-Spend today against your cap, pending items, recent verdicts.
-None
+Spend today against your cap and per-call limit, and decides your open calls. Recent verdicts: Coming.
+Signs a payer message (no payment, no transaction)
 SDK: payAndVerify
 TypeScript
 Copy

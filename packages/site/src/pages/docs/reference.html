@@ -11,27 +11,28 @@
     <p>Lookup tables: the commands, tools and options that are built or planned, marked where they aren't built yet, and refusal codes as the SDK and gateway return them.</p>
 
     <h2 id="cli">CLI commands</h2>
-    <p>These commands are built: they are in <code>packages/cli</code>. Rows marked <span class="muted">Coming</span> are planned but not built yet. Rows marked <span class="muted">Optional</span> may not ship. Run <code>attessa --help</code> for the full list; <code>--network sepolia</code> is the only network Attessa is deployed on today.</p>
+    <p>These commands are built: they are in <code>packages/cli</code>.<!--notlive:all--> Rows marked <span class="muted">Coming</span> are planned but not built yet. Rows marked <span class="muted">Optional</span> may not ship.<!--/notlive--> The CLI has no full command list of its own yet: <code>attessa --help</code> and <code>attessa seller --help</code> print only the seller summary and its steps (agent register, enclave build, release approve, endpoint add, enclave start, signer register).<!--notlive:seller--> <code>--network sepolia</code> is the only network Attessa is deployed on today.<!--/notlive--></p>
     <h3 id="cli-buyer">Buyer</h3>
     <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
-        <tr><td><code>attessa init</code></td><td>Creates a wallet for this computer (key in the OS keychain), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>, <code>--max-amount</code>, <code>--daily-cap</code>, <code>--keystore &lt;file&gt;</code>.</td></tr>
+        <tr><td><code>attessa init</code></td><td>Sets up your wallet (<code>ATTESSA_PRIVATE_KEY</code> or <code>--keystore</code>; it creates one in the OS keychain only if the <code>keytar</code> package is installed, and a source build doesn't install it), picks the network, sets spending limits. <code>--network sepolia|mainnet</code>, <code>--max-amount</code>, <code>--daily-cap</code>, <code>--keystore &lt;file&gt;</code>.</td></tr>
         <tr><td><code>attessa call &lt;url&gt;</code></td><td>Checks the seller, gets the price, signs a payment permission, and pays only if the proof checks out. <code>--body</code>, <code>--max-amount</code>, <code>--asset usdc|usat</code>, <code>--new</code>, <code>--no-wait</code>, <code>--out &lt;file&gt;</code>, <code>--keystore &lt;file&gt;</code>, <code>--dry-run</code> (stops before signing), <code>--json</code>, <code>--yes</code>.</td></tr>
-        <tr><td><code>attessa call --via buy &lt;url&gt;</code></td><td><span class="muted">Optional, not built yet.</span> Buys through buy and records what came back. No payment protection. <code>--accept-unprotected</code> skips the prompt for agents.</td></tr>
-        <tr><td><code>attessa verify &lt;requestId&gt;</code></td><td><span class="muted">Coming.</span> Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.</td></tr>
+        <tr><td><code>attessa call --via buy &lt;url&gt;</code></td><td><!--notlive:viaBuy--><span class="muted">Optional, not built yet.</span> <!--/notlive-->Buys through buy and records what came back. No payment protection. <code>--accept-unprotected</code> skips the prompt for agents.</td></tr>
+        <tr><td><code>attessa verify &lt;requestId&gt;</code></td><td><!--notlive:verify--><span class="muted">Coming.</span> <!--/notlive-->Re-checks a past call against public Celo data, by request ID or settlement transaction. No wallet, no payment.</td></tr>
         <tr><td><code>attessa cancel &lt;requestId&gt;</code></td><td>Voids an unused payment permission on chain, for a little gas.</td></tr>
-        <tr><td><code>attessa status</code></td><td>Spend today against your cap, pending permissions, recent verdicts. <code>--pending</code>, <code>--agent &lt;id&gt;</code>, or an origin.</td></tr>
+        <tr><td><code>attessa status</code></td><td>Spend today against your cap and per-call limit, and decides your open calls. <code>--pending</code>, <code>--agent &lt;id&gt;</code>, or an origin.</td></tr>
         <tr><td><code>attessa evidence export</code></td><td>Exports your call records. <code>--format csv|jsonl</code>.</td></tr>
-        <tr><td><code>attessa release verify</code></td><td><span class="muted">Optional, not built yet.</span> Rebuilds a release from the source you name and compares its measurements.</td></tr>
+        <tr><td><code>attessa release verify</code></td><td><!--notlive:releaseVerify--><span class="muted">Optional, not built yet.</span> <!--/notlive-->Rebuilds a release from the source you name and compares its measurements.</td></tr>
       </tbody>
     </table></div>
+    <!--notlive:statusVerdicts--><p><span class="muted">Coming.</span> <code>attessa status</code> does not list your recent verdicts yet.</p><!--/notlive-->
     <h3 id="cli-seller">Seller</h3>
     <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Command</th><th scope="col">What it does</th></tr></thead>
       <tbody>
         <tr><td><code>attessa agent register</code></td><td>Creates your agent's ERC-8004 identity from this wallet.</td></tr>
-        <tr><td><code>attessa agent transfer</code>, <code>wallet-sig</code>, <code>set-wallet</code></td><td>Moves your agent to a cold owner wallet, then sets the agent wallet from it.</td></tr>
+        <tr><td><code>attessa agent transfer</code>, <code>attessa agent wallet-sig</code>, <code>attessa agent set-wallet</code></td><td>Moves your agent to a cold owner wallet, then sets the agent wallet from it.</td></tr>
         <tr><td><code>attessa enclave build</code></td><td>Builds the sealed machine image and writes its measurements. Refuses a dirty tree.</td></tr>
         <tr><td><code>attessa release approve</code></td><td>Approves a build for your agent, with the source you claim it came from.</td></tr>
         <tr><td><code>attessa release deprecate</code></td><td>Marks an approved build deprecated. It can be approved again later.</td></tr>
@@ -48,19 +49,19 @@
     </table></div>
 
     <h2 id="tools">Agent tools</h2>
-    <p><span class="muted">Coming.</span> The MCP server isn't built yet. It will expose nine tools, and errors will come back as an enum code with a suggestion.</p>
+    <p>The MCP server is built: it exposes these nine tools over stdio, started with <code>node &lt;clone&gt;/packages/mcp/dist/bin.js</code>. See the <a href="how-to.html#mcp">how-to</a> for the environment it reads.</p>
     <div class="table-wrap" tabindex="0"><table class="table">
       <thead><tr><th scope="col">Tool</th><th scope="col">What it does</th><th scope="col">Side effect</th></tr></thead>
       <tbody>
-        <tr><td><code>resolve_endpoint</code></td><td>Looks a service up in the registry: agent, approved builds, pay-to address.</td><td>None</td></tr>
-        <tr><td><code>check_liveness</code></td><td>Checks the sealed machine is answering at this address.</td><td>None</td></tr>
-        <tr><td><code>quote</code></td><td>Gets the price without signing anything.</td><td>None</td></tr>
-        <tr><td><code>pay_and_verify</code></td><td>Signs a payment within your bounds and returns the answer only if its proof checks out.</td><td><strong>Signs a payment</strong></td></tr>
-        <tr><td><code>verify_proof</code></td><td>Checks a proof against the registry.</td><td>None</td></tr>
-        <tr><td><code>get_result</code></td><td>Fetches a stored answer by request ID.</td><td>None</td></tr>
-        <tr><td><code>list_pending</code></td><td>Lists payment permissions not yet settled or expired.</td><td>None</td></tr>
+        <tr><td><code>resolve_endpoint</code></td><td>Looks a service up in the Celo registry: which agent runs it, whether the endpoint is active or retired, and who it pays.</td><td>None</td></tr>
+        <tr><td><code>check_liveness</code></td><td>Asks a registered service for a fresh liveness proof, checked against the registry.</td><td>None</td></tr>
+        <tr><td><code>quote</code></td><td>Shows the price against your limits after the registry and liveness checks, and stops before anything is signed.</td><td>None</td></tr>
+        <tr><td><code>pay_and_verify</code></td><td>Signs a payment within your per-call limit (<code>maxAmount</code>) and daily cap, and returns the answer only if its proof checks out.</td><td><strong>Signs a payment</strong></td></tr>
+        <tr><td><code>verify_proof</code></td><td>Checks a proof header offline, with no chain read: the signature, the proof's lifetime, and the request and response hashes you give it. It lists what it did not check, so a success is not a verified paid result.</td><td>None</td></tr>
+        <tr><td><code>get_result</code></td><td>Reports what happened to an earlier call, by request ID. A verified call is read from your local record. A call still open is decided now.</td><td><strong>Signs a payer message</strong> (no payment, no transaction) when the call is still open or was decided against you</td></tr>
+        <tr><td><code>list_pending</code></td><td>Lists the open calls recorded on this computer, from the local ledger.</td><td>None</td></tr>
         <tr><td><code>cancel_authorization</code></td><td>Voids an unused payment permission on chain.</td><td><strong>Sends a transaction</strong></td></tr>
-        <tr><td><code>status</code></td><td>Spend today against your cap, pending items, recent verdicts.</td><td>None</td></tr>
+        <tr><td><code>status</code></td><td>Spend today against your cap and per-call limit, and decides your open calls. Recent verdicts<!--notlive:statusVerdicts-->: <span class="muted">Coming</span><!--/notlive-->.</td><td><strong>Signs a payer message</strong> (no payment, no transaction)</td></tr>
       </tbody>
     </table></div>
 
@@ -96,7 +97,7 @@
         <tr><td><code>origin_agent_mismatch</code></td><td>The service claims to be a different agent than the registry says.</td><td>Don't retry. Report it.</td></tr>
         <tr><td><code>over_max_amount</code> R</td><td>The price is above your limit per call.</td><td>raise <code>--max-amount</code> if that's fine.</td></tr>
         <tr><td><code>over_daily_cap</code> R</td><td>This call would take today's spend past your cap.</td><td>Wait until 00:00 UTC. raise <code>--daily-cap</code>.</td></tr>
-        <tr><td><code>endpoint_not_registered</code></td><td>The origin isn't an attested endpoint.</td><td>Ask the seller to register. <span class="muted">Optional, not built yet:</span> pay without protection with <code>--via buy</code>.</td></tr>
+        <tr><td><code>endpoint_not_registered</code></td><td>The origin isn't an attested endpoint.</td><td>Ask the seller to register.<!--notlive:viaBuy--> <span class="muted">Optional, not built yet:</span> pay without protection with <code>--via buy</code>.<!--/notlive--><!--live:viaBuy--> Or pay without protection with <code>--via buy</code>.<!--/live--></td></tr>
         <tr><td><code>endpoint_retired</code></td><td>The owner stopped selling at this origin. Nothing was signed.</td><td><code>attessa status --agent &lt;id&gt;</code> lists current endpoints.</td></tr>
         <tr><td><code>liveness_failed</code></td><td>The sealed machine didn't answer a fresh check.</td><td>Retry later. <code>attessa status &lt;origin&gt;</code> shows when it last answered.</td></tr>
         <tr><td><code>payment_invalid</code></td><td>The payment permission was refused, for example for insufficient funds.</td><td>Add funds to your address.</td></tr>

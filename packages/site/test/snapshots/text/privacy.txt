@@ -5,9 +5,9 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Privacy
 What this website does with your data, what the proof explorer sends and to whom, and what the Attessa gateway keeps when you make a call. Last updated 2026-11-06.
 What this site does today

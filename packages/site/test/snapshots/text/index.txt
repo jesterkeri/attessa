@@ -5,14 +5,14 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 Pay only for
 answers you
 can prove.
 You pay a service for an answer, it comes back wrong, and you can't tell whether the code the seller stands behind actually ran, or something else did.
-Explorer preview Use it from your agent
+Open the explorer Use it from your agent
 Example call
 Approved build Sealed machine Signed answer
 It's a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.
@@ -103,14 +103,14 @@ Machine
 Request
 Celo data
 Nothing signed
-Check any settlement, once live. No wallet, no payment.
-Anyone can check a past call's payment from public Celo data. Planned: the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.
+Check any settlement. No wallet, no payment.
+Anyone can check a past call's payment from public Celo data. It reads Celo Sepolia today; Celo mainnet comes after launch. Planned: the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.
 Settlement transaction
 Check
 Request hash Settlement tx Approved build Celo block
 Your agent can't overspend.
 It signs a payment permission, never a blank cheque. These are the defaults attessa init sets, and you can change them. Run attessa init to set them.
-Give it to your agent. Coming. An MCP server with nine tools keeps the same limits. It isn't built yet.
+Give it to your agent. An MCP server with nine tools keeps the same limits. Build this repository, then start it from your clone.
 $ node /path/to/attessa/packages/mcp/dist/bin.js
 Copy
 Most it pays per call
@@ -137,7 +137,7 @@ Owner says it's built from github.com/acme/risk @ a1b2c3d (not checked by attess
 You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way (EIP-3009 authorization)
 → Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118 (settled: tx 0xabc…, signer 0x7f3b…22)
 → Answer saved to result.json. Record: ~/.attessa/evidence.jsonl
-Example output. risk.example and the hashes above are illustrative.
+Illustrated example: no public seller is live yet. risk.example and the hashes above are illustrative.
 What this proves, and what it doesn't
 A proof records which code produced an answer. That's narrower than "the answer is right", and we say so. The security page lists the main limits and links to all of them.
 What a proof shows
@@ -153,11 +153,11 @@ That requests are private. Request bodies are visible to the service's gateway a
 Protection when paying through buy. buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.
 An instant "not charged". After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.
 Built on
-Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. It pays in USDC on Celo Sepolia, and will pay in USDC and USA₮ on mainnet after launch.
+Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. It's designed to settle in USDC on Celo Sepolia, and in USDC and USA₮ on mainnet after launch. No public seller is live yet.
 Check a call
 yourself.
-Preview the explorer, which will check a settlement transaction once live, or wire the check into your agent.
-Explorer preview Use it from your agent
+Check a settlement transaction in the explorer, or wire the check into your agent.
+Open the explorer Use it from your agent
 Attessa
 A check your agent runs before paying for a service. Built for Celo.
 GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt

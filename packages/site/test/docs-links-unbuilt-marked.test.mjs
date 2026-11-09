@@ -37,31 +37,32 @@ const section = (page, id) => {
   return text(end < 0 ? rest : rest.slice(0, end));
 };
 
-// T21 is ticked: how-to.html#revoke (release revoke, revoke signer, status) is built and no longer marked. Still unbuilt: the MCP
-// server (T21b), buy (T29) and the agent tools.
+// T21 is ticked: how-to.html#revoke (release revoke, revoke signer, status) is built and no longer marked. The MCP server (T21b, packages/mcp, on staging)
+// is built too, so how-to.html#mcp and reference.html#tools are no longer marked. Still unbuilt: buy (T29).
 const UNBUILT = [
-  ['how-to.html', 'mcp', /Coming\. The MCP server isn't built yet\./],
   ['how-to.html', 'buy', /Optional, not built yet\./],
-  ['reference.html', 'tools', /Coming\. The MCP server isn't built yet\./],
 ];
+const BUILT_MCP = [['how-to.html', 'mcp'], ['reference.html', 'tools']];
 
-test('the target sections mark MCP, buy and the agent tools as not built; revoke and the tutorial are built (precondition)', () => {
+test('the target sections mark buy as not built; revoke, the tutorial and the MCP server are built (precondition)', () => {
   for (const [page, id, says] of UNBUILT) assert.match(section(page, id), says, `${page}#${id}`);
+  for (const [page, id] of BUILT_MCP) assert.doesNotMatch(section(page, id), /MCP server isn't built|Coming\. The MCP/i, `${page}#${id}: the MCP server is built and must not be marked`);
+  assert.match(section('how-to.html', 'mcp'), /packages\/mcp\/dist\/bin\.js/, 'the how-to names how to start the server');
   assert.doesNotMatch(section('how-to.html', 'revoke'), /aren't built yet|Coming/, 'revoke is built (T21) and must not be marked');
   assert.match(text(read('pages/docs/tutorial.html')), /attessa init and attessa call are built\./);
 });
 
-test('the tutorial closing card that offers the MCP server says it is not built', () => {
+test('the tutorial closing card that offers the MCP server does not mark it as not built', () => {
   const card = [...read('pages/docs/tutorial.html').matchAll(/<a href="([^"]+)">([\s\S]*?)<\/a>/g)]
     .map(m => ({ href: m[1], t: text(m[2]) }))
     .find(c => c.href === 'how-to.html#mcp');
   assert.ok(card, 'no tutorial card links to how-to.html#mcp');
   assert.match(card.t, /MCP/, 'the card no longer offers the MCP server');
-  assert.match(card.t, marked,
-    `tutorial.html card "${card.t}" tells the reader to add the MCP server; how-to.html#mcp says "Coming. The MCP server isn't built yet." (TASKS.md T21b unticked)`);
+  assert.doesNotMatch(card.t, marked,
+    `tutorial.html card "${card.t}" marks the MCP server as not built, but packages/mcp is built (T21b)`);
 });
 
-test('the docs menu marks each link whose target section is not built', () => {
+test('the docs menu marks each link whose target section is not built, and not the built MCP link', () => {
   const nav = read('partials/docs-nav.html');
   const links = [...nav.matchAll(/<a href="\{\{root\}\}docs\/([^"#]+)(?:#([^"]+))?"[^>]*>([\s\S]*?)<\/a>/g)]
     .map(m => ({ page: m[1], id: m[2] ?? '', label: text(m[3]) }));
@@ -75,7 +76,10 @@ test('the docs menu marks each link whose target section is not built', () => {
     .filter(l => !marked.test(l.label))
     .map(l => `${l.page}${l.id ? '#' + l.id : ''}: "${l.label}"`);
   assert.deepEqual(unmarked, [],
-    'docs-nav.html (on every docs page) offers these as usable today, but each target says Coming / not built (TASKS.md T21b, T29 unticked)');
+    'docs-nav.html (on every docs page) offers these as usable today, but each target says Coming / not built (TASKS.md T29 unticked)');
+  const mcp = links.find(l => l.page === 'how-to.html' && l.id === 'mcp');
+  assert.ok(mcp, 'the docs menu has no link to how-to.html#mcp');
+  assert.doesNotMatch(mcp.label, marked, 'the MCP link is marked, but packages/mcp is built (T21b)');
 });
 
 test('the docs menu does not mark the built tutorial or the built revoke recipe as Coming', () => {

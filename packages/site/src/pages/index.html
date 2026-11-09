@@ -10,7 +10,7 @@
       <div class="hero-sub">
         <p class="lede" data-intro>You pay a service for an answer, it comes back wrong, and you can't tell whether the code the seller stands behind actually ran, or something else did.</p>
         <div class="btn-row" data-intro>
-          <a class="btn btn-primary" href="explorer.html">Explorer preview{{arrow}}</a>
+          <a class="btn btn-primary" href="explorer.html">Open the explorer{{arrow}}</a>
           <a class="btn btn-ghost" href="docs/tutorial.html">Use it from your agent</a>
         </div>
       </div>
@@ -178,8 +178,8 @@
   <div class="scene-sticky">
     <div class="wrap scene-grid explore">
       <div class="scene-copy">
-        <h2 id="explore" data-split>Check any settlement, once live. No wallet, no payment.</h2>
-        <p class="sec-lede" data-fade><span class="key">Anyone can check a past call's payment from public Celo data.</span> <span class="muted">Planned:</span> the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.</p>
+        <h2 id="explore" data-split>Check any settlement. No wallet, no payment.</h2>
+        <p class="sec-lede" data-fade><span class="key">Anyone can check a past call's payment from public Celo data.</span><!--notlive:seller--> It reads Celo Sepolia today; Celo mainnet comes after launch.<!--/notlive--> <span class="muted">Planned:</span> the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.</p>
         <form class="recheck" action="explorer.html" method="get" role="search" data-fade>
           <label class="sr-only" for="q">Settlement transaction</label>
           {{i:search}}
@@ -208,7 +208,7 @@
         </div>
         <div class="limits-side" data-fade>
           <p><span class="key">It signs a payment permission, never a blank cheque.</span> These are the defaults <code>attessa init</code> sets, and you can change them. Run <code>attessa init</code> to set them.</p>
-          <p><strong>Give it to your agent.</strong> <span class="muted">Coming.</span> An MCP server with nine tools keeps the same limits. It isn't built yet.</p>
+          <p><strong>Give it to your agent.</strong> An MCP server with nine tools keeps the same limits. Build this repository, then start it from your clone.</p>
           <div class="cmd"><code><span class="p">$</span> node /path/to/attessa/packages/mcp/dist/bin.js</code><button type="button" class="copy-btn" data-copy="node /path/to/attessa/packages/mcp/dist/bin.js">{{copyIcon}}<span data-copy-label>Copy</span></button></div>
         </div>
       </div>
@@ -229,11 +229,11 @@
   <div class="wrap try">
     <div class="try-copy">
       <h2 id="try" data-split>Try it on Celo Sepolia</h2>
-      <p class="sec-lede" data-fade><span class="key">Celo's test network, so nothing here costs real money.</span> Get gas at <a href="https://faucet.celo.org/celo-sepolia">faucet.celo.org/celo-sepolia</a> and test USDC at <a href="https://faucet.circle.com">faucet.circle.com</a> (choose Celo Sepolia). The buyer commands below are built, except <code>attessa verify</code>, which is coming; install them <a href="docs/tutorial.html#install">from source</a>.</p>
+      <p class="sec-lede" data-fade><span class="key">Celo's test network, so nothing here costs real money.</span> Get gas at <a href="https://faucet.celo.org/celo-sepolia">faucet.celo.org/celo-sepolia</a> and test USDC at <a href="https://faucet.circle.com">faucet.circle.com</a> (choose Celo Sepolia). The buyer commands below are built<!--notlive:verify-->, except <code>attessa verify</code>, which is coming<!--/notlive-->; install them <a href="docs/tutorial.html#install">from source</a>.</p>
       <ol class="try-steps">
         <li data-row><span>Install from source (<a href="docs/tutorial.html#install">steps</a>), then set up</span><code>attessa init</code></li>
         <li data-row><span>Call a service</span><code>attessa call https://&lt;service&gt; --body input.json --max-amount 0.05</code></li>
-        <li data-row><span>Re-check it later, with no wallet <span class="muted">Coming</span></span><code>attessa verify &lt;requestId&gt;</code></li>
+        <li data-row><span>Re-check it later, with no wallet <!--notlive:verify--><span class="muted">Coming</span><!--/notlive--></span><code>attessa verify &lt;requestId&gt;</code></li>
       </ol>
     </div>
     <div class="term-card glass" data-terminal>
@@ -260,16 +260,16 @@
 <section class="built" aria-label="What it runs on">
   <div class="wrap built-line">
     <p class="label">Built on</p>
-    <p>Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. It pays in USDC on Celo Sepolia, and will pay in USDC and USA&#x20AE; on mainnet after launch.</p>
+    <p>Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. <!--notlive:seller-->It's designed to settle in USDC on Celo Sepolia, and in USDC and USA&#x20AE; on mainnet after launch. No public seller is live yet.<!--/notlive--><!--live:seller-->It settles in USDC on Celo Sepolia, and in USDC and USA&#x20AE; on Celo mainnet.<!--/live--></p>
   </div>
 </section>
 
 <section class="sec cta-sec" aria-labelledby="cta" data-cta data-scene-sec="cta">
   <div class="wrap" data-slot>
     <h2 id="cta" data-split>Check a call<br> <span class="ol">yourself.</span></h2>
-    <p class="sec-lede" data-fade>Preview the explorer, which will check a settlement transaction once live, or wire the check into your agent.</p>
+    <p class="sec-lede" data-fade>Check a settlement transaction in the explorer, or wire the check into your agent.</p>
     <div class="btn-row" data-fade>
-      <a class="btn btn-primary" href="explorer.html">Explorer preview{{arrow}}</a>
+      <a class="btn btn-primary" href="explorer.html">Open the explorer{{arrow}}</a>
       <a class="btn btn-ghost" href="docs/tutorial.html">Use it from your agent</a>
     </div>
   </div>

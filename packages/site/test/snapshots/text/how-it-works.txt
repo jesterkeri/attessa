@@ -5,9 +5,9 @@ Skip to content
 AttessaA check your agent runs
 before paying for a service
 How it works Explorer Use cases Docs Security
-Celo Sepolia Explorer preview
+Celo Sepolia Open the explorer
 How it works Proof explorer Use cases Docs Security and limits
-Explorer preview
+Open the explorer
 How a call
 gets checked
 before you pay
@@ -29,6 +29,7 @@ An AWS Nitro enclave. Its running code is measured, its operator can't log in or
 Buyer's view
 Seller's view
 Buyer's view
+Illustrated example: no public seller is live yet. Every command and result below is a sample.
 01
 You ask for an answer
 Your agent, or you, calls a paid API through Attessa instead of calling it directly.
@@ -111,7 +112,7 @@ An agent owns an approved release. A signer is proven to run that release. An en
 Approved buildIn the code this is a release: the build's three measurements, approved by the agent's owner. Revoking it stops every signer that runs it within 60 seconds.
 SignerThe key a sealed machine makes when it starts. It never leaves the machine. Every restart makes a new one.
 ProofAn EIP-712 signature by the signer over the request, the answer, the inputs and the payment. AWS's report is the attestation; the proof is Attessa's.
-Explorer previewOpen the explorer Ten minutes on Celo SepoliaTry the tutorial
+Proof explorerOpen the explorer Ten minutes on Celo SepoliaTry the tutorial
 Attessa
 A check your agent runs before paying for a service. Built for Celo.
 GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt

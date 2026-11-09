@@ -4571,6 +4571,213 @@ status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attes
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
 
+### Website Codex r4 fixes - 2026-11-07
+
+Codex r4 (REVISE) on 08c4a66; origin/staging merged first (fast-forward). Failing tests first, alone (e5468d5), then the fix.
+- The reference row now spells `attessa agent transfer`, `attessa agent wallet-sig` and `attessa agent set-wallet` in full.
+- It no longer calls `attessa --help` the full command list: `--help` (and `attessa seller --help`) print only the seller steps (`COPY.sellerHelp`), and the page says so.
+- `test/lib/cli-table.mjs` reads the command table and each command's flags from `packages/cli/src/index.ts`. `reference-commands-exact` checks every first-column command is a full `attessa ...` command in that table (unless the row is marked) and every flag its row shows is accepted by it; `use-cases-cli-built` now resolves each command exactly and checks the flags on every page, and keeps `attessa call --via buy` marked.
+
+`pnpm -r build && pnpm -r typecheck && pnpm -r lint && ./packages/site/test-count.sh && ./scripts/check-install-scripts.sh`:
+```
+Scope: 6 of 7 workspace projects
+packages/core build$ tsc -p .
+packages/core build: Done
+packages/sdk build$ tsc -p .
+packages/gateway build$ tsc -p .
+packages/seller-host build$ tsc -p .
+packages/site build$ node build.mjs
+packages/site build: built 12 pages into dist
+packages/site build: Done
+packages/seller-host build: Done
+packages/sdk build: Done
+packages/gateway build: Done
+packages/cli build$ tsc -p .
+packages/cli build: Done
+Scope: 6 of 7 workspace projects
+packages/core typecheck$ tsc -p . --noEmit
+packages/core typecheck: Done
+packages/gateway typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk typecheck$ tsc -p . --noEmit
+packages/seller-host typecheck$ tsc -p ../core && tsc -p . --noEmit
+packages/site typecheck$ tsc -p . --noEmit
+packages/site typecheck: Done
+packages/seller-host typecheck: Done
+packages/sdk typecheck: Done
+packages/gateway typecheck: Done
+packages/cli typecheck$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli typecheck: Done
+Scope: 6 of 7 workspace projects
+packages/core lint$ tsc -p . --noEmit
+packages/core lint: Done
+packages/gateway lint$ tsc -p ../core && tsc -p . --noEmit
+packages/sdk lint$ tsc -p . --noEmit
+packages/seller-host lint$ tsc -p ../core && tsc -p . --noEmit
+packages/site lint$ tsc -p . --noEmit && node --check src/static/assets/site.js && node --check src/static/assets/motion.js && node --check src/static/assets/scene.js && node --check src/static/assets/explorer.js && node --check src/static/assets/network.js
+packages/site lint: Done
+packages/seller-host lint: Done
+packages/sdk lint: Done
+packages/gateway lint: Done
+packages/cli lint$ tsc -p ../core && tsc -p ../sdk && tsc -p ../seller-host && tsc -p ../gateway && tsc -p . --noEmit
+packages/cli lint: Done
+4 tests, 0 failed, exit 0: test/built-state-consistent.test.mjs
+3 tests, 0 failed, exit 0: test/buy-optional-not-coming.test.mjs
+2 tests, 0 failed, exit 0: test/celo-mainnet-already-live.test.mjs
+2 tests, 0 failed, exit 0: test/cli-output-verbatim.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-focus-ring-visible.test.mjs
+3 tests, 0 failed, exit 0: test/code-block-keyboard-scrolls.test.mjs
+6 tests, 0 failed, exit 0: test/config.test.mjs
+4 tests, 0 failed, exit 0: test/docs-index-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/docs-links-unbuilt-marked.test.mjs
+2 tests, 0 failed, exit 0: test/docs-menu-reopens-when-wide.test.mjs
+4 tests, 0 failed, exit 0: test/docs-nav-focus-ring-visible.test.mjs
+2 tests, 0 failed, exit 0: test/docs-nav-ring-breakpoint-no-gap.test.mjs
+2 tests, 0 failed, exit 0: test/explanation-swap-owner-can-approve.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-sample-not-built.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-buy-unprotected.test.mjs
+18 tests, 0 failed, exit 0: test/explorer-live-errors.test.mjs
+12 tests, 0 failed, exit 0: test/explorer-live-recorded.test.mjs
+7 tests, 0 failed, exit 0: test/explorer-live-wiring.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-payto-not-one-endpoint.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-elsewhere.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-reads-nothing-yet.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-refused-money.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-refused-no-settlement-tx.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-runs-only-onchain.test.mjs
+3 tests, 0 failed, exit 0: test/explorer-verified-needs-proof.test.mjs
+2 tests, 0 failed, exit 0: test/explorer-withdrawn-signer-checked.test.mjs
+3 tests, 0 failed, exit 0: test/focus-return-at-page-end.test.mjs
+2 tests, 0 failed, exit 0: test/focus-return-keeps-place.test.mjs
+3 tests, 0 failed, exit 0: test/font-provenance.test.mjs
+2 tests, 0 failed, exit 0: test/home-checks-before-pay.test.mjs
+1 tests, 0 failed, exit 0: test/home-checks-count.test.mjs
+2 tests, 0 failed, exit 0: test/home-console-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-tamper-gateway-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/home-unapproved-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/home-verified-not-on-celo.test.mjs
+3 tests, 0 failed, exit 0: test/how-buyer-check-after-pay.test.mjs
+1 tests, 0 failed, exit 0: test/how-records-count-matches-diagram.test.mjs
+2 tests, 0 failed, exit 0: test/howto-buy-built-state.test.mjs
+3 tests, 0 failed, exit 0: test/howto-summaries-unbuilt-marked.test.mjs
+4 tests, 0 failed, exit 0: test/legal-pages-final.test.mjs
+6 tests, 0 failed, exit 0: test/limits-command-fits.test.mjs
+2 tests, 0 failed, exit 0: test/mainnet-pays-usdc.test.mjs
+2 tests, 0 failed, exit 0: test/menu-breakpoint-no-gap.test.mjs
+3 tests, 0 failed, exit 0: test/menu-close-keeps-focus.test.mjs
+6 tests, 0 failed, exit 0: test/menu-fits-at-200-zoom.test.mjs
+3 tests, 0 failed, exit 0: test/menu-focus-stays-visible.test.mjs
+16 tests, 0 failed, exit 0: test/no-js-outcomes-not-clipped.test.mjs
+5 tests, 0 failed, exit 0: test/no-js-phone-nav-reaches-every-page.test.mjs
+2 tests, 0 failed, exit 0: test/no-js-seller-view-readable.test.mjs
+3 tests, 0 failed, exit 0: test/no-js-steps-readable.test.mjs
+6 tests, 0 failed, exit 0: test/no-third-party-origins.test.mjs
+13 tests, 0 failed, exit 0: test/pages.test.mjs
+3 tests, 0 failed, exit 0: test/pinned-box-keyboard-scrolls.test.mjs
+1 tests, 0 failed, exit 0: test/proves-fits-at-200-zoom.test.mjs
+1 tests, 0 failed, exit 0: test/proves-nonce-source.test.mjs
+2 tests, 0 failed, exit 0: test/proves-record-has-nonce.test.mjs
+2 tests, 0 failed, exit 0: test/public-proof-not-published.test.mjs
+3 tests, 0 failed, exit 0: test/reference-busy-limited.test.mjs
+5 tests, 0 failed, exit 0: test/reference-commands-exact.test.mjs
+2 tests, 0 failed, exit 0: test/reference-confirm-not-charged.test.mjs
+2 tests, 0 failed, exit 0: test/reference-every-refusal-code.test.mjs
+2 tests, 0 failed, exit 0: test/reference-next-step-unbuilt-marked.test.mjs
+3 tests, 0 failed, exit 0: test/request-id-lookup-planned.test.mjs
+4 tests, 0 failed, exit 0: test/resize-hidden-focus-returns.test.mjs
+6 tests, 0 failed, exit 0: test/scene-cdn-failure-readable.test.mjs
+7 tests, 0 failed, exit 0: test/scene-performance-accessibility.test.mjs
+3 tests, 0 failed, exit 0: test/search-input-no-request-id.test.mjs
+2 tests, 0 failed, exit 0: test/security-txt-contact.test.mjs
+3 tests, 0 failed, exit 0: test/settlement-names-no-seller.test.mjs
+5 tests, 0 failed, exit 0: test/site-config.test.mjs
+3 tests, 0 failed, exit 0: test/tamper-after-signing-can-settle.test.mjs
+2 tests, 0 failed, exit 0: test/tutorial-install-clone-builds.test.mjs
+3 tests, 0 failed, exit 0: test/unbuilt-commands-marked.test.mjs
+5 tests, 0 failed, exit 0: test/use-cases-cli-built.test.mjs
+3 tests, 0 failed, exit 0: test/use-cases-headings-fit-phone.test.mjs
+2 tests, 0 failed, exit 0: test/use-cases-unused-check.test.mjs
+node v22.23.2: 76 files, 277 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+EXIT=0
+```
+
+reviewed: pending (Codex r5)
+
+### Website Codex r5 fixes - 2026-11-08
+
+Codex r5 (REVISE) on 6488d29.
+- `use-cases-cli-built` now parses every displayed command node (`<code>`, terminal `span.c`, and `Next:`-style output). An unknown command fails before its flags are looked at. Only `verify`, `release verify` and `call --via` may be exempt, and only with the marker in the same table row, list item, paragraph, heading or figure.
+- Regressions added for the r5 mutants: `attessa ghost --bogus` in a terminal block, `attessa init --bogus` beside a Coming mark, an unknown command in a marked paragraph, and an unbuilt command with the mark only in its section heading.
+- The stricter test found two unmarked terminal blocks, so their captions now say "Terminal (coming)" and "Example output (not built yet)".
+- The reference says `--help` and `seller --help` print "only the seller summary and its steps". Three text snapshots changed, for those three wordings only.
+
+```
+node v22.23.2: 76 files, 278 tests, 0 failed
+pnpm@10.32.1 install ran no non-allowlisted install script: ok
+```
+`pnpm -r build`, `typecheck` and `lint` ended Done. reviewed: pending Codex r6.
+
+### Website Codex r6 fixes - 2026-11-08
+
+Codex r6 (REVISE) on 38039f5: three major findings, all in `packages/site/test/use-cases-cli-built.test.mjs`. No page was wrong and no page text or snapshot changed.
+- The page-wide check now builds the site (partials expanded) and scans the rendered text of every page, meta descriptions and the shipped scripts, finding every `attessa ...`, not only `<code>` and `span.c`. Every command in an output line is checked, not just the first.
+- Built commands are held to the CLI table (`packages/site/test/lib/cli-table.mjs` now also reads each flag's type and each command's `args`): the command must be a table key (or `gateway <sub>`), each option must exist spelled exactly (`--BOGUS` and `--0` fail), a string option takes a value, and extra positionals fail.
+- The unbuilt exemption is three exact shapes (`verify [<id>]`, `release verify [<id>]`, `call --via buy [<url>]`) with the marker in the same block; any other trailing token or option fails.
+- Regressions for every r6 mutant (3 tests plus real-page swaps). Run against the old checker (HEAD 38039f5 plus the new tests) they fail: tests 6, 7, 8 not ok.
+
+```
+pnpm -r build / typecheck / lint: Done (all packages)
+pnpm --filter @attessa/site test: tests 282, pass 282, fail 0
+node v22.23.2: 76 files, 282 tests, 0 failed
+```
+reviewed: pending Codex r7
+
+### Website Codex r7 fix - 2026-11-08
+
+Codex r7 (REVISE) on 36e2abc: one major finding (M1), in `packages/site/test/use-cases-cli-built.test.mjs`. No page was wrong; no page text changed.
+- `render()` now decodes character references once, as a browser does (decimal and hex, with or without the semicolon, named incl. `&nbsp; &Tab; &NewLine; &amp;`, legacy names without the semicolon). `&amp;#32;` shows as the text `&#32;`. No HTML-decoder package is in the lockfile, so the named table is in the test.
+- `attessa` is followed by any rendered whitespace (`\s`: NBSP, Unicode spaces, line breaks), not only space and tab. Formatting tags (`b i em strong ...`) are invisible to the text run; `code`, `a`, `span` end a command at their edge but a command may start just inside one (`attessa <code>ghost</code>`).
+- Attribute policy: SCANNED (title, alt, aria-label, content, placeholder, value, data-*; double-quoted, single-quoted, unquoted). Tag end now respects quotes.
+- New tests: 26 mutants in a built page (`&#32;`, `&#x20;`, `&nbsp;`, `&#160;`, `&#97;ttessa`, `init&#32;--bogus`, `<b>` split ...), entity-written real commands pass, `&amp;#32;` is not whitespace, and per-attribute tests.
+
+```
+pnpm --filter @attessa/site test: tests 285, pass 285, fail 0
+node v22.23.2: 76 files, 285 tests, 0 failed
+pnpm --filter @attessa/site lint: ok
+```
+Added by the lead after reading the diff: the name table is partial, and a browser shows names it lacks (`attessa&NonBreakingSpace;ghost` displays as a command), so a `&name;` not in the table is now a violation in text and attributes. 286 tests, 0 failed. Current pages contain no such reference.
+reviewed: pending Codex
+
+### Website Codex r8 fix - 2026-11-08 (correction of the scan claim)
+
+Codex r8 (REVISE) on 02ab7c1: two major findings in `packages/site/test/use-cases-cli-built.test.mjs`. No page text changed.
+- Correction: the r5 to r7 entries above say the scan reads every displayed command. That overstated it. The scan is a model of rendered text, not a browser render. What it does: expands partials (it reads the BUILT site), decodes character references (partial name table; an unknown `&name;` is a violation), treats the elements on a list of line-breaking elements (HTML Standard rendering section) as separators and every other tag, unknown and custom elements included, as transparent (fails closed: over-joining can only cause a false violation), and scans visible attributes. `code`, `a`, `span`, `kbd`, `samp`, `var`, `tt` keep one edge rule (a command may start just inside, not run out) because real pages need it.
+- Not covered: CSS that visually joins or hides text (`display`, `::before`/`::after` content, `visibility`, `text-transform`, `unicode-bidi`); text generated by script other than string literals found in the shipped `.js` (concatenation, computed strings, fetched data); text in images, SVG `<text>` is only scanned as markup; entities missing from the name table are refused, not read; a regex literal holding a quote can mislead the script literal finder (the effect is a violation, not a pass); the rendered result of `<textarea>`, `<select>` and replaced elements is not modelled.
+- M1: BREAKS list replaces the FORMAT and INLINE allow-lists. New mutants: `label del ins time output ruby data`, `<x-foo>`, an unknown element, and more.
+- M2: in a script, an unbuilt command is exempt only when the Coming mark is in the same string literal (or template literal, the fragment it builds). The r8 regression (`'const unrelated = "Coming";' + ' '.repeat(240) + 'const command = "attessa verify";'`) now reports the command.
+- Verification: `pnpm --filter @attessa/site test` -> `tests 288`, `pass 288`, `fail 0` (was 286 at 02ab7c1; +2 tests, the M1 and M2 tests). `node --test packages/site/test/use-cases-cli-built.test.mjs` -> `tests 16`, `pass 16`, `fail 0`.
+- Fails without the fix: the two new tests appended to the 02ab7c1 version of the file fail there (`not ok 15 ... (Codex site r8 M1)` at `label`, `not ok 16 ... (Codex site r8 M2)`), and pass with the fix.
+reviewed: pending Codex
+
+### Website scanner, adversary site-r1 false passes - 2026-11-08 (correction of the regex-quote claim)
+
+Adversary probe `site-r1-scanner-false-passes` found three false passes in `violations()` of `packages/site/test/use-cases-cli-built.test.mjs` (HEAD fe9e2ff); three more were checked beside them. No page text changed; the real pages all still pass.
+- Correction: the r8 entry above says a regex literal holding a quote "only causes a violation". That is wrong. `const esc = s.replace(/"/g, ""); const b = 'attessa verify'; const a = 'Coming';` made the literal finder merge `b` and `a`, and the Coming in `a` exempted the command: a false pass. The literal finder now skips regex literals, and when boundaries are not certain (a string not closed on its line, a regex not closed on its line, a `/` after `)` or `]` whose candidate regex holds a quote) it grants no exemption at all.
+- 1. Inline tags (`span code a kbd samp var tt`): the text after `attessa` is joined across their edges while the command is incomplete (no command word, first word of a two-word command, `gateway` sub-command), when an option follows, or when the last token is an option that may take a value and no line break came between. Otherwise the edge ends the command, which real pages need (`<code>attessa verify</code> isn't built yet`, a command line then its output line). `cd attessa` (a directory) and `the <code>attessa</code> command` (prose) are not commands. Known limit: a plain positional after a finished command and an edge is read as prose.
+- 2. Script escapes `\n \t \r \v \f \b \0` are boundaries, `\xNN \uNNNN \u{..}` are decoded, `\\` is a backslash, so the n of `\n` no longer hides the next command.
+- 4. `enclosing()` ends a block at its own end tag or the first tag that closes it in a browser (a new block start for `p`/headings, the next `li`/`tr`, the end of the container). No terminator: no block, no exemption.
+- 5. `</script >`, `</script/>`, `</style >` close the element; `<script-x>` is a custom element, not a script.
+- 6. Also scanned: `aria-description aria-roledescription aria-valuetext aria-placeholder aria-braillelabel aria-brailleroledescription label srcdoc` (srcdoc is read as a page).
+- One kept test changed its expected text, not its strength: the r7 mutant `attessa <code>ghost</code> --bogus` now reports `attessa ghost --bogus: no such command` (the whole command) instead of `attessa ghost: no such command`.
+- 7 tests added (6 fail on fe9e2ff, one guards the real pages): run against the old checker they print `not ok 17, 19, 20, 21, 22, 23`.
+
+```
+node --test test/use-cases-cli-built.test.mjs: tests 23, pass 23, fail 0
+pnpm --filter @attessa/site test: tests 295, pass 295, fail 0   (was 288)
+adversary probe site-r1-scanner-false-passes.test.mjs: before the fix 3 fail, after 4 pass
+```
+reviewed: pending
+
 ### Mainnet entry: `agent register` before the registry exists, and the Loops attribution tag - 2026-11-08
 Change 1: `attessa agent register` uses the pinned ERC-8004 identity registry (`packages/core/src/deployments.ts`) when no EnclaveRegistry is deployed or configured, on any network; a deployed or `ATTESSA_REGISTRY` registry's `identityRegistry()` stays authoritative; every other command still refuses with `no_registry`; `--dry-run` needs no key. Dry run: `attessa agent register --name "<name>" --uri <agentURI> --network mainnet --dry-run`.
 Change 2: `withAttribution` (`packages/core/src/attribution.ts`) appends an ERC-8021 Schema 0 suffix `[code ASCII][len:1][0x00][0x80218021 x8]` (celo-org/attribution-tags INDEXERS.md and BUILDERS.md; byte-identical to `ox/erc8021` `Attribution.toDataSuffix`, checked once by hand) to every non-x402 transaction on mainnet, code from env `LOOPS_ATTRIBUTION_TAG`. Send paths: `packages/cli/src/tx.ts send()` (all seller/owner/operator writes) and `packages/sdk/src/client.ts sendCancel()` (`attessa cancel`, through `ClientOptions.dataSuffix`). Mainnet with the tag unset: `no_attribution_tag`, nothing signed; `--dry-run` prints that the tag is missing. Sepolia and local: no suffix. x402 signing untouched.
@@ -4703,6 +4910,28 @@ reviewed: pending Codex r6
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
 
+### Site finish: adversary r2 fixes, MCP built, branch brought up to date - 2026-11-08
+
+Branch feat/site-finish (PR #16), local commits only (not pushed).
+
+- Merged origin/staging (packages/mcp, nine tools, Codex SHIP reviews/t21b-mcp-review-r6.md). Only DONE.md conflicted; both sides kept in order (the branch's entries, then staging's).
+- MCP statements flipped to built, from `packages/mcp/src/server.ts` and `bin.ts`: home (index.html), docs landing card, docs menu, tutorial card and meta description, how-to (#mcp now a real short how-to: no published package, build the clone, start `node <clone>/packages/mcp/dist/bin.js`, the env vars it reads, best-effort secret hiding), reference #tools (intro and the nine rows: get_result and status sign a payer message, verify_proof is offline and lists what it did not check, list_pending is the local ledger). Not flipped: `attessa verify`, `call --via buy`, `release verify`.
+- Scanner (`use-cases-cli-built.test.mjs` `flatten()`): in script code a `<` opens a tag only when a tag name, `/` or `!` follows and the whole tag sits inside one string literal (literals uncertain: any such `<`, never a bare one). The adversary's `script-comparison-hides-command.test.mjs` (3 tests) and `reference-status-recent-verdicts.test.mjs` (2 tests) are now permanent tests.
+- reference.html: the `attessa status` row says what the CLI prints (spend today against cap and per-call limit, decides open calls); recent verdicts is a Coming note under the buyer table and in the MCP `status` row. The liveness_failed row ("shows when it last answered") is FLOWS-fixed and untrue against the CLI; left as is, noted in OPEN-QUESTIONS.md with the status/verdicts departure.
+- Tests changed because MCP is now built: built-state-consistent, docs-links-unbuilt-marked, howto-summaries-unbuilt-marked, docs-index-unbuilt-marked (now assert MCP is NOT marked; buy still marked; the docs-index how-to card case moved to howto-summaries), plus text snapshots regenerated (UPDATE_SNAPSHOTS=1, diff reviewed).
+
+Verification, each under `flock /home/hr/.cache/attessa-heavy.lock`:
+```
+pnpm --filter @attessa/site test    -> # tests 297  # pass 297  # fail 0
+pnpm --filter @attessa/site lint, typecheck -> exit 0
+pnpm --filter @attessa/mcp test     -> Tests 66 passed (66)
+```
+reviewed: pending
+
+### Site adversary r3 fixes - 2026-11-08
+Defect, proved by packages/site/test/keychain-not-shipped.test.mjs: the tutorial, the reference and the MCP how-to presented the OS keychain as available, but `keytar` is in no package.json or lockfile, so a source build has none and `attessa init` says "no wallet was created". Prose now says to use ATTESSA_PRIVATE_KEY or a keystore. FLOWS-verbatim sample output stays in `<pre>`, with a note above it. The how-to also now says `get_result` and `status` sign a payer message.
+Verify (flock): pnpm --filter @attessa/site test: # tests 298, # pass 298, # fail 0 (snapshots regenerated with UPDATE_SNAPSHOTS=1, diff read: only the four copy changes); lint: no errors.
+reviewed: pending
 ### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
 Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
 
@@ -4722,3 +4951,28 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+## Site: one launch switch, and the explorer says what it does (feat/site-finish, 2026-11-09)
+reviewed: pending adversary and Codex r9
+
+Joshua: "use the switch"; "update the explorer test". Not-live labels now come from one list, `live` in `packages/site/site.config.json`, resolved by `packages/site/status.mjs`. Flip a key and rebuild, and its labels change on every page. `test/status-switch.test.mjs` refuses a true key while its task is unticked (seller T32 and T37, verify T21a, viaBuy T29, recentCalls T45) or while the CLI has no such command (releaseVerify, statusVerdicts). All keys are false.
+
+Explorer wording: `assets/explorer.js` really reads Celo Sepolia for a pasted transaction, so "when live" and "Nothing is read from Celo yet" were false. The page now says the payment check runs and the other four are planned. Recent calls stays marked not built. Tests rewritten on Joshua's instruction, keeping the rule that nothing may claim more than the payment check: `explorer-reads-nothing-yet` became `explorer-claims-payment-check-only`, `explorer-reads-nothing-elsewhere` became `explorer-claims-elsewhere`; `explorer-refused-no-settlement-tx`, `explorer-runs-only-onchain` and `home-checks-before-pay` re-pointed to the new wording. `site-config.test.mjs` copies status.mjs into its package copy. Snapshots refreshed: Joshua approves the copy through that diff (T48).
+
+`./packages/site/test-count.sh`:
+```
+node v22.23.2: 80 files, 305 tests, 0 failed
+```
+Not converted: `assets/site.js` isn't templated, so sample-state labels there stay fixed. Not deployed.
+
+## Site: Joshua's original logo as favicon and header mark (feat/site-finish, 2026-11-09)
+reviewed: pending adversary and Codex r9
+
+Joshua: "this is the original attessa logo. use it as a favicon and update it in the site." Traced from his 1024 x 1024 PNG (swirl path, centre circle at 512,512 r 45, colours sampled: #ededee, #c5f25b, ground #030304). `assets/favicon.svg`, plus `favicon-32.png` and `apple-touch-icon.png` downscaled from the original; `{{logo}}` in the header is the same shape. Looked at in headless Chrome at 16, 32, 90 and 180 px and in the header. `./packages/site/test-count.sh`: `node v22.23.2: 80 files, 305 tests, 0 failed`. Not deployed.
+
+## Site switch: adversary round 1 fixes (feat/site-finish, 2026-11-09)
+reviewed: pending Codex r9
+
+Attacked with 14 flag combinations. Fixed: labels the switch missed (homepage "which is coming", tutorial "Terminal (coming)", terms, security and reference mainnet wording) and the tutorial's "Once the proof explorer is live", which called the working check unbuilt. The switch test now looks for all of them, and the seller flag also needs a mainnet registry in the deploy record, because the footer's "After launch" follows that record. Terms wording for after launch is new and needs Joshua's reading before the flag is ever set.
+
+`./packages/site/test-count.sh`: `node v22.23.2: 80 files, 306 tests, 0 failed`
