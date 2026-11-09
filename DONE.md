@@ -4571,6 +4571,56 @@ status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attes
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
 
+### T30 prep: deploy scripts target Celo mainnet (simulated only, nothing sent) - 2026-11-08
+Branch feat/t30-mainnet-deploy. DeployBase now picks identity/Self by block.chainid: 11142220 unchanged, 42220 uses 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 and 0xaC3DF9ABf80d0F5c020C06B04Cced27763355944 (equal to deployments.ts and check-deploy PINS), any other chain reverts "Celo mainnet (42220) or Celo Sepolia (11142220) only". Admin != deployer guard kept; no env var selects the chain or registries. check-deploy `--pre-deploy` failure confirmed as ENOBUFS (forge build exit 0, 7,610,779 bytes on stderr vs execFileSync's 1 MB default); fixed in scripts/forge-run.mjs (256 MB buffer; a non-zero exit still throws with status and stderr tail).
+```
+$ forge fmt --check                       -> FMT_OK
+$ forge test                              -> Ran 12 test suites: 253 tests passed, 0 failed, 3 skipped (256 total)
+$ forge test --match-path 'test/deploy/*' -> 18 passed (13 DeployRegistry, 5 DeployValidatorStack)
+$ node --test scripts/forge-run.test.mjs  -> tests 3, pass 3, fail 0
+$ node scripts/check-deploy.mjs --pre-deploy
+REF   reference build from HEAD d9ae7cd31489 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ forge script DeployValidatorStack --rpc-url https://forno.celo.org --sender <discarded address>   (dry run)
+Chain 42220  Estimated total gas used for script: 13938801
+P384Verifier 2255020, CertManager 6975844, NitroValidator 4707937 (per tx)
+$ forge script DeployRegistry (Sepolia, existing validator, dry run) -> EnclaveRegistry 4477814 gas
+$ forge script DeployRegistry on 42220 -> reverts "ATTESSA_NITRO_VALIDATOR has no code" (stack not deployed; expected)
+$ node scripts/check-deploy.mjs celo -> exit 2, "Admin is still TODO" (nothing deployed)
+```
+Correction, same day: the first version of `test/deploy/DeployValidatorStack.t.sol` above was flaky. The lead's re-run failed 5 of 6 times without `-j 1`, because `vm.setEnv` is process-wide and its tests overwrote one another's ATTESSA_ADMIN. The "18 passed" above was a lucky run. `DeployValidatorStack` now has an internal `_run(admin)` as `DeployRegistry` has, and only one test sets the variable. Results after the fix are in the commit that changed it.
+reviewed: pending Codex
+
+### T30 fixes: pins on the reference build, unconditional creation-input check, mainnet script guard, safe output dir - 2026-11-08
+Branch feat/t30-mainnet-deploy. Defects proven by the adversary (`tagged-deploy.attack.test.mjs`, 2 of 3 failed before the fix) and fixed:
+1. `prepare`/`check` now call `verifyReference`: for all four contracts the runtime embedded in the creation bytecode (immutables zeroed) must equal `PINNED` and the whole creation bytecode `CREATION_PINNED`. P384Verifier, CertManager, NitroValidator runtime pins are the `DeployBase.sol` constants; EnclaveRegistry has no `DeployBase.sol` constant, so its runtime and creation pins exist only in `scripts/tagged-deploy.mjs` (recorded from the reference build at this commit; re-record in the same commit whenever EnclaveRegistry.sol or the submodule changes). check-deploy pins the solc 0.8.26 binary sha256 (linux x86_64 only), writes `evm_version = "cancun"` into the generated foundry.toml, and refuses artifacts whose metadata says another solc/evm_version/optimizer. Not pinned: the forge binary itself.
+2. `check --tx` rebuilds reference bytecode ++ args ++ suffix and compares the whole input; no data file is read.
+3. `DeployBase.sol`: `_requireSupportedChain` and `_startBroadcast` revert on 42220 under `vm.isContext(ScriptBroadcast | ScriptResume)`. Simulation on 42220 still works (below). Limit: the test runner cannot enter a broadcast context without sending, so the guard is tested through the `_inBroadcastContext()` seam; the real cheatcode answering true under a send was not exercised (the send flag is blocked here).
+4. Output dir: symlink, foreign owner, or group/other-writable refused; created 0700; default `<tmp>/attessa-tagged-deploy-<uid>`. `insideRepo` fixed for a directory named `..x` (and for a new directory under a symlink into the repo).
+5. Comment corrected: the tag is public on chain; the printed suffix contains it; only error messages never show it.
+```
+$ node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs   -> tests 37, pass 37, fail 0
+$ cd contracts && forge test (run 1 and run 2, each) -> Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total)   (was 261 passed; +7 MainnetSendGuard)
+$ forge fmt --check -> exit 0
+$ node scripts/check-deploy.mjs --pre-deploy -> PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ anvil --chain-id 42220; forge script script/DeployValidatorStack.s.sol --rpc-url <anvil> --sender <anvil dev account>   (no send flag)
+Estimated total gas used for script: 13938801 ... SIMULATION COMPLETE
+$ node scripts/tagged-deploy.e2e.mjs (clean tree at e2d8fea) -> E2E OK: all four tagged creations passed every check, exit 0
+  P384Verifier    0x5fbdb2315678afecb367f032d93f642f64180aa3  gas 1735181   (verifyTx tag found, runtime = control, storage 0..31 = control, check OK, creation input equals reference bytecode ++ args ++ suffix, 7858 bytes)
+  CertManager     0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0  gas 5366590
+  NitroValidator  0xdc64a140aa3e981100a9beca4e685f962f0cf6c9  gas 3622046
+  EnclaveRegistry 0x0165878a594ca255338adfa4d48449f69242eb8f  gas 3445017
+  check-deploy celo against the local stack: OK: all 27 checks passed
+```
+Full e2e output kept at /tmp/claude-1000/-home-hr-myvscode-linux-attessa/03e05dc1-b5af-45ec-8609-89d159bfc040/scratchpad/e2e.txt. Not fixed (outside this task): `node --test scripts/check-deploy.test.mjs` has 12 failing tests that read the now-deployed Sepolia data (deployments.ts and DEPLOYMENTS.md disagree for the fixtures; "the repo as committed (TODO addresses)" expects a Sepolia Admin TODO that no longer exists). Their failure messages are about those fixtures, not the reference build.
+reviewed: pending
+
+### T30 adversary r2 fixes - 2026-11-09
+Defect, proved by scripts/tagged-deploy.attack2.test.mjs: the printed deploy line put --account, --from, --rpc-url and --gas-limit after `--create <CODE>`. In foundry 1.8.1 `--create` is a subcommand and rejects them ("unexpected argument '--account' found"), so the route could not deploy as printed. Options now come first. The test parses the printed line with `cast mktx`, which shares the parser and signs and sends nothing; the real `cast send` line is blocked by a repo hook here and has not been run.
+Also from the round's suspicions: the clean-tree check drops GIT_* from its environment, and a failed gas estimate no longer repeats the node's error text, which could echo the tag.
+Verify (flock): node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs scripts/tagged-deploy.attack2.test.mjs: # tests 39, # pass 39, # fail 0.
+Known and not from this change: 6 of 11 tests in scripts/check-deploy.test.mjs fail, the same 6 on origin/staging. Their fixtures expect the pre-Sepolia placeholder addresses. They do not run in CI.
+reviewed: pending
 ### Mainnet entry: `agent register` before the registry exists, and the Loops attribution tag - 2026-11-08
 Change 1: `attessa agent register` uses the pinned ERC-8004 identity registry (`packages/core/src/deployments.ts`) when no EnclaveRegistry is deployed or configured, on any network; a deployed or `ATTESSA_REGISTRY` registry's `identityRegistry()` stays authoritative; every other command still refuses with `no_registry`; `--dry-run` needs no key. Dry run: `attessa agent register --name "<name>" --uri <agentURI> --network mainnet --dry-run`.
 Change 2: `withAttribution` (`packages/core/src/attribution.ts`) appends an ERC-8021 Schema 0 suffix `[code ASCII][len:1][0x00][0x80218021 x8]` (celo-org/attribution-tags INDEXERS.md and BUILDERS.md; byte-identical to `ox/erc8021` `Attribution.toDataSuffix`, checked once by hand) to every non-x402 transaction on mainnet, code from env `LOOPS_ATTRIBUTION_TAG`. Send paths: `packages/cli/src/tx.ts send()` (all seller/owner/operator writes) and `packages/sdk/src/client.ts sendCancel()` (`attessa cancel`, through `ClientOptions.dataSuffix`). Mainnet with the tag unset: `no_attribution_tag`, nothing signed; `--dry-run` prints that the tag is missing. Sepolia and local: no suffix. x402 signing untouched.
@@ -4703,6 +4753,43 @@ reviewed: pending Codex r6
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
 
+## T34 README (README part only; T34 not ticked) - 2026-11-08
+
+Wrote `README.md` from FLOWS §1 (premise line verbatim), SPEC §1, ARCHITECTURE, KNOWN-LIMITS, `packages/cli/src/index.ts` COMMANDS, `packages/mcp/src/server.ts` and `docs/DEPLOYMENTS.md`. Every relative link was checked and resolves; no em dashes; no numbers, addresses or keys in it. `scripts/check-claims.sh` does not exist on this branch (not written). No project license file or `license` field exists, so the README states none.
+
+Documented commands run from the worktree, each under `flock /home/hr/.cache/attessa-heavy.lock`, all exit 0:
+
+```
+install (pnpm install --frozen-lockfile; then submodule update + cargo fetch): exit 0
+build: exit 0   (tail: Finished `release` profile [optimized] target(s) in 10.30s)
+typecheck: exit 0
+lint: exit 0    (tail: Finished `dev` profile ... in 5.63s)
+test: exit 0
+  packages/cli test:  Test Files 87 passed (87), Tests 347 passed (347)
+  packages/core test: Test Files 9 passed (9), Tests 69 passed (69)
+  packages/gateway test: Test Files 23 passed (23), Tests 164 passed (164)
+  packages/mcp test:  Test Files 1 passed (1), Tests 66 passed (66)
+  packages/sdk test:  Tests 191 passed (191)
+  forge test: every suite ok, 0 failed
+  cargo test: test result: ok
+```
+
+Not run: invariants and slither (documented only). reviewed: pending Codex
+
+### T34 README adversary r1 fixes - 2026-11-08
+A fact-check against the code found statements that were false or overstated; README.md corrected: `attessa seller --help` prints the steps, not the full list; a source install has no OS keychain (keytar is not installed), so `attessa init` needs ATTESSA_PRIVATE_KEY or --keystore; attestations are checked at each signer registration or renewal, not "once per boot"; the intro now says the gateway settles only after its check passes, not that a buyer always pays only on a valid proof; `init` ignores --dry-run; `pnpm setup` may be needed; L17 wording matches the SDK's real checks. README only, so no suite re-run.
+reviewed: pending
+
+### T34 README adversary r2 corrections - 2026-11-08
+Round 2 (tests archived at .worktrees/archive/adversary/readme-r2/) proved two gaps:
+1. README step 6 implied the CLI says nothing about a refusal until the chain confirms. In fact the CLI prints the gateway's refusal, including "Your payment permission wasn't used.", at once, and warns if the chain later shows it was used. `packages/cli/test/buyer.test.ts:329` pins that FLOWS line, so the README now states the order instead. The FLOWS wording question goes to OPEN-QUESTIONS.md.
+2. "Node 22" is not enough: `packages/sdk/src/ledger.ts:3` imports `node:sqlite`, and on v22.12.0 the CLI stops with ERR_UNKNOWN_BUILTIN_MODULE. The README now says Node 22.13 or newer, and pnpm 10.32.1 or newer.
+Also from its suspicions: "Every paid response" in the intro, the fake Nitro module stated in Status, and the docs line no longer calls existing site pages missing.
+reviewed: pending
+
+### T34 README adversary r3 corrections - 2026-11-09
+Round 3 (.worktrees/archive/adversary/readme-r3/): `require('better-sqlite3'); new Database(':memory:')` exits 139 (segmentation fault) on Node 22.12.0, 22.13.0 and 22.13.1, and works on 22.14.0 to 22.22.0, so the floor is now 22.14. The adversary ran the full suite on 22.23.2 and only the probe on 22.14.0. The `cd contracts` lines are now in subshells, so the block works pasted whole.
+reviewed: pending
 ### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
 Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
 
@@ -4718,6 +4805,10 @@ reviewed: pending Codex
 ### CI ts budget review recorded - 2026-11-08
 reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
 
+### T34 README Codex r1: SHIP - 2026-11-09
+
+Codex round 1 reviewed README.md at d2a257c in a frozen worktree and found nothing. It confirmed the mainnet paragraph with read-only Celo reads (the transaction, `ownerOf(10061)`, `tokenURI(10061)`) and the live agent.json. It checked commands, paths and claims statically and did not install, build or run them. T34 stays open: this covers the README only, not the tutorial, how-tos or the rest of the docs set.
+reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
 ### Mainnet entry Codex r4: SHIP - 2026-11-09
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
@@ -4746,3 +4837,13 @@ reviewed: pending Codex r2
 reviewed: pending Codex r2
 
 `signer register` and `signer renew` swallowed a log failure and fell back to the hash; they now report `rpc_unavailable`, with the adversary's test kept as `packages/cli/test/signer-logs-adversary.test.ts`. The runbook named files missing from this commit, so it moved to `feat/mainnet-runbook` until T12 and T30 are on staging (OPEN-QUESTIONS). This branch is now the log reader fix only. This supersedes the runbook part of the entry above.
+### T30 mainnet deploy route Codex r2: SHIP - 2026-11-09
+
+Codex round 2 reviewed 7de210c in a frozen worktree and found nothing: every mainnet creation is pinned init code, constructor arguments and the ERC-8021 suffix, the Forge scripts refuse a mainnet broadcast, and `tagged-deploy.mjs` signs and sends nothing. After merging staging (dce5d3d, which brings the Codex-SHIP mainnet-entry work):
+```
+node --test scripts/tagged-deploy*.test.mjs: # tests 39 # pass 39 # fail 0
+pnpm --filter @attessa/cli test: Tests  388 passed (388)
+forge test: Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total tests)
+```
+No mainnet contract is deployed by this. T30 stays open until the real deployment is recorded.
+reviewed: reviews/t30-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
