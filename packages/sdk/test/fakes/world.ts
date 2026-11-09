@@ -22,11 +22,13 @@ export interface WorldOpts {
   waitForExpiry?: boolean;
   limits?: Partial<Limits>;
   client?: Partial<ClientOptions>;
+  /** The fake chain reports Celo mainnet's chain id (42220) and its pinned USDC. */
+  mainnet?: boolean;
 }
 
 /** Chain + registry state + a running fake gateway + an SDK client with a signing spy. */
 export async function makeWorld(opts: WorldOpts = {}) {
-  const chain = new FakeChain();
+  const chain = new FakeChain(opts.mainnet ? { chainId: DEPLOYMENTS.celo.chainId, asset: DEPLOYMENTS.celo.assets.usdc!.address } : {});
   // The FakeChain reports Sepolia's chain id, and a pinned registry wins over options.registry (SPEC §2.6). Since T10
   // pinned the real Sepolia registry, the fake one stands in for it while this world is open; close() restores it.
   const sepolia = DEPLOYMENTS['celo-sepolia'] as { enclaveRegistry: string | null };
