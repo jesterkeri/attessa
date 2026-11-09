@@ -1,6 +1,6 @@
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { readFileSync } from 'node:fs';
 import Database from 'better-sqlite3';
+import { durableReplace, type BuyIntentLedger } from './ledger.ts';
 
 /**
  * SPEC §5 input-read budget guard. Seller-host keeps a daily (UTC) counter of buy spend. A paid read is
@@ -34,31 +34,59 @@ export class BuySpendGuard {
   private readonly statePath: string;
   private readonly revenue: RevenueSource;
   private readonly log: (event: string, fields?: Record<string, unknown>) => void;
-  constructor(statePath: string, revenue: RevenueSource, log: (event: string, fields?: Record<string, unknown>) => void = () => {}) {
+  private readonly ledger: BuyIntentLedger | undefined;
+  constructor(statePath: string, revenue: RevenueSource, log: (event: string, fields?: Record<string, unknown>) => void = () => {}, ledger?: BuyIntentLedger) {
     this.statePath = statePath;
     this.revenue = revenue;
     this.log = log;
+    this.ledger = ledger;
   }
 
-  /** Today's state. A missing or unreadable file, or yesterday's, starts the day at zero. */
+  /**
+   * Today's state. Only a missing file (first run) or a file that is a valid state for another day starts the day at
+   * zero; a file that exists but cannot be read or parsed throws, which is a guard fault that turns buy off. Today's spend
+   * is never less than what the durable intent ledger holds for the day (uncertain intents included), so deleting the
+   * state file cannot reset it.
+   */
   state(now: Date): GuardState {
     const day = utcDay(now);
+    let text: string | null = null;
     try {
-      const s = JSON.parse(readFileSync(this.statePath, 'utf8')) as Partial<GuardState>;
-      if (s.day === day && typeof s.spentAtomic === 'string' && /^(0|[1-9][0-9]*)$/.test(s.spentAtomic)) {
-        return { day, spentAtomic: s.spentAtomic, tripped: s.tripped === true };
-      }
-    } catch {
-      // first run of the day
+      text = readFileSync(this.statePath, 'utf8');
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw new Error(`buy guard state unreadable: ${(e as NodeJS.ErrnoException).code ?? 'error'}`);
     }
-    return { day, spentAtomic: '0', tripped: false };
+    let spent = 0n;
+    let tripped = false;
+    if (text !== null) {
+      let s: Partial<GuardState>;
+      try {
+        s = JSON.parse(text) as Partial<GuardState>;
+      } catch {
+        throw new Error('buy guard state is corrupt');
+      }
+      if (typeof s !== 'object' || s === null || typeof s.day !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(s.day) || typeof s.spentAtomic !== 'string' || !/^(0|[1-9][0-9]*)$/.test(s.spentAtomic)) {
+        throw new Error('buy guard state is corrupt');
+      }
+      if (s.day === day) {
+        spent = BigInt(s.spentAtomic);
+        tripped = s.tripped === true;
+      }
+    }
+    if (this.ledger) {
+      let l: bigint;
+      try {
+        l = this.ledger.spentOn(day);
+      } catch {
+        throw new Error('buy intent ledger is unreadable or corrupt');
+      }
+      if (l > spent) spent = l;
+    }
+    return { day, spentAtomic: spent.toString(), tripped };
   }
 
   private save(s: GuardState): void {
-    mkdirSync(dirname(this.statePath), { recursive: true });
-    const tmp = `${this.statePath}.tmp`;
-    writeFileSync(tmp, `${JSON.stringify(s)}\n`, { mode: 0o640 });
-    renameSync(tmp, this.statePath);
+    durableReplace(this.statePath, `${JSON.stringify(s)}\n`);
   }
 
   /** True when a paid read of `cost` keeps today's spend within settled revenue + 1 USDC. */

@@ -14,10 +14,11 @@ contract DeployRegistry is DeployScript, RegistryDeployer, ValidatorStackChecker
     }
 
     function _run(address validator) internal returns (EnclaveRegistry registry) {
-        _requireSepolia();
+        _requireSupportedChain();
         (address certManager, address p384) = _requireProductionStack(validator);
-        require(SEPOLIA_IDENTITY.code.length != 0, "ERC-8004 identity registry has no code on this chain");
-        require(SEPOLIA_SELF.code.length != 0, "Self registry has no code on this chain");
+        (address identity, address self) = _registries();
+        require(identity.code.length != 0, "ERC-8004 identity registry has no code on this chain");
+        require(self.code.length != 0, "Self registry has no code on this chain");
 
         address deployer = _startBroadcast();
         registry = _deployRegistry(validator);

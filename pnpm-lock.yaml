@@ -103,6 +103,9 @@ importers:
       '@attessa/core':
         specifier: workspace:*
         version: link:../core
+      '@celo/buy-core':
+        specifier: 0.8.5
+        version: 0.8.5(typescript@5.9.3)(zod@4.6.7)
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -136,6 +139,9 @@ packages:
 
   '@adraffy/ens-normalize@1.11.1':
     resolution: {integrity: sha512-nhCBV3quEgesuf7c7KYfperqSS14T8bYuvJ8PcLJp6znkZpFc0AuW4qBtr8eKVyPPe/8RSr7sglCWPU5eaxwKQ==}
+
+  '@celo/buy-core@0.8.5':
+    resolution: {integrity: sha512-SjWbZdKFInPLaIx04JgFb39KvU0g1IFb+R5+hPBB3VT6tC7eT+eYyYwAEmVsoRQrSkFTMkR9z67kTJYFvi1+OQ==}
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1320,6 +1326,15 @@ packages:
 snapshots:
 
   '@adraffy/ens-normalize@1.11.1': {}
+
+  '@celo/buy-core@0.8.5(typescript@5.9.3)(zod@4.6.7)':
+    dependencies:
+      viem: 2.57.13(typescript@5.9.3)(zod@4.6.7)
+    transitivePeerDependencies:
+      - bufferutil
+      - typescript
+      - utf-8-validate
+      - zod
 
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
