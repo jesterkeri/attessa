@@ -4753,6 +4753,84 @@ reviewed: pending Codex r6
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
 
+## T28 seller-host input fetch through buy, Forno fallback, `source` recorded (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 (capability id, price, first paid transaction) is not done because the agent wallet is not funded, so T27 and T28 stay unticked. Every buy test uses a test double for the `buy` binary (an `exec` stub answering from an in-process fake JSON-RPC node); the capability id, URL and price in the tests are placeholders.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` runs the `buy` binary's `curl` subcommand with `--max-amount <decimal>`, `--silent`, a POST and the JSON-RPC batch as the request body, through an injectable exec. One attempt, never retried. The key is never read by seller-host, never in argv or the child's environment (minimal env: PATH, HOME, LANG, BUY_HOME), and buy's stderr/stdout is never put in an error. Config check: https URL without credentials, 1-128 visible ASCII id, per-call maximum > 0 and <= 0.10 USDC ceiling. The same maximum is passed to buy and counted by the budget guard as one evaluate's cost.
+- `src/inputs.ts`: `parseBatchReply` shared by Forno and buy. A paid primary gets the head number from Forno (free), then asks buy once for the four reads (block, code, nonce, balance) at latest - 1, in one batch. A buy reply that fails validation (not JSON, not an array, a per-call error, wrong block number, bad hash, bad code) counts as failed and falls back once to Forno with `source:"forno"`; the paid attempt is still counted.
+- `src/config.ts`, `src/main.ts`: optional `buy` block (capabilityId, url, maxAmount as decimal USDC, optional binary, account, home). Refused on sepolia and local, and without `gatewayDbPath`. Absent means Forno only. Wired with `BuySpendGuard`/`GatewayDbRevenue`.
+- Tests: `test/buy-inputs.test.ts` (new). Two assertions in `test/inputs.test.ts` changed because the head read moved to Forno: Forno now sees 1 request when buy succeeds (was 0), and the guard test counts 4 paid requests for 4 fetches (was 8). They encode SPEC's "one batch per evaluate"; what is checked is not relaxed.
+
+Verification: `pnpm --filter @attessa/seller-host exec vitest run -t "inputs"` 16 passed | 76 skipped; full seller-host suite 92 passed (92); typecheck and lint exit 0 (see the build report for the output).
+reviewed: pending
+
+## T28 round 1 fixes after the adversary pass (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 and T28 stay unticked: T27 (capability id, price, first paid transaction) needs a funded agent wallet. Every buy test uses a test double or a stand-in shell script for the `buy` binary; nothing signs or spends.
+
+Fixed in packages/seller-host (each with a test that fails without the fix; confirmed by stashing `src/` and running the suite: 16 failed):
+1. `src/buy.ts`: new `keystoreBackend` config field (`system` | `file`), forwarded as BUY_KEYSTORE_BACKEND, plus XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS; the parent's own BUY_KEYSTORE_BACKEND is used if the config has none and it is a valid value. From @celo/buy-keystore 0.8.5 (read as data): the file backend has no passphrase and refuses mainnet accounts, so it cannot sign on mainnet (see OPEN-QUESTIONS). No AGENT_PRIVATE_KEY or other secret reaches the child.
+2. `CAPABILITY_ID = /^[A-Za-z0-9._:/-]{1,128}$/`, with a test reading `enclave/src/rules.rs` for the same grammar; `parseConfig` refuses a missing or non-string capabilityId, url or maxAmount at parse time.
+3. `src/inputs.ts`: `guard.allow`/`guard.record` run inside the paid-call wrapper under try/catch; a fault logs `buy_guard_fault`, makes no paid call, and Forno answers. The spend is recorded before the call it pays for.
+4. `defaultExec` uses spawn with `detached: true` and kills the process group on abort, exit or overflow; the test leaves a background child that would write a marker file 1.2 s later.
+5. The paid block's hash and timestamp are checked against Forno at the same number; a mismatch is a failed buy read (Forno answers). A Forno failure in the cross-check does not fail the evaluate (decision recorded in OPEN-QUESTIONS.md).
+6. A failed Forno head read is replaced by a head read through buy, counted as a second paid request within the budget; spend is counted only just before a paid call is made.
+Changed expectation in `test/inputs.test.ts`: Forno now sees 2 requests when buy succeeds (head, then the cross-check), was 1. `test/buy-adversary.test.ts` is the adversary's file with imports changed, kept as is.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  109 passed (109)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+```
+(previous count 92 passed)
+reviewed: pending
+
+
+## T28 seller-host paid reads through the @celo/buy-core library, not the buy CLI (NOT ticked; no real paid call has run)
+
+No real paid call has run and nothing touched the buy gateway. T27 (capability id, price, first paid transaction) needs a funded agent wallet, so T27 and T28 stay unticked. Why: on a headless mainnet host the `buy` CLI cannot sign (`BUY_KEYSTORE_BACKEND=file` refuses mainnet, `system` needs a Secret Service over D-Bus), so every evaluate would have fallen back to Forno.
+
+Read as data first (`npm pack @celo/buy-core@0.8.5 --ignore-scripts`, unpacked in an empty scratch directory, not run): no install scripts, one dependency (`viem ^2.21.55`, already in the lockfile at 2.57.13). `x402.payingFetch(ctx, url, init)`: `ctx = { account: LocalAccount | () => Promise<LocalAccount>, network: 'celo' | 'celo-sepolia', preferredToken?, fetchImpl?, readBalance?, ... }`; `init` is a `RequestInit` plus `maxAmount?: bigint` (cap), `maxRetries` (default 1), `onChallenge`, `onBeforePayment`. Cap: the library compares the selected requirement's `maxAmountRequired` to `maxAmount` and throws `amount_exceeds_max` before `buildPayment` (before signing). Seller-host also checks, in `onChallenge` (also before signing): network `celo`, asset 0xcebA9300f2b948710d2653dD7B07f33A8B32118C, scheme `exact`, integer price within the cap, payTo an address; `onBeforePayment` refuses if the evaluate was aborted. The paid request is sent once (library comment: no transient retry after a payment is on the wire); the library signs with chainId from the `celo` table, 42220. v2: challenge in the `payment-required` header (base64 JSON, CAIP-2 network `eip155:42220`, price in `amount`), payment in `PAYMENT-SIGNATURE`.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` and the process-group exec replaced by `BuyPaidSource(config, account, fetchImpl?)` (same `BuySource` interface, same `buy:<capabilityId>` source, same cost per evaluate) and `loadAgentAccount(env)`. The key comes from env `AGENT_PRIVATE_KEY` only (64 hex, 0x optional), through viem's `privateKeyToAccount`, in memory. A missing or malformed key returns a reason that never contains the value. Errors carry a short code (`paid read failed (http_500)`), never a library or network message; the source does not serialise or inspect its account. The paid request uses `redirect: 'error'`, the caller's abort signal, and a 1 MiB reply cap.
+- `src/main.ts`: builds the source only if the config has `buy` and the key loads; otherwise logs `buy_disabled` (reason, `fallback: forno`) and reads go to Forno. The `listening` log says whether buy is on. seller-host has no health route, so the startup log is the message.
+- `src/config.ts`: `binary`, `account`, `home` and `keystoreBackend` removed (an old config that still has them has them ignored).
+- `package.json`: `@celo/buy-core` `0.8.5` exact. `pnpm-lock.yaml`: +15 lines: the importer entry, the `@celo/buy-core@0.8.5` package and snapshot (depends only on the existing `viem 2.57.13` instance). No other package was added.
+- Tests: `test/fake-x402.ts` (new): a local x402 v2 seller that verifies the EIP-3009 signature (chain 42220, USDC domain) before answering from a fake JSON-RPC node. `test/buy-inputs.test.ts` rewritten on it with a throwaway key generated in the test; `test/buy-adversary.test.ts` keeps its config and guard probes. Removed as tests of deleted features: the argv/`--max-amount` and minimal-env test, the keystoreBackend env tests (2), the two process-group abort tests and the two spawn-based adversary tests. Ported to the new route: abort ends the in-flight request (the server sees the connection close, exactly one payment), reply that is not a valid batch is a failed read, fallback and spend counting, cross-check, head, guard. New: cap, chain, asset and scheme refusals with a counted signer (zero signatures), cap boundary, a cheaper wrong-token offer listed first, redirect not followed, abort during signing sends nothing, no second payment after a 5xx / 402 / dropped connection, key loading, key never in a thrown error, JSON or inspect output. A mutation check (the scheme and payTo checks disabled) makes the refusal test fail.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm install --frozen-lockfile        -> Done in 428ms (lockfile up to date; bin-link WARNs are for unbuilt workspace dists)
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  119 passed (119)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+$ bash scripts/check-install-scripts.sh          -> "pnpm@10.32.1 install ran no non-allowlisted install script: ok", exit 0
+(previous count 109 passed)
+```
+reviewed: pending
+
+### T28 payment receipts - 2026-11-09
+Build with buy asks for proof of payment, and the library route kept only the reply body. Each paid read now appends a receipt to `<stateDir>/buy-receipts.jsonl` (mode 0600) and logs `buy_paid`: capability, url, network, asset, amount, status, outcome, settlement tx, payer, nonce, time. Public values only, never the signature. A paid request the service answers with an error still leaves a receipt. A failed write does not fail the read or pay again. Not confirmed: the real gateway's settlement header, or that Loops counts library payments (asked of the organisers).
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 11 passed (11), Tests 123 passed (123); typecheck and lint: no errors.
+reviewed: pending
+
+### T28 adversary r2 fixes - 2026-11-09
+Defects, proved by packages/seller-host/test/adversary-t28-r2.test.ts:
+1. One transient Forno failure made one evaluate pay twice, because a paid request stood in for the head. That broke SPEC §5 / FR-11, "one JSON-RPC batch per evaluate".
+2. In that same case the paid block skipped the cross-check against Forno, so a forged block hash could be attested.
+3. The library signs a validity window the seller chooses (1e9 seconds passed).
+Fixes: the head is always free Forno, with one retry. With no head the evaluate fails with nothing paid, so availability now depends on Forno for the head, and this is a stated trade-off. Offers above MAX_AUTH_WINDOW_SECONDS (3600, our choice; the spec gives no number) are refused before signing. A settlement value that is not a transaction hash is not recorded, and `buy_paid` is logged before the file write.
+Test changes: "head: Forno down and buy up, the head is a second counted paid request" and "the extra paid head request stays inside the budget" asserted the removed design and are replaced by one test that nothing is paid. The adversary's window test now expects a refusal with nothing signed, and the 3600 boundary to pay, because the library's window can't be overridden.
+Left open: code, nonce and balance from the paid service are not cross-checked (only block hash and timestamp). A paid request ending in a transport error or abort leaves no receipt, because the library calls onPayment only after a non-402 reply.
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 126 passed (126); typecheck and lint: no errors.
 ## T34 README (README part only; T34 not ticked) - 2026-11-08
 
 Wrote `README.md` from FLOWS §1 (premise line verbatim), SPEC §1, ARCHITECTURE, KNOWN-LIMITS, `packages/cli/src/index.ts` COMMANDS, `packages/mcp/src/server.ts` and `docs/DEPLOYMENTS.md`. Every relative link was checked and resolves; no em dashes; no numbers, addresses or keys in it. `scripts/check-claims.sh` does not exist on this branch (not written). No project license file or `license` field exists, so the README states none.
@@ -4814,6 +4892,22 @@ reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
 
+## T28 Codex r1 fixes (M1-M3)
+- M1: an unavailable Forno cross-check now fails the paid read closed; the Forno fallback runs, and if it cannot answer the result is `inputs_unavailable` with no inputs for the enclave. Old fail-open test replaced; forged-payload-plus-outage test added.
+- M2: `buy-intents.jsonl` (new `src/ledger.ts`) is append-only, fsynced per line: `intent` (id, capability, payer, cap, timestamp) written in `onBeforePayment`, `nonce` line before the paid request is sent, then `outcome` `responded` or `uncertain`. A paid fetch that throws after the send ends as `payment_uncertain`. No durable intent, no send.
+- M3: an existing but unreadable/corrupt `buy-guard.json` throws (guard fault, buy off, Forno serves). Today's spend = max(state, ledger intents for the UTC day, uncertain ones included). State is written with fsync.
+- Verify: `pnpm --filter @attessa/seller-host lint && ... typecheck && ... test`
+```
+ Test Files  13 passed (13)
+      Tests  137 passed (137)
+exit 0
+```
+reviewed: pending Codex r2
+
+## T28: adversary round 2 (feat/t28-buy-inputs, 2026-11-09)
+reviewed: pending Codex r2
+
+The cross-check anchored only the paid block header, so a paid reply with the real header and forged code, nonce or balance reached the enclave. Every paid read is now compared with Forno at the same block, and any difference or outage rejects the paid read; the Forno fallback runs. Test kept as `packages/seller-host/test/adversary-t28-forged-values.test.ts`. `pnpm --filter @attessa/seller-host test`: Test Files 14 passed, Tests 140 passed.
 ### T30 mainnet deploy route Codex r2: SHIP - 2026-11-09
 
 Codex round 2 reviewed 7de210c in a frozen worktree and found nothing: every mainnet creation is pinned init code, constructor arguments and the ERC-8021 suffix, the Forge scripts refuse a mainnet broadcast, and `tagged-deploy.mjs` signs and sends nothing. After merging staging (dce5d3d, which brings the Codex-SHIP mainnet-entry work):
@@ -4824,3 +4918,16 @@ forge test: Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total
 ```
 No mainnet contract is deployed by this. T30 stays open until the real deployment is recorded.
 reviewed: reviews/t30-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+## T28: Codex r2 SHIP (feat/t28-buy-inputs, 2026-11-09)
+reviewed: reviews/t28-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+Reviewed at 17d6d2c. The review also closed r1's M1, M2 and M3. Verify command, verbatim, at that head:
+
+```
+$ pnpm --filter @attessa/seller-host test -- -t "inputs"
+ Test Files  14 passed (14)
+      Tests  140 passed (140)
+```
+
+The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
