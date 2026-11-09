@@ -26,8 +26,8 @@ export async function main(path: string): Promise<void> {
     if (key.ok) {
       const receipts = join(cfg.stateDir, 'buy-receipts.jsonl');
       buy = new BuyPaidSource(cfg.buy, key.account, undefined, (r) => {
+        log('buy_paid', { capabilityId: r.capabilityId, amount: r.amount, outcome: r.outcome, txHash: r.txHash, from: r.from, nonce: r.nonce }); // first: survives a failed write
         appendFileSync(receipts, `${JSON.stringify(r)}\n`, { mode: 0o600 });
-        log('buy_paid', { capabilityId: r.capabilityId, amount: r.amount, outcome: r.outcome, txHash: r.txHash });
       });
     }
     else log('buy_disabled', { reason: key.reason, fallback: 'forno' });

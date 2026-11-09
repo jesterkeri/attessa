@@ -45,6 +45,13 @@ describe('proof of a paid read', () => {
     expect(got[0]!.outcome).toBe('ambiguous');
   });
 
+  it('a settlement value that is not a transaction hash is not recorded: the seller supplies it', async () => {
+    x.settlementTx = 'x'.repeat(5000);
+    const got: BuyReceipt[] = [];
+    await new BuyPaidSource(CFG, ACCOUNT, x.fetchImpl, (r) => void got.push(r)).batch(CALLS, new AbortController().signal);
+    expect(got[0]!.txHash).toBeNull();
+  });
+
   it('a failed receipt write does not turn a paid read into a failure, and pays once', async () => {
     const reply = await new BuyPaidSource(CFG, ACCOUNT, x.fetchImpl, () => {
       throw new Error('disk full');

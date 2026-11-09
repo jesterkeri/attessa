@@ -268,23 +268,12 @@ describe('buy inputs (T28) round 1 behaviours, on the library route', () => {
     expect(logs).toContain('inputs_crosscheck_unavailable');
   });
 
-  it('head: Forno down and buy up, the head is a second counted paid request and buy alone serves the evaluate', async () => {
+  it('head: Forno down and buy up, nothing is paid: one evaluate never pays for a head, and there is no block to read at', async () => {
     forno.mode = 'http500';
     const { f, guard } = fetcher('ok');
-    const i = await f.fetch(PAY_TO, NOW);
-    expect(i.source).toBe('buy:test-capability');
-    expect(x.payments).toHaveLength(2);
-    expect((x.rpc.requests[0] as Array<{ method: string }>)[0]).toMatchObject({ method: 'eth_blockNumber' });
-    expect(guard.state(NOW).spentAtomic).toBe('20000');
-  });
-
-  it('head: the extra paid head request stays inside the budget, and with the budget used up nothing is counted for a call not made', async () => {
-    forno.mode = 'http500';
-    const { f, guard } = fetcher('ok');
-    guard.record(990_000n, NOW);
     await expect(f.fetch(PAY_TO, NOW)).rejects.toThrow(/inputs_unavailable/);
-    expect(x.payments).toHaveLength(1);
-    expect(guard.state(NOW).spentAtomic).toBe('1000000');
+    expect(x.unpaid + x.payments.length).toBe(0);
+    expect(guard.state(NOW).spentAtomic).toBe('0');
   });
 
   it('head: when the paid call never happens (budget gone) nothing is counted', async () => {

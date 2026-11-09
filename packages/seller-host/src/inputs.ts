@@ -181,8 +181,9 @@ export class InputFetcher {
             return buy.batch(calls, signal);
           },
         };
-        let headFromBuy = false;
-        // The free head first; if Forno cannot give it, the head is one more paid request, within the same budget.
+        // The head is always free Forno, with one retry for a transient fault: one evaluate pays for one batch (SPEC §5,
+        // FR-11), so a paid request never stands in for the head. Without a head there is nothing to read at, and the
+        // evaluate fails with nothing paid.
         headSource = {
           id: forno.id,
           batch: async (calls, signal) => {
@@ -190,15 +191,13 @@ export class InputFetcher {
               return await forno.batch(calls, signal);
             } catch (e) {
               log?.('inputs_head_forno_failed', { reason: (e as Error).message });
-              headFromBuy = true;
-              return metered.batch(calls, AbortSignal.timeout(this.timeoutMs));
+              return forno.batch(calls, signal);
             }
           },
         };
         // A paid answer is checked against free Forno at the same number. If Forno cannot answer, the paid
         // read stands (it is not Forno's evaluate to fail); a differing hash or timestamp is a failed buy read.
         verify = async (blk) => {
-          if (headFromBuy) return;
           let ref: unknown;
           try {
             [ref] = await forno.batch([{ method: 'eth_getBlockByNumber', params: [`0x${BigInt(blk.number).toString(16)}`, false] }], AbortSignal.timeout(this.timeoutMs));

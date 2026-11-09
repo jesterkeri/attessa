@@ -4683,3 +4683,14 @@ reviewed: pending
 Build with buy asks for proof of payment, and the library route kept only the reply body. Each paid read now appends a receipt to `<stateDir>/buy-receipts.jsonl` (mode 0600) and logs `buy_paid`: capability, url, network, asset, amount, status, outcome, settlement tx, payer, nonce, time. Public values only, never the signature. A paid request the service answers with an error still leaves a receipt. A failed write does not fail the read or pay again. Not confirmed: the real gateway's settlement header, or that Loops counts library payments (asked of the organisers).
 Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 11 passed (11), Tests 123 passed (123); typecheck and lint: no errors.
 reviewed: pending
+
+### T28 adversary r2 fixes - 2026-11-09
+Defects, proved by packages/seller-host/test/adversary-t28-r2.test.ts:
+1. One transient Forno failure made one evaluate pay twice, because a paid request stood in for the head. That broke SPEC §5 / FR-11, "one JSON-RPC batch per evaluate".
+2. In that same case the paid block skipped the cross-check against Forno, so a forged block hash could be attested.
+3. The library signs a validity window the seller chooses (1e9 seconds passed).
+Fixes: the head is always free Forno, with one retry. With no head the evaluate fails with nothing paid, so availability now depends on Forno for the head, and this is a stated trade-off. Offers above MAX_AUTH_WINDOW_SECONDS (3600, our choice; the spec gives no number) are refused before signing. A settlement value that is not a transaction hash is not recorded, and `buy_paid` is logged before the file write.
+Test changes: "head: Forno down and buy up, the head is a second counted paid request" and "the extra paid head request stays inside the budget" asserted the removed design and are replaced by one test that nothing is paid. The adversary's window test now expects a refusal with nothing signed, and the 3600 boundary to pay, because the library's window can't be overridden.
+Left open: code, nonce and balance from the paid service are not cross-checked (only block hash and timestamp). A paid request ending in a transport error or abort leaves no receipt, because the library calls onPayment only after a non-402 reply.
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 126 passed (126); typecheck and lint: no errors.
+reviewed: pending

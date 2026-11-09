@@ -79,6 +79,9 @@ class RefusedRequirement extends Error {
   readonly code = 'refused_requirement';
 }
 
+/** Longest validity a signed payment may ask for (1 hour). */
+export const MAX_AUTH_WINDOW_SECONDS = 3600;
+
 /** Largest reply body read (1 MiB). */
 const MAX_BODY = 1 << 20;
 
@@ -181,6 +184,8 @@ export class BuyPaidSource implements BuySource {
             if (req.scheme !== 'exact') throw new RefusedRequirement('scheme');
             if (typeof req.maxAmountRequired !== 'string' || !/^[0-9]+$/.test(req.maxAmountRequired) || BigInt(req.maxAmountRequired) > max) throw new RefusedRequirement('price');
             if (typeof req.payTo !== 'string' || !isAddress(req.payTo)) throw new RefusedRequirement('payTo');
+            // The library signs a window the seller chooses. A long one stays settleable long after a failed or aborted call.
+            if (typeof req.maxTimeoutSeconds === 'number' && req.maxTimeoutSeconds > MAX_AUTH_WINDOW_SECONDS) throw new RefusedRequirement('window');
           },
           onBeforePayment: () => {
             if (signal.aborted) throw Object.assign(new Error('aborted'), { code: 'aborted' });
@@ -188,7 +193,7 @@ export class BuyPaidSource implements BuySource {
           // Proof of payment: the library calls this after the paid request, whatever its outcome. A failed write can't
           // undo a payment and must not read as a failed call, so errors stop here (the library also guards this).
           onPayment: async (info) => {
-            await this.onReceipt?.({ capabilityId: this.c.capabilityId, url: info.url, network: info.network, asset: info.asset, amount: info.amount, status: info.status, outcome: info.outcome, txHash: info.txHash ?? null, from: info.authorization.from, nonce: info.authorization.nonce, timestamp: info.timestamp });
+            await this.onReceipt?.({ capabilityId: this.c.capabilityId, url: info.url, network: info.network, asset: info.asset, amount: info.amount, status: info.status, outcome: info.outcome, txHash: typeof info.txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(info.txHash) ? info.txHash : null, from: info.authorization.from, nonce: info.authorization.nonce, timestamp: info.timestamp });
           },
           onAccountingError: () => {},
         },
