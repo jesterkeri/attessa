@@ -67,6 +67,10 @@ case "$1" in
     esac
     # WRONG_RESP_CID: the enclave for this CID starts, but the printed response is a well-formed foreign one
     if [ "$cid" = "\${WRONG_RESP_CID:-}" ]; then echo '{"EnclaveID":"i-seller-16","EnclaveCID":16,"EnclaveName":"someone-else","NumberOfCPUs":1,"MemoryMiB":1024}'; exit 0; fi
+    # WRONG_NAME_CID: the printed response has the requested CID but someone else's id and name.
+    if [ "$cid" = "\${WRONG_NAME_CID:-}" ]; then echo "{\\"EnclaveID\\":\\"i-seller-$cid\\",\\"EnclaveCID\\":$cid,\\"EnclaveName\\":\\"someone-else\\"}"; exit 0; fi
+    # TWO_DOCS_CID: two JSON documents, a foreign one on the requested CID and then our own.
+    if [ "$cid" = "\${TWO_DOCS_CID:-}" ]; then echo "{\\"EnclaveID\\":\\"i-seller-$cid\\",\\"EnclaveCID\\":$cid,\\"EnclaveName\\":\\"$ename\\"}"; echo "{\\"EnclaveName\\":\\"$ename\\",\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid}"; exit 0; fi
     if [ "$(cat "$STATE.slowrun" 2>/dev/null)" = "$cid" ]; then touch "$STATE.inrun"; sleep 1; fi
     echo "{\\"EnclaveName\\":\\"$ename\\",\\"EnclaveID\\":\\"i-fake-$cid\\",\\"EnclaveCID\\":$cid,\\"NumberOfCPUs\\":1,\\"MemoryMiB\\":1024}" ;;
   terminate-enclave)
@@ -273,6 +277,17 @@ describe('t12-spike.sh requires all three launches and a bound run-enclave respo
     const { r, terminates } = runSpike({ WRONG_RESP_CID: '18' });
     expect(r.status).not.toBe(0);
     expect(terminates.join('\n')).not.toContain('i-seller-16');
+    expect(terminates).toEqual([T('i-fake-18')]);
+  });
+
+  // Codex r4: cleanup read the response again with a CID-only check, so these reached terminate-enclave.
+  it.each([
+    ['the requested CID with a foreign id and name', { WRONG_NAME_CID: '18' }],
+    ['two JSON documents', { TWO_DOCS_CID: '18' }],
+  ])('never terminates a foreign id from a run-enclave response with %s', (_n, env) => {
+    const { r, terminates } = runSpike(env);
+    expect(r.status).not.toBe(0);
+    expect(terminates.join('\n')).not.toContain('i-seller-18');
     expect(terminates).toEqual([T('i-fake-18')]);
   });
 });
