@@ -4848,3 +4848,18 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+### T12 host run at cb076e2 - 2026-11-09
+
+`scripts/t12-spike.sh` on the EC2 host (c6g.xlarge) at cb076e2, in a non-debug enclave. No keys, no transactions. The host's `describe-enclaves` printed `[]` before and after, and no socat stayed running.
+```
+ok   public_key length 65
+ok   user_data length 160
+ok   PCR0 0xfb037fb31c094c57784fd9e6b14040bf23c5fd9d9171b3c75f24f31051f73aebdacc0dd12f87ebf265a835051717b3da
+ok   PCR1 0x3b4a7e1b5f13c5a1000b3ed32ef8995ee13e9876329f9bc72650b918329ef9cf4e2e4d1e1e37375dab0ba56ba0974d03
+ok   PCR2 0x1bacbbc88a652f2eb3d64079fb74ab6523287d053544bbd8dd0397d0e7982804c505d05c0db274298d3f975c2446378c
+ok   timestamp 2026-11-09T05:51:42.440Z (0 s ago)
+== verify, part 2: enclaves running
+3
+```
+reviewed: pending Codex (reviews/t12-review-r3.md)
