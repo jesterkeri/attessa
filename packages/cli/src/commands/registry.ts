@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { normalizeOrigin, originHash } from '@attessa/core';
+import { DEPLOYMENTS, normalizeOrigin, originHash } from '@attessa/core';
 import {
   decodeEventLog,
   encodeEventTopics,
@@ -10,7 +10,7 @@ import {
   type Hex,
 } from 'viem';
 import { AGENT_WALLET_SET_TYPES, ENDPOINT_STATUS, IDENTITY_ABI, REGISTRY_ABI, REGISTRY_EVENTS, RELEASE_STATUS, SIGNER_STATUS } from '../abi.ts';
-import { connect, type Chain, type Deps, type Global } from '../context.ts';
+import { connect, type Chain, type ChainBase, type Deps, type Global } from '../context.ts';
 import { CliError, ERR, OWN, OWNERR, celo, host, rpcShownSafe, safe, short, sourceLabel, utcShort, withoutCredentials } from '../copy.ts';
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Revert, type Step } from '../tx.ts';
@@ -22,6 +22,8 @@ const ADDRESS = /^0x[0-9a-fA-F]{40}$/;
 const BYTES32 = /^0x[0-9a-fA-F]{64}$/;
 const DEC = /^(0|[1-9][0-9]*)$/;
 const ZERO: Address = '0x0000000000000000000000000000000000000000';
+/** Who a keyless register is simulated from. Not ZERO: the identity registry mints to msg.sender, and ERC-721 reverts for the zero address. */
+const KEYLESS_REGISTER_SIMULATOR: Address = '0x000000000000000000000000000000000000dead';
 
 type EventName = 'ReleaseApproved' | 'EndpointAdded' | 'SignerRegistered';
 
@@ -57,7 +59,7 @@ function onRevert(rc: RevertContext, extra: Partial<Record<string, () => CliErro
 }
 
 async function write(
-  c: Chain,
+  c: ChainBase,
   g: Global,
   deps: Deps,
   o: { from: Address; step: Step; yesWord: string; prompt: (cost: string) => string; rc: RevertContext; extra?: Partial<Record<string, () => CliError>>; done: (tx: Hex, logs: Array<{ address: Address; topics: Hex[]; data: Hex }>) => void },
@@ -79,11 +81,17 @@ function needAgent(v: string | undefined): bigint {
 export async function agentRegister(g: Global, deps: Deps, o: { name?: string | undefined; description?: string | undefined; uri?: string | undefined }): Promise<number> {
   if (!o.name) throw ERR.usage('--name is required, like --name "Acme risk check".');
   if (!o.uri) throw ERR.usage('--uri <agentURI> is required: where docs/agent.json will be published.');
-  const c = await connect(g, deps);
-  const identity = ((await read(c, c.registry, REGISTRY_ABI, 'identityRegistry', [])) as Address).toLowerCase() as Address;
+  // Registering an ERC-8004 identity needs only the identity registry, so it works before our EnclaveRegistry exists
+  // (mainnet until T30). A registry that is deployed or configured stays authoritative for its address.
+  const c = await connect(g, deps, { registry: 'optional' });
+  const identity = (
+    c.registry
+      ? ((await read(c, c.registry, REGISTRY_ABI, 'identityRegistry', [])) as Address)
+      : (Object.values(DEPLOYMENTS).find((d) => d.chainId === c.chainId)?.identityRegistry ?? (() => { throw ERR.noRegistry(g.network); })())
+  ).toLowerCase() as Address;
   // ERC-8004 registration file (SPEC §8). `services` lists endpoints; there are none before `endpoint add`.
   const file = resolve(deps.cwd, 'docs/agent.json');
-  const doc = (registrations: Array<{ agentId: number; agentRegistry: string }>) =>
+  const doc = (registrations: Array<{ agentId: number | string; agentRegistry: string }>) =>
     `${JSON.stringify(
       {
         type: 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1',
@@ -107,7 +115,7 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
     }
   };
   if (!c.account && !g.dryRun && !registered()) deps.writeFile(file, doc([]));
-  const from = (c.account?.address.toLowerCase() as Address | undefined) ?? ZERO;
+  const from = (c.account?.address.toLowerCase() as Address | undefined) ?? KEYLESS_REGISTER_SIMULATOR;
   const step: Step = { label: 'register', to: identity, data: encodeFunctionData({ abi: IDENTITY_ABI, functionName: 'register', args: [o.uri] }) };
   return write(c, g, deps, {
     from,
@@ -128,7 +136,8 @@ export async function agentRegister(g: Global, deps: Deps, o: { name?: string | 
         .find((a) => a && a.from === ZERO && a.to.toLowerCase() === from);
       if (!minted) throw new CliError('no_agent_id', `The registration (tx ${tx}) minted no agent to ${from}.`, 'Check the tx on a Celo explorer.');
       const agent = minted.tokenId.toString();
-      deps.writeFile(file, doc([{ agentId: Number(minted.tokenId), agentRegistry: `eip155:${c.chainId}:${getAddress(identity)}` }]));
+      deps.writeFile(file, doc([{ agentId: minted.tokenId <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(minted.tokenId) : agent, // SPEC §2: above 2^53 a decimal string, never a rounded number
+           agentRegistry: `eip155:${c.chainId}:${getAddress(identity)}` }]));
       deps.io.out(OWN.registered(agent, tx));
       deps.io.data?.({ agentId: agent, tx, agentFile: file });
     },

@@ -1,7 +1,7 @@
-import { DEPLOYMENTS } from '@attessa/core';
+import { ATTRIBUTION_CHAIN_ID, DEPLOYMENTS, attributionSuffix } from '@attessa/core';
 import { KeyError, keyToAccount, type ClientOptions, type Keychain } from '@attessa/sdk';
 import type { EnclaveTransport } from '@attessa/seller-host';
-import type { Address } from 'viem';
+import type { Address, Hex } from 'viem';
 import type { PrivateKeyAccount } from 'viem/accounts';
 import { CliError, ERR } from './copy.ts';
 import { HttpRpc, type Rpc } from './rpc.ts';
@@ -82,6 +82,12 @@ export interface Chain {
   /** The RPC as the user set it (`--rpc`) or the network's default: the one copy names (FLOWS §8 "Can't reach Celo at {rpc}"). */
   url: string;
   registry: Address;
+  /**
+   * The Loops ERC-8021 data suffix every transaction this CLI sends carries: set only on mainnet with a wallet and
+   * `LOOPS_ATTRIBUTION_TAG` set. Null on Sepolia and local, and on mainnet when the variable is unset (sending is
+   * then refused: `attributionRequired`).
+   */
+  attribution: Hex | null;
   /** The signing account, only from env `ATTESSA_PRIVATE_KEY`. Null means: plan and simulate, never send. */
   account: PrivateKeyAccount | null;
 }
@@ -103,12 +109,33 @@ export function loadAccount(env: Deps['env']): PrivateKeyAccount | null {
   }
 }
 
+/** A chain resolved with `registry: 'optional'`: `registry` is null when no EnclaveRegistry is deployed or configured. */
+export type ChainBase = Omit<Chain, 'registry'>;
+export type RegistrylessChain = ChainBase & { registry: Address | null };
+
+/**
+ * The suffix from env `LOOPS_ATTRIBUTION_TAG` (not a secret): null when unset or malformed. It never throws and never
+ * echoes the value, so a bad tag cannot block a read or an x402 call; a send on verified chain 42220 treats null as
+ * `attributionRequired` and refuses before signing.
+ */
+export function loopsSuffix(env: Deps['env']): Hex | null {
+  const tag = env.LOOPS_ATTRIBUTION_TAG;
+  if (tag === undefined || tag === '') return null;
+  try {
+    return attributionSuffix(tag);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Resolves network, RPC and registry, and checks the RPC's chain id (FLOWS §7 wrong network). A read-only command
  * passes `{ wallet: false }`: FLOWS "Reading doesn't require a wallet", so it never loads ATTESSA_PRIVATE_KEY and a
  * malformed one can't block it.
  */
-export async function connect(g: Global, deps: Deps, o: { wallet?: boolean } = {}): Promise<Chain> {
+export async function connect(g: Global, deps: Deps, o: { wallet?: boolean; registry: 'optional' }): Promise<RegistrylessChain>;
+export async function connect(g: Global, deps: Deps, o?: { wallet?: boolean }): Promise<Chain>;
+export async function connect(g: Global, deps: Deps, o: { wallet?: boolean; registry?: 'optional' } = {}): Promise<RegistrylessChain> {
   const url = g.rpc ?? (g.network === 'local' ? undefined : DEFAULT_RPC[g.network]);
   if (!url) throw ERR.usage('--network local needs --rpc.');
   const rpc = deps.rpc(url);
@@ -132,7 +159,18 @@ export async function connect(g: Global, deps: Deps, o: { wallet?: boolean } = {
   }
   // A deployed registry is authoritative; ATTESSA_REGISTRY only fills in before deploy, or on a chain with no pins.
   const registry = deployed ?? deps.env.ATTESSA_REGISTRY ?? null;
-  if (!registry) throw ERR.noRegistry(g.network);
-  if (!ADDRESS.test(registry)) throw ERR.usage('ATTESSA_REGISTRY must be an address.');
-  return { network: g.network, chainId, rpc, url, registry: registry.toLowerCase() as Address, account: o.wallet === false ? null : loadAccount(deps.env) };
+  if (!registry && o.registry !== 'optional') throw ERR.noRegistry(g.network);
+  if (registry && !ADDRESS.test(registry)) throw ERR.usage('ATTESSA_REGISTRY must be an address.');
+  const wallet = o.wallet !== false;
+  return {
+    network: g.network,
+    chainId,
+    rpc,
+    url,
+    registry: registry ? (registry.toLowerCase() as Address) : null,
+    // Only a command that can send looks at the tag; a read never fails on it. The decision follows the VERIFIED chain id
+    // (the one signed into the transaction), so `--network local` against a 42220 RPC is tagged or refused like mainnet.
+    attribution: wallet && chainId === ATTRIBUTION_CHAIN_ID ? loopsSuffix(deps.env) : null,
+    account: wallet ? loadAccount(deps.env) : null,
+  };
 }

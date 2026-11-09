@@ -1,7 +1,7 @@
 import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, linkSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { originHash } from '@attessa/core';
+import { DEPLOYMENTS, originHash } from '@attessa/core';
 import type { Keychain } from '@attessa/sdk';
 import { keccak256, stringToBytes, type Address, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
@@ -764,6 +764,81 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     expect(w.err).toEqual(['Use just the scheme and host, like https://risk.example (no path, lowercase).']);
   });
 
+  it('cancel on mainnet without LOOPS_ATTRIBUTION_TAG is refused before anything is signed (no_attribution_tag)', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    (w.chain as unknown as { chainId: number }).chainId = 42220; // the rule follows the RPC's real chain, not the --network label
+    const before = w.transcript.length;
+    expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+    w.out.length = 0;
+    expect(await w.cli('cancel', id, '--network', 'mainnet', '--rpc', 'http://127.0.0.1:1', '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG');
+  });
+
+  // Review r1 finding 1/2: `--network local` is no way round the tag. The SDK refuses on the verified chain id 42220.
+  it('cancel via --network local on an RPC that reports 42220, no LOOPS_ATTRIBUTION_TAG: no_attribution_tag, nothing signed or sent', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const before = w.transcript.length;
+    expect(await w.cli('cancel', id, ...LOCAL, '--yes', '--json')).toBe(1);
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+  });
+
+  // Codex mainnet r3: a dry run makes the same promise as a real cancel, on the verified chain, not the --network label.
+  it('cancel --dry-run via --network local on an RPC that reports 42220, no tag: says a real cancel would be refused, and signs nothing', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const before = w.transcript.length;
+    expect(await w.cli('cancel', id, ...LOCAL, '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).toContain('LOOPS_ATTRIBUTION_TAG is not set or not a valid code');
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+    w.out.length = 0;
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234';
+    expect(await w.cli('cancel', id, ...LOCAL, '--dry-run')).toBe(0);
+    expect(w.out.join('\n')).not.toContain('LOOPS_ATTRIBUTION_TAG');
+  });
+
+  it('cancel on 42220 whose estimate leaves no room for the tag: gas_over_cap, never the rpc row, nothing sent', async () => {
+    await initialized();
+    w.gw.behavior = { paid: 'pending_no_settle' };
+    expect(await w.call('--no-wait')).toBe(1);
+    const id = w.pending()[0]!.requestId as string;
+    w.out.length = 0;
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234';
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_estimateGas' ? '0xffffff' : orig(m, p));
+    const before = w.transcript.length;
+    // This file's fake token stands in for a pinned mainnet asset, so the cancel reaches its transaction.
+    const assets = DEPLOYMENTS.celo.assets as unknown as Record<string, unknown>;
+    assets.fake = { address: w.chain.asset, name: 'USD Coin', version: '2', decimals: 6, symbol: 'USDC' };
+    try {
+      expect(await w.cli('cancel', id, ...LOCAL, '--yes', '--json')).toBe(1);
+    } finally {
+      delete assets.fake;
+    }
+    expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'gas_over_cap' });
+    expect(w.out.join('\n')).not.toMatch(/Can't reach Celo/);
+    expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction/);
+  });
+
   it('cancel --json against an RPC on another chain: error code network_mismatch', async () => {
     await initialized();
     w.gw.behavior = { paid: 'pending_no_settle' };
@@ -790,4 +865,67 @@ describe('buyer: T21 adversary r4 fixes beyond the adversary tests', () => {
     ]);
     expect(JSON.stringify(w.pending())).toBe(before);
   });
+});
+
+// Review r2, finding 2: a malformed LOOPS_ATTRIBUTION_TAG matters only to a real send on verified chain 42220.
+describe('buyer: a malformed LOOPS_ATTRIBUTION_TAG', () => {
+  const BAD = 'Not A Tag!';
+  const LOCAL = ['--network', 'local', '--rpc', 'http://127.0.0.1:1'];
+  const MAINNET = ['--network', 'mainnet', '--rpc', 'http://127.0.0.1:1'];
+  const noTagError = () => expect(w.transcript.join('\n')).not.toMatch(/LOOPS_ATTRIBUTION_TAG|Not A Tag/);
+
+  it('does not block `status` on --network local (same result as with no tag)', async () => {
+    await initialized();
+    delete w.env.LOOPS_ATTRIBUTION_TAG;
+    const clean = await w.cli('status', '--pending', ...LOCAL);
+    w.transcript.length = 0;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    expect(await w.cli('status', '--pending', ...LOCAL)).toBe(clean);
+    noTagError();
+    expect(await w.cli('status', w.origin, ...LOCAL)).not.toBe(2);
+    noTagError();
+  });
+
+  it('does not block `status` on --network mainnet (a chain reporting 42220)', async () => {
+    await initialized();
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    await w.cli('status', '--pending', ...MAINNET);
+    noTagError();
+    await w.cli('status', w.origin, ...MAINNET);
+    noTagError();
+  });
+
+  it('does not block `call` on --network local: the x402 call completes as it does with no tag', async () => {
+    await initialized();
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    expect(await w.call()).toBe(0);
+    noTagError();
+  });
+
+  it('does not block `call` on --network mainnet: no tag error, nothing about the variable', async () => {
+    await initialized();
+    (w.chain as unknown as { chainId: number }).chainId = 42220;
+    w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+    await run(['call', w.url, '--body', 'tx.json', ...MAINNET], w.deps());
+    noTagError();
+  });
+
+  for (const [label, route] of [['a local route on 42220', LOCAL], ['the mainnet route', MAINNET]] as const) {
+    it(`cancel on verified 42220 through ${label}: no_attribution_tag before signing, the bad value is never echoed`, async () => {
+      await initialized();
+      w.gw.behavior = { paid: 'pending_no_settle' };
+      expect(await w.call('--no-wait')).toBe(1);
+      const id = w.pending()[0]!.requestId as string;
+      w.out.length = 0;
+      w.transcript.length = 0;
+      (w.chain as unknown as { chainId: number }).chainId = 42220;
+      w.env.LOOPS_ATTRIBUTION_TAG = BAD;
+      const before = w.transcript.length;
+      expect(await w.cli('cancel', id, ...route, '--yes', '--json')).toBe(1);
+      expect(JSON.parse(w.out.at(-1)!)).toMatchObject({ ok: false, error: 'no_attribution_tag' });
+      expect(w.transcript.slice(before).join('\n')).not.toMatch(/eth_sendRawTransaction|eth_estimateGas/);
+      expect(w.transcript.join('\n')).not.toContain('Not A Tag');
+    });
+  }
 });
