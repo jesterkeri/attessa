@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { applyStatus, readLive, FEATURES } from '../status.mjs';
+import { config as siteNetworks } from '../config.mjs';
 
 const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = join(site, '..', '..');
@@ -63,7 +64,7 @@ test('with everything off, every label a visitor relies on is on the page', () =
 
 test('with everything on, no not-live label survives on any page, in any meta tag or nav', () => {
   const left = build(allOn).flatMap(({ f, html }) =>
-    [...html.matchAll(/No public seller|isn't built yet|not built yet|<span class="muted">Coming|Coming:|mainnet comes after launch|Tutorial preview|class="muted">Preview|once a public seller|\{\{[#/](?:live|notlive)|<!--\/?(?:live|notlive)/g)]
+    [...html.matchAll(/No public seller|isn't built yet|not built yet|<span class="muted">Coming|Coming:|mainnet comes after launch|Tutorial preview|class="muted">Preview|once a public seller|which is coming|\(coming\)|not live on Celo mainnet|fill in once deployed|only network Attessa is deployed|\{\{[#/](?:live|notlive)|<!--\/?(?:live|notlive)/g)]
       .map(m => `${f}: ${m[0]}`));
   assert.deepEqual(left, []);
 });
@@ -97,5 +98,15 @@ test('no flag is on while its work is unfinished', () => {
     }
     if (need.cli && !need.cli.test(cli)) bad.push(`${k} is live but the CLI has no such command`);
   }
+  // The footer's network switch follows the deploy record, not this list: "After launch" goes only when mainnet is deployed.
+  if (live.seller && !siteNetworks.networks.mainnet.enabled) bad.push('seller is live but the deploy record has no mainnet registry');
   assert.deepEqual(bad, []);
+});
+
+test('in every state the tutorial says the working payment check works', () => {
+  for (const flags of [allOff, allOn]) {
+    const page = build(flags).find(p => p.f.endsWith('tutorial.html')).html;
+    assert.doesNotMatch(page, /explorer<\/a> is live/);
+    assert.match(page, /into the <a href="\.\.\/explorer\.html">proof explorer<\/a> to check its payment/);
+  }
 });
