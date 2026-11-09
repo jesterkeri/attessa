@@ -18,6 +18,7 @@ import { COPY, CliError, ERR, RENEW, celo, host, rpcShownSafe, short, utcShort }
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Simulation, type Step } from '../tx.ts';
 import { parseAgent } from './owner.ts';
+import { getLogsChunked } from '../logs.ts';
 
 /**
  * Operator commands `signer register` and `signer renew` (SPEC §3.4, §8; FLOWS §6 J3). Both cache only the
@@ -112,19 +113,16 @@ function normalizedOrigin(flag: string, local: boolean): string {
 /** The origin string for copy: `--origin`, else the `EndpointAdded` log for this hash, else the hash itself. */
 async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boolean): Promise<string> {
   if (flag) return normalizedOrigin(flag, local);
+  // A failed read is an RPC failure the caller reports, never a quiet fall back: getLogsChunked handles capped ranges.
+  let origin: string | undefined;
   try {
-    const logs = (await c.rpc.request('eth_getLogs', [
-      { address: c.registry, fromBlock: '0x0', toBlock: 'latest', topics: [toEventSelector(ENDPOINT_ADDED), oh] },
-    ])) as Array<{ data: Hex }>;
-    const last = logs.at(-1);
-    if (last) {
-      const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
-      // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
-      if (hashOrigin(o) === oh) return rpcShownSafe(o, short(oh));
-    }
+    const last = (await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh], c.registryCreation)).at(-1);
+    if (last) [origin] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
   } catch {
-    // Some RPCs cap log ranges; fall back to the hash.
+    throw ERR.rpcUnavailable(c.url);
   }
+  // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
+  if (origin !== undefined && hashOrigin(origin) === oh) return rpcShownSafe(origin, short(oh));
   return short(oh);
 }
 

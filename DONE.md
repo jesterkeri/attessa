@@ -4892,6 +4892,57 @@ reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
 
+### Audit fixes - 2026-11-09
+
+An outside audit by Codex found these and each was confirmed before fixing. The credential scan could not fail CI: the harness job scanned no build output and ended in `|| true`. CI's `ts` job now scans the built site and can fail, and the `|| true` is gone (workflow change applied by Joshua). `.gitignore` covers more credential file names. The README's typecheck command runs the build first, because packages read each other's built types, and the README records the hand-run paid call. T21b is ticked to match its recorded SHIP. Gate 2 is recorded as open in OPEN-QUESTIONS.md and STATUS.md. `AGENTS.md` and `PIPELINE.md` still list the bare typecheck command.
+```
+./scripts/check-secrets.sh <dir with a planted sk_live_ string>: FAIL, exit 1
+./scripts/check-secrets.sh packages/site/dist: no credential-shaped strings in client output, exit 0
+pnpm -r typecheck on a fresh checkout: fails; pnpm -r build && pnpm -r typecheck: passes
+./scripts/check-workflows.sh: workflows clean
+```
+reviewed: pending Codex (reviews/audit-hygiene-review-r1.md)
+
+## Audit hygiene: Codex r1 findings (feat/audit-hygiene, 2026-11-09)
+reviewed: pending Codex r2
+
+`reviews` round 1 (REVISE; archived at `.worktrees/archive/codex/audit-hygiene-review-r1.md`). Major: `scripts/check-secrets.sh` now fails with exit 2 when a named directory is missing or empty, when no usual output exists, or when grep can't read a directory, so `ci.yml`'s `packages/site/dist` scan can't pass having scanned nothing. `harness.yml` builds nothing, so its job now runs `scripts/check-secrets.test.sh` (a planted credential, missing and empty directories); Joshua applied that workflow patch by hand. Minor: the README now separates what the paid-call transaction proves from our own record, in `docs/PAID-CALL.md`.
+
+`./scripts/check-secrets.test.sh`:
+```
+ok a clean directory passes
+ok a planted credential fails
+ok a missing named directory fails
+ok an empty named directory fails
+ok one missing among several fails
+ok a credential in the second directory fails
+ok no arguments and no usual output fails
+ok no arguments finds dist
+check-secrets: all passed
+```
+### Rehearsal fix: registry logs on Forno - 2026-11-09
+
+`attessa status` and `signer register` read registry logs from block 0, which Forno rejects above 5000 blocks, so on mainnet `status` would have said "Can't reach Celo". Logs are now read in windows from the registry's creation block, found by binary search on `eth_getCode`. Forno serves `eth_getCode` at old blocks: on the ERC-8004 registry it answered `0x` at blocks 1,000,000 and 41,000,000, and code at 70,000,000 and 82,000,000. Adversary round 1 (Sonnet) found that an undocumented start-block variable could hide every event; the variable is removed. The rehearsal record and runbook are added under docs/.
+```
+pnpm --filter @attessa/cli test: Tests  392 passed (392)
+```
+reviewed: pending Codex (reviews/rehearsal-fixes-review-r1.md)
+
+## Rehearsal fixes: Codex r1 findings (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`reviews/rehearsal-fixes-review-r1.md` (REVISE, 4 Major). M1: `getLogsChunked` now raises `RpcError` when the registry has no code at head after a range error, so a pruned or wrong node reports `rpc_unavailable`, never an empty history; tests added for that and for a failure in a later window. M2: the runbook opens with a literal gate stop that prints `STOP: a gate has not passed` on this commit. M3: a tag check, run in the shell that sends, before each sending section, separately for Joshua's terminal and the host. M4: `docs/EC2-RUNBOOK.md` and `scripts/ec2-host-setup.sh` are copied from `feat/t12-enclave-spike` so the runbook's references exist in this commit; systemd and Caddy stay marked not run. Step 10 now says agent 10061 is already registered. Limit: a node that answers `0x` for old blocks, rather than an error, can still move the search's start block later; nothing here detects that.
+
+`pnpm test` in packages/cli:
+```
+ Test Files  95 passed (95)
+      Tests  394 passed (394)
+```
+
+## Rehearsal fixes: adversary round 2 (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`signer register` and `signer renew` swallowed a log failure and fell back to the hash; they now report `rpc_unavailable`, with the adversary's test kept as `packages/cli/test/signer-logs-adversary.test.ts`. The runbook named files missing from this commit, so it moved to `feat/mainnet-runbook` until T12 and T30 are on staging (OPEN-QUESTIONS). This branch is now the log reader fix only. This supersedes the runbook part of the entry above.
 ## T28 Codex r1 fixes (M1-M3)
 - M1: an unavailable Forno cross-check now fails the paid read closed; the Forno fallback runs, and if it cannot answer the result is `inputs_unavailable` with no inputs for the enclave. Old fail-open test replaced; forged-payload-plus-outage test added.
 - M2: `buy-intents.jsonl` (new `src/ledger.ts`) is append-only, fsynced per line: `intent` (id, capability, payer, cap, timestamp) written in `onBeforePayment`, `nonce` line before the paid request is sent, then `outcome` `responded` or `uncertain`. A paid fetch that throws after the send ends as `payment_uncertain`. No durable intent, no send.
@@ -4931,3 +4982,39 @@ $ pnpm --filter @attessa/seller-host test -- -t "inputs"
 ```
 
 The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
+
+## Audit hygiene: Codex r3 finding M1 (feat/audit-hygiene, 2026-11-09)
+reviewed: reviews/audit-hygiene-review-r3.md is archived outside the repo (REVISE); this entry's change goes to round 4
+
+The renamed job no longer reported a check the ruleset required, so the branch could merge only with an admin bypass. Joshua removed the old requirement before this merge, so a normal merge works. His command's output, verbatim:
+
+```
+before: ts, contracts, slither, enclave, guardrails, no secrets in client output
+after:  ts, contracts, slither, enclave, guardrails
+```
+
+Adding `credential scanner self-test` as required comes after this reaches staging and main, and is tracked in OPEN-QUESTIONS.
+## Rehearsal fixes: Codex r3 SHIP (feat/rehearsal-fixes, 2026-11-09)
+reviewed: reviews/rehearsal-fixes-review-r3.md | verdict: SHIP (r1 and r2 ended REVISE; archived outside the repo)
+
+Reviewed at ab7395e after adversary round 5 found no defect. `status`, `signer register` and `signer renew` now read a registry's whole history on an RPC that caps eth_getLogs: the deploy record names the creation, it is proved from the transaction, and an answer that isn't a list of logs matching the filter is an RPC failure. Verify at ab7395e, verbatim:
+
+```
+$ pnpm --filter @attessa/cli test
+      Tests  434 passed (434)
+```
+
+Real reads, 2026-11-09: the Sepolia EnclaveRegistry scan made 147 calls in 37 s and found 0 events, which is how many it has, so a real event has not yet gone through the scan. The item check accepted 20 real rows from the mainnet identity registry and 4 from Sepolia's. T16 will be the first real event.
+
+## Audit hygiene: Codex r4 findings (feat/audit-hygiene, 2026-11-09)
+reviewed: reviews/audit-hygiene-review-r4.md is archived outside the repo (REVISE); these changes go to round 5
+
+The scanner now also fails on GitHub fine-grained tokens, with a test. The old record of a non-blocking scanner in OPEN-QUESTIONS is marked superseded. The self-test becomes a required check before this merges (OPEN-QUESTIONS). Verify, verbatim:
+
+```
+$ ./scripts/check-secrets.test.sh | tail -2
+ok a dangling symlink fails closed
+check-secrets: all passed
+$ ./scripts/check-workflows.sh
+workflows clean
+```

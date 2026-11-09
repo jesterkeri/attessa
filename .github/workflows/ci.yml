@@ -41,6 +41,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # core's package types point at dist, so dependents typecheck against a built core.
       - run: pnpm -r build
+      - name: No credentials in the built site
+        run: ./scripts/check-secrets.sh packages/site/dist
       - run: pnpm -r lint
       - run: pnpm -r typecheck
       - run: pnpm -r test

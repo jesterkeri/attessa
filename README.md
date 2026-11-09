@@ -59,8 +59,8 @@ pnpm -r test && (cd contracts && forge test) && cargo test --locked --manifest-p
 # lint
 pnpm -r lint && (cd contracts && forge fmt --check) && cargo fmt --check --manifest-path enclave/Cargo.toml && cargo clippy --locked --manifest-path enclave/Cargo.toml -- -D warnings
 
-# typecheck
-pnpm -r typecheck
+# typecheck (run the build first: packages read each other's built types)
+pnpm -r build && pnpm -r typecheck
 
 # contracts test, verbose
 (cd contracts && forge test -vv)
@@ -121,7 +121,7 @@ Not done, per [TASKS.md](TASKS.md):
 - The validator stack, `EnclaveRegistry` and a seller are not deployed on Celo mainnet. That deployment is being prepared and `docs/DEPLOYMENTS.md` will carry the addresses when it is done.
 - Reproducible enclave builds (spike S3) are not done, so a release's `sourceRef` is not yet checked against its measurements.
 - The Sepolia end-to-end run (signer registration, paid calls, tamper and modified-build refusals) and the drills are not recorded as done.
-- This README makes no claim of a live seller, real paid calls or users.
+- There is no live seller and there are no users. Eleven paid calls have been made on Celo mainnet, all by hand, 0.11 USDC in total; [`docs/PAID-CALL.md`](docs/PAID-CALL.md) lists them. The first [transaction](https://celoscan.io/tx/0xebec214d75d2df40e8911d32737daba48f059f2882d36408d128331f37f21df0) proves 0.01 USDC moved from the agent wallet to `0x20faAca5F980E29639A0FCC6dcA6988E18ed333B`. Our record of the run says the rest, which a transaction can't show: it was paid with the `buy` CLI to Chainstack's Celo JSON-RPC on buy, for the same four chain reads the seller host will buy ([docs/PAID-CALL.md](docs/PAID-CALL.md)). The seller itself has made no paid call.
 - Still open: `attessa verify`, `attessa call --via buy`, the public proof explorer, and the final docs set (the tutorial and how-tos on the site source are not final).
 
 ## Known limits

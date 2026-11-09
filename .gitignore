@@ -6,6 +6,16 @@
 *.key
 keystore/
 .npmrc
+.envrc
+id_rsa
+id_ed25519
+credentials.json
+secrets.json
+wallet.json
+keystore.json
+*.p12
+*.pfx
+*.jks
 
 # node
 node_modules/
@@ -23,6 +33,10 @@ enclave/target/
 # local data
 *.sqlite
 *.sqlite-journal
+*.db
 .attessa/
 .claude/worktrees/
 .worktrees/
+
+# working tracker, not part of the project
+task.md
