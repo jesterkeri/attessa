@@ -29,7 +29,7 @@ function build(live, record) {
   const { all: _all, mainnet: _mainnet, contractsOnly: _contractsOnly, ...flags } = live;
   writeFileSync(cfg, JSON.stringify({ ...config, live: flags }));
   const out = join(dir, 'out');
-  execFileSync('node', ['build.mjs'], { cwd: site, env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) }, stdio: 'pipe' });
+  execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], { cwd: site, env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) }, stdio: 'pipe' });
   const pages = (d) => readdirSync(d, { withFileTypes: true }).flatMap(e =>
     e.isDirectory() ? pages(join(d, e.name)) : /\.(html|js)$/.test(e.name) ? [join(d, e.name)] : []);
   return pages(out).map(f => ({ f: f.slice(out.length + 1), html: readFileSync(f, 'utf8') }));

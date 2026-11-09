@@ -27,7 +27,7 @@ const layout = readFileSync(join(src, 'layout.html'), 'utf8');
 const siteConfig = JSON.parse(readFileSync(process.env.SITE_CONFIG ?? join(here, 'site.config.json'), 'utf8'));
 if (!/^https:\/\/[a-z0-9.-]+$/.test(siteConfig.siteOrigin)) throw new Error('site.config.json: siteOrigin must be https://<host> with no path');
 const SITE_ORIGIN_HOST = new URL(siteConfig.siteOrigin).host;
-if (process.env.SITE_TEST_DEPLOYMENTS && !process.env.SITE_OUT) throw new Error('SITE_TEST_DEPLOYMENTS is for test builds, which set SITE_OUT: it must never reach dist');
+if (process.env.SITE_TEST_DEPLOYMENTS) throw new Error('SITE_TEST_DEPLOYMENTS is not a build input: only tests use it, through test/lib/test-record.mjs. A build takes its deploy record from @attessa/core');
 const live = readLive(siteConfig, { mainnet: config.networks.mainnet.enabled });
 const contactSet = siteConfig.securityContact != null && siteConfig.securityTxtExpires != null;
 if (contactSet) {

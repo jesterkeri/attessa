@@ -27,7 +27,7 @@ function build({ on, record }) {
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ ...config, live: Object.fromEntries(FLAGS.map(k => [k, on])) }));
   const out = join(dir, 'out');
-  execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) } });
+  execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], { cwd: site, stdio: 'pipe', env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) } });
   return out;
 }
 const text = h => h.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ');

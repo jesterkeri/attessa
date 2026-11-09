@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, cpSync, mkdirSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, cpSync, mkdirSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,7 +21,7 @@ function build({ on, record, src, except = [] }) {
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ ...config, live: Object.fromEntries(FEATURES.map(k => [k, on && !except.includes(k)])) }));
   const out = join(dir, 'out');
-  execFileSync('node', ['build.mjs'], {
+  execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], {
     cwd: site, stdio: 'pipe',
     env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(src ? { SITE_SRC: src } : {}), ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) },
   });
@@ -72,8 +72,18 @@ test('a block named for an inherited object property is an unknown feature, not 
   }
 });
 
-test('the test deploy record can never reach dist, and a spaced status comment stops the build', () => {
+test('the test deploy record is no input to a build: with or without an output directory the build refuses it', () => {
   const { SITE_OUT: _unset, ...env } = process.env;
-  assert.throws(() => execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: { ...env, SITE_TEST_DEPLOYMENTS: JSON.stringify(MAINNET_RECORD) } }), /must never reach dist/);
+  const dir = mkdtempSync(join(tmpdir(), 'site-no-record-'));
+  const out = join(dir, 'out');
+  const record = JSON.stringify(MAINNET_RECORD);
+  for (const e of [{ ...env, SITE_TEST_DEPLOYMENTS: record }, { ...env, SITE_TEST_DEPLOYMENTS: record, SITE_OUT: out }]) {
+    assert.throws(() => execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: e }), /not a build input/);
+  }
+  assert.equal(existsSync(out), false, 'nothing was written');
+  assert.doesNotMatch(readFileSync(join(site, 'config.mjs'), 'utf8'), /SITE_TEST_DEPLOYMENTS|process\.env/);
+});
+
+test('a spaced status comment stops the build', () => {
   assert.throws(() => applyStatus('<!--  live:seller-->x<!--/live-->', readLive({})), /unbalanced/);
 });

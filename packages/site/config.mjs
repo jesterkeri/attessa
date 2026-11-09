@@ -7,13 +7,10 @@ import { DEPLOYMENTS } from '@attessa/core';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const extra = JSON.parse(readFileSync(join(here, 'networks.json'), 'utf8'));
-// test/status-switch.test.mjs only: fields laid over a network's deploy record, to build the site as it will be once
-// Celo mainnet is deployed. Nothing that deploys the site sets this.
-const testRecord = process.env.SITE_TEST_DEPLOYMENTS ? JSON.parse(process.env.SITE_TEST_DEPLOYMENTS) : {};
 
 /** @param {string} coreKey */
 function network(coreKey) {
-  const d = { .../** @type {Record<string, any>} */ (DEPLOYMENTS)[coreKey], ...testRecord[coreKey] };
+  const d = /** @type {Record<string, any>} */ (DEPLOYMENTS)[coreKey];
   const x = extra[coreKey];
   if (!d.chainId || !x) throw new Error(`networks.json and DEPLOYMENTS disagree about ${coreKey}`);
   const tokens = Object.entries(d.assets).map(([k, a]) => {

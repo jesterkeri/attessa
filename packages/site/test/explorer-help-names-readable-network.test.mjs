@@ -23,7 +23,7 @@ test('registry but no seller: the explorer never names an offered network as rea
   const cfg = join(dir, 'config.json');
   writeFileSync(cfg, JSON.stringify({ ...config, live: Object.fromEntries(['seller', 'verify', 'viaBuy', 'releaseVerify', 'statusVerdicts', 'recentCalls'].map(k => [k, false])) }));
   const out = join(dir, 'out');
-  execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, SITE_TEST_DEPLOYMENTS: JSON.stringify(MAINNET_RECORD) } });
+  execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], { cwd: site, stdio: 'pipe', env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, SITE_TEST_DEPLOYMENTS: JSON.stringify(MAINNET_RECORD) } });
 
   const sandbox = { window: {} };
   vm.createContext(sandbox);
