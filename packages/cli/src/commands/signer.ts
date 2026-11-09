@@ -113,16 +113,18 @@ function normalizedOrigin(flag: string, local: boolean): string {
 /** The origin string for copy: `--origin`, else the `EndpointAdded` log for this hash, else the hash itself. */
 async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boolean): Promise<string> {
   if (flag) return normalizedOrigin(flag, local);
+  // A failed read is an RPC failure the caller reports, never a quiet fall back: getLogsChunked handles capped ranges.
+  let logs: Awaited<ReturnType<typeof getLogsChunked>>;
   try {
-    const logs = await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh]);
-    const last = logs.at(-1);
-    if (last) {
-      const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
-      // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
-      if (hashOrigin(o) === oh) return rpcShownSafe(o, short(oh));
-    }
+    logs = await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh]);
   } catch {
-    // Some RPCs cap log ranges; fall back to the hash.
+    throw ERR.rpcUnavailable(c.url);
+  }
+  const last = logs.at(-1);
+  if (last) {
+    const [o] = decodeAbiParameters([{ type: 'string' }, { type: 'address' }, { type: 'address' }], last.data);
+    // For display only (messages and copy): the registry accepts any https:// text, so scheme://host[:port].
+    if (hashOrigin(o) === oh) return rpcShownSafe(o, short(oh));
   }
   return short(oh);
 }

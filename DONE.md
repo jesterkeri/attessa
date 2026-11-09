@@ -4741,3 +4741,8 @@ reviewed: pending Codex r2
  Test Files  95 passed (95)
       Tests  394 passed (394)
 ```
+
+## Rehearsal fixes: adversary round 2 (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`signer register` and `signer renew` swallowed a log failure and fell back to the hash; they now report `rpc_unavailable`, with the adversary's test kept as `packages/cli/test/signer-logs-adversary.test.ts`. The runbook named files missing from this commit, so it moved to `feat/mainnet-runbook` until T12 and T30 are on staging (OPEN-QUESTIONS). This branch is now the log reader fix only. This supersedes the runbook part of the entry above.
