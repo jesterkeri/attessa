@@ -3,10 +3,10 @@
 | field | value |
 |---|---|
 | project | attested execution trust layer for buy sellers (Celo, Agents on Open Rails + USA₮ with x402) |
-| stage | ready for G2 (T02) |
+| stage | Gate 2 review open (T11); Gates 3+4, 5 and 6 not passed. Entry submitted 2026-11-09 |
 | tier | 2, scoped to MVP |
-| updated | 2026-10-19 |
-| blocked on | Joshua: domain for the origin, AWS account with enclaves, fresh dev wallets |
+| updated | 2026-11-09 |
+| blocked on | Gate reviews. No mainnet registry, live paid API or operational claim before the gates pass (OPEN-QUESTIONS.md) |
 
 ## Stage log
 - 0 route, done 2026-10-19 (written plan → stage 1)
