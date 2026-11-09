@@ -4774,3 +4774,21 @@ pnpm -r typecheck on a fresh checkout: fails; pnpm -r build && pnpm -r typecheck
 ./scripts/check-workflows.sh: workflows clean
 ```
 reviewed: pending Codex (reviews/audit-hygiene-review-r1.md)
+
+## Audit hygiene: Codex r1 findings (feat/audit-hygiene, 2026-11-09)
+reviewed: pending Codex r2
+
+`reviews` round 1 (REVISE; archived at `.worktrees/archive/codex/audit-hygiene-review-r1.md`). Major: `scripts/check-secrets.sh` now fails with exit 2 when a named directory is missing or empty, when no usual output exists, or when grep can't read a directory, so `ci.yml`'s `packages/site/dist` scan can't pass having scanned nothing. `harness.yml` builds nothing, so its job now runs `scripts/check-secrets.test.sh` (a planted credential, missing and empty directories); Joshua applied that workflow patch by hand. Minor: the README now separates what the paid-call transaction proves from our own record, in `docs/PAID-CALL.md`.
+
+`./scripts/check-secrets.test.sh`:
+```
+ok a clean directory passes
+ok a planted credential fails
+ok a missing named directory fails
+ok an empty named directory fails
+ok one missing among several fails
+ok a credential in the second directory fails
+ok no arguments and no usual output fails
+ok no arguments finds dist
+check-secrets: all passed
+```
