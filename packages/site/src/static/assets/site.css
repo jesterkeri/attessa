@@ -123,8 +123,8 @@ body::before { content: ""; position: fixed; inset: 0; z-index: 1; pointer-event
 .brand-tag { margin-left: 8px; font: 500 9.5px/1.35 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); white-space: nowrap; }
 .nav-links { position: relative; display: flex; gap: clamp(22px, 3vw, 46px); }
 .nav-ind { position: absolute; left: 0; bottom: 4px; height: 1px; width: 0; background: var(--text); opacity: 0; pointer-events: none; transition: transform 380ms var(--ease-out), width 380ms var(--ease-out), opacity 200ms ease; }
-.logo { width: 20px; height: 20px; fill: none; stroke: var(--text); stroke-width: 2.6; stroke-linecap: round; }
-.logo circle { fill: var(--text); stroke: none; }
+.logo { width: 26px; height: 26px; fill: #ededee; }
+.logo circle { fill: var(--accent); }
 .nav-links a { position: relative; font: 500 11.5px/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-2); text-decoration: none; padding: 12px 0; transition: color 160ms ease; }
 .nav-links a[aria-current="page"] { color: var(--text); }
 @media (hover: hover) and (pointer: fine) { .nav-links a:hover { color: var(--text); } }

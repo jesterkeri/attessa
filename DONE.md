@@ -4964,3 +4964,8 @@ Explorer wording: `assets/explorer.js` really reads Celo Sepolia for a pasted tr
 node v22.23.2: 80 files, 305 tests, 0 failed
 ```
 Not converted: `assets/site.js` isn't templated, so sample-state labels there stay fixed. Not deployed.
+
+## Site: Joshua's original logo as favicon and header mark (feat/site-finish, 2026-11-09)
+reviewed: pending adversary and Codex r9
+
+Joshua: "this is the original attessa logo. use it as a favicon and update it in the site." Traced from his 1024 x 1024 PNG (swirl path, centre circle at 512,512 r 45, colours sampled: #ededee, #c5f25b, ground #030304). `assets/favicon.svg`, plus `favicon-32.png` and `apple-touch-icon.png` downscaled from the original; `{{logo}}` in the header is the same shape. Looked at in headless Chrome at 16, 32, 90 and 180 px and in the header. `./packages/site/test-count.sh`: `node v22.23.2: 80 files, 305 tests, 0 failed`. Not deployed.
