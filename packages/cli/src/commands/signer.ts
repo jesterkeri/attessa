@@ -116,7 +116,7 @@ async function originFor(c: Chain, oh: Hex, flag: string | undefined, local: boo
   // A failed read is an RPC failure the caller reports, never a quiet fall back: getLogsChunked handles capped ranges.
   let logs: Awaited<ReturnType<typeof getLogsChunked>>;
   try {
-    logs = await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh]);
+    logs = await getLogsChunked(c.rpc, c.registry, [toEventSelector(ENDPOINT_ADDED), oh], c.registryCreation);
   } catch {
     throw ERR.rpcUnavailable(c.url);
   }

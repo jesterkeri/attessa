@@ -167,3 +167,6 @@ Each took the reading that matches the FLOWS §6 sample; strings FLOWS lacks are
 - [ ] **A log scan can still start late on a node that answers `0x` for old blocks instead of an error** (`packages/cli/src/logs.ts` `creationBlock`). The binary search takes the answer as "no code yet". Not detected.
 
 - 2026-11-08 (T34 README r2): `SIGNED_TAIL` in `packages/cli/src/copy.ts:406` prints "Your payment permission wasn't used." on the gateway's refusal, before any chain read, and the chain can later show it was used (the settled_after_refusal warning follows). FLOWS fixes this wording, so it stays. Should FLOWS say "The gateway says your payment permission wasn't used." until the chain confirms? Separately, `engines.node` in package.json says >=22 while `node:sqlite` needs >=22.13.
+
+- [ ] Log reader (feat/rehearsal-fixes), for the mainnet deploy: when `celo.enclaveRegistry` is filled in `packages/core/src/deployments.ts`, `celo.enclaveRegistryCreation` must be filled too, from the deploy record in `docs/DEPLOYMENTS.md`. A test fails if it isn't. feat/mainnet-runbook must add that step.
+- [ ] Log reader cost: the Sepolia registry's history is 147 calls and 37 seconds on Forno (2026-11-09), and it grows by about 21 calls a day on mainnet. It is correct but slow for `agent status`.

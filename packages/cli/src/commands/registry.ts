@@ -33,7 +33,7 @@ async function events(c: Chain, eventName: EventName, args: Record<string, unkno
   const topics = encodeEventTopics({ abi: REGISTRY_EVENTS, eventName, args } as never);
   let logs: Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
   try {
-    logs = await getLogsChunked(c.rpc, c.registry, topics as Array<Hex | null>);
+    logs = await getLogsChunked(c.rpc, c.registry, topics as Array<Hex | null>, c.registryCreation);
   } catch {
     throw ERR.rpcUnavailable(c.url);
   }
