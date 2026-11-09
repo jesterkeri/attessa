@@ -1,4 +1,4 @@
-import { concat, isHex, numberToHex, size, stringToHex, type Hex } from 'viem';
+import { concat, hexToString, isHex, numberToHex, size, slice, stringToHex, type Hex } from 'viem';
 
 /**
  * ERC-8021 transaction attribution, Schema 0 (a flat code list), for the Loops / Celo attribution programme.
@@ -33,8 +33,24 @@ export function withAttribution(data: Hex, suffix: Hex | null | undefined): Hex 
 /** The chain whose transactions must carry the suffix: Celo mainnet. Policy follows the verified chain id, never a CLI label. */
 export const ATTRIBUTION_CHAIN_ID = 42220;
 
-/** True when `suffix` is present and ends in the 16-byte ERC-8021 marker after at least a code, a length and a schema byte. */
+/**
+ * True only for a well-formed ERC-8021 Schema 0 suffix: `[code ASCII][length][0x00][marker]` with the code in
+ * `[a-z0-9_]{1,32}`, the length byte equal to the code's length, schema byte 0 and the exact total size. Decodes the
+ * code and requires `attributionSuffix(code)` to reproduce the input (hex case ignored), so it cannot drift from the writer.
+ */
 export function isAttributionSuffix(suffix: string | null | undefined): suffix is Hex {
-  if (!suffix || !isHex(suffix) || size(suffix) <= size(ERC8021_MARKER) + 2) return false;
-  return suffix.toLowerCase().endsWith(ERC8021_MARKER.slice(2));
+  if (!suffix || !isHex(suffix, { strict: true })) return false;
+  const total = size(suffix);
+  const markerLen = size(ERC8021_MARKER);
+  // code (1..32) + length byte + schema byte + marker
+  if (total < 1 + 2 + markerLen || total > 32 + 2 + markerLen) return false;
+  const codeLen = total - 2 - markerLen;
+  let code: string;
+  try {
+    code = hexToString(slice(suffix, 0, codeLen));
+  } catch {
+    return false;
+  }
+  if (!CODE.test(code) || size(stringToHex(code)) !== codeLen) return false; // rejects non-ASCII and uppercase codes
+  return attributionSuffix(code).toLowerCase() === suffix.toLowerCase();
 }

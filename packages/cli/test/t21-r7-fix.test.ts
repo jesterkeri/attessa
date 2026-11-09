@@ -131,12 +131,14 @@ describe('the next action depends on the chain: a faucet only on Celo Sepolia', 
 
   it('--network mainnet (42220): no faucet', async () => {
     const argv = revokeUnfunded(42220);
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234'; // mainnet sends carry the Loops tag, so the tag is not what these tests are about
     expect(await w.cli(...argv, '--network', 'mainnet')).toBe(1);
     expect(w.err).toEqual([expect.stringMatching(/^0x[0-9a-f]{40} doesn't have enough CELO .* Nothing was signed\.$/), plain()]);
   });
 
   it('--network local on a fork of mainnet (42220): no faucet', async () => {
     const argv = revokeUnfunded(42220);
+    w.env.LOOPS_ATTRIBUTION_TAG = 'celo_test1234'; // a verified 42220 send carries the Loops tag; the tag is not this test's subject
     expect(await w.cli(...argv, '--network', 'local', '--rpc', 'http://127.0.0.1:8545')).toBe(1);
     expect(w.err.at(-1)).toBe(plain());
   });
