@@ -157,7 +157,7 @@ const NEEDS = {
   viaBuy: { tasks: ['T29'] },
   releaseVerify: { cli: /release verify/ },
   statusVerdicts: { cli: /Recent verdicts/i },
-  recentCalls: { tasks: ['T45'] },
+  recentCalls: { tasks: ['T45', 'T46'] }, // T45 checks one transaction; T46 is the feed the flipped sentence describes
 };
 
 test('every feature says what must be true before it can be flipped', () => {
