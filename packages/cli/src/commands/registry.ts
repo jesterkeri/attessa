@@ -15,6 +15,7 @@ import { CliError, ERR, OWN, OWNERR, celo, host, rpcShownSafe, safe, short, sour
 import { revertToError, type RevertContext } from '../reverts.ts';
 import { gasPrice, head, planOrSend, read, simulate, type Revert, type Step } from '../tx.ts';
 import { ownerOf, parseAgent } from './owner.ts';
+import { getLogsChunked } from '../logs.ts';
 
 /** Owner commands beyond T15's (SPEC §8): agent register/transfer/wallet-sig/set-wallet, selflink, release deprecate|revoke, revoke signer, endpoint retire, and `status --agent`. */
 
@@ -27,19 +28,19 @@ const KEYLESS_REGISTER_SIMULATOR: Address = '0x000000000000000000000000000000000
 
 type EventName = 'ReleaseApproved' | 'EndpointAdded' | 'SignerRegistered';
 
-/** Registry events matching the indexed `args` (null = any), from block 0. */
+/** Registry events matching the indexed `args` (null = any), over the registry's life in RPC-sized windows. */
 async function events(c: Chain, eventName: EventName, args: Record<string, unknown>): Promise<Array<{ args: Record<string, any>; blockNumber: bigint }>> {
   const topics = encodeEventTopics({ abi: REGISTRY_EVENTS, eventName, args } as never);
-  let logs: Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
+  // A log that won't decode as the event the node says it is, is a failed read like any other.
   try {
-    logs = (await c.rpc.request('eth_getLogs', [{ address: c.registry, topics, fromBlock: '0x0', toBlock: 'latest' }])) as typeof logs;
+    const logs = await getLogsChunked(c.rpc, c.registry, topics as Array<Hex | null>, c.registryCreation);
+    return logs.map((l) => ({
+      args: decodeEventLog({ abi: REGISTRY_EVENTS, eventName, topics: l.topics as [Hex, ...Hex[]], data: l.data }).args as Record<string, any>,
+      blockNumber: BigInt(l.blockNumber),
+    }));
   } catch {
     throw ERR.rpcUnavailable(c.url);
   }
-  return logs.map((l) => ({
-    args: decodeEventLog({ abi: REGISTRY_EVENTS, eventName, topics: l.topics as [Hex, ...Hex[]], data: l.data }).args as Record<string, any>,
-    blockNumber: BigInt(l.blockNumber ?? 0),
-  }));
 }
 
 /** An endpoint's origin from its EndpointAdded log, for display only: scheme://host[:port] (the registry accepts any https:// text). */
