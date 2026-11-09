@@ -24,13 +24,16 @@ import {
   payerSigMessage,
   recoverDigestSigner,
   requestHash as hashRequest,
+  withAttribution,
+  isAttributionSuffix,
+  ATTRIBUTION_CHAIN_ID,
   GATEWAY_ERRORS,
   type Deployment,
   type PinnedAsset,
 } from '@attessa/core';
 import { EIP3009_TYPES, ENDPOINT_STATUS, tokenAbi } from './abi.ts';
 import { Chain, RpcError, type Settlement } from './chain.ts';
-import { InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
+import { GasCapError, InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
 import { Ledger, isTerminal } from './ledger.ts';
 import {
   decodePaymentRequired,
@@ -470,8 +473,16 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
    * broadcast to the same error: either way nothing was sent. Reads that fail are RpcError; the node's text of a
    * funds refusal is not kept.
    */
+  /** Celo mainnet (the verified chain id) takes no transaction without a valid ERC-8021 suffix. */
+  function requireAttribution(n: Net): void {
+    if (n.chainId === ATTRIBUTION_CHAIN_ID && !isAttributionSuffix(opts.dataSuffix)) {
+      throw new AttestError('no_attribution_tag', 'a transaction on Celo mainnet needs an ERC-8021 attribution suffix; nothing was signed');
+    }
+  }
+
   async function sendCancel(n: Net, to: Address, data: Hex, sent: { hash?: Hash }): Promise<Hash> {
     const from = cfg.account.address;
+    requireAttribution(n);
     const read = async (method: string, params: unknown[]): Promise<bigint> => {
       try {
         return BigInt((await n.chain.client.request({ method, params } as never)) as string);
@@ -494,14 +505,14 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       read('eth_getTransactionCount', [from, 'pending']),
       read('eth_getBalance', [from, 'latest']),
     ]);
-    const t = gasTerms(estimate, price, tip);
+    const t = gasTerms(estimate, price, tip, n.chainId === ATTRIBUTION_CHAIN_ID ? opts.dataSuffix : null);
     if (!canPayGas(balance, t)) throw new InsufficientGasFundsError(lc(from), n.chainId, t.maxCost, false);
     const raw = await cfg.account.signTransaction({
       type: 'eip1559',
       chainId: n.chainId,
       nonce: Number(nonce),
       to,
-      data,
+      data: withAttribution(data, n.chainId === ATTRIBUTION_CHAIN_ID ? opts.dataSuffix : null),
       value: 0n,
       gas: t.gas,
       maxFeePerGas: t.maxFeePerGas,
@@ -1212,6 +1223,7 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
       };
       const before = await decide(false);
       if (before !== 'open') return await ended(before);
+      requireAttribution(n); // before the cancel permission is signed
       const pin = Object.values(n.deployment.assets).find((a) => lc(a.address) === entry.asset);
       if (!pin) throw new Error(`asset ${entry.asset} is not pinned on chain ${n.chainId}`);
       if (!cfg.account.signTypedData) throw new Error('account cannot sign typed data');
@@ -1259,11 +1271,18 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           e instanceof CancelRevertedError ||
           e instanceof CancelUndecidedError ||
           e instanceof CancelUnconfirmedError ||
-          e instanceof InsufficientGasFundsError
+          e instanceof InsufficientGasFundsError ||
+          e instanceof GasCapError
         )
           throw e;
         throw new CancelInterruptedError(sent.hash, { cause: e });
       }
+    },
+
+    /** False when this RPC's verified chain is Celo mainnet and there is no valid attribution suffix, so a real send would be refused. */
+    async attributionReady(): Promise<boolean> {
+      const n = await net();
+      return n.chainId !== ATTRIBUTION_CHAIN_ID || isAttributionSuffix(opts.dataSuffix);
     },
 
     async listPending(): Promise<PendingEntry[]> {
