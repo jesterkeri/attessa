@@ -3,7 +3,7 @@
 // from the operator wallet; then every operator transaction's gas against the 16,777,215 per-transaction cap, and the cost at Forno's price.
 import { copyFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { assertLocal, DIR, TAG, wallet, cli, state, rpc, pub, realGasPriceWei, celoCost } from './lib.mjs';
+import { assertLocal, mine, DIR, TAG, wallet, cli, state, rpc, pub, realGasPriceWei, celoCost } from './lib.mjs';
 await assertLocal();
 const att = process.argv[2];
 const s = state(), A = s.agentId;
@@ -13,6 +13,8 @@ copyFileSync(att, join(work, 'att.bin'));
 const env = { ATTESSA_REGISTRY: process.env.REG || s.addrs.registry, LOOPS_ATTRIBUTION_TAG: TAG };
 const clean = (t) => t.replace(/\(node:\d+\) ExperimentalWarning.*\n|\(Use `node --trace-warnings.*\n/g, '').trim();
 const startBlock = BigInt(await rpc('eth_blockNumber'));
+// The fork only has a new head when something mines; the CLI compares the report against the head's timestamp.
+await mine();
 const t0 = Date.now();
 const r = cli(['signer', 'register', '--agent', A, '--attestation', 'att.bin', '--yes'], { as: 'operator', cwd: work, env });
 console.log(`$ attessa signer register --agent ${A} --attestation att.bin [as operator] -> exit ${r.code} (${((Date.now() - t0) / 1000).toFixed(1)} s)\n${clean(r.text)}`);
