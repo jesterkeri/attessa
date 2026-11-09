@@ -4772,3 +4772,14 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+### T30 mainnet deploy route Codex r2: SHIP - 2026-11-09
+
+Codex round 2 reviewed 7de210c in a frozen worktree and found nothing: every mainnet creation is pinned init code, constructor arguments and the ERC-8021 suffix, the Forge scripts refuse a mainnet broadcast, and `tagged-deploy.mjs` signs and sends nothing. After merging staging (dce5d3d, which brings the Codex-SHIP mainnet-entry work):
+```
+node --test scripts/tagged-deploy*.test.mjs: # tests 39 # pass 39 # fail 0
+pnpm --filter @attessa/cli test: Tests  388 passed (388)
+forge test: Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total tests)
+```
+No mainnet contract is deployed by this. T30 stays open until the real deployment is recorded.
+reviewed: reviews/t30-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
