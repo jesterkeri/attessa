@@ -5,7 +5,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, cpSync, mkdirSync, appendFileSync } from 'node:fs';
+import { existsSync, symlinkSync, mkdtempSync, readFileSync, readdirSync, writeFileSync, cpSync, mkdirSync, appendFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -94,6 +94,20 @@ test('the test hook cannot reach a build through NODE_OPTIONS, nor write outside
   for (const e of [{ ...env, SITE_TEST_DEPLOYMENTS: record }, { ...env, SITE_OUT: join(site, 'dist'), SITE_TEST_DEPLOYMENTS: record }]) {
     assert.throws(() => execFileSync('node', ['--import', './test/lib/test-record.mjs', 'build.mjs'], { cwd: site, stdio: 'pipe', env: e }), /only into the temp directory/);
   }
+});
+
+test('the test hook refuses every way of pointing it at the real output (adversary r15)', () => {
+  const record = JSON.stringify(MAINNET_RECORD);
+  const { NODE_OPTIONS: _n, SITE_OUT: _o, TMPDIR: _t, ...env } = process.env;
+  const dir = mkdtempSync(join(tmpdir(), 'site-hook-'));
+  const hook = join(site, 'test', 'lib', 'test-record.mjs');
+  const build = join(site, 'build.mjs');
+  const refused = (cwd, e) => assert.throws(() => execFileSync('node', ['--import', hook, build], { cwd, stdio: 'pipe', env: { ...env, SITE_TEST_DEPLOYMENTS: record, ...e } }), /only into the temp directory/);
+  refused(dir, {}); // no SITE_OUT: the build writes dist whatever the cwd
+  refused(site, { TMPDIR: site, SITE_OUT: join(site, 'dist') });
+  symlinkSync(join(site, 'dist'), join(dir, 'link'));
+  refused(dir, { SITE_OUT: join(dir, 'link') });
+  refused(dir, { SITE_OUT: join(dir, 'link', 'deeper') });
 });
 
 test('a spaced status comment stops the build', () => {
