@@ -5,7 +5,23 @@ import { RpcError, type Rpc } from './rpc.ts';
 export const LOG_WINDOW = 4000n;
 
 // Per connection: one URL can front different chains or forks, and a boundary from one says nothing about another.
+type LogRow = { topics: Hex[]; data: Hex; blockNumber?: string };
+
 const creationCache = new WeakMap<Rpc, Map<string, bigint>>();
+
+/** Whether the address has code at this block. An answer that isn't hex is a failed read, never "has code". */
+async function codeAt(rpc: Rpc, address: string, at: string): Promise<boolean> {
+  const code = await rpc.request('eth_getCode', [address, at]);
+  if (typeof code !== 'string' || !/^0x[0-9a-fA-F]*$/.test(code)) throw new RpcError(-32000, `eth_getCode for ${address} did not answer hex`, undefined);
+  return code !== '0x' && code !== '0x0';
+}
+
+/** One eth_getLogs. Anything but a list is a failed read: passed on, it would look like a history. */
+async function logsIn(rpc: Rpc, filter: Record<string, unknown>): Promise<LogRow[]> {
+  const part = await rpc.request('eth_getLogs', [filter]);
+  if (!Array.isArray(part)) throw new RpcError(-32000, 'eth_getLogs did not answer with a list', undefined);
+  return part as LogRow[];
+}
 
 interface CreationTx {
   to?: string | null;
@@ -36,10 +52,7 @@ export async function creationBlock(rpc: Rpc, address: string, head: bigint): Pr
   const key = address.toLowerCase();
   const hit = creationCache.get(rpc)?.get(key);
   if (hit !== undefined) return hit;
-  const hasCode = async (b: bigint) => {
-    const code = (await rpc.request('eth_getCode', [address, `0x${b.toString(16)}`])) as string;
-    return code !== '0x' && code !== '0x0';
-  };
+  const hasCode = (b: bigint) => codeAt(rpc, address, `0x${b.toString(16)}`);
   let lo = 0n;
   let hi = head;
   // No code at head doesn't prove there are no events: it can be a pruned or inconsistent node, or the wrong address.
@@ -69,19 +82,19 @@ export interface Creation {
 async function provenCreation(rpc: Rpc, address: string, creation: Creation): Promise<bigint> {
   const block = BigInt(creation.block);
   const tx = (await rpc.request('eth_getTransactionByHash', [creation.tx])) as CreationTx | null;
-  const code = (await rpc.request('eth_getCode', [address, 'latest'])) as string;
-  if (!creates(tx, address) || tx?.blockNumber === undefined || tx.blockNumber === null || BigInt(tx.blockNumber) !== block || code === '0x' || code === '0x0') {
+  const code = await codeAt(rpc, address, 'latest');
+  if (!creates(tx, address) || tx?.blockNumber === undefined || tx.blockNumber === null || BigInt(tx.blockNumber) !== block || !code) {
     throw new RpcError(-32000, `this RPC doesn't show ${creation.tx} creating ${address} in block ${block}, so where its events start isn't proved`, undefined);
   }
   return block;
 }
 
 /** eth_getLogs for one contract over its whole life, in windows a public RPC accepts, from the block it was created in. */
-export async function getLogsChunked(rpc: Rpc, address: string, topics: Array<Hex | null>, creation?: Creation | null): Promise<Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>> {
+export async function getLogsChunked(rpc: Rpc, address: string, topics: Array<Hex | null>, creation?: Creation | null): Promise<LogRow[]> {
   // The whole range in one call first: a local node or a small chain answers it. A public RPC that caps the range
   // (Forno: 5000 blocks) rejects it, and only then does the windowed scan below run.
   try {
-    return (await rpc.request('eth_getLogs', [{ address, topics, fromBlock: '0x0', toBlock: 'latest' }])) as Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
+    return await logsIn(rpc, { address, topics, fromBlock: '0x0', toBlock: 'latest' });
   } catch (e) {
     if (!/range|limit|exceed|too (many|large|big)|10000|5000/i.test((e as Error).message ?? '')) throw e;
   }
@@ -90,11 +103,10 @@ export async function getLogsChunked(rpc: Rpc, address: string, topics: Array<He
   // only start that works there. Without one, the search needs a node that serves old state, and fails safe otherwise.
   const from = creation ? await provenCreation(rpc, address, creation) : await creationBlock(rpc, address, head);
   if (from > head) throw new RpcError(-32000, `this RPC's head ${head} is behind the block ${from} that created ${address}`, undefined);
-  const out: Array<{ topics: Hex[]; data: Hex; blockNumber?: string }> = [];
+  const out: LogRow[] = [];
   for (let start = from; start <= head; start += LOG_WINDOW) {
     const end = start + LOG_WINDOW - 1n < head ? start + LOG_WINDOW - 1n : head;
-    const part = (await rpc.request('eth_getLogs', [{ address, topics, fromBlock: `0x${start.toString(16)}`, toBlock: `0x${end.toString(16)}` }])) as typeof out;
-    out.push(...part);
+    out.push(...(await logsIn(rpc, { address, topics, fromBlock: `0x${start.toString(16)}`, toBlock: `0x${end.toString(16)}` })));
   }
   return out;
 }
