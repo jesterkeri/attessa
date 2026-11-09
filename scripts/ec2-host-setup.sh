@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Prepare a fresh Amazon Linux 2023 arm64 host (made by scripts/ec2-launch.sh) to run the Attessa seller.
 # Run on the instance as ec2-user (not root; it calls sudo):  ./ec2-host-setup.sh <40-hex-commit-sha>
-# Safe to run again. Starts no Attessa service and holds no key. After it: log out and back in (new groups),
+# Safe to run again, also with an enclave running. Starts no Attessa service and holds no key. After it: log out and back in (new groups),
 # fill /etc/attessa as docs/EC2-RUNBOOK.md says. Ran on the real host on 2026-11-08 (DONE.md, T12).
 #
 # Pinned: Node 22.23.2 (.nvmrc says 22), pnpm 10.32.1 (package.json packageManager, via corepack), Caddy 2.10.2,
@@ -29,7 +29,7 @@ ME=$(id -un)
 # Nothing below may change the host until both archives have been downloaded and have matched their pinned digests.
 # The tools for that come with the base AMI (curl-minimal and coreutils on Amazon Linux 2023), so they are checked,
 # not installed: installing anything first would change the host before the check.
-for c in curl sha256sum sha512sum cut mktemp; do
+for c in curl sha256sum sha512sum cut mktemp cmp; do
   command -v "$c" >/dev/null || { echo "missing: $c. Nothing was installed. Install it yourself, then run this again."; exit 2; }
 done
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
@@ -53,9 +53,25 @@ sudo dnf install -y docker aws-nitro-enclaves-cli aws-nitro-enclaves-cli-devel s
 nitro-cli --version | grep -q 1.5.2 || echo "WARNING: nitro-cli is not 1.5.2 (ADR-008, SPEC §2); say so in DONE.md"
 
 echo "== enclave allocator: 3 vCPU, 3072 MiB (SPEC §5)"
-printf -- '---\nmemory_mib: 3072\ncpu_count: 3\n' | sudo tee /etc/nitro_enclaves/allocator.yaml >/dev/null
+# The allocator refuses to restart under a running enclave ("Could not re-online CPUs ..."), and that would stop this
+# script halfway. So with an enclave running: same settings, leave the allocator alone; different settings, stop here.
+ALLOCATOR=/etc/nitro_enclaves/allocator.yaml
+printf -- '---\nmemory_mib: 3072\ncpu_count: 3\n' >"$TMP/allocator.yaml"
+# Can't tell (a fresh host): take it as none, and the allocator's own refusal still stands if that's wrong.
+RUNNING=$(nitro-cli describe-enclaves 2>/dev/null | jq length) || RUNNING=
+RUNNING=${RUNNING:-0}
+if [ "$RUNNING" != 0 ] && ! cmp -s "$TMP/allocator.yaml" "$ALLOCATOR"; then
+  echo "$RUNNING enclave(s) running and $ALLOCATOR needs different settings. Stop them, then run this again. Packages were updated; nothing else changed."
+  exit 1
+fi
 sudo systemctl enable docker nitro-enclaves-allocator
-sudo systemctl restart docker nitro-enclaves-allocator
+if [ "$RUNNING" = 0 ]; then
+  sudo tee "$ALLOCATOR" <"$TMP/allocator.yaml" >/dev/null
+  sudo systemctl restart docker nitro-enclaves-allocator
+else
+  echo "$RUNNING enclave(s) running and the allocator settings are unchanged: not restarting the allocator."
+  sudo systemctl restart docker
+fi
 sudo usermod -aG docker,ne "$ME"
 
 echo "== node $NODE_VERSION and pnpm via corepack"

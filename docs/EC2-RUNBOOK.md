@@ -30,7 +30,7 @@ curl -fsSLO https://raw.githubusercontent.com/jesterkeri/attessa/<commit>/script
 chmod +x ec2-host-setup.sh && ./ec2-host-setup.sh <commit>
 exit        # log back in so the docker and ne groups apply
 ```
-`<commit>` is a 40-hex commit on the public repo (push first). Safe to re-run. It starts no Attessa service.
+`<commit>` is a 40-hex commit on the public repo (push first). Safe to re-run, also with an enclave running: the allocator is then left alone, or the script stops and says so if its settings differ. It starts no Attessa service.
 Node 22.23.2 and Caddy 2.10.2 are downloaded on every run and checked against SHA-256 / SHA-512 constants written in the
 script (no checksum file is fetched); a mismatch stops it before any `sudo` extraction. dnf packages stay unpinned.
 `/etc/attessa` is `root:attessa-gw` mode 750, not 700, because the units read their JSON from it (comment in the script).
