@@ -3,8 +3,20 @@
   "name": "Attessa",
   "description": "Attessa is a trust layer for x402 sellers on Celo: a seller runs approved code in an AWS Nitro Enclave, and each paid response carries a signed proof from that code, checked before payment settles. Status: not yet serving paid calls on Celo mainnet. Source: https://github.com/jesterkeri/attessa",
   "services": [
-    { "name": "web", "endpoint": "https://attessa.xyz" }
+    {
+      "name": "web",
+      "endpoint": "https://attessa.xyz"
+    }
   ],
   "x402Support": false,
-  "registrations": []
+  "registrations": [
+    {
+      "agentId": 10061,
+      "agentRegistry": "eip155:42220:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+    },
+    {
+      "agentId": 931,
+      "agentRegistry": "eip155:11142220:0x8004A818BFB912233c491871b3d84c89A494BD9e"
+    }
+  ]
 }
