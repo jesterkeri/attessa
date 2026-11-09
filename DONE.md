@@ -4666,3 +4666,8 @@ reviewed: pending Codex
 
 ### CI ts budget review recorded - 2026-11-08
 reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
+
+### T34 README Codex r1: SHIP - 2026-11-09
+
+Codex round 1 reviewed README.md at d2a257c in a frozen worktree and found nothing. It confirmed the mainnet paragraph with read-only Celo reads (the transaction, `ownerOf(10061)`, `tokenURI(10061)`) and the live agent.json. It checked commands, paths and claims statically and did not install, build or run them. T34 stays open: this covers the README only, not the tutorial, how-tos or the rest of the docs set.
+reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
