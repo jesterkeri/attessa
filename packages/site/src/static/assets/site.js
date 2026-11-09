@@ -440,7 +440,7 @@
       <p class="muted">If the call was made in the last few seconds, its transaction may not be in a block yet. Check that the network in the footer is the one the call used. Looking a call up by its request ID is planned.</p>`),
     malformed: () => message('fail', 'alert', "That isn't a transaction hash", `
       <p>A settlement transaction starts with <code>0x</code> and has 64 hex characters after it (0 to 9, a to f).</p>
-      <p class="muted">It is the payment's transaction on Celoscan. Looking a call up by its request ID is planned.</p>`),
+      <p class="muted">It is the payment's transaction on the network's block explorer. Looking a call up by its request ID is planned.</p>`),
     rpc: () => message('wait', 'plug', "Can't reach Celo right now", `
       <p>The explorer couldn't read <span data-network-name>${networkName()}</span> from its connection to the network (${chip('rpcUrl')}). Nothing was checked, and nothing about the call itself has changed. Try again in a moment.</p>
       <p><button type="button" class="bracket-link" data-retry>Retry</button></p>`),
