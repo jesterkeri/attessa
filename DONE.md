@@ -4959,3 +4959,15 @@ $ pnpm --filter @attessa/seller-host test -- -t "inputs"
 ```
 
 The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
+
+## Audit hygiene: Codex r3 finding M1 (feat/audit-hygiene, 2026-11-09)
+reviewed: reviews/audit-hygiene-review-r3.md is archived outside the repo (REVISE); this entry's change goes to round 4
+
+The renamed job no longer reported a check the ruleset required, so the branch could merge only with an admin bypass. Joshua removed the old requirement before this merge, so a normal merge works. His command's output, verbatim:
+
+```
+before: ts, contracts, slither, enclave, guardrails, no secrets in client output
+after:  ts, contracts, slither, enclave, guardrails
+```
+
+Adding `credential scanner self-test` as required comes after this reaches staging and main, and is tracked in OPEN-QUESTIONS.

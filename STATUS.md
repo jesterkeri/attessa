@@ -27,4 +27,4 @@
 - Gate 1 kill test: running in parallel in Claude Code (BUILD_KICKOFF.md)
 - product named Attessa; pack renamed (packages `@attessa/*`, CLI `attessa` + alias `attest`, units `attessa-*`), protocol identifiers unchanged 2026-10-29
 - Joshua registered on Loops 2026-10-29 (attribution tag goes in .env as LOOPS_ATTRIBUTION_TAG for T30)
-- public repo github.com/jesterkeri/attessa created 2026-10-29; ruleset on main requires guardrails + no secrets in client output
+- public repo github.com/jesterkeri/attessa created 2026-10-29; ruleset on main requires guardrails and the other CI jobs (see OPEN-QUESTIONS, the ruleset migration)
