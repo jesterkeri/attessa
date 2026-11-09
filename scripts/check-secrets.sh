@@ -10,7 +10,8 @@ found=0
 if [ "$#" -gt 0 ]; then DIRS=("$@"); REQUIRE_EACH=1; else DIRS=(.next dist build out); REQUIRE_EACH=0; fi
 for d in "${DIRS[@]}"; do
   # A name starting with a dash must never reach find or grep as an option (`-L` scanned the wrong place and passed).
-  case "$d" in /*) ;; *) d="./$d" ;; esac
+  # An empty name is a missing directory, not the current one.
+  case "$d" in /*) ;; "") ;; *) d="./$d" ;; esac
   if [ ! -d "$d" ] || [ -z "$(find "$d" -type f -print -quit 2>/dev/null)" ]; then
     if [ "$REQUIRE_EACH" -eq 1 ]; then echo "FAIL $d is missing or empty: nothing was scanned"; exit 2; fi
     continue

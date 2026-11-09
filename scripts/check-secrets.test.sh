@@ -31,9 +31,13 @@ want 'no arguments and no usual output fails' 2
 mkdir -p "$tmp/dist"; echo "nothing here" > "$tmp/dist/a.js"
 want 'no arguments finds dist' 0
 # Adversary r3: a directory named like a grep or find option, and a credential behind a symlink.
-mkdir -p "$tmp/-L" "$tmp/sym" "$tmp/real" "$tmp/dangling"
-printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/-L/a.js"
-want 'a credential in a directory named -L fails' 1 -L
+# The -L case runs where nothing else is dirty: beside the other cases, the old script failed only by accident.
+alone="$(mktemp -d)"; trap 'rm -rf "$tmp" "$alone"' EXIT
+mkdir -p "$alone/-L"; printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$alone/-L/a.js"
+( cd "$alone" && "$scan" -L >/dev/null 2>&1 ); got=$?
+if [ "$got" -eq 1 ]; then echo "ok a credential in a lone directory named -L fails"; else echo "not ok a credential in a lone directory named -L fails: exit $got, wanted 1"; fails=$((fails + 1)); fi
+want 'an empty directory name fails' 2 ""
+mkdir -p "$tmp/sym" "$tmp/real" "$tmp/dangling"
 echo "nothing here" > "$tmp/sym/a.js"
 printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/real/s.txt"
 ln -s ../real/s.txt "$tmp/sym/link.js"
