@@ -8,8 +8,11 @@ import {DeployScript, ValidatorStackDeployer} from "./DeployBase.sol";
 /// env ATTESSA_ADMIN: the cold admin EOA that owns the CertManager and holds its revoker role (L3).
 contract DeployValidatorStack is DeployScript, ValidatorStackDeployer {
     function run() external returns (ValidatorStack memory s) {
-        _requireSepolia();
-        address admin = vm.envAddress("ATTESSA_ADMIN");
+        return _run(vm.envAddress("ATTESSA_ADMIN"));
+    }
+
+    function _run(address admin) internal returns (ValidatorStack memory s) {
+        _requireSupportedChain();
         address deployer = _startBroadcast();
         require(admin != address(0), "ATTESSA_ADMIN is zero");
         require(admin != deployer, "ATTESSA_ADMIN must be the cold admin key, not the deployer");
