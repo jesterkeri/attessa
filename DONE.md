@@ -4571,6 +4571,56 @@ status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attes
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
 
+### T30 prep: deploy scripts target Celo mainnet (simulated only, nothing sent) - 2026-11-08
+Branch feat/t30-mainnet-deploy. DeployBase now picks identity/Self by block.chainid: 11142220 unchanged, 42220 uses 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 and 0xaC3DF9ABf80d0F5c020C06B04Cced27763355944 (equal to deployments.ts and check-deploy PINS), any other chain reverts "Celo mainnet (42220) or Celo Sepolia (11142220) only". Admin != deployer guard kept; no env var selects the chain or registries. check-deploy `--pre-deploy` failure confirmed as ENOBUFS (forge build exit 0, 7,610,779 bytes on stderr vs execFileSync's 1 MB default); fixed in scripts/forge-run.mjs (256 MB buffer; a non-zero exit still throws with status and stderr tail).
+```
+$ forge fmt --check                       -> FMT_OK
+$ forge test                              -> Ran 12 test suites: 253 tests passed, 0 failed, 3 skipped (256 total)
+$ forge test --match-path 'test/deploy/*' -> 18 passed (13 DeployRegistry, 5 DeployValidatorStack)
+$ node --test scripts/forge-run.test.mjs  -> tests 3, pass 3, fail 0
+$ node scripts/check-deploy.mjs --pre-deploy
+REF   reference build from HEAD d9ae7cd31489 and nitro-validator 0ea0d12366b4fa44f9e07e4755f2ad36561cb674
+PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ forge script DeployValidatorStack --rpc-url https://forno.celo.org --sender <discarded address>   (dry run)
+Chain 42220  Estimated total gas used for script: 13938801
+P384Verifier 2255020, CertManager 6975844, NitroValidator 4707937 (per tx)
+$ forge script DeployRegistry (Sepolia, existing validator, dry run) -> EnclaveRegistry 4477814 gas
+$ forge script DeployRegistry on 42220 -> reverts "ATTESSA_NITRO_VALIDATOR has no code" (stack not deployed; expected)
+$ node scripts/check-deploy.mjs celo -> exit 2, "Admin is still TODO" (nothing deployed)
+```
+Correction, same day: the first version of `test/deploy/DeployValidatorStack.t.sol` above was flaky. The lead's re-run failed 5 of 6 times without `-j 1`, because `vm.setEnv` is process-wide and its tests overwrote one another's ATTESSA_ADMIN. The "18 passed" above was a lucky run. `DeployValidatorStack` now has an internal `_run(admin)` as `DeployRegistry` has, and only one test sets the variable. Results after the fix are in the commit that changed it.
+reviewed: pending Codex
+
+### T30 fixes: pins on the reference build, unconditional creation-input check, mainnet script guard, safe output dir - 2026-11-08
+Branch feat/t30-mainnet-deploy. Defects proven by the adversary (`tagged-deploy.attack.test.mjs`, 2 of 3 failed before the fix) and fixed:
+1. `prepare`/`check` now call `verifyReference`: for all four contracts the runtime embedded in the creation bytecode (immutables zeroed) must equal `PINNED` and the whole creation bytecode `CREATION_PINNED`. P384Verifier, CertManager, NitroValidator runtime pins are the `DeployBase.sol` constants; EnclaveRegistry has no `DeployBase.sol` constant, so its runtime and creation pins exist only in `scripts/tagged-deploy.mjs` (recorded from the reference build at this commit; re-record in the same commit whenever EnclaveRegistry.sol or the submodule changes). check-deploy pins the solc 0.8.26 binary sha256 (linux x86_64 only), writes `evm_version = "cancun"` into the generated foundry.toml, and refuses artifacts whose metadata says another solc/evm_version/optimizer. Not pinned: the forge binary itself.
+2. `check --tx` rebuilds reference bytecode ++ args ++ suffix and compares the whole input; no data file is read.
+3. `DeployBase.sol`: `_requireSupportedChain` and `_startBroadcast` revert on 42220 under `vm.isContext(ScriptBroadcast | ScriptResume)`. Simulation on 42220 still works (below). Limit: the test runner cannot enter a broadcast context without sending, so the guard is tested through the `_inBroadcastContext()` seam; the real cheatcode answering true under a send was not exercised (the send flag is blocked here).
+4. Output dir: symlink, foreign owner, or group/other-writable refused; created 0700; default `<tmp>/attessa-tagged-deploy-<uid>`. `insideRepo` fixed for a directory named `..x` (and for a new directory under a symlink into the repo).
+5. Comment corrected: the tag is public on chain; the printed suffix contains it; only error messages never show it.
+```
+$ node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs   -> tests 37, pass 37, fail 0
+$ cd contracts && forge test (run 1 and run 2, each) -> Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total)   (was 261 passed; +7 MainnetSendGuard)
+$ forge fmt --check -> exit 0
+$ node scripts/check-deploy.mjs --pre-deploy -> PASS: contracts/out equals the reference build for P384Verifier, CertManager, NitroValidator, EnclaveRegistry, DeployValidatorStack, DeployRegistry
+$ anvil --chain-id 42220; forge script script/DeployValidatorStack.s.sol --rpc-url <anvil> --sender <anvil dev account>   (no send flag)
+Estimated total gas used for script: 13938801 ... SIMULATION COMPLETE
+$ node scripts/tagged-deploy.e2e.mjs (clean tree at e2d8fea) -> E2E OK: all four tagged creations passed every check, exit 0
+  P384Verifier    0x5fbdb2315678afecb367f032d93f642f64180aa3  gas 1735181   (verifyTx tag found, runtime = control, storage 0..31 = control, check OK, creation input equals reference bytecode ++ args ++ suffix, 7858 bytes)
+  CertManager     0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0  gas 5366590
+  NitroValidator  0xdc64a140aa3e981100a9beca4e685f962f0cf6c9  gas 3622046
+  EnclaveRegistry 0x0165878a594ca255338adfa4d48449f69242eb8f  gas 3445017
+  check-deploy celo against the local stack: OK: all 27 checks passed
+```
+Full e2e output kept at /tmp/claude-1000/-home-hr-myvscode-linux-attessa/03e05dc1-b5af-45ec-8609-89d159bfc040/scratchpad/e2e.txt. Not fixed (outside this task): `node --test scripts/check-deploy.test.mjs` has 12 failing tests that read the now-deployed Sepolia data (deployments.ts and DEPLOYMENTS.md disagree for the fixtures; "the repo as committed (TODO addresses)" expects a Sepolia Admin TODO that no longer exists). Their failure messages are about those fixtures, not the reference build.
+reviewed: pending
+
+### T30 adversary r2 fixes - 2026-11-09
+Defect, proved by scripts/tagged-deploy.attack2.test.mjs: the printed deploy line put --account, --from, --rpc-url and --gas-limit after `--create <CODE>`. In foundry 1.8.1 `--create` is a subcommand and rejects them ("unexpected argument '--account' found"), so the route could not deploy as printed. Options now come first. The test parses the printed line with `cast mktx`, which shares the parser and signs and sends nothing; the real `cast send` line is blocked by a repo hook here and has not been run.
+Also from the round's suspicions: the clean-tree check drops GIT_* from its environment, and a failed gas estimate no longer repeats the node's error text, which could echo the tag.
+Verify (flock): node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs scripts/tagged-deploy.attack2.test.mjs: # tests 39, # pass 39, # fail 0.
+Known and not from this change: 6 of 11 tests in scripts/check-deploy.test.mjs fail, the same 6 on origin/staging. Their fixtures expect the pre-Sepolia placeholder addresses. They do not run in CI.
+reviewed: pending
 ### Mainnet entry: `agent register` before the registry exists, and the Loops attribution tag - 2026-11-08
 Change 1: `attessa agent register` uses the pinned ERC-8004 identity registry (`packages/core/src/deployments.ts`) when no EnclaveRegistry is deployed or configured, on any network; a deployed or `ATTESSA_REGISTRY` registry's `identityRegistry()` stays authoritative; every other command still refuses with `no_registry`; `--dry-run` needs no key. Dry run: `attessa agent register --name "<name>" --uri <agentURI> --network mainnet --dry-run`.
 Change 2: `withAttribution` (`packages/core/src/attribution.ts`) appends an ERC-8021 Schema 0 suffix `[code ASCII][len:1][0x00][0x80218021 x8]` (celo-org/attribution-tags INDEXERS.md and BUILDERS.md; byte-identical to `ox/erc8021` `Attribution.toDataSuffix`, checked once by hand) to every non-x402 transaction on mainnet, code from env `LOOPS_ATTRIBUTION_TAG`. Send paths: `packages/cli/src/tx.ts send()` (all seller/owner/operator writes) and `packages/sdk/src/client.ts sendCancel()` (`attessa cancel`, through `ClientOptions.dataSuffix`). Mainnet with the tag unset: `no_attribution_tag`, nothing signed; `--dry-run` prints that the tag is missing. Sepolia and local: no suffix. x402 signing untouched.
@@ -4703,6 +4753,84 @@ reviewed: pending Codex r6
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
 
+## T28 seller-host input fetch through buy, Forno fallback, `source` recorded (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 (capability id, price, first paid transaction) is not done because the agent wallet is not funded, so T27 and T28 stay unticked. Every buy test uses a test double for the `buy` binary (an `exec` stub answering from an in-process fake JSON-RPC node); the capability id, URL and price in the tests are placeholders.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` runs the `buy` binary's `curl` subcommand with `--max-amount <decimal>`, `--silent`, a POST and the JSON-RPC batch as the request body, through an injectable exec. One attempt, never retried. The key is never read by seller-host, never in argv or the child's environment (minimal env: PATH, HOME, LANG, BUY_HOME), and buy's stderr/stdout is never put in an error. Config check: https URL without credentials, 1-128 visible ASCII id, per-call maximum > 0 and <= 0.10 USDC ceiling. The same maximum is passed to buy and counted by the budget guard as one evaluate's cost.
+- `src/inputs.ts`: `parseBatchReply` shared by Forno and buy. A paid primary gets the head number from Forno (free), then asks buy once for the four reads (block, code, nonce, balance) at latest - 1, in one batch. A buy reply that fails validation (not JSON, not an array, a per-call error, wrong block number, bad hash, bad code) counts as failed and falls back once to Forno with `source:"forno"`; the paid attempt is still counted.
+- `src/config.ts`, `src/main.ts`: optional `buy` block (capabilityId, url, maxAmount as decimal USDC, optional binary, account, home). Refused on sepolia and local, and without `gatewayDbPath`. Absent means Forno only. Wired with `BuySpendGuard`/`GatewayDbRevenue`.
+- Tests: `test/buy-inputs.test.ts` (new). Two assertions in `test/inputs.test.ts` changed because the head read moved to Forno: Forno now sees 1 request when buy succeeds (was 0), and the guard test counts 4 paid requests for 4 fetches (was 8). They encode SPEC's "one batch per evaluate"; what is checked is not relaxed.
+
+Verification: `pnpm --filter @attessa/seller-host exec vitest run -t "inputs"` 16 passed | 76 skipped; full seller-host suite 92 passed (92); typecheck and lint exit 0 (see the build report for the output).
+reviewed: pending
+
+## T28 round 1 fixes after the adversary pass (NOT ticked; no real paid call has run)
+
+No real paid call has run. T27 and T28 stay unticked: T27 (capability id, price, first paid transaction) needs a funded agent wallet. Every buy test uses a test double or a stand-in shell script for the `buy` binary; nothing signs or spends.
+
+Fixed in packages/seller-host (each with a test that fails without the fix; confirmed by stashing `src/` and running the suite: 16 failed):
+1. `src/buy.ts`: new `keystoreBackend` config field (`system` | `file`), forwarded as BUY_KEYSTORE_BACKEND, plus XDG_RUNTIME_DIR and DBUS_SESSION_BUS_ADDRESS; the parent's own BUY_KEYSTORE_BACKEND is used if the config has none and it is a valid value. From @celo/buy-keystore 0.8.5 (read as data): the file backend has no passphrase and refuses mainnet accounts, so it cannot sign on mainnet (see OPEN-QUESTIONS). No AGENT_PRIVATE_KEY or other secret reaches the child.
+2. `CAPABILITY_ID = /^[A-Za-z0-9._:/-]{1,128}$/`, with a test reading `enclave/src/rules.rs` for the same grammar; `parseConfig` refuses a missing or non-string capabilityId, url or maxAmount at parse time.
+3. `src/inputs.ts`: `guard.allow`/`guard.record` run inside the paid-call wrapper under try/catch; a fault logs `buy_guard_fault`, makes no paid call, and Forno answers. The spend is recorded before the call it pays for.
+4. `defaultExec` uses spawn with `detached: true` and kills the process group on abort, exit or overflow; the test leaves a background child that would write a marker file 1.2 s later.
+5. The paid block's hash and timestamp are checked against Forno at the same number; a mismatch is a failed buy read (Forno answers). A Forno failure in the cross-check does not fail the evaluate (decision recorded in OPEN-QUESTIONS.md).
+6. A failed Forno head read is replaced by a head read through buy, counted as a second paid request within the budget; spend is counted only just before a paid call is made.
+Changed expectation in `test/inputs.test.ts`: Forno now sees 2 requests when buy succeeds (head, then the cross-check), was 1. `test/buy-adversary.test.ts` is the adversary's file with imports changed, kept as is.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  109 passed (109)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+```
+(previous count 92 passed)
+reviewed: pending
+
+
+## T28 seller-host paid reads through the @celo/buy-core library, not the buy CLI (NOT ticked; no real paid call has run)
+
+No real paid call has run and nothing touched the buy gateway. T27 (capability id, price, first paid transaction) needs a funded agent wallet, so T27 and T28 stay unticked. Why: on a headless mainnet host the `buy` CLI cannot sign (`BUY_KEYSTORE_BACKEND=file` refuses mainnet, `system` needs a Secret Service over D-Bus), so every evaluate would have fallen back to Forno.
+
+Read as data first (`npm pack @celo/buy-core@0.8.5 --ignore-scripts`, unpacked in an empty scratch directory, not run): no install scripts, one dependency (`viem ^2.21.55`, already in the lockfile at 2.57.13). `x402.payingFetch(ctx, url, init)`: `ctx = { account: LocalAccount | () => Promise<LocalAccount>, network: 'celo' | 'celo-sepolia', preferredToken?, fetchImpl?, readBalance?, ... }`; `init` is a `RequestInit` plus `maxAmount?: bigint` (cap), `maxRetries` (default 1), `onChallenge`, `onBeforePayment`. Cap: the library compares the selected requirement's `maxAmountRequired` to `maxAmount` and throws `amount_exceeds_max` before `buildPayment` (before signing). Seller-host also checks, in `onChallenge` (also before signing): network `celo`, asset 0xcebA9300f2b948710d2653dD7B07f33A8B32118C, scheme `exact`, integer price within the cap, payTo an address; `onBeforePayment` refuses if the evaluate was aborted. The paid request is sent once (library comment: no transient retry after a payment is on the wire); the library signs with chainId from the `celo` table, 42220. v2: challenge in the `payment-required` header (base64 JSON, CAIP-2 network `eip155:42220`, price in `amount`), payment in `PAYMENT-SIGNATURE`.
+
+Built (packages/seller-host):
+- `src/buy.ts`: `BuyCliSource` and the process-group exec replaced by `BuyPaidSource(config, account, fetchImpl?)` (same `BuySource` interface, same `buy:<capabilityId>` source, same cost per evaluate) and `loadAgentAccount(env)`. The key comes from env `AGENT_PRIVATE_KEY` only (64 hex, 0x optional), through viem's `privateKeyToAccount`, in memory. A missing or malformed key returns a reason that never contains the value. Errors carry a short code (`paid read failed (http_500)`), never a library or network message; the source does not serialise or inspect its account. The paid request uses `redirect: 'error'`, the caller's abort signal, and a 1 MiB reply cap.
+- `src/main.ts`: builds the source only if the config has `buy` and the key loads; otherwise logs `buy_disabled` (reason, `fallback: forno`) and reads go to Forno. The `listening` log says whether buy is on. seller-host has no health route, so the startup log is the message.
+- `src/config.ts`: `binary`, `account`, `home` and `keystoreBackend` removed (an old config that still has them has them ignored).
+- `package.json`: `@celo/buy-core` `0.8.5` exact. `pnpm-lock.yaml`: +15 lines: the importer entry, the `@celo/buy-core@0.8.5` package and snapshot (depends only on the existing `viem 2.57.13` instance). No other package was added.
+- Tests: `test/fake-x402.ts` (new): a local x402 v2 seller that verifies the EIP-3009 signature (chain 42220, USDC domain) before answering from a fake JSON-RPC node. `test/buy-inputs.test.ts` rewritten on it with a throwaway key generated in the test; `test/buy-adversary.test.ts` keeps its config and guard probes. Removed as tests of deleted features: the argv/`--max-amount` and minimal-env test, the keystoreBackend env tests (2), the two process-group abort tests and the two spawn-based adversary tests. Ported to the new route: abort ends the in-flight request (the server sees the connection close, exactly one payment), reply that is not a valid batch is a failed read, fallback and spend counting, cross-check, head, guard. New: cap, chain, asset and scheme refusals with a counted signer (zero signatures), cap boundary, a cheaper wrong-token offer listed first, redirect not followed, abort during signing sends nothing, no second payment after a 5xx / 402 / dropped connection, key loading, key never in a thrown error, JSON or inspect output. A mutation check (the scheme and payTo checks disabled) makes the refusal test fail.
+
+Verification (each under `flock /home/hr/.cache/attessa-heavy.lock`):
+```
+$ pnpm install --frozen-lockfile        -> Done in 428ms (lockfile up to date; bin-link WARNs are for unbuilt workspace dists)
+$ pnpm --filter @attessa/seller-host test
+ Test Files  10 passed (10)
+      Tests  119 passed (119)
+$ pnpm --filter @attessa/seller-host typecheck   -> exit 0
+$ pnpm --filter @attessa/seller-host lint        -> exit 0
+$ bash scripts/check-install-scripts.sh          -> "pnpm@10.32.1 install ran no non-allowlisted install script: ok", exit 0
+(previous count 109 passed)
+```
+reviewed: pending
+
+### T28 payment receipts - 2026-11-09
+Build with buy asks for proof of payment, and the library route kept only the reply body. Each paid read now appends a receipt to `<stateDir>/buy-receipts.jsonl` (mode 0600) and logs `buy_paid`: capability, url, network, asset, amount, status, outcome, settlement tx, payer, nonce, time. Public values only, never the signature. A paid request the service answers with an error still leaves a receipt. A failed write does not fail the read or pay again. Not confirmed: the real gateway's settlement header, or that Loops counts library payments (asked of the organisers).
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 11 passed (11), Tests 123 passed (123); typecheck and lint: no errors.
+reviewed: pending
+
+### T28 adversary r2 fixes - 2026-11-09
+Defects, proved by packages/seller-host/test/adversary-t28-r2.test.ts:
+1. One transient Forno failure made one evaluate pay twice, because a paid request stood in for the head. That broke SPEC §5 / FR-11, "one JSON-RPC batch per evaluate".
+2. In that same case the paid block skipped the cross-check against Forno, so a forged block hash could be attested.
+3. The library signs a validity window the seller chooses (1e9 seconds passed).
+Fixes: the head is always free Forno, with one retry. With no head the evaluate fails with nothing paid, so availability now depends on Forno for the head, and this is a stated trade-off. Offers above MAX_AUTH_WINDOW_SECONDS (3600, our choice; the spec gives no number) are refused before signing. A settlement value that is not a transaction hash is not recorded, and `buy_paid` is logged before the file write.
+Test changes: "head: Forno down and buy up, the head is a second counted paid request" and "the extra paid head request stays inside the budget" asserted the removed design and are replaced by one test that nothing is paid. The adversary's window test now expects a refusal with nothing signed, and the 3600 boundary to pay, because the library's window can't be overridden.
+Left open: code, nonce and balance from the paid service are not cross-checked (only block hash and timestamp). A paid request ending in a transport error or abort leaves no receipt, because the library calls onPayment only after a non-402 reply.
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 12 passed (12), Tests 126 passed (126); typecheck and lint: no errors.
 ## T34 README (README part only; T34 not ticked) - 2026-11-08
 
 Wrote `README.md` from FLOWS §1 (premise line verbatim), SPEC §1, ARCHITECTURE, KNOWN-LIMITS, `packages/cli/src/index.ts` COMMANDS, `packages/mcp/src/server.ts` and `docs/DEPLOYMENTS.md`. Every relative link was checked and resolves; no em dashes; no numbers, addresses or keys in it. `scripts/check-claims.sh` does not exist on this branch (not written). No project license file or `license` field exists, so the README states none.
@@ -4792,3 +4920,42 @@ ok no arguments and no usual output fails
 ok no arguments finds dist
 check-secrets: all passed
 ```
+## T28 Codex r1 fixes (M1-M3)
+- M1: an unavailable Forno cross-check now fails the paid read closed; the Forno fallback runs, and if it cannot answer the result is `inputs_unavailable` with no inputs for the enclave. Old fail-open test replaced; forged-payload-plus-outage test added.
+- M2: `buy-intents.jsonl` (new `src/ledger.ts`) is append-only, fsynced per line: `intent` (id, capability, payer, cap, timestamp) written in `onBeforePayment`, `nonce` line before the paid request is sent, then `outcome` `responded` or `uncertain`. A paid fetch that throws after the send ends as `payment_uncertain`. No durable intent, no send.
+- M3: an existing but unreadable/corrupt `buy-guard.json` throws (guard fault, buy off, Forno serves). Today's spend = max(state, ledger intents for the UTC day, uncertain ones included). State is written with fsync.
+- Verify: `pnpm --filter @attessa/seller-host lint && ... typecheck && ... test`
+```
+ Test Files  13 passed (13)
+      Tests  137 passed (137)
+exit 0
+```
+reviewed: pending Codex r2
+
+## T28: adversary round 2 (feat/t28-buy-inputs, 2026-11-09)
+reviewed: pending Codex r2
+
+The cross-check anchored only the paid block header, so a paid reply with the real header and forged code, nonce or balance reached the enclave. Every paid read is now compared with Forno at the same block, and any difference or outage rejects the paid read; the Forno fallback runs. Test kept as `packages/seller-host/test/adversary-t28-forged-values.test.ts`. `pnpm --filter @attessa/seller-host test`: Test Files 14 passed, Tests 140 passed.
+### T30 mainnet deploy route Codex r2: SHIP - 2026-11-09
+
+Codex round 2 reviewed 7de210c in a frozen worktree and found nothing: every mainnet creation is pinned init code, constructor arguments and the ERC-8021 suffix, the Forge scripts refuse a mainnet broadcast, and `tagged-deploy.mjs` signs and sends nothing. After merging staging (dce5d3d, which brings the Codex-SHIP mainnet-entry work):
+```
+node --test scripts/tagged-deploy*.test.mjs: # tests 39 # pass 39 # fail 0
+pnpm --filter @attessa/cli test: Tests  388 passed (388)
+forge test: Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total tests)
+```
+No mainnet contract is deployed by this. T30 stays open until the real deployment is recorded.
+reviewed: reviews/t30-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+## T28: Codex r2 SHIP (feat/t28-buy-inputs, 2026-11-09)
+reviewed: reviews/t28-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+Reviewed at 17d6d2c. The review also closed r1's M1, M2 and M3. Verify command, verbatim, at that head:
+
+```
+$ pnpm --filter @attessa/seller-host test -- -t "inputs"
+ Test Files  14 passed (14)
+      Tests  140 passed (140)
+```
+
+The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
