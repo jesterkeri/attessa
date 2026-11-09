@@ -33,7 +33,7 @@ import {
 } from '@attessa/core';
 import { EIP3009_TYPES, ENDPOINT_STATUS, tokenAbi } from './abi.ts';
 import { Chain, RpcError, type Settlement } from './chain.ts';
-import { InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
+import { GasCapError, InsufficientGasFundsError, canPayGas, causes, gasTerms, isInsufficientFundsReply, isRevertReply } from './gas.ts';
 import { Ledger, isTerminal } from './ledger.ts';
 import {
   decodePaymentRequired,
@@ -1271,11 +1271,18 @@ export function createAttestClient(cfg: AttestConfig, opts: ClientOptions = {}) 
           e instanceof CancelRevertedError ||
           e instanceof CancelUndecidedError ||
           e instanceof CancelUnconfirmedError ||
-          e instanceof InsufficientGasFundsError
+          e instanceof InsufficientGasFundsError ||
+          e instanceof GasCapError
         )
           throw e;
         throw new CancelInterruptedError(sent.hash, { cause: e });
       }
+    },
+
+    /** False when this RPC's verified chain is Celo mainnet and there is no valid attribution suffix, so a real send would be refused. */
+    async attributionReady(): Promise<boolean> {
+      const n = await net();
+      return n.chainId !== ATTRIBUTION_CHAIN_ID || isAttributionSuffix(opts.dataSuffix);
     },
 
     async listPending(): Promise<PendingEntry[]> {

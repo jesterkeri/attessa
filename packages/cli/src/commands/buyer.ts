@@ -10,6 +10,7 @@ import {
   CancelNotRecordedError,
   CancelUnconfirmedError,
   CancelUndecidedError,
+  GasCapError,
   InsufficientGasFundsError,
   KeyError,
   RpcError as SdkRpcError,
@@ -679,8 +680,10 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     return report(g, d, client, await viaSdk(g, () => client.getResult(id), entry.origin), ctx(entry));
   }
   if (g.dryRun) {
+    // The same rule as a real cancel: the RPC's verified chain decides, never the --network label.
+    const ready = await viaSdk(g, () => client.attributionReady(), entry.origin);
     d.io.out('  (dry run: nothing was sent)');
-    if (g.network === 'mainnet' && !loopsSuffix(d.env)) d.io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real cancel on mainnet is refused until it is)'); // not in FLOWS
+    if (!ready) d.io.out('  (LOOPS_ATTRIBUTION_TAG is not set or not a valid code: a real cancel on Celo mainnet is refused until it is)'); // not in FLOWS
     return 0;
   }
   // The tag rule is on the verified chain id, after the wrong-network check: the SDK's requireAttribution refuses
@@ -697,6 +700,8 @@ export async function cancel(g: Global, d: Deps, o: { id?: string | undefined; k
     // The cancel permission is signed before its transaction, so a wallet without CELO ends "Nothing was sent.",
     // whether the SDK refused before signing the transaction or the node refused its broadcast.
     if (e instanceof InsufficientGasFundsError) throw ERR.insufficientGasFunds(e.address, 'cancelAuthorization', e.maxCost, e.chainId, 'Nothing was sent.');
+    // The RPC answered and the transaction was refused here, so never the rpc row. // not in FLOWS
+    if (e instanceof GasCapError) throw new CliError('gas_over_cap', 'The cancel needs more gas than one Celo transaction allows once it carries the attribution tag. The cancel permission was signed, but nothing was sent.', null);
     if (e instanceof CancelRevertedError) throw BUYERR.cancelReverted(hms(e.validBefore), e.tx);
     if (e instanceof CancelUnconfirmedError) throw BUYERR.cancelUnconfirmed(e.tx);
     if (e instanceof CancelNotRecordedError) {

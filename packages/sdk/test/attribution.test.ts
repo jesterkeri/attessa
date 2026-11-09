@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { parseTransaction, toFunctionSelector, type Hex } from 'viem';
+import { GasCapError } from '../src/gas.ts';
 import { makeWorld, type World } from './fakes/world.ts';
 
 // The buyer's cancelAuthorization is a real transaction the CLI sends (`attessa cancel`). The suffix is appended only
@@ -68,6 +69,17 @@ describe('cancelAuthorization and the attribution suffix', () => {
 
 // Review r2, finding 1: a suffix that merely ends in the marker is not a Schema 0 suffix. These are refused on 42220
 // before the cancel permission is signed or the transaction estimated.
+// Codex mainnet r3: the gas-cap refusal keeps its own type through cancelAuthorization, never "interrupted".
+describe('cancelAuthorization on 42220 whose estimate leaves no room for the suffix', () => {
+  it('throws GasCapError with nothing broadcast', async () => {
+    const { id, raws } = await open(true, SUFFIX);
+    const orig = w.chain.request.bind(w.chain);
+    w.chain.request = async (m: string, p: unknown[] = []) => (m === 'eth_estimateGas' ? '0xffffff' : orig(m, p));
+    await expect(w.client.cancelAuthorization(id)).rejects.toBeInstanceOf(GasCapError);
+    expect(raws).toHaveLength(0);
+  });
+});
+
 describe('cancelAuthorization refuses a malformed Schema 0 suffix on chain 42220', () => {
   const M = '80218021802180218021802180218021';
   const code = '63656c6f5f7465737431323334'; // celo_test1234, 13 bytes

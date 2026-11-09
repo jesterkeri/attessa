@@ -4702,6 +4702,13 @@ reviewed: pending
 ### Mainnet entry adversary r3 fix, and the rehearsal's register fix - 2026-11-09
 1. Proved by packages/cli/test/adversary-mainnet-r3.test.ts: a leftover ATTESSA_REGISTRY with no code on the chain made `agent register` answer "Unexpected error (AbiDecodingZeroDataError)". A read of the configured registry that answers `0x` now refuses with `registry_no_code`, which names the variable ("Nothing was signed.", not in FLOWS). Round 3's other attacks failed.
 2. Found by the mainnet rehearsal (cherry-picked): `agent register` crashed with ENOENT after sending when docs/ did not exist, so a real transaction could land with no agent id reported. writeFile now creates the directory.
+
+### Mainnet entry Codex r3 fixes - 2026-11-09
+Codex r3: REVISE, with two majors (.worktrees/archive/codex/mainnet-entry-review-r3.md).
+1. `cancel --dry-run` decided its missing-tag line from the --network label, so a local route to 42220 stayed silent. It now asks the SDK (`attributionReady`), which reads the verified chain id, and the line also covers a malformed tag.
+2. A gas-cap refusal in `sendCancel` became CancelInterruptedError and then the false "Can't reach Celo" row. GasCapError now passes through, and the CLI maps it to `gas_over_cap` ("The cancel permission was signed, but nothing was sent.", not in FLOWS).
+Verify (flock): pnpm --filter @attessa/sdk test: Tests 206 passed (206); pnpm --filter @attessa/cli test: Tests 388 passed (388); pnpm -r typecheck and pnpm -r lint: no errors.
+reviewed: pending
 ### T21b Codex r4 fixes - 2026-11-07
 
 Codex r4 (REVISE, 3466a30). First merged origin/staging (T21 merged; DONE.md and OPEN-QUESTIONS.md keep both sides, lockfile regenerated, MCP builds against the merged CLI). Failing tests first (commit message ends "(failing)"), then the design fix:
@@ -4760,3 +4767,8 @@ reviewed: pending Codex
 
 ### CI ts budget review recorded - 2026-11-08
 reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
+
+### Mainnet entry Codex r4: SHIP - 2026-11-09
+
+Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
+reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
