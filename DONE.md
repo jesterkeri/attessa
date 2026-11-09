@@ -4918,3 +4918,16 @@ forge test: Ran 14 test suites: 268 tests passed, 0 failed, 3 skipped (271 total
 ```
 No mainnet contract is deployed by this. T30 stays open until the real deployment is recorded.
 reviewed: reviews/t30-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+## T28: Codex r2 SHIP (feat/t28-buy-inputs, 2026-11-09)
+reviewed: reviews/t28-review-r2.md | verdict: SHIP (r1 ended REVISE; archived outside the repo)
+
+Reviewed at 17d6d2c. The review also closed r1's M1, M2 and M3. Verify command, verbatim, at that head:
+
+```
+$ pnpm --filter @attessa/seller-host test -- -t "inputs"
+ Test Files  14 passed (14)
+      Tests  140 passed (140)
+```
+
+The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
