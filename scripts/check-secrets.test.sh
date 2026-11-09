@@ -15,7 +15,13 @@ echo "nothing here" > "$tmp/clean/a.js"
 echo "nothing here" > "$tmp/second/a.js"
 # Built at run time, so this file itself isn't credential-shaped.
 printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/dirty/a.js"
+# A binary asset: a NUL byte first, then the credential, and a byte that isn't valid UTF-8.
+mkdir -p "$tmp/binary" "$tmp/cleanbin"
+printf '\0\377 const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/binary/a.wasm"
+printf '\0\377 nothing here\n' > "$tmp/cleanbin/a.wasm"
 want 'a clean directory passes' 0 clean
+want 'a credential inside a binary asset fails' 1 binary
+want 'a clean binary asset passes' 0 cleanbin
 want 'a planted credential fails' 1 dirty
 want 'a missing named directory fails' 2 missing
 want 'an empty named directory fails' 2 empty

@@ -14,7 +14,8 @@ for d in "${DIRS[@]}"; do
     continue
   fi
   scanned=$((scanned + 1))
-  hits=$(grep -rIlE "$PATTERN" "$d"); rc=$?
+  # -a and the C locale: a binary asset ships to the browser too, and a credential inside it still counts.
+  hits=$(LC_ALL=C grep -rlaE "$PATTERN" "$d"); rc=$?
   if [ "$rc" -gt 1 ]; then echo "FAIL could not read $d (grep exit $rc)"; exit 2; fi
   if [ -n "$hits" ]; then
     while IFS= read -r hit; do echo "FAIL $hit"; done <<<"$(head -20 <<<"$hits")"
