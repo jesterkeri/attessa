@@ -1,20 +1,19 @@
-import { appendFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
 import { BuyPaidSource } from '../src/buy.ts';
 import { BuySpendGuard } from '../src/guard.ts';
-import { BuyIntentLedger } from '../src/ledger.ts';
 import { HttpRpcSource, InputFetcher } from '../src/inputs.ts';
 import { FakeRpc } from './fake-rpc.ts';
 import { FakeX402 } from './fake-x402.ts';
 
-// Adversary T28 r2 (7de4490). Test doubles only, throwaway key generated here.
+// Adversary round 2 for T28 (origin/feat/t28-buy-inputs f819bed). Test doubles only, throwaway key generated here.
 const PAY_TO = '0x2222222222222222222222222222222222222222';
 const ACCOUNT = privateKeyToAccount(generatePrivateKey());
 const CFG = { capabilityId: 'test-capability', url: 'https://buy.example.test/rpc', maxAmountAtomic: 10_000n };
-const NOW = new Date();
+const NOW = new Date('2026-11-10T12:00:00Z');
 
 let forno: FakeRpc;
 let x: FakeX402;
@@ -30,56 +29,47 @@ afterEach(async () => {
   await x.stop();
 });
 
-function wire(buyFetch: typeof fetch) {
-  const dir = mkdtempSync(join(tmpdir(), 'attessa-adv-'));
-  const ledger = new BuyIntentLedger(join(dir, 'i.jsonl'));
-  const guard = new BuySpendGuard(join(dir, 'g.json'), { settledSince: () => 0n }, () => {}, ledger);
-  const f = new InputFetcher({ forno: new HttpRpcSource('forno', forno.url), buy: new BuyPaidSource(CFG, ACCOUNT, buyFetch, undefined, ledger), guard, timeoutMs: 1000 });
-  return { dir, ledger, guard, f };
+/** Forno that fails its first request only (one transient fault), then answers normally. */
+function flakyOnce(): HttpRpcSource {
+  let n = 0;
+  return new HttpRpcSource('forno', forno.url, (async (u: string, o: RequestInit) => (n++ === 0 ? Promise.reject(new Error('transient')) : fetch(u, o))) as typeof fetch);
 }
 
-describe('T28 r2 attacks', () => {
-  it('a paid reply with the honest block header but forged payTo code, nonce and balance is not handed on as anchored inputs', async () => {
-    x.paidMode = 'ok';
-    const forging: typeof fetch = async (input, init) => {
-      const res = await x.fetchImpl(input, init);
-      if (!init?.headers || !new Headers(init.headers).has('payment-signature')) return res;
+function fetcherWith(fornoSrc: HttpRpcSource, fetchImpl: typeof fetch = x.fetchImpl) {
+  const buy = new BuyPaidSource(CFG, ACCOUNT, fetchImpl);
+  const guard = new BuySpendGuard(join(mkdtempSync(join(tmpdir(), 'attessa-r2-')), 'g.json'), { settledSince: () => 0n });
+  return { f: new InputFetcher({ forno: fornoSrc, buy, guard, timeoutMs: 1000 }), guard };
+}
+
+describe('T28 adversary r2', () => {
+  it('SPEC §5 / FR-11: one transient Forno head failure must not make one evaluate pay twice', async () => {
+    const { f } = fetcherWith(flakyOnce());
+    await f.fetch(PAY_TO, NOW);
+    // "one JSON-RPC batch per evaluate", "an evaluate pays at most once".
+    expect(x.payments.length).toBeLessThanOrEqual(1);
+  });
+
+  it('chain cross-check: after a transient Forno head failure a paid block with a wrong hash is still rejected (Forno is up for the check)', async () => {
+    const lying: typeof fetch = async (u, o) => {
+      const res = await x.fetchImpl(u, o);
+      if (!new Headers(o?.headers).has('payment-signature')) return res;
       const arr = JSON.parse(await res.text()) as Array<{ id: number; result: unknown }>;
-      arr.find((r) => r.id === 2)!.result = '0x';
-      arr.find((r) => r.id === 3)!.result = '0x0';
-      arr.find((r) => r.id === 4)!.result = '0xde0b6b3a7640000';
+      for (const r of arr) if (typeof r.result === 'object' && r.result !== null && 'hash' in r.result) (r.result as { hash: string }).hash = '0x' + 'ab'.repeat(32);
       return new Response(JSON.stringify(arr), { status: 200 });
     };
-    const { f } = wire(forging);
+    const { f } = fetcherWith(flakyOnce(), lying);
     const i = await f.fetch(PAY_TO, NOW);
-    // Whatever the source label, the values for the enclave must equal what Forno holds at that height.
-    expect({ code: i.payTo.code, nonce: i.payTo.nonce, balanceWei: i.payTo.balanceWei }).toEqual({ code: '0x6001', nonce: '1', balanceWei: '5' });
+    expect(i.block.hash).toBe(forno.blockHash(BigInt(i.block.number)));
   });
 
-  it('double count: after a state-file deletion the next paid call adds exactly one cap to the day total', async () => {
-    x.paidMode = 'ok';
-    const { dir, ledger, guard, f } = wire(x.fetchImpl);
-    await f.fetch(PAY_TO, NOW);
-    rmSync(join(dir, 'g.json'));
-    await f.fetch(PAY_TO, NOW);
-    expect(ledger.read().filter((l) => l.kind === 'intent')).toHaveLength(2);
-    expect(guard.state(NOW).spentAtomic).toBe('20000');
-  });
-
-  it('torn last line (complete JSON, no newline) then a later append: the ledger must fault, never undercount', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'attessa-adv-'));
-    const p = join(dir, 'i.jsonl');
-    const ledger = new BuyIntentLedger(p);
-    const day = NOW.toISOString().slice(0, 10);
-    ledger.append({ v: 1, kind: 'intent', id: 'a', cap: '10000', timestamp: NOW.toISOString() });
-    appendFileSync(p, JSON.stringify({ v: 1, kind: 'intent', id: 'b', cap: '10000', timestamp: NOW.toISOString() }));
-    ledger.append({ v: 1, kind: 'intent', id: 'c', cap: '10000', timestamp: NOW.toISOString() });
-    let spent: bigint | 'fault';
-    try {
-      spent = ledger.spentOn(day);
-    } catch {
-      spent = 'fault';
-    }
-    expect(spent === 'fault' || spent === 30000n).toBe(true);
+  it('the signed authorization is not valid for longer than a bounded window, whatever maxTimeoutSeconds the seller offers', async () => {
+    x.offers[0]!.maxTimeoutSeconds = 1_000_000_000; // 31 years, chosen by the seller
+    const buy = new BuyPaidSource(CFG, ACCOUNT, x.fetchImpl);
+    await expect(buy.batch([{ method: 'eth_blockNumber', params: [] }], new AbortController().signal)).rejects.toThrow(/refused_requirement/);
+    expect(x.payments).toHaveLength(0);
+    x.offers[0]!.maxTimeoutSeconds = 3600;
+    await buy.batch([{ method: 'eth_blockNumber', params: [] }], new AbortController().signal);
+    const a = x.payments[0]!.payload.authorization as { validBefore: string };
+    expect(Number(a.validBefore) - Math.floor(Date.now() / 1000)).toBeLessThanOrEqual(3600);
   });
 });

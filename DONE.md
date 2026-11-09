@@ -4907,7 +4907,7 @@ reviewed: pending Codex r2
 ## T28: adversary round 2 (feat/t28-buy-inputs, 2026-11-09)
 reviewed: pending Codex r2
 
-The cross-check anchored only the paid block header, so a paid reply with the real header and forged code, nonce or balance reached the enclave. Every paid read is now compared with Forno at the same block, and any difference or outage rejects the paid read; the Forno fallback runs. Test kept as `packages/seller-host/test/adversary-t28-r2.test.ts`.
+The cross-check anchored only the paid block header, so a paid reply with the real header and forged code, nonce or balance reached the enclave. Every paid read is now compared with Forno at the same block, and any difference or outage rejects the paid read; the Forno fallback runs. Test kept as `packages/seller-host/test/adversary-t28-forged-values.test.ts`. `pnpm --filter @attessa/seller-host test`: Test Files 14 passed, Tests 140 passed.
 ### T30 mainnet deploy route Codex r2: SHIP - 2026-11-09
 
 Codex round 2 reviewed 7de210c in a frozen worktree and found nothing: every mainnet creation is pinned init code, constructor arguments and the ERC-8021 suffix, the Forge scripts refuse a mainnet broadcast, and `tagged-deploy.mjs` signs and sends nothing. After merging staging (dce5d3d, which brings the Codex-SHIP mainnet-entry work):
