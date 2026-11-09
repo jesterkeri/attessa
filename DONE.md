@@ -4648,3 +4648,7 @@ Round 2 (tests archived at .worktrees/archive/adversary/readme-r2/) proved two g
 2. "Node 22" is not enough: `packages/sdk/src/ledger.ts:3` imports `node:sqlite`, and on v22.12.0 the CLI stops with ERR_UNKNOWN_BUILTIN_MODULE. The README now says Node 22.13 or newer, and pnpm 10.32.1 or newer.
 Also from its suspicions: "Every paid response" in the intro, the fake Nitro module stated in Status, and the docs line no longer calls existing site pages missing.
 reviewed: pending
+
+### T34 README adversary r3 corrections - 2026-11-09
+Round 3 (.worktrees/archive/adversary/readme-r3/): `require('better-sqlite3'); new Database(':memory:')` exits 139 (segmentation fault) on Node 22.12.0, 22.13.0 and 22.13.1, and works on 22.14.0 to 22.22.0, so the floor is now 22.14. The adversary ran the full suite on 22.23.2 and only the probe on 22.14.0. The `cd contracts` lines are now in subshells, so the block works pasted whole.
+reviewed: pending

@@ -44,7 +44,7 @@ Project documents at the root: [SPEC.md](SPEC.md), [FLOWS.md](FLOWS.md), [INVARI
 
 ## Build and test
 
-Requirements: Node 22.13 or newer (the SDK uses `node:sqlite`) with pnpm 10.32.1 or newer, Foundry (version in `contracts/FOUNDRY_VERSION`), Rust (`rust-toolchain.toml`). Slither is needed only for static analysis. The enclave image targets arm64 and is built on the EC2 host, not locally.
+Requirements: Node 22.14 or newer (the SDK uses `node:sqlite`, and `better-sqlite3` crashes on 22.13 and older) with pnpm 10.32.1 or newer, Foundry (version in `contracts/FOUNDRY_VERSION`), Rust (`rust-toolchain.toml`). Slither is needed only for static analysis. The enclave image targets arm64 and is built on the EC2 host, not locally.
 
 ```sh
 # install
@@ -63,13 +63,13 @@ pnpm -r lint && (cd contracts && forge fmt --check) && cargo fmt --check --manif
 pnpm -r typecheck
 
 # contracts test, verbose
-cd contracts && forge test -vv
+(cd contracts && forge test -vv)
 
 # invariants
-cd contracts && FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --match-path 'test/invariant/*'
+(cd contracts && FOUNDRY_INVARIANT_RUNS=256 FOUNDRY_INVARIANT_DEPTH=50 forge test --match-path 'test/invariant/*')
 
 # static analysis
-cd contracts && slither . --config-file slither.config.json
+(cd contracts && slither . --config-file slither.config.json)
 ```
 
 ## Usage
