@@ -1,0 +1,13 @@
+<figure class="code is-output">
+  <figcaption><span class="label">Terminal / attessa call</span><button type="button" class="copy-btn">{{copyIcon}}<span data-copy-label>Copy</span></button></figcaption>
+  <pre><code><span class="p">$ </span><span class="c">attessa call https://risk.example/v1/evaluate --body tx.json</span>
+<span class="k">→</span> Checking risk.example before paying
+  Runs agent 412's approved build in a sealed machine the seller can't change  <span class="m">(release 0x9c4e…a1, Nitro enclave)</span>
+  Owner says it's built from github.com/acme/risk @ a1b2c3d  <span class="m">(not checked by attessa)</span>
+<span class="k">→</span> It's up and answering for this address right now  <span class="m">(liveness check, 0.4 s)</span>
+<span class="k">→</span> Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+  You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way  <span class="m">(EIP-3009 authorization)</span>
+<span class="s">→</span> Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118  <span class="m">(settled: tx 0xabc…, signer 0x7f3b…22)</span>
+<span class="k">→</span> Answer saved to result.json. Record: ~/.attessa/evidence.jsonl</code></pre>
+  <p class="code-note">Example output. <code>risk.example</code> and the hashes above are illustrative.</p>
+</figure>

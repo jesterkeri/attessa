@@ -1,0 +1,166 @@
+title: Attessa
+description: A check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.
+
+Skip to content
+AttessaA check your agent runs
+before paying for a service
+How it works Explorer Use cases Docs Security
+Celo Sepolia Explorer preview
+How it works Proof explorer Use cases Docs Security and limits
+Explorer preview
+Pay only for
+answers you
+can prove.
+You pay a service for an answer, it comes back wrong, and you can't tell whether the code the seller stands behind actually ran, or something else did.
+Explorer preview Use it from your agent
+Example call
+Approved build Sealed machine Signed answer
+It's a check your agent runs before paying for a service: pay only if the answer was signed by the build the seller approved, running in hardware the seller can't tamper with.
+A seller runs their service in a sealed machine and approves that exact build on Celo. Your agent pays only when an answer comes back signed by that build, and anyone can check its payment on Celo later.
+The seller approves one exact build.
+They publish its fingerprint on Celo. From then on, buyers only pay for answers from a build the seller approved.
+release, measured as PCR0 to PCR2
+It runs in a sealed machine.
+A cloud computer its operator can't log into or change. AWS attests to exactly which build is running.
+AWS Nitro enclave, attestation
+Every answer comes back signed.
+The machine signs the request, the answer, the Celo data it read and the payment, all together.
+EIP-712 proof
+You pay only if the proof checks out.
+Your agent's payment permission moves no money by itself. The gateway uses it only after all four checks pass.
+x402 quote, EIP-3009 permission
+A tampered answer is caught.
+If the answer doesn't match what was signed, an honest gateway refuses to settle: the permission expires unused, and once Celo shows that, you're not charged. If the gateway itself changed it and settled anyway, you're charged, and the SDK reports it as paid but rejected, with a record that proves it.
+response_hash_mismatch, not_charged, paid_but_rejected
+Proof checklistChecking
+Approved buildChecking
+Sealed machineChecking
+This exact request and answerChecking
+Real Celo dataChecking
+PaymentChecking
+Approved build
+PCR0
+9c4e07b2…41a1
+PCR1
+4b1d8e60…0c3f
+PCR2
+e72a51c9…b88d
+Approved on Celo by the seller. Sample values.
+AWS attestation
+Operator login
+blocked
+Code changes
+blocked
+Debug mode
+refused
+Signing key made inside the machine
+Signed proof
+ExecutionProof {
+request bound
+answer bound
+inputs bound
+payment bound
+release bound
+}
+One EIP-712 signature over all five
+Payment permission
+value
+0.02 USDC
+to
+registered pay-to
+expires in
+120 s
+EIP-3009. Moves no money until the gateway settles it.
+Tampered answer
+signed hash
+0x4be1…7d09
+received hash
+0x4be1…3a6f
+RejectedNot charged
+Sample values, after Celo showed the permission expired unused.
+Three ways a call can end
+These are the three outcomes in the demo, and what each one leaves on Celo. Celo shows a settled payment or an unused permission. Whether a call was verified takes the proof, which your agent checks.
+Verified and paid
+Every check passes, so the payment goes through. Celo shows the payment settled; your agent's SDK checks the proof itself, which is what makes the call verified.
+Build
+Machine
+Request
+Celo data
+Paid
+See it on Celoscan sample
+Tampered and refused
+The answer doesn't match what the sealed machine signed, so the gateway doesn't settle. There is no transaction: the payment permission expires unused, which anyone can read on Celo (authorizationState).
+Build
+Machine
+Request
+Celo data
+Not charged
+Check it on Celo sample
+Unapproved build
+The machine runs a build the seller never approved on Celo, so the registry refuses to register its key and it can't sell a single call. The demo shows this on a local copy of Celo, so nothing reaches Celo.
+Build
+Machine
+Request
+Celo data
+Nothing signed
+Check any settlement, once live. No wallet, no payment.
+Anyone can check a past call's payment from public Celo data. Planned: the rest of the five checks the buyer's agent ran, including which approved build and signer answered, from a public copy of the call's proof. A payment names only the address paid, which many endpoints can share.
+Settlement transaction
+Check
+Request hash Settlement tx Approved build Celo block
+Your agent can't overspend.
+It signs a payment permission, never a blank cheque. These are the defaults attessa init sets, and you can change them. Run attessa init to set them.
+Give it to your agent. Coming. An MCP server with nine tools keeps the same limits. It isn't built yet.
+$ node /path/to/attessa/packages/mcp/dist/bin.js
+Copy
+Most it pays per call
+0.10USDC
+Most it pays per day
+1.00USDC
+An unused permission expires after
+120seconds
+Checks that must all pass first
+4checks
+Try it on Celo Sepolia
+Celo's test network, so nothing here costs real money. Get gas at faucet.celo.org/celo-sepolia and test USDC at faucet.circle.com (choose Celo Sepolia). The buyer commands below are built, except attessa verify, which is coming; install them from source.
+Install from source (steps), then set upattessa init
+Call a serviceattessa call https://<service> --body input.json --max-amount 0.05
+Re-check it later, with no wallet Comingattessa verify <requestId>
+Terminal / attessa call
+Copy
+$ attessa call https://risk.example/v1/evaluate --body tx.json
+→ Checking risk.example before paying
+Runs agent 412's approved build in a sealed machine the seller can't change (release 0x9c4e…a1, Nitro enclave)
+Owner says it's built from github.com/acme/risk @ a1b2c3d (not checked by attessa)
+→ It's up and answering for this address right now (liveness check, 0.4 s)
+→ Price: 0.02 USDC (your limit per call: 0.10), paid to the address registered for this service.
+You sign a payment permission now (free). The service's gateway only uses it if the answer checks out, and it expires in 120 s either way (EIP-3009 authorization)
+→ Paid 0.02 USDC. The answer came from that approved build, for this request, using Celo data from block 31,204,118 (settled: tx 0xabc…, signer 0x7f3b…22)
+→ Answer saved to result.json. Record: ~/.attessa/evidence.jsonl
+Example output. risk.example and the hashes above are illustrative.
+What this proves, and what it doesn't
+A proof records which code produced an answer. That's narrower than "the answer is right", and we say so. The security page lists the main limits and links to all of them.
+What a proof shows
+Which approved build answered, for this request, with these inputs.
+That it ran in a sealed machine, attested by AWS, with its key registered on Celo.
+Which Celo data it used, read at a stated block and bound by hash. Re-reading that block is what checks the values, when your RPC still has it.
+Which payment it answers for. The proof is signed before you pay and names your payment permission; whether that permission was used or expired unused is read from Celo, not from the proof. Anyone can read it there, given the payer's address and the permission's nonce. Both are in your pending ledger, pending.jsonl in the SDK's data folder, which the SDK writes before it sends a payment.
+What it doesn't show
+That the answer is correct. A bad answer is a rules problem you can read in the source.
+That the service is available. An operator can still withhold or delay answers.
+That the build matches its source. That link is the owner's claim, shown as "Owner says it's built from github.com/… @ commit" until someone reproduces the build.
+That requests are private. Request bodies are visible to the service's gateway and to the server the sealed machine runs on.
+Protection when paying through buy. buy, Celo's marketplace of pay-per-call APIs, takes payment before the service runs, so Attessa can only check afterwards.
+An instant "not charged". After a refusal, confirming it takes up to about two minutes, or you can cancel on chain for a little gas.
+Built on
+Celo, x402 payments, AWS Nitro Enclaves and ERC-8004 agent identity. It pays in USDC on Celo Sepolia, and will pay in USDC and USA₮ on mainnet after launch.
+Check a call
+yourself.
+Preview the explorer, which will check a settlement transaction once live, or wire the check into your agent.
+Explorer preview Use it from your agent
+Attessa
+A check your agent runs before paying for a service. Built for Celo.
+GitHub How it works Use cases Docs Explorer Security Privacy Terms security.txt
+Network
+Celo Sepolia test money
+Celo mainnet After launch

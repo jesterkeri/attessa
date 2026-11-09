@@ -1,0 +1,21 @@
+{
+  "_comment": "What the site needs per network beyond packages/core DEPLOYMENTS: the site's key, its label, the public RPC, the block explorer and the demo service. Addresses are never written here; they come from DEPLOYMENTS. demoOrigin stays null until the demo service is live (OPEN-QUESTIONS).",
+  "celo-sepolia": {
+    "key": "sepolia",
+    "label": "Celo Sepolia",
+    "rpc": "https://forno.celo-sepolia.celo-testnet.org",
+    "explorer": { "name": "Blockscout", "tx": "https://celo-sepolia.blockscout.com/tx/" },
+    "demoOrigin": null
+  },
+  "celo": {
+    "key": "mainnet",
+    "label": "Celo mainnet",
+    "rpc": "https://forno.celo.org",
+    "explorer": { "name": "Celoscan", "tx": "https://celoscan.io/tx/" },
+    "demoOrigin": null
+  },
+  "tokens": {
+    "usdc": { "symbol": "USDC", "decimals": 6 },
+    "usat": { "symbol": "USA₮", "decimals": 6 }
+  }
+}
