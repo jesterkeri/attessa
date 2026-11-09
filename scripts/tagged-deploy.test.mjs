@@ -140,7 +140,7 @@ test('the data file ends with the suffix, and minus the suffix is bytecode + arg
     assert.equal(data.slice(0, data.length - (suffix.length - 2)), art.P384Verifier.bytecode.object); // no constructor args for P384Verifier
     assert.equal(r.gasLimit, 1_300_000);
     const cmd = lines.find((l) => l.startsWith('cast send'));
-    assert.match(cmd, /^cast send --create "\$\(cat '.*p384\.creation\.hex'\)" --account 'acct' --from 0x[0-9a-f]{40} --rpc-url 'https:\/\/forno\.celo\.org' --gas-limit 1300000$/);
+    assert.match(cmd, /^cast send --account 'acct' --from 0x[0-9a-f]{40} --rpc-url 'https:\/\/forno\.celo\.org' --gas-limit 1300000 --create "\$\(cat '.*p384\.creation\.hex'\)"$/);
     assert.ok(!/private-key|mnemonic|interactive/.test(lines.join('\n')));
     assert.ok(lines.some((l) => l.includes('Nothing was signed or sent')));
     assert.equal(r.expected, createAddress(fakeDeps(), DEPLOYER.toLowerCase(), 0));

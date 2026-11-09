@@ -134,7 +134,7 @@ export function realDeps(rpcUrl) {
     rpc: (method, params) => rawRpc(rpcUrl, method, params),
     gitStatus: () => {
       try {
-        return execFileSync('git', ['--no-replace-objects', '-C', ROOT, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8' });
+        return execFileSync('git', ['--no-replace-objects', '-C', ROOT, 'status', '--porcelain', '--untracked-files=all'], { encoding: 'utf8', env: Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('GIT_'))) });
       } catch (e) {
         throw new Refuse(`cannot read the git status at ${ROOT}: ${String(e.message).split('\n')[0]}`);
       }
@@ -386,7 +386,8 @@ export async function prepare(step, a, env, deps, log = console.log) {
   try {
     est = Number(BigInt(await deps.rpc('eth_estimateGas', [{ from: deployer, data: c.data }])));
   } catch (e) {
-    throw new Refuse(`gas estimate of the tagged ${step} creation failed: ${e.message}`);
+    // Not e.message: a node's error text can echo the creation input, and with it the tag.
+    throw new Refuse(`gas estimate of the tagged ${step} creation failed. Check the --rpc-url, the deployer's funds and the env addresses, then run prepare again.`);
   }
   const limit = Math.ceil(est * 1.3);
   if (limit > GAS_CAP) throw new Refuse(`the estimate ${est} x 1.3 = ${limit} exceeds Celo's per-transaction cap ${GAS_CAP}; nothing written`);
@@ -408,7 +409,8 @@ export async function prepare(step, a, env, deps, log = console.log) {
   log('');
   log('Nothing was signed or sent. To deploy, run this yourself:');
   log('');
-  log(`cast send --create "$(cat ${shq(file)})" --account ${shq(a.account)} --from ${deployer} --rpc-url ${shq(a.rpcUrl)} --gas-limit ${limit}`);
+  // Options first: `--create` is a clap subcommand of `cast send`, and it rejects its parent's options after it.
+  log(`cast send --account ${shq(a.account)} --from ${deployer} --rpc-url ${shq(a.rpcUrl)} --gas-limit ${limit} --create "$(cat ${shq(file)})"`);
   log('');
   log(`Then record the contract address and post-check it: node scripts/tagged-deploy.mjs check ${step} <address> --deployer ${deployer} --tx <hash>`);
   return { file, data: c.data, estimate: est, gasLimit: limit, expected, nonce };

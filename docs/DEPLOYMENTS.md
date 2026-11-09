@@ -159,7 +159,7 @@ node scripts/check-deploy.mjs --pre-deploy        # PASS, or stop
 
 # 1. P384Verifier
 node scripts/tagged-deploy.mjs p384 --deployer $DEPLOYER --account <keystore-name>
-#    run the printed `cast send --create ...` yourself, then the post-check:
+#    run the printed `cast send ... --create ...` yourself, then the post-check:
 node scripts/tagged-deploy.mjs check p384 <address> --deployer $DEPLOYER --tx <hash>
 export ATTESSA_P384_VERIFIER=<address>
 

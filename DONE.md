@@ -4521,3 +4521,10 @@ $ node scripts/tagged-deploy.e2e.mjs (clean tree at e2d8fea) -> E2E OK: all four
 ```
 Full e2e output kept at /tmp/claude-1000/-home-hr-myvscode-linux-attessa/03e05dc1-b5af-45ec-8609-89d159bfc040/scratchpad/e2e.txt. Not fixed (outside this task): `node --test scripts/check-deploy.test.mjs` has 12 failing tests that read the now-deployed Sepolia data (deployments.ts and DEPLOYMENTS.md disagree for the fixtures; "the repo as committed (TODO addresses)" expects a Sepolia Admin TODO that no longer exists). Their failure messages are about those fixtures, not the reference build.
 reviewed: pending
+
+### T30 adversary r2 fixes - 2026-11-09
+Defect, proved by scripts/tagged-deploy.attack2.test.mjs: the printed deploy line put --account, --from, --rpc-url and --gas-limit after `--create <CODE>`. In foundry 1.8.1 `--create` is a subcommand and rejects them ("unexpected argument '--account' found"), so the route could not deploy as printed. Options now come first. The test parses the printed line with `cast mktx`, which shares the parser and signs and sends nothing; the real `cast send` line is blocked by a repo hook here and has not been run.
+Also from the round's suspicions: the clean-tree check drops GIT_* from its environment, and a failed gas estimate no longer repeats the node's error text, which could echo the tag.
+Verify (flock): node --test scripts/tagged-deploy.test.mjs scripts/tagged-deploy.attack.test.mjs scripts/tagged-deploy.attack2.test.mjs: # tests 39, # pass 39, # fail 0.
+Known and not from this change: 6 of 11 tests in scripts/check-deploy.test.mjs fail, the same 6 on origin/staging. Their fixtures expect the pre-Sepolia placeholder addresses. They do not run in CI.
+reviewed: pending

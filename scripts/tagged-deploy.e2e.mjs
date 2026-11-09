@@ -163,7 +163,7 @@ async function run(cleanup) {
     for (const l of lines) console.log(`      ${l}`);
     const data = readFileSync(prep.file, 'utf8').trim();
     ok(`${step}: the data file ends with the suffix`, data.endsWith(suffix.slice(2)), 'it does not');
-    ok(`${step}: the printed command is cast send --create with --account, no key flag`, lines.some((l) => /^cast send --create .* --account '[^']+' --from 0x[0-9a-f]{40} --rpc-url '[^']+' --gas-limit \d+$/.test(l)) && !lines.join('\n').match(/private-key|--mnemonic|--interactive/), 'unexpected command');
+    ok(`${step}: the printed command is cast send --create with --account, no key flag`, lines.some((l) => /^cast send --account '[^']+' --from 0x[0-9a-f]{40} --rpc-url '[^']+' --gas-limit \d+ --create "\$\(cat .*\)"$/.test(l)) && !lines.join('\n').match(/private-key|--mnemonic|--interactive/), 'unexpected command');
 
     // send the file's data, tagged
     const { hash, rc } = await send(data, prep.gasLimit);
