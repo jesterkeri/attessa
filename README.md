@@ -114,9 +114,11 @@ Built and covered by tests in this repo (see [DONE.md](DONE.md) for the recorded
 
 Deployed: the validator stack and `EnclaveRegistry` on Celo Sepolia (chain 11142220). The addresses and transactions are in [docs/DEPLOYMENTS.md](docs/DEPLOYMENTS.md).
 
+On Celo mainnet (chain 42220), the agent identity is registered: ERC-8004 agent 10061, owned by the agent wallet `0x08eeF13fD03088aE1dB72ED84a7eed7B255CBfe1`, in the identity registry `0x8004A169FB4a3325136EB29fA0ceB6D2e539a432` ([transaction](https://celoscan.io/tx/0x58e6d1cc47c9d1a15ab5e1492dc3efe74a4cb8c28aba65a25762f43c9841ac0b)). Its metadata is at https://attessa.xyz/.well-known/agent.json.
+
 Not done, per [TASKS.md](TASKS.md):
 
-- Nothing is deployed on Celo mainnet. Mainnet deployment is being prepared and `docs/DEPLOYMENTS.md` will carry the addresses when it is done.
+- The validator stack, `EnclaveRegistry` and a seller are not deployed on Celo mainnet. That deployment is being prepared and `docs/DEPLOYMENTS.md` will carry the addresses when it is done.
 - Reproducible enclave builds (spike S3) are not done, so a release's `sourceRef` is not yet checked against its measurements.
 - The Sepolia end-to-end run (signer registration, paid calls, tamper and modified-build refusals) and the drills are not recorded as done.
 - This README makes no claim of a live seller, real paid calls or users.

@@ -4652,3 +4652,17 @@ reviewed: pending
 ### T34 README adversary r3 corrections - 2026-11-09
 Round 3 (.worktrees/archive/adversary/readme-r3/): `require('better-sqlite3'); new Database(':memory:')` exits 139 (segmentation fault) on Node 22.12.0, 22.13.0 and 22.13.1, and works on 22.14.0 to 22.22.0, so the floor is now 22.14. The adversary ran the full suite on 22.23.2 and only the probe on 22.14.0. The `cd contracts` lines are now in subshells, so the block works pasted whole.
 reviewed: pending
+### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
+Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
+
+Why: `ts` runs near the limit, and on 2026-11-08 it was cancelled at the limit. `gh run view <id> --attempt <n> --json jobs`; `gh run view` without `--attempt` shows only the latest attempt:
+```
+3c1edec 42500812715 attempt 1 cancelled 244 s; attempt 2 success 157 s
+804f4aa 42501256160 attempt 1 cancelled 242 s; attempt 2 success 194 s
+9b6dc4c 42522705467 attempt 1 cancelled 255 s; attempt 2 cancelled 256 s (the same commit's push run 42522701434 passed)
+```
+The same job's duration on one commit ranged from 157 to 244 s, so the difference is the runner, not the tests. Successful `ts` jobs on 2026-11-08 took 157 to 236 s.
+reviewed: pending Codex
+
+### CI ts budget review recorded - 2026-11-08
+reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)

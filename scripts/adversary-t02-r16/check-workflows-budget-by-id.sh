@@ -15,7 +15,7 @@ case_() { # name, file, python edit of the text
   out=$(cd "$d" && "$S" 2>&1); st=$?
   if [ $st -eq 0 ]; then echo "$out"; echo "FAIL $1: check-workflows.sh said clean"; rc=1; else echo "ok   $1: $(grep -m1 '^FAIL ' <<<"$out")"; fi
 }
-case_ ts-renamed-id ci.yml 's.replace("  ts:\n    name: ts\n    runs-on: ubuntu-latest\n    timeout-minutes: 4", "  typescript:\n    name: ts\n    runs-on: ubuntu-latest\n    timeout-minutes: 5")'
+case_ ts-renamed-id ci.yml 's.replace("  ts:\n    name: ts\n    runs-on: ubuntu-latest\n    timeout-minutes: 6", "  typescript:\n    name: ts\n    runs-on: ubuntu-latest\n    timeout-minutes: 5")'
 case_ guardrails-renamed-id harness.yml 's.replace("  guardrails:\n    name: guardrails\n    runs-on: ubuntu-latest\n    timeout-minutes: 1", "  guard:\n    name: guardrails\n    runs-on: ubuntu-latest\n    timeout-minutes: 5")'
 case_ harness-new-job harness.yml 's.replace("\n  secrets:\n", "\n  reviews:\n    name: reviews\n    runs-on: ubuntu-latest\n    timeout-minutes: 5\n    steps:\n      - name: Review integrity\n        run: ./scripts/check-reviews.sh\n\n  secrets:\n", 1)'
 exit $rc
