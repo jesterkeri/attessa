@@ -4813,3 +4813,8 @@ reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 en
 exit 0
 ```
 reviewed: pending Codex r2
+
+## T28: adversary round 2 (feat/t28-buy-inputs, 2026-11-09)
+reviewed: pending Codex r2
+
+The cross-check anchored only the paid block header, so a paid reply with the real header and forged code, nonce or balance reached the enclave. Every paid read is now compared with Forno at the same block, and any difference or outage rejects the paid read; the Forno fallback runs. Test kept as `packages/seller-host/test/adversary-t28-r2.test.ts`.

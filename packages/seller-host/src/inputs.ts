@@ -90,19 +90,26 @@ function quantity(v: unknown, what: string): bigint {
  * Reads the four inputs from `source` at latest − 1. The head number comes from `headSource` (default:
  * `source` itself). A paid source gets the free Forno head, so it is asked once, with the four reads in
  * one batch; its block is checked against the number asked for, and `source` names where the values came from.
- * Every request has its own `timeoutMs`. `verify` runs on the block `source` returned and may throw to reject it.
+ * Every request has its own `timeoutMs`. `verify` runs on what `source` returned and may throw to reject it.
  */
 export async function readInputsFrom(
   source: RpcSource,
   payTo: string,
   timeoutMs: number,
   headSource: RpcSource = source,
-  verify?: (block: { number: string; hash: string; timestamp: string }) => Promise<void>,
+  verify?: (read: Inputs) => Promise<void>,
 ): Promise<Inputs> {
   const [head] = await headSource.batch([{ method: 'eth_blockNumber', params: [] }], AbortSignal.timeout(timeoutMs));
   const latest = quantity(head, 'eth_blockNumber');
   if (latest < 1n) throw new Error('chain has no block before latest');
   const n = latest - 1n;
+  const out = await readInputsAt(source, payTo, n, AbortSignal.timeout(timeoutMs));
+  await verify?.(out);
+  return out;
+}
+
+/** The four reads at block n from one source, in the shape the enclave receives. Throws on anything malformed. */
+async function readInputsAt(source: RpcSource, payTo: string, n: bigint, signal: AbortSignal): Promise<Inputs> {
   const tag = `0x${n.toString(16)}`;
   const [block, code, nonce, balance] = await source.batch(
     [
@@ -111,7 +118,7 @@ export async function readInputsFrom(
       { method: 'eth_getTransactionCount', params: [payTo, tag] },
       { method: 'eth_getBalance', params: [payTo, tag] },
     ],
-    AbortSignal.timeout(timeoutMs),
+    signal,
   );
   if (typeof block !== 'object' || block === null) throw new Error('block not found');
   const b = block as Record<string, unknown>;
@@ -129,7 +136,6 @@ export async function readInputsFrom(
     },
     source: source.id,
   };
-  await verify?.(out.block);
   return out;
 }
 
@@ -158,7 +164,7 @@ export class InputFetcher {
     const { buy, guard, forno, log } = this.o;
     let primary: RpcSource = forno;
     let headSource: RpcSource = forno;
-    let verify: ((b: Inputs['block']) => Promise<void>) | undefined;
+    let verify: ((read: Inputs) => Promise<void>) | undefined;
     if (buy) {
       if (!guard) throw new Error('a buy source needs the budget guard');
       let allowed = false;
@@ -195,26 +201,18 @@ export class InputFetcher {
             }
           },
         };
-        // A paid answer is checked against free Forno at the same number. The paid provider is untrusted: if Forno cannot
-        // answer, the paid read is rejected (fail closed) and the Forno fallback below runs; a differing hash or timestamp
-        // is a failed buy read as well.
-        verify = async (blk) => {
-          let ref: unknown;
+        // A paid answer is checked against free Forno at the same number, all four reads: the paid provider is untrusted.
+        // If Forno cannot answer, or anything differs, the paid read is rejected and the Forno fallback below runs.
+        verify = async (read) => {
+          let same: Inputs;
           try {
-            [ref] = await forno.batch([{ method: 'eth_getBlockByNumber', params: [`0x${BigInt(blk.number).toString(16)}`, false] }], AbortSignal.timeout(this.timeoutMs));
+            same = await readInputsAt(forno, read.payTo.address, BigInt(read.block.number), AbortSignal.timeout(this.timeoutMs));
           } catch (e) {
             log?.('inputs_crosscheck_unavailable', { reason: (e as Error).message });
             throw new Error('cross-check against Forno unavailable');
           }
-          const r = (typeof ref === 'object' && ref !== null ? ref : {}) as Record<string, unknown>;
-          const sameHash = typeof r.hash === 'string' && r.hash.toLowerCase() === blk.hash;
-          let sameTime = false;
-          try {
-            sameTime = quantity(r.timestamp, 'timestamp').toString() === blk.timestamp;
-          } catch {
-            // not comparable
-          }
-          if (!sameHash || !sameTime) throw new Error('block differs from Forno at the same number');
+          if (same.block.hash !== read.block.hash || same.block.timestamp !== read.block.timestamp) throw new Error('block differs from Forno at the same number');
+          if (same.payTo.code !== read.payTo.code || same.payTo.nonce !== read.payTo.nonce || same.payTo.balanceWei !== read.payTo.balanceWei) throw new Error('payTo values differ from Forno at the same number');
         };
         primary = metered;
       }
