@@ -30,5 +30,16 @@ want 'a credential in the second directory fails' 1 second dirty
 want 'no arguments and no usual output fails' 2
 mkdir -p "$tmp/dist"; echo "nothing here" > "$tmp/dist/a.js"
 want 'no arguments finds dist' 0
+# Adversary r3: a directory named like a grep or find option, and a credential behind a symlink.
+mkdir -p "$tmp/-L" "$tmp/sym" "$tmp/real" "$tmp/dangling"
+printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/-L/a.js"
+want 'a credential in a directory named -L fails' 1 -L
+echo "nothing here" > "$tmp/sym/a.js"
+printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/real/s.txt"
+ln -s ../real/s.txt "$tmp/sym/link.js"
+want 'a credential behind a symlink fails' 1 sym
+echo "nothing here" > "$tmp/dangling/a.js"
+ln -s ../real/no-such-file "$tmp/dangling/link.js"
+want 'a dangling symlink fails closed' 2 dangling
 [ "$fails" -eq 0 ] && echo "check-secrets: all passed"
 exit "$fails"
