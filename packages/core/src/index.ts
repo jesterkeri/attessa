@@ -7,3 +7,4 @@ export * from './headers.ts';
 export * from './deployments.ts';
 export * from './errors.ts';
 export * from './attestation.ts';
+export * from './attribution.ts';

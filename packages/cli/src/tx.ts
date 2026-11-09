@@ -9,9 +9,10 @@ import {
   type ContractFunctionName,
   type Hex,
 } from 'viem';
-import { canPayGas, gasTerms, isInsufficientFundsReply } from '@attessa/sdk';
+import { ATTRIBUTION_CHAIN_ID, withAttribution } from '@attessa/core';
+import { GasCapError, canPayGas, gasTerms, isInsufficientFundsReply, type GasTerms } from '@attessa/sdk';
 import { CERT_MANAGER_ABI, REGISTRY_ABI } from './abi.ts';
-import type { Chain, Deps, Global } from './context.ts';
+import type { ChainBase as Chain, Deps, Global } from './context.ts';
 import { CliError, ERR } from './copy.ts';
 import { RpcError, RpcUnavailable, revertData } from './rpc.ts';
 
@@ -54,6 +55,10 @@ export async function read<const abi extends Abi, fn extends ContractFunctionNam
 ): Promise<any> {
   const data = encodeFunctionData({ abi, functionName, args } as never);
   const out = await chainRead(c, () => c.rpc.request('eth_call', [{ to, data }, 'latest']));
+  // An address with no code answers "0x". On the configured registry that is a leftover setting, not a crash.
+  if (out === '0x' && (c as { registry?: Address | null }).registry?.toLowerCase() === to.toLowerCase()) {
+    throw new CliError('registry_no_code', `The registry ${to} (ATTESSA_REGISTRY) has no contract on chain ${c.chainId}. Nothing was signed.`, 'Unset ATTESSA_REGISTRY, or set it to the registry on this chain.'); // not in FLOWS
+  }
   return decodeFunctionResult({ abi, functionName, data: out as Hex } as never);
 }
 
@@ -131,6 +136,8 @@ export interface Sent {
 export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Revert | null, message: string) => CliError): Promise<Sent> {
   const account = c.account;
   if (!account) throw new Error('send: no account');
+  // Belt and braces: planOrSend refuses first, so no prompt precedes this; a caller that skips it still can't send untagged.
+  if (c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution) throw ERR.attributionRequired();
   const sim = await simulate(c, account.address, step);
   if (!sim.ok) throw onRevert(sim.revert, sim.message);
   const [nonceHex, price, tip, balance] = await Promise.all([
@@ -141,7 +148,13 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
   ]);
   // The shared gas terms and funds rule (@attessa/sdk gas.ts): refused before signing when the balance can't
   // cover gas x maxFeePerGas; eth_call and eth_estimateGas above carry no fee fields, so they never check it.
-  const t = gasTerms(sim.gas, price, tip);
+  let t: GasTerms;
+  try {
+    t = gasTerms(sim.gas, price, tip, c.chainId === ATTRIBUTION_CHAIN_ID ? c.attribution : null);
+  } catch (e) {
+    if (!(e instanceof GasCapError)) throw e;
+    throw new CliError('gas_over_cap', `${step.label} needs more gas than one Celo transaction allows once it carries the attribution tag. Nothing was signed.`, null); // not in FLOWS
+  }
   const noFunds = (tail: 'Nothing was signed.' | 'Nothing was sent.') =>
     ERR.insufficientGasFunds(account.address.toLowerCase(), step.label, t.maxCost, c.chainId, tail);
   if (!canPayGas(balance, t)) throw noFunds('Nothing was signed.');
@@ -150,7 +163,7 @@ export async function send(c: Chain, deps: Deps, step: Step, onRevert: (r: Rever
     chainId: c.chainId,
     nonce: Number(BigInt(nonceHex as string)),
     to: step.to,
-    data: step.data,
+    data: withAttribution(step.data, c.attribution),
     value: 0n,
     gas: t.gas,
     maxFeePerGas: t.maxFeePerGas,
@@ -203,15 +216,20 @@ export async function planOrSend(
 ): Promise<'sent' | 'planned'> {
   const { io } = deps;
   if (g.dryRun || !c.account) {
+    const missingTag = c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution;
     plan.steps.forEach((s, i) => {
       const sim = plan.simulations[i];
       const simText = sim === null || sim === undefined ? 'simulated after the previous transaction lands' : sim.ok ? `eth_call ok, gas ${sim.gas}` : `eth_call reverts${sim.revert ? ` ${sim.revert.name}` : ''}`;
       io.out(`  (tx ${i + 1}/${plan.steps.length}: ${s.label}; from ${plan.from} to ${s.to}; ${simText})`);
-      io.out(`  (calldata ${s.data})`);
+      // Never print calldata for mainnet without its tag: sent by hand, it could never be credited.
+      if (!missingTag) io.out(`  (calldata ${withAttribution(s.data, c.attribution)})`);
     });
+    // not in FLOWS: a plan on mainnet shows what a send would carry, or that it would be refused.
+    if (missingTag) io.out('  (LOOPS_ATTRIBUTION_TAG is not set: a real send on mainnet is refused until it is)');
     io.out(g.dryRun ? '  (dry run: nothing was sent)' : '  (no ATTESSA_PRIVATE_KEY: nothing was sent; set it and run again to send these yourself)');
     return 'planned';
   }
+  if (c.chainId === ATTRIBUTION_CHAIN_ID && !c.attribution) throw ERR.attributionRequired(); // before the prompt: nothing was signed
   if (!g.yes && !(await io.confirm(plan.yesWord))) throw ERR.cancelled(plan.yesWord); // a non-TTY stdin answers no (bin.ts)
   for (let i = 0; i < plan.steps.length; i++) {
     let sent: Sent;

@@ -4571,6 +4571,94 @@ status=built https_enforced=true cert=approved domains=["attessa.xyz","www.attes
 ```
 The live content is the 48fdee6 build (Codex r3 SHIP). This machine cannot reach GitHub Pages (pages.github.com also times out), so the page itself was not loaded from here.
 
+### Mainnet entry: `agent register` before the registry exists, and the Loops attribution tag - 2026-11-08
+Change 1: `attessa agent register` uses the pinned ERC-8004 identity registry (`packages/core/src/deployments.ts`) when no EnclaveRegistry is deployed or configured, on any network; a deployed or `ATTESSA_REGISTRY` registry's `identityRegistry()` stays authoritative; every other command still refuses with `no_registry`; `--dry-run` needs no key. Dry run: `attessa agent register --name "<name>" --uri <agentURI> --network mainnet --dry-run`.
+Change 2: `withAttribution` (`packages/core/src/attribution.ts`) appends an ERC-8021 Schema 0 suffix `[code ASCII][len:1][0x00][0x80218021 x8]` (celo-org/attribution-tags INDEXERS.md and BUILDERS.md; byte-identical to `ox/erc8021` `Attribution.toDataSuffix`, checked once by hand) to every non-x402 transaction on mainnet, code from env `LOOPS_ATTRIBUTION_TAG`. Send paths: `packages/cli/src/tx.ts send()` (all seller/owner/operator writes) and `packages/sdk/src/client.ts sendCancel()` (`attessa cancel`, through `ClientOptions.dataSuffix`). Mainnet with the tag unset: `no_attribution_tag`, nothing signed; `--dry-run` prints that the tag is missing. Sepolia and local: no suffix. x402 signing untouched.
+Not reached: `forge script` deploys (T30), the seller host and gateway (they send no transactions from this CLI; the gateway's settlement/facilitator is x402).
+Verification (real output, run under the heavy lock):
+```
+pnpm -r build      exit 0
+pnpm -r typecheck  exit 0
+pnpm -r lint       exit 0
+@attessa/cli test: Test Files 89 passed (89), Tests 362 passed (362)
+@attessa/core test: Tests 75 passed (75)   @attessa/sdk test: Tests 193 passed (193)
+```
+Three existing mainnet tests now set a synthetic `LOOPS_ATTRIBUTION_TAG` (their subject is not the tag); no assertion changed.
+
+reviewed: pending Codex
+
+### Mainnet entry r1 fixes (Codex REVISE: 1 critical, 1 major, 1 minor) - 2026-11-08
+1. Critical: the CLI attribution decision follows the verified chain id, not `--network`. `packages/cli/src/context.ts connect()` sets `attribution` when `chainId === 42220` (the id signed into the transaction; for `local` it is the RPC-reported one, otherwise the pinned one that must equal it); the gates in `packages/cli/src/tx.ts` (`send`, `planOrSend`, dry-run note) test `c.chainId`. `--network local` on a 42220 RPC is tagged, or refused with `no_attribution_tag` before any prompt or signature; `--dry-run` prints the missing-tag note. Other chains carry no suffix. The fake chain rejects a transaction whose chain id differs from the one it reports, and a test reads the signed chain id back (42220).
+2. Major: `packages/sdk/src/client.ts` `requireAttribution()` runs in `cancelAuthorization` before the cancel permission is signed and again at the top of `sendCancel` (before any estimate): on a verified 42220 an absent, `0x`, marker-less or bare-marker `dataSuffix` throws `AttestError('no_attribution_tag')`. The suffix is appended only on 42220. `packages/core/src/attribution.ts` gains `isAttributionSuffix` and `ATTRIBUTION_CHAIN_ID`. The CLI buyer passes the tag on every network but sepolia (`buyer.ts makeClient`) and maps the code to the same CLI error (`sdkError`).
+3. Minor: `registry.ts` writes `agentId` as a JSON number up to 2^53-1 and as a decimal string above (SPEC §2). The only reader of `registrations` in `packages/*/src` is the `registered()` check in the same file (`.length`), so both forms work.
+Tests that asserted the faulty behaviour were changed: `packages/cli/test/attribution.test.ts` "local: no suffix, even on a fork that reports the mainnet chain id" is now local-on-11142220 untagged plus local-on-42220 tagged / refused; `packages/sdk/test/attribution.test.ts` first case (no suffix accepted) is now refused on 42220, and a suffix on a non-42220 chain is not appended. `t21-r7-fix.test.ts` "local fork of mainnet: no faucet" sets a synthetic tag (its subject is not the tag; assertion unchanged).
+New tests fail on 5518cdf's source (reverted cli+sdk src, kept the tests): SDK 5 of 6, CLI 7 (local-42220 tagged, refused, dry-run note, buyer local-42220 cancel, 3 agent-id).
+Sweep: other flag-based routes in `packages/{cli,sdk}`: `buyer.ts makeClient` (fixed). Left: `buyer.ts cancel` early `g.network === 'mainnet'` refusal and dry-run note: the flag `mainnet` forces chain 42220 or `network_mismatch`, so it is a safe early refusal; a `--network local --dry-run` cancel does not print the note (the chain is not read in a dry run), the real cancel is refused by the SDK.
+Verification (real output, under the heavy lock):
+```
+pnpm -r build      exit 0
+pnpm -r typecheck  exit 0
+pnpm -r lint       exit 0
+@attessa/core test: Test Files 10 passed (10), Tests 77 passed (77)
+@attessa/sdk test:  Test Files 21 passed (21), Tests 197 passed (197)
+@attessa/cli test:  Test Files 90 passed (90), Tests 370 passed (370)
+```
+(build, typecheck and lint ran before the one-line test edit in t21-r7-fix.test.ts; the cli suite was rerun after it.)
+
+Correction to the entry above: its claims "every non-x402 transaction on mainnet" and "`--network local` ... no suffix" were false for a local route on chain 42220, and `sendCancel` was not guarded in the SDK; the entry's "no assertion changed" holds only for its own three tests. Superseded by this section.
+
+reviewed: pending Codex
+
+### Mainnet entry r2 fixes (Codex REVISE: 2 major, 1 minor) - 2026-11-08
+1. Major: `isAttributionSuffix` (`packages/core/src/attribution.ts`) is now strict Schema 0: strict hex, total size 19..50 bytes, code `[a-z0-9_]{1,32}` decoded from the leading bytes, and `attributionSuffix(code)` must reproduce the input (hex case ignored), so length byte, schema byte 0 and the marker are all checked and it cannot drift from the writer. The review case `0x00000080218021802180218021802180218021` is rejected in core and refused by `cancelAuthorization` on 42220 (`no_attribution_tag`, nothing estimated, signed or sent). Core tests also pin three `ox/erc8021` vectors (1-char, 32-char, assigned-shaped).
+2. Major: `loopsSuffix` (`packages/cli/src/context.ts`) no longer throws; a malformed `LOOPS_ATTRIBUTION_TAG` is null and its value is never echoed. `buyer.ts makeClient` therefore never blocks `status` or `call` on any network; a send on verified 42220 treats null as absent and the SDK refuses with `no_attribution_tag` before signing (also behind `--network local` on a 42220 RPC). The `no_attribution_tag` copy now reads "is not set (or is not a valid code)".
+3. Minor: the r1 entry above said three tests set a synthetic tag; four `it` cases do (`adversary-t21-r4.test.ts`, `buyer.test.ts`, and two in `t21-r7-fix.test.ts`). The "Verification" block of the original mainnet entry was a hand-written summary; the block below is real output.
+New tests: core `isAttributionSuffix: Schema 0 shape`, sdk `cancelAuthorization refuses a malformed Schema 0 suffix on chain 42220`, cli `buyer: a malformed LOOPS_ATTRIBUTION_TAG` (status and call on local and mainnet, cancel on verified 42220 through both routes).
+Verification (real output, under the heavy lock):
+```
+pnpm -r build: ... packages/cli build: Done
+@attessa/core test: Test Files  10 passed (10)   Tests  86 passed (86)
+@attessa/sdk test:  Test Files  21 passed (21)   Tests  205 passed (205)
+@attessa/cli test:  Test Files  90 passed (90)   Tests  376 passed (376)
+pnpm -r typecheck: packages/site, seller-host, sdk, gateway, cli typecheck: Done
+pnpm -r lint:      packages/site, seller-host, sdk, gateway, cli lint: Done
+```
+
+reviewed: pending Codex
+
+### Mainnet entry adversary r1 fix - 2026-11-08
+Defect, proved by packages/cli/test/adversary-mainnet-r1.test.ts: `attessa cancel --network mainnet` against an RPC on another chain, with no valid tag, answered no_attribution_tag instead of the FLOWS section 8 network_mismatch, because buyer.ts checked the tag on the --network label before the chain was verified. Nothing untagged could be sent; the error and next action were wrong.
+Fix: removed the label check from cancel. The SDK's requireAttribution refuses on the verified chain id, before the cancel permission is signed, after the wrong-network check.
+Test changes: the new adversary test added. adversary-t21-r4 and the buyer.test.ts network_mismatch case no longer need a tag set, so those lines are gone and both now run tagless. The buyer.test.ts "cancel on mainnet without LOOPS_ATTRIBUTION_TAG" case, added on this branch, expected no_attribution_tag from an RPC reporting Sepolia, which is the behaviour the adversary proved wrong: it now sets the fake chain to 42220, and also asserts nothing was estimated or sent.
+verify (flock, this worktree):
+pnpm --filter @attessa/cli test: Test Files 91 passed (91), Tests 378 passed (378)
+pnpm --filter @attessa/sdk test: Tests 205 passed (205)
+pnpm --filter @attessa/core test: Tests 86 passed (86)
+pnpm --filter @attessa/cli typecheck: exit 0; pnpm --filter @attessa/cli lint: exit 0
+reviewed: pending
+
+### Mainnet entry adversary r2 fixes - 2026-11-08
+Defects, proved by packages/cli/test/adversary-mainnet-r2.test.ts and the adversary's read-only cast call on Forno:
+1. `gasTerms` clamps to TX_GAS_CAP - 1 from an estimate made without the attribution suffix. An estimate within 788 gas of the cap signed a tagged transaction that could not cover its own calldata.
+2. A keyless `agent register --dry-run` simulated from the zero address, which the real ERC-8004 registry reverts with ERC721InvalidReceiver(0x0).
+3. Suspicion taken up: a keyless plan on 42220 with no tag printed untagged calldata with exit 0. Sent by hand, it could never be credited.
+Fixes:
+1. `gasTerms` takes the suffix, adds its intrinsic gas (EIP-2028) before the 20% pad, and throws `GasCapError` when estimate + suffix gas reaches the cap, before signing. The CLI maps it to `gas_over_cap` ("Nothing was signed.", not in FLOWS). Without a suffix the clamp is unchanged, and the 14.5M control still signs at the cap minus 1.
+2. Keyless register simulates from 0x...dead. ZERO stays for the mint Transfer match.
+3. A plan on 42220 with no tag prints the missing-tag note and no calldata.
+Verify (flock, this worktree): pnpm --filter @attessa/cli test: Tests 384 passed (384); pnpm --filter @attessa/sdk test: Tests 205 passed (205); cli typecheck and lint: no errors (a full `pnpm -r typecheck` and `pnpm -r lint` before the two added tests: every package Done).
+reviewed: pending
+
+### Mainnet entry adversary r3 fix, and the rehearsal's register fix - 2026-11-09
+1. Proved by packages/cli/test/adversary-mainnet-r3.test.ts: a leftover ATTESSA_REGISTRY with no code on the chain made `agent register` answer "Unexpected error (AbiDecodingZeroDataError)". A read of the configured registry that answers `0x` now refuses with `registry_no_code`, which names the variable ("Nothing was signed.", not in FLOWS). Round 3's other attacks failed.
+2. Found by the mainnet rehearsal (cherry-picked): `agent register` crashed with ENOENT after sending when docs/ did not exist, so a real transaction could land with no agent id reported. writeFile now creates the directory.
+
+### Mainnet entry Codex r3 fixes - 2026-11-09
+Codex r3: REVISE, with two majors (.worktrees/archive/codex/mainnet-entry-review-r3.md).
+1. `cancel --dry-run` decided its missing-tag line from the --network label, so a local route to 42220 stayed silent. It now asks the SDK (`attributionReady`), which reads the verified chain id, and the line also covers a malformed tag.
+2. A gas-cap refusal in `sendCancel` became CancelInterruptedError and then the false "Can't reach Celo" row. GasCapError now passes through, and the CLI maps it to `gas_over_cap` ("The cancel permission was signed, but nothing was sent.", not in FLOWS).
+Verify (flock): pnpm --filter @attessa/sdk test: Tests 206 passed (206); pnpm --filter @attessa/cli test: Tests 388 passed (388); pnpm -r typecheck and pnpm -r lint: no errors.
+reviewed: pending
 ### T21b Codex r4 fixes - 2026-11-07
 
 Codex r4 (REVISE, 3466a30). First merged origin/staging (T21 merged; DONE.md and OPEN-QUESTIONS.md keep both sides, lockfile regenerated, MCP builds against the merged CLI). Failing tests first (commit message ends "(failing)"), then the design fix:
@@ -4671,3 +4759,7 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 1 reviewed README.md at d2a257c in a frozen worktree and found nothing. It confirmed the mainnet paragraph with read-only Celo reads (the transaction, `ownerOf(10061)`, `tokenURI(10061)`) and the live agent.json. It checked commands, paths and claims statically and did not install, build or run them. T34 stays open: this covers the README only, not the tutorial, how-tos or the rest of the docs set.
 reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
+### Mainnet entry Codex r4: SHIP - 2026-11-09
+
+Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
+reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
