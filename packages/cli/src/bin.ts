@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { createInterface } from 'node:readline/promises';
 import { TcpEnclaveTransport } from '@attessa/seller-host';
 import { lastResortLines, run, type Deps, type RunResult } from './index.ts';
+import { writeFileMakingDirs } from './fsutil.ts';
 import { HttpRpc } from './rpc.ts';
 
 /** `attessa` / `attest`: real process wiring for `run`. */
@@ -38,7 +39,7 @@ const deps: Deps = {
   fetch,
   enclave: (port) => new TcpEnclaveTransport(port),
   readFile: (p) => readFileSync(p),
-  writeFile: (p, d) => writeFileSync(p, d),
+  writeFile: (p, d) => writeFileMakingDirs(p, d),
   exists: (p) => existsSync(p),
   readdir: (p) => readdirSync(p),
   sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
