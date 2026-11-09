@@ -37,6 +37,8 @@ mkdir -p "$alone/-L"; printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$alone
 ( cd "$alone" && "$scan" -L >/dev/null 2>&1 ); got=$?
 if [ "$got" -eq 1 ]; then echo "ok a credential in a lone directory named -L fails"; else echo "not ok a credential in a lone directory named -L fails: exit $got, wanted 1"; fails=$((fails + 1)); fi
 want 'an empty directory name fails' 2 ""
+mkdir -p "$tmp/finegrained"; printf 'const k = "%s%s";\n' 'github_pat_' '11AAABBBCCCDDDEEEFFFGGGHHHIIIJJJ' > "$tmp/finegrained/a.js"
+want 'a GitHub fine-grained token fails' 1 finegrained
 mkdir -p "$tmp/sym" "$tmp/real" "$tmp/dangling"
 echo "nothing here" > "$tmp/sym/a.js"
 printf 'const k = "%s%s";\n' 'sk_live_' 'abc123' > "$tmp/real/s.txt"

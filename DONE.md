@@ -4920,6 +4920,29 @@ ok no arguments and no usual output fails
 ok no arguments finds dist
 check-secrets: all passed
 ```
+### Rehearsal fix: registry logs on Forno - 2026-11-09
+
+`attessa status` and `signer register` read registry logs from block 0, which Forno rejects above 5000 blocks, so on mainnet `status` would have said "Can't reach Celo". Logs are now read in windows from the registry's creation block, found by binary search on `eth_getCode`. Forno serves `eth_getCode` at old blocks: on the ERC-8004 registry it answered `0x` at blocks 1,000,000 and 41,000,000, and code at 70,000,000 and 82,000,000. Adversary round 1 (Sonnet) found that an undocumented start-block variable could hide every event; the variable is removed. The rehearsal record and runbook are added under docs/.
+```
+pnpm --filter @attessa/cli test: Tests  392 passed (392)
+```
+reviewed: pending Codex (reviews/rehearsal-fixes-review-r1.md)
+
+## Rehearsal fixes: Codex r1 findings (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`reviews/rehearsal-fixes-review-r1.md` (REVISE, 4 Major). M1: `getLogsChunked` now raises `RpcError` when the registry has no code at head after a range error, so a pruned or wrong node reports `rpc_unavailable`, never an empty history; tests added for that and for a failure in a later window. M2: the runbook opens with a literal gate stop that prints `STOP: a gate has not passed` on this commit. M3: a tag check, run in the shell that sends, before each sending section, separately for Joshua's terminal and the host. M4: `docs/EC2-RUNBOOK.md` and `scripts/ec2-host-setup.sh` are copied from `feat/t12-enclave-spike` so the runbook's references exist in this commit; systemd and Caddy stay marked not run. Step 10 now says agent 10061 is already registered. Limit: a node that answers `0x` for old blocks, rather than an error, can still move the search's start block later; nothing here detects that.
+
+`pnpm test` in packages/cli:
+```
+ Test Files  95 passed (95)
+      Tests  394 passed (394)
+```
+
+## Rehearsal fixes: adversary round 2 (feat/rehearsal-fixes, 2026-11-09)
+reviewed: pending Codex r2
+
+`signer register` and `signer renew` swallowed a log failure and fell back to the hash; they now report `rpc_unavailable`, with the adversary's test kept as `packages/cli/test/signer-logs-adversary.test.ts`. The runbook named files missing from this commit, so it moved to `feat/mainnet-runbook` until T12 and T30 are on staging (OPEN-QUESTIONS). This branch is now the log reader fix only. This supersedes the runbook part of the entry above.
 ## T28 Codex r1 fixes (M1-M3)
 - M1: an unavailable Forno cross-check now fails the paid read closed; the Forno fallback runs, and if it cannot answer the result is `inputs_unavailable` with no inputs for the enclave. Old fail-open test replaced; forged-payload-plus-outage test added.
 - M2: `buy-intents.jsonl` (new `src/ledger.ts`) is append-only, fsynced per line: `intent` (id, capability, payer, cap, timestamp) written in `onBeforePayment`, `nonce` line before the paid request is sent, then `outcome` `responded` or `uncertain`. A paid fetch that throws after the send ends as `payment_uncertain`. No durable intent, no send.
@@ -4971,3 +4994,27 @@ after:  ts, contracts, slither, enclave, guardrails
 ```
 
 Adding `credential scanner self-test` as required comes after this reaches staging and main, and is tracked in OPEN-QUESTIONS.
+## Rehearsal fixes: Codex r3 SHIP (feat/rehearsal-fixes, 2026-11-09)
+reviewed: reviews/rehearsal-fixes-review-r3.md | verdict: SHIP (r1 and r2 ended REVISE; archived outside the repo)
+
+Reviewed at ab7395e after adversary round 5 found no defect. `status`, `signer register` and `signer renew` now read a registry's whole history on an RPC that caps eth_getLogs: the deploy record names the creation, it is proved from the transaction, and an answer that isn't a list of logs matching the filter is an RPC failure. Verify at ab7395e, verbatim:
+
+```
+$ pnpm --filter @attessa/cli test
+      Tests  434 passed (434)
+```
+
+Real reads, 2026-11-09: the Sepolia EnclaveRegistry scan made 147 calls in 37 s and found 0 events, which is how many it has, so a real event has not yet gone through the scan. The item check accepted 20 real rows from the mainnet identity registry and 4 from Sepolia's. T16 will be the first real event.
+
+## Audit hygiene: Codex r4 findings (feat/audit-hygiene, 2026-11-09)
+reviewed: reviews/audit-hygiene-review-r4.md is archived outside the repo (REVISE); these changes go to round 5
+
+The scanner now also fails on GitHub fine-grained tokens, with a test. The old record of a non-blocking scanner in OPEN-QUESTIONS is marked superseded. The self-test becomes a required check before this merges (OPEN-QUESTIONS). Verify, verbatim:
+
+```
+$ ./scripts/check-secrets.test.sh | tail -2
+ok a dangling symlink fails closed
+check-secrets: all passed
+$ ./scripts/check-workflows.sh
+workflows clean
+```

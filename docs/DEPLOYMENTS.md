@@ -111,7 +111,8 @@ node ../scripts/check-deploy.mjs --pre-deploy   # PASS, or stop
 forge script script/DeployRegistry.s.sol:DeployRegistry --rpc-url $RPC \
   --account <keystore-name> --sender $DEPLOYER --slow --broadcast
 
-# 3. Record. Replace the TODO rows above with the five addresses, fill `enclaveRegistry` and
+# 3. Record. Replace the TODO rows above with the five addresses, fill `enclaveRegistry`,
+#    `enclaveRegistryCreation` (the tx and block that created it) and
 #    `validatorStack` for celo-sepolia in packages/core/src/deployments.ts, commit, then from the
 #    repo root at the commit you deployed from (check-deploy compiles its own reference bytecode
 #    from HEAD's committed contracts and the pinned nitro-validator, so local edits can't skew it):

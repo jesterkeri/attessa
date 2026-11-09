@@ -4,7 +4,7 @@
 set -uo pipefail
 # Fails closed: a named directory that is missing or empty means nothing was scanned, and that is not a pass.
 # With no arguments it looks for the usual outputs, and at least one of them must exist.
-PATTERN='service_role|sk_live_|sk_test_|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-|ghp_[A-Za-z0-9]{20,}|AKIA[0-9A-Z]{16}|eyJhbGciOi[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'
+PATTERN='service_role|sk_live_|sk_test_|-----BEGIN [A-Z ]*PRIVATE KEY-----|xox[baprs]-|ghp_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[0-9A-Z]{16}|eyJhbGciOi[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*'
 scanned=0
 found=0
 if [ "$#" -gt 0 ]; then DIRS=("$@"); REQUIRE_EACH=1; else DIRS=(.next dist build out); REQUIRE_EACH=0; fi
