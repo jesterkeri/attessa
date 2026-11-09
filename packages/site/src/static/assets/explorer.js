@@ -268,7 +268,7 @@
       case 'malformed': return { tone: 'fail', icon: 'alert', title: "That isn't a transaction hash", body: [
         h('p', null, 'A settlement transaction starts with ', h('code', null, '0x'), ' and has 64 hex characters after it (0 to 9, a to f).')] };
       case 'unsupported': return { tone: 'na', icon: 'plug', title: 'Not on this network yet', body: [
-        h('p', null, 'The live check reads Celo Sepolia only. Celo mainnet comes after launch.')] };
+        h('p', null, 'The live check reads Celo Sepolia only.{{#notlive mainnet}} Celo mainnet comes after launch.{{/notlive}}')] };
       default: return { tone: 'wait', icon: 'alert', title: "Can't read Celo's answer", body: [
         h('p', null, 'The explorer\'s connection to the network (', host, ') sent an answer it couldn\'t read, so nothing was checked. Try again in a moment.'), retry] };
     }

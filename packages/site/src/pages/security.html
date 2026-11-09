@@ -24,14 +24,14 @@
 <div class="wrap page-body">
   <article class="docs-main">
     <h2 id="contracts">Contracts</h2>
-    <p>Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Ours are live on Celo Sepolia<!--notlive:seller-->; our Celo mainnet addresses fill in once deployed<!--/notlive--><!--live:seller--> and Celo mainnet<!--/live-->.</p>
+    <p>Attessa deploys four contracts, all immutable. Two more are other people's registries that Attessa reads, and those can be upgraded by their owners. Ours are live on Celo Sepolia<!--notlive:mainnet-->; our Celo mainnet addresses fill in once deployed<!--/notlive--><!--live:mainnet--> and Celo mainnet<!--/live-->.</p>
     <div class="table-wrap"><table class="table">
       <thead><tr><th scope="col">Contract</th><th scope="col">What it does</th><th scope="col">Celo Sepolia</th><th scope="col">Celo mainnet</th></tr></thead>
       <tbody>
-        <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[chain:celo-sepolia.enclaveRegistry]]</td><td class="muted">After launch</td></tr>
-        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[chain:celo-sepolia.nitroValidator]]</td><td class="muted">After launch</td></tr>
-        <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[chain:celo-sepolia.certManager]]</td><td class="muted">After launch</td></tr>
-        <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[chain:celo-sepolia.p384Verifier]]</td><td class="muted">After launch</td></tr>
+        <tr><td>Attessa registry</td><td>Holds approved builds, endpoints and signers. No admin key, and it can't be upgraded.</td><td>[[chain:celo-sepolia.enclaveRegistry]]</td><!--notlive:mainnet--><td class="muted">After launch</td><!--/notlive--><!--live:mainnet--><td>[[chain:celo.enclaveRegistry]]</td><!--/live--></tr>
+        <tr><td>Nitro validator</td><td>Checks AWS's attestation on chain each time a signer is registered or renewed. Built on base's nitro-validator.</td><td>[[chain:celo-sepolia.nitroValidator]]</td><!--notlive:mainnet--><td class="muted">After launch</td><!--/notlive--><!--live:mainnet--><td>[[chain:celo.nitroValidator]]</td><!--/live--></tr>
+        <tr><td>Certificate manager</td><td>Caches AWS's certificates so registering a signer costs less.</td><td>[[chain:celo-sepolia.certManager]]</td><!--notlive:mainnet--><td class="muted">After launch</td><!--/notlive--><!--live:mainnet--><td>[[chain:celo.certManager]]</td><!--/live--></tr>
+        <tr><td>P-384 verifier</td><td>Verifies the P-384 signatures in AWS's certificates for the two contracts above.</td><td>[[chain:celo-sepolia.p384Verifier]]</td><!--notlive:mainnet--><td class="muted">After launch</td><!--/notlive--><!--live:mainnet--><td>[[chain:celo.p384Verifier]]</td><!--/live--></tr>
         <tr><td>ERC-8004 identity registry</td><td>The agent identity registry. Not ours, and upgradeable by whoever holds its keys.</td><td>[[chain:celo-sepolia.identityRegistry]]</td><td>[[chain:celo.identityRegistry]]</td></tr>
         <tr><td>Self Agent ID registry</td><td>Links a person-verified ID to an agent. Shown for information only, never part of the check. Not ours, and upgradeable.</td><td>[[chain:celo-sepolia.selfRegistry]]</td><td>[[chain:celo.selfRegistry]]</td></tr>
       </tbody>

@@ -16,15 +16,20 @@ const config = JSON.parse(readFileSync(join(site, 'site.config.json'), 'utf8'));
 const allOff = readLive({});
 const allOn = readLive({ live: Object.fromEntries(FEATURES.map(k => [k, true])) });
 
-function build(live) {
+// A stand-in deploy record for Celo mainnet, to build the state after Gate 5. Sepolia's real stack is a different record.
+const A = n => `0x${String(n).repeat(40)}`;
+const MAINNET_RECORD = { celo: { enclaveRegistry: A(1), validatorStack: { p384Verifier: A(2), certManager: A(3), nitroValidator: A(4) } } };
+
+// Every file a visitor is served that can carry words: the pages and the scripts.
+function build(live, record) {
   const dir = mkdtempSync(join(tmpdir(), 'site-switch-'));
   const cfg = join(dir, 'config.json');
-  const { all: _derived, ...flags } = live;
+  const { all: _all, mainnet: _mainnet, ...flags } = live;
   writeFileSync(cfg, JSON.stringify({ ...config, live: flags }));
   const out = join(dir, 'out');
-  execFileSync('node', ['build.mjs'], { cwd: site, env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out }, stdio: 'pipe' });
+  execFileSync('node', ['build.mjs'], { cwd: site, env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) }, stdio: 'pipe' });
   const pages = (d) => readdirSync(d, { withFileTypes: true }).flatMap(e =>
-    e.isDirectory() ? pages(join(d, e.name)) : e.name.endsWith('.html') ? [join(d, e.name)] : []);
+    e.isDirectory() ? pages(join(d, e.name)) : /\.(html|js)$/.test(e.name) ? [join(d, e.name)] : []);
   return pages(out).map(f => ({ f: f.slice(out.length + 1), html: readFileSync(f, 'utf8') }));
 }
 
@@ -62,11 +67,80 @@ test('with everything off, every label a visitor relies on is on the page', () =
   assert.doesNotMatch(all, /\{\{[#/](live|notlive)|<!--\/?(live|notlive)/);
 });
 
-test('with everything on, no not-live label survives on any page, in any meta tag or nav', () => {
-  const left = build(allOn).flatMap(({ f, html }) =>
-    [...html.matchAll(/No public seller|isn't built yet|not built yet|<span class="muted">Coming|Coming:|mainnet comes after launch|Tutorial preview|class="muted">Preview|once a public seller|which is coming|\(coming\)|not live on Celo mainnet|fill in once deployed|only network Attessa is deployed|\{\{[#/](?:live|notlive)|<!--\/?(?:live|notlive)/g)]
-      .map(m => `${f}: ${m[0]}`));
-  assert.deepEqual(left, []);
+const NOT_LIVE = /No public seller|isn't built yet|not built yet|<span class="muted">Coming|Coming:|mainnet comes after launch|After launch|Tutorial preview|class="muted">Preview|once a public seller|which is coming|\(coming\)|not live on Celo mainnet|fill in once deployed|only network Attessa is deployed|\{\{[#/](?:live|notlive)|<!--\/?(?:live|notlive)/g;
+const labels = files => files.flatMap(({ f, html }) => [...html.matchAll(NOT_LIVE)].map(m => `${f}: ${m[0]}`));
+
+test('with every feature on and mainnet deployed, no not-live label survives in any page or script', () => {
+  assert.deepEqual(labels(build(allOn, MAINNET_RECORD)), []);
+});
+
+test('a mainnet deployment shows the addresses and opens the switch', () => {
+  const files = build(allOff, MAINNET_RECORD);
+  const security = files.find(p => p.f === 'security.html').html;
+  for (const n of [1, 2, 3, 4]) assert.ok(security.includes(A(n)), `mainnet address ${A(n)} is missing`);
+  assert.doesNotMatch(security, /After launch/);
+  assert.match(files.find(p => p.f === 'index.html').html, /<label><input type="radio" name="network" value="mainnet"> Celo mainnet<\/label>/);
+  assert.doesNotMatch(files.find(p => p.f === 'assets/explorer.js').html, /comes after launch/);
+  assert.match(files.find(p => p.f === 'assets/explorer.js').html, /The live check reads Celo Sepolia only\./);
+  // The deployment says nothing about the seller.
+  assert.match(files.find(p => p.f === 'index.html').html, /No public seller is live yet/);
+});
+
+test('no feature flag stands in for a mainnet deployment: every flag on and no registry keeps the mainnet labels', () => {
+  const files = build(allOn);
+  const of = name => files.find(p => p.f === name).html;
+  assert.match(of('security.html'), /<td class="muted">After launch<\/td>/);
+  assert.match(of('security.html'), /fill in once deployed/);
+  assert.match(of('explorer.html'), /Celo mainnet comes after launch/);
+  assert.match(of('index.html'), /value="mainnet" disabled> Celo mainnet <span class="muted">After launch/);
+  assert.match(of('assets/explorer.js'), /Celo mainnet comes after launch/);
+});
+
+test('the deploy record, not the list, decides mainnet', () => {
+  assert.throws(() => readLive({ live: { mainnet: true } }), /not a known feature/);
+  assert.equal(readLive({}).mainnet, false);
+  assert.equal(readLive({}, { mainnet: true }).mainnet, true);
+  assert.equal(readLive({ live: Object.fromEntries(FEATURES.map(k => [k, true])) }).mainnet, false);
+  assert.equal(allOn.all, true, '`all` is the features only');
+});
+
+test('the explorer scripts follow viaBuy, and nothing else moves them', () => {
+  const site = flags => build(readLive({ live: flags })).find(p => p.f === 'assets/site.js').html;
+  const off = site({});
+  assert.match(off, /Once buying through buy is built/);
+  assert.match(off, /Optional, not built yet:/);
+  const on = site({ viaBuy: true });
+  assert.doesNotMatch(on, /not built yet|Once buying through buy is built/);
+  assert.match(on, /When a call is bought through buy/);
+  assert.match(on, /A sample of what the buyer's SDK shows for a purchase through buy/);
+  const others = site(Object.fromEntries(FEATURES.filter(k => k !== 'viaBuy').map(k => [k, true])));
+  assert.match(others, /Optional, not built yet:/);
+});
+
+// Every block in the source, read back against a build with only its own flag on.
+const blocksIn = d => readdirSync(d, { withFileTypes: true }).flatMap(e => {
+  if (e.isDirectory()) return blocksIn(join(d, e.name));
+  if (!/\.(html|js)$/.test(e.name)) return [];
+  return [...readFileSync(join(d, e.name), 'utf8').matchAll(/<!--(live|notlive):(\w+)-->([\s\S]*?)<!--\/\1-->|\{\{#(live|notlive) (\w+)\}\}([\s\S]*?)\{\{\/\4\}\}/g)]
+    .map(m => ({ file: e.name, kind: m[1] ?? m[4], key: m[2] ?? m[5], body: m[3] ?? m[6] }));
+});
+
+test('each feature flag alone changes exactly its own blocks, in pages and scripts', () => {
+  const blocks = blocksIn(join(site, 'src')).filter(b => !/\{\{|\[\[/.test(b.body) && b.key !== 'all');
+  for (const key of [...FEATURES]) {
+    const text = build(readLive({ live: { [key]: true } })).map(p => p.html).join('\n');
+    for (const b of blocks) {
+      const on = b.key === key;
+      if (b.key === 'mainnet') continue; // the deploy record's own tests are above
+      const expected = (b.kind === 'live') === on;
+      if (expected) assert.ok(text.includes(b.body), `${key} on: ${b.file} ${b.kind}:${b.key} should be shown: ${b.body.slice(0, 70)}`);
+      // Absence is asserted only for a wording long enough to be its own (" preview" occurs in ordinary copy) that no
+      // block with another answer also holds ("Coming." also opens a statusVerdicts line).
+      else if (b.body.length >= 25 && blocks.every(o => !o.body.includes(b.body) || (o.key === b.key && o.kind === b.kind))) {
+        assert.ok(!text.includes(b.body), `${key} on: ${b.file} ${b.kind}:${b.key} should be gone: ${b.body.slice(0, 70)}`);
+      }
+    }
+  }
 });
 
 // What must be true before a flag may be set. A ticked TASKS.md task, or the command existing in the CLI where no
@@ -98,7 +172,6 @@ test('no flag is on while its work is unfinished', () => {
     }
     if (need.cli && !need.cli.test(cli)) bad.push(`${k} is live but the CLI has no such command`);
   }
-  // The footer's network switch follows the deploy record, not this list: "After launch" goes only when mainnet is deployed.
   if (live.seller && !siteNetworks.networks.mainnet.enabled) bad.push('seller is live but the deploy record has no mainnet registry');
   assert.deepEqual(bad, []);
 });

@@ -27,7 +27,7 @@ const layout = readFileSync(join(src, 'layout.html'), 'utf8');
 const siteConfig = JSON.parse(readFileSync(process.env.SITE_CONFIG ?? join(here, 'site.config.json'), 'utf8'));
 if (!/^https:\/\/[a-z0-9.-]+$/.test(siteConfig.siteOrigin)) throw new Error('site.config.json: siteOrigin must be https://<host> with no path');
 const SITE_ORIGIN_HOST = new URL(siteConfig.siteOrigin).host;
-const live = readLive(siteConfig);
+const live = readLive(siteConfig, { mainnet: config.networks.mainnet.enabled });
 const contactSet = siteConfig.securityContact != null && siteConfig.securityTxtExpires != null;
 if (contactSet) {
   if (!/^(mailto:\S+@\S+|https:\/\/\S+|tel:\S+)$/.test(siteConfig.securityContact)) throw new Error('site.config.json: securityContact must be a mailto:, https: or tel: URI');
@@ -173,17 +173,14 @@ function expand(html, depth = 0) {
   });
 }
 
-// The footer's mainnet radio ships disabled and marked "After launch" (layout.html). Once the deploy record has an
-// EnclaveRegistry for Celo mainnet the build enables it; until then it stays as written.
-const MAINNET_OFF = '<input type="radio" name="network" value="mainnet" disabled> Celo mainnet <span class="muted">After launch</span>';
-function enableNetworks(html) {
-  if (!html.includes(MAINNET_OFF)) throw new Error('layout.html: the mainnet radio line changed');
-  return config.networks.mainnet.enabled ? html.replace(MAINNET_OFF, '<input type="radio" name="network" value="mainnet"> Celo mainnet').replace('<label class="is-disabled">', '<label>') : html;
-}
-
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync(join(src, 'static'), out, { recursive: true });
+// The scripts a visitor runs say the same as the pages: the same status blocks, resolved once, before anything reads them.
+for (const name of readdirSync(join(out, 'assets')).filter(n => n.endsWith('.js'))) {
+  const script = join(out, 'assets', name);
+  writeFileSync(script, applyStatus(readFileSync(script, 'utf8'), live));
+}
 
 // Third-party code is bundled, never loaded from a CDN. motion.js gets gsap and ScrollTrigger (as the globals it
 // already reads); scene.js gets three. Output replaces the copied source files.
@@ -220,12 +217,14 @@ for (const file of walk(pagesDir)) {
   const body = raw.replace(/^<!--\s*\w+:.*?-->\s*\r?\n/gm, '');
   const depth = rel.split(sep).length - 1;
 
-  let html = enableNetworks(layout).replace('{{content}}', () => expand(body));
+  let html = layout.replace('{{content}}', () => expand(body));
   html = html
     .replace(/\{\{cur:(\w+)\}\}/g, (_, k) => (k === meta.nav ? ' aria-current="page"' : ''))
     .replace(/\{\{doc:(\w+)\}\}/g, (_, k) => (k === meta.doc ? ' aria-current="page"' : ''))
     .replace(/\{\{title\}\}/g, () => meta.title ?? 'Attessa')
-    .replace(/\{\{description\}\}/g, () => meta.description ?? '')
+    .replace(/\{\{description\}\}/g, () => meta.description ?? '');
+  html = applyStatus(html, live);
+  html = html
     .replace(/\{\{bodyClass\}\}/g, () => meta.body ?? '')
     .replace(/\{\{seal(?::([a-z ]+))?\}\}/g, (_, st) => seal(st))
     .replace(/\{\{sealMini:([a-z ]+)\}\}/g, (_, st) => seal(st, true))
@@ -245,8 +244,6 @@ for (const file of walk(pagesDir)) {
     .replace(/\{\{chain:([\w.-]+)\}\}/g, (_, r) => chainValue(r))
     .replace(/\[\[hash:(0x[0-9a-fA-F]+)\]\]/g, (_, h) => hashChip(h))
     .replace(/\{\{root\}\}/g, () => (depth ? '../'.repeat(depth) : ''));
-
-  html = applyStatus(html, live);
 
   html = html.replace('{{csp}}', () => csp(html));
 

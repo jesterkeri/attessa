@@ -4,11 +4,15 @@ import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { applyStatus, readLive } from '../../status.mjs';
+import { config } from '../../config.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const src = process.env.SITE_SRC ?? join(here, '..', '..', 'src');
 export const fixtureDir = join(here, '..', 'fixtures');
-export const explorerJs = readFileSync(join(src, 'static', 'assets', 'explorer.js'), 'utf8');
+// The script as the build ships it: status blocks resolved for the committed switch and deploy record.
+const siteConfig = JSON.parse(readFileSync(join(here, '..', '..', 'site.config.json'), 'utf8'));
+export const explorerJs = applyStatus(readFileSync(join(src, 'static', 'assets', 'explorer.js'), 'utf8'), readLive(siteConfig, { mainnet: config.networks.mainnet.enabled }));
 
 // explorer.js is a classic script that sets window.AttessaLive (globalThis without a window).
 export function loadLive() {

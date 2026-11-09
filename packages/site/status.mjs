@@ -4,18 +4,21 @@
 //   <!--live:seller-->shown once it is live<!--/live-->
 // `all` is on only when every feature is. A page's title and description are one-line comments themselves, so inside
 // those lines write {{#notlive seller}}..{{/notlive}} and {{#live seller}}..{{/live}} instead.
-// Set the key to true in site.config.json and rebuild, and every such block changes together.
+// Set the key to true in site.config.json and rebuild, and every such block changes together, in the pages and in the
+// copied scripts (assets/*.js use the brace form inside their strings).
 // test/status-switch.test.mjs refuses a true key while its work is unfinished, so a flip needs the real work.
 export const FEATURES = ['seller', 'verify', 'viaBuy', 'releaseVerify', 'statusVerdicts', 'recentCalls'];
 
-export function readLive(config) {
+// `mainnet` is the deployment half of the status: on only when the deploy record holds a Celo mainnet registry. It comes
+// from the record, never from the list, so no flag can claim a deployment, and no feature flag stands in for one.
+export function readLive(config, { mainnet = false } = {}) {
   const live = config.live ?? {};
   for (const [k, v] of Object.entries(live)) {
     if (!FEATURES.includes(k)) throw new Error(`site.config.json: live.${k} is not a known feature`);
     if (typeof v !== 'boolean') throw new Error(`site.config.json: live.${k} must be true or false`);
   }
   const flags = Object.fromEntries(FEATURES.map(k => [k, live[k] === true]));
-  return { ...flags, all: FEATURES.every(k => flags[k]) };
+  return { ...flags, all: FEATURES.every(k => flags[k]), mainnet: mainnet === true };
 }
 
 const BLOCK = /<!--(live|notlive):(\w+)-->([\s\S]*?)<!--\/\1-->|\{\{#(live|notlive) (\w+)\}\}([\s\S]*?)\{\{\/\4\}\}/g;
