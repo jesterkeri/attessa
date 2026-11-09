@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { realpathSync } from 'node:fs';
+import { appendFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.ts';
@@ -23,7 +23,13 @@ export async function main(path: string): Promise<void> {
   let buy: BuyPaidSource | null = null;
   if (cfg.buy) {
     const key = loadAgentAccount();
-    if (key.ok) buy = new BuyPaidSource(cfg.buy, key.account);
+    if (key.ok) {
+      const receipts = join(cfg.stateDir, 'buy-receipts.jsonl');
+      buy = new BuyPaidSource(cfg.buy, key.account, undefined, (r) => {
+        appendFileSync(receipts, `${JSON.stringify(r)}\n`, { mode: 0o600 });
+        log('buy_paid', { capabilityId: r.capabilityId, amount: r.amount, outcome: r.outcome, txHash: r.txHash });
+      });
+    }
     else log('buy_disabled', { reason: key.reason, fallback: 'forno' });
   }
   const host = new SellerHost({

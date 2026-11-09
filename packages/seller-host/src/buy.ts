@@ -110,13 +110,31 @@ function failureCode(e: unknown): string {
   return 'error';
 }
 
+/** What one paid read leaves behind as proof of payment. Public values only: the signature is never included. */
+export interface BuyReceipt {
+  capabilityId: string;
+  url: string;
+  network: string;
+  asset: string;
+  amount: string;
+  status: number;
+  outcome: string;
+  /** Settlement transaction, when the service returned one. Otherwise `from` and `nonce` find it on the token. */
+  txHash: string | null;
+  from: string;
+  nonce: string;
+  timestamp: string;
+}
+
 export class BuyPaidSource implements BuySource {
   readonly id: string;
   readonly costPerEvaluate: bigint;
   private readonly c: BuyConfig;
   private readonly account: LocalAccount;
   private readonly fetchImpl: typeof fetch | undefined;
-  constructor(c: BuyConfig, account: LocalAccount, fetchImpl?: typeof fetch) {
+  private readonly onReceipt: ((r: BuyReceipt) => void | Promise<void>) | undefined;
+  constructor(c: BuyConfig, account: LocalAccount, fetchImpl?: typeof fetch, onReceipt?: (r: BuyReceipt) => void | Promise<void>) {
+    this.onReceipt = onReceipt;
     validateBuyConfig(c);
     this.c = c;
     this.id = `buy:${c.capabilityId}`;
@@ -167,6 +185,12 @@ export class BuyPaidSource implements BuySource {
           onBeforePayment: () => {
             if (signal.aborted) throw Object.assign(new Error('aborted'), { code: 'aborted' });
           },
+          // Proof of payment: the library calls this after the paid request, whatever its outcome. A failed write can't
+          // undo a payment and must not read as a failed call, so errors stop here (the library also guards this).
+          onPayment: async (info) => {
+            await this.onReceipt?.({ capabilityId: this.c.capabilityId, url: info.url, network: info.network, asset: info.asset, amount: info.amount, status: info.status, outcome: info.outcome, txHash: info.txHash ?? null, from: info.authorization.from, nonce: info.authorization.nonce, timestamp: info.timestamp });
+          },
+          onAccountingError: () => {},
         },
       );
       if (!res.ok) {

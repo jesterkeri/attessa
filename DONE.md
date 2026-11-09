@@ -4678,3 +4678,8 @@ $ bash scripts/check-install-scripts.sh          -> "pnpm@10.32.1 install ran no
 (previous count 109 passed)
 ```
 reviewed: pending
+
+### T28 payment receipts - 2026-11-09
+Build with buy asks for proof of payment, and the library route kept only the reply body. Each paid read now appends a receipt to `<stateDir>/buy-receipts.jsonl` (mode 0600) and logs `buy_paid`: capability, url, network, asset, amount, status, outcome, settlement tx, payer, nonce, time. Public values only, never the signature. A paid request the service answers with an error still leaves a receipt. A failed write does not fail the read or pay again. Not confirmed: the real gateway's settlement header, or that Loops counts library payments (asked of the organisers).
+Verify (flock): pnpm --filter @attessa/seller-host test: Test Files 11 passed (11), Tests 123 passed (123); typecheck and lint: no errors.
+reviewed: pending

@@ -34,6 +34,8 @@ export class FakeX402 {
   paidClosed = 0;
   /** Hits on the redirect target. */
   redirectHits = 0;
+  /** Settlement transaction reported on a paid reply, if any. */
+  settlementTx: string | null = null;
   private server: Server | null = null;
   url = '';
 
@@ -99,7 +101,7 @@ export class FakeX402 {
           return;
         default: {
           const r = await fetch(this.rpc.url, { method: 'POST', headers: { 'content-type': 'application/json' }, body });
-          res.writeHead(200, { 'content-type': 'application/json' }).end(await r.text());
+          res.writeHead(200, { 'content-type': 'application/json', ...(this.settlementTx ? { 'x-payment-response': Buffer.from(JSON.stringify({ success: true, transaction: this.settlementTx, network: 'eip155:42220' })).toString('base64') } : {}) }).end(await r.text());
         }
       }
     });
