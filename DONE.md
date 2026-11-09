@@ -4954,3 +4954,15 @@ $ pnpm --filter @attessa/seller-host test -- -t "inputs"
 ```
 
 The test count shows the `-t` filter did not narrow the run, so this is the whole seller-host suite. Lint and typecheck ran clean. This task is the code path only: no seller has bought a read yet, and the seller host's paid reads stay off until T32.
+
+## Rehearsal fixes: Codex r3 SHIP (feat/rehearsal-fixes, 2026-11-09)
+reviewed: reviews/rehearsal-fixes-review-r3.md | verdict: SHIP (r1 and r2 ended REVISE; archived outside the repo)
+
+Reviewed at ab7395e after adversary round 5 found no defect. `status`, `signer register` and `signer renew` now read a registry's whole history on an RPC that caps eth_getLogs: the deploy record names the creation, it is proved from the transaction, and an answer that isn't a list of logs matching the filter is an RPC failure. Verify at ab7395e, verbatim:
+
+```
+$ pnpm --filter @attessa/cli test
+      Tests  434 passed (434)
+```
+
+Real reads, 2026-11-09: the Sepolia EnclaveRegistry scan made 147 calls in 37 s and found 0 events, which is how many it has, so a real event has not yet gone through the scan. The item check accepted 20 real rows from the mainnet identity registry and 4 from Sepolia's. T16 will be the first real event.
