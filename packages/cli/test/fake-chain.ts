@@ -121,7 +121,8 @@ export class FakeChain implements Rpc {
         return this.receipts.get(params[0] as Hex) ?? null;
       case 'eth_getLogs': {
         const f = params[0] as { address: Address; topics: Hex[] };
-        return this.logs.filter((l) => l.address === f.address.toLowerCase() && f.topics.every((t, i) => !t || l.topics[i] === t));
+        // A real node gives every log its block; the CLI refuses an item without one.
+        return this.logs.filter((l) => l.address === f.address.toLowerCase() && f.topics.every((t, i) => !t || l.topics[i] === t)).map((l) => ({ ...l, blockNumber: toHex(this.blockNumber) }));
       }
       default:
         throw new Error(`fake chain: ${method} unsupported`);

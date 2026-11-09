@@ -31,16 +31,16 @@ type EventName = 'ReleaseApproved' | 'EndpointAdded' | 'SignerRegistered';
 /** Registry events matching the indexed `args` (null = any), over the registry's life in RPC-sized windows. */
 async function events(c: Chain, eventName: EventName, args: Record<string, unknown>): Promise<Array<{ args: Record<string, any>; blockNumber: bigint }>> {
   const topics = encodeEventTopics({ abi: REGISTRY_EVENTS, eventName, args } as never);
-  let logs: Array<{ topics: Hex[]; data: Hex; blockNumber?: string }>;
+  // A log that won't decode as the event the node says it is, is a failed read like any other.
   try {
-    logs = await getLogsChunked(c.rpc, c.registry, topics as Array<Hex | null>, c.registryCreation);
+    const logs = await getLogsChunked(c.rpc, c.registry, topics as Array<Hex | null>, c.registryCreation);
+    return logs.map((l) => ({
+      args: decodeEventLog({ abi: REGISTRY_EVENTS, eventName, topics: l.topics as [Hex, ...Hex[]], data: l.data }).args as Record<string, any>,
+      blockNumber: BigInt(l.blockNumber),
+    }));
   } catch {
     throw ERR.rpcUnavailable(c.url);
   }
-  return logs.map((l) => ({
-    args: decodeEventLog({ abi: REGISTRY_EVENTS, eventName, topics: l.topics as [Hex, ...Hex[]], data: l.data }).args as Record<string, any>,
-    blockNumber: BigInt(l.blockNumber ?? 0),
-  }));
 }
 
 /** An endpoint's origin from its EndpointAdded log, for display only: scheme://host[:port] (the registry accepts any https:// text). */

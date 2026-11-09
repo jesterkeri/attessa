@@ -5,7 +5,7 @@ import { RpcError, type Rpc } from './rpc.ts';
 export const LOG_WINDOW = 4000n;
 
 // Per connection: one URL can front different chains or forks, and a boundary from one says nothing about another.
-type LogRow = { topics: Hex[]; data: Hex; blockNumber?: string };
+type LogRow = { address: string; topics: Hex[]; data: Hex; blockNumber: string };
 
 const creationCache = new WeakMap<Rpc, Map<string, bigint>>();
 
@@ -16,10 +16,33 @@ async function codeAt(rpc: Rpc, address: string, at: string): Promise<boolean> {
   return code !== '0x' && code !== '0x0';
 }
 
-/** One eth_getLogs. Anything but a list is a failed read: passed on, it would look like a history. */
-async function logsIn(rpc: Rpc, filter: Record<string, unknown>): Promise<LogRow[]> {
+const HEX = /^0x[0-9a-fA-F]*$/;
+const isHex = (v: unknown): v is string => typeof v === 'string' && HEX.test(v);
+const sameHex = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+
+interface LogFilter {
+  address: string;
+  topics: Array<Hex | null>;
+  fromBlock: string;
+  toBlock: string;
+}
+
+/** Whether this item could be an answer to this filter: an item that isn't one is a lie, and passing it on would crash or mislead the reader. */
+function fits(row: unknown, f: LogFilter): boolean {
+  if (typeof row !== 'object' || row === null) return false;
+  const { address, topics, data, blockNumber } = row as { address?: unknown; topics?: unknown; data?: unknown; blockNumber?: unknown };
+  if (!isHex(address) || !sameHex(address, f.address) || !isHex(data) || !isHex(blockNumber) || blockNumber === '0x') return false;
+  if (!Array.isArray(topics) || topics.length < f.topics.length || !topics.every(isHex)) return false;
+  if (!f.topics.every((t, i) => t === null || sameHex(t, topics[i] as string))) return false;
+  const at = BigInt(blockNumber);
+  return at >= BigInt(f.fromBlock) && (f.toBlock === 'latest' || at <= BigInt(f.toBlock));
+}
+
+/** One eth_getLogs. Anything but a list of logs matching the filter is a failed read: passed on, it would look like a history. */
+async function logsIn(rpc: Rpc, filter: LogFilter): Promise<LogRow[]> {
   const part = await rpc.request('eth_getLogs', [filter]);
   if (!Array.isArray(part)) throw new RpcError(-32000, 'eth_getLogs did not answer with a list', undefined);
+  if (!part.every((row) => fits(row, filter))) throw new RpcError(-32000, 'eth_getLogs answered with an item that is not a log matching the filter', undefined);
   return part as LogRow[];
 }
 

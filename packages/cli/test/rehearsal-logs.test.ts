@@ -26,7 +26,7 @@ function forno(): Rpc & { windows: Array<[bigint, bigint]> } {
         const to = f.toBlock === 'latest' ? 1_013_000n : BigInt(f.toBlock);
         if (to - from + 1n > 5000n) throw new RpcError(-32602, `query exceeds range, retry smaller (max block range 5000, got ${to - from + 1n})`, undefined);
         windows.push([from, to]);
-        return from <= 1_005_000n && 1_005_000n <= to ? [{ topics: ['0x01'], data: '0x', blockNumber: '0xf4a38' }] : [];
+        return from <= 1_005_000n && 1_005_000n <= to ? [{ address: A, topics: ['0x01'], data: '0x', blockNumber: '0x' + (1_005_000).toString(16) }] : [];
       }
       throw new Error(method);
     },
@@ -115,7 +115,7 @@ it('two connections to one URL do not share a creation block (Codex r2 M2: a sec
       if (m === 'eth_getLogs') {
         const f = p[0] as { fromBlock: string; toBlock: string };
         if (f.toBlock === 'latest') throw new RpcError(-32602, 'query exceeds range, retry smaller (max block range 5000)', undefined);
-        return BigInt(f.fromBlock) <= event && event <= BigInt(f.toBlock) ? [{ topics: ['0x01'], data: '0x', blockNumber: '0x1' }] : [];
+        return BigInt(f.fromBlock) <= event && event <= BigInt(f.toBlock) ? [{ address: A, topics: ['0x01'], data: '0x', blockNumber: '0x' + event.toString(16) }] : [];
       }
       throw new Error(m);
     },
@@ -186,4 +186,35 @@ it('every deployed registry names its creation, and it matches docs/DEPLOYMENTS.
     expect(d.enclaveRegistryCreation, name).not.toBeNull();
     expect(docs).toContain(`EnclaveRegistry: tx \`${d.enclaveRegistryCreation!.tx}\`, block ${d.enclaveRegistryCreation!.block},`);
   }
+});
+
+it.each([
+  ['a null item', null],
+  ['another contract', { address: '0x' + '22'.repeat(20), topics: ['0x01'], data: '0x', blockNumber: '0x' + (1_000_000).toString(16) }],
+  ['a block before the window', { address: A, topics: ['0x01'], data: '0x', blockNumber: '0x1' }],
+  ['a block after the window', { address: A, topics: ['0x01'], data: '0x', blockNumber: '0x' + (9_000_000).toString(16) }],
+  ['no block', { address: A, topics: ['0x01'], data: '0x' }],
+  ['data that is not hex', { address: A, topics: ['0x01'], data: 'zz', blockNumber: '0x' + (1_000_000).toString(16) }],
+  ['a topic that is not hex', { address: A, topics: [7], data: '0x', blockNumber: '0x' + (1_000_000).toString(16) }],
+])('a window answering with %s is an RPC failure, not a history', async (_n, item) => {
+  const base = forno();
+  const rpc: Rpc = {
+    url: 'http://lying.test',
+    async request(m, p) {
+      if (m === 'eth_getLogs' && (p[0] as { toBlock: string }).toBlock !== 'latest') return [item];
+      return base.request(m, p);
+    },
+  };
+  await expect(getLogsChunked(rpc, A, [null])).rejects.toBeInstanceOf(RpcError);
+});
+
+it('a log for a different indexed value than the filter asked for is an RPC failure', async () => {
+  const rpc: Rpc = { url: 'x', async request() { return [{ address: A, topics: ['0x02'], data: '0x', blockNumber: '0x1' }]; } };
+  await expect(getLogsChunked(rpc, A, ['0x01'])).rejects.toBeInstanceOf(RpcError);
+});
+
+it('address and topic casing is not a mismatch', async () => {
+  const row = { address: A.toUpperCase().replace('0X', '0x'), topics: ['0xAB'], data: '0x', blockNumber: '0x1' };
+  const rpc: Rpc = { url: 'x', async request() { return [row]; } };
+  expect(await getLogsChunked(rpc, A, ['0xab'])).toEqual([row]);
 });
