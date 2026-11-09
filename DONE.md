@@ -4703,6 +4703,43 @@ reviewed: pending Codex r6
 Codex r6 on fb4da64: SHIP, 0 critical, 0 major, 0 minor. Its limits, from the review: `pnpm --filter @attessa/mcp test` passed 66 of 66; the full CLI suite stopped at 86 files / 346 tests in the frozen copy because its nitro-validator submodule was not initialised, and global typecheck and lint did not finish in its foreground limit. CI on fb4da64 ran them and passed. The redaction is a documented best-effort boundary, not a proof that no reversible form can exist.
 reviewed: reviews/t21b-mcp-review-r6.md | verdict: implementation-ready | C0 M0 m0 (r1 to r5 ended changes required; archived outside the repo)
 
+## T34 README (README part only; T34 not ticked) - 2026-11-08
+
+Wrote `README.md` from FLOWS §1 (premise line verbatim), SPEC §1, ARCHITECTURE, KNOWN-LIMITS, `packages/cli/src/index.ts` COMMANDS, `packages/mcp/src/server.ts` and `docs/DEPLOYMENTS.md`. Every relative link was checked and resolves; no em dashes; no numbers, addresses or keys in it. `scripts/check-claims.sh` does not exist on this branch (not written). No project license file or `license` field exists, so the README states none.
+
+Documented commands run from the worktree, each under `flock /home/hr/.cache/attessa-heavy.lock`, all exit 0:
+
+```
+install (pnpm install --frozen-lockfile; then submodule update + cargo fetch): exit 0
+build: exit 0   (tail: Finished `release` profile [optimized] target(s) in 10.30s)
+typecheck: exit 0
+lint: exit 0    (tail: Finished `dev` profile ... in 5.63s)
+test: exit 0
+  packages/cli test:  Test Files 87 passed (87), Tests 347 passed (347)
+  packages/core test: Test Files 9 passed (9), Tests 69 passed (69)
+  packages/gateway test: Test Files 23 passed (23), Tests 164 passed (164)
+  packages/mcp test:  Test Files 1 passed (1), Tests 66 passed (66)
+  packages/sdk test:  Tests 191 passed (191)
+  forge test: every suite ok, 0 failed
+  cargo test: test result: ok
+```
+
+Not run: invariants and slither (documented only). reviewed: pending Codex
+
+### T34 README adversary r1 fixes - 2026-11-08
+A fact-check against the code found statements that were false or overstated; README.md corrected: `attessa seller --help` prints the steps, not the full list; a source install has no OS keychain (keytar is not installed), so `attessa init` needs ATTESSA_PRIVATE_KEY or --keystore; attestations are checked at each signer registration or renewal, not "once per boot"; the intro now says the gateway settles only after its check passes, not that a buyer always pays only on a valid proof; `init` ignores --dry-run; `pnpm setup` may be needed; L17 wording matches the SDK's real checks. README only, so no suite re-run.
+reviewed: pending
+
+### T34 README adversary r2 corrections - 2026-11-08
+Round 2 (tests archived at .worktrees/archive/adversary/readme-r2/) proved two gaps:
+1. README step 6 implied the CLI says nothing about a refusal until the chain confirms. In fact the CLI prints the gateway's refusal, including "Your payment permission wasn't used.", at once, and warns if the chain later shows it was used. `packages/cli/test/buyer.test.ts:329` pins that FLOWS line, so the README now states the order instead. The FLOWS wording question goes to OPEN-QUESTIONS.md.
+2. "Node 22" is not enough: `packages/sdk/src/ledger.ts:3` imports `node:sqlite`, and on v22.12.0 the CLI stops with ERR_UNKNOWN_BUILTIN_MODULE. The README now says Node 22.13 or newer, and pnpm 10.32.1 or newer.
+Also from its suspicions: "Every paid response" in the intro, the fake Nitro module stated in Status, and the docs line no longer calls existing site pages missing.
+reviewed: pending
+
+### T34 README adversary r3 corrections - 2026-11-09
+Round 3 (.worktrees/archive/adversary/readme-r3/): `require('better-sqlite3'); new Database(':memory:')` exits 139 (segmentation fault) on Node 22.12.0, 22.13.0 and 22.13.1, and works on 22.14.0 to 22.22.0, so the floor is now 22.14. The adversary ran the full suite on 22.23.2 and only the probe on 22.14.0. The `cd contracts` lines are now in subshells, so the block works pasted whole.
+reviewed: pending
 ### CI: the ts job's budget goes from 4 to 6 minutes - 2026-11-08
 Joshua's decision, an exception to PIPELINE.md's "anything slower than budget moves to nightly"; moving slow tests to nightly is on the after-submission list. Joshua applied the `.github/workflows/ci.yml` line himself, because the hook keeps workflow files for human review. `PIPELINE.md`, the `BUDGET` table and comment in `scripts/check-workflows.sh`, and the two tests that hold the number moved with it.
 
@@ -4718,6 +4755,10 @@ reviewed: pending Codex
 ### CI ts budget review recorded - 2026-11-08
 reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r1 ended REVISE; archived outside the repo)
 
+### T34 README Codex r1: SHIP - 2026-11-09
+
+Codex round 1 reviewed README.md at d2a257c in a frozen worktree and found nothing. It confirmed the mainnet paragraph with read-only Celo reads (the transaction, `ownerOf(10061)`, `tokenURI(10061)`) and the live agent.json. It checked commands, paths and claims statically and did not install, build or run them. T34 stays open: this covers the README only, not the tutorial, how-tos or the rest of the docs set.
+reviewed: reviews/t34-readme-review-r1.md | verdict: SHIP
 ### Mainnet entry Codex r4: SHIP - 2026-11-09
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
