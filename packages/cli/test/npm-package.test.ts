@@ -1,7 +1,8 @@
 import { execFileSync, spawnSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { generatePrivateKey } from 'viem/accounts';
 import { beforeAll, expect, it } from 'vitest';
 
 const here = new URL('..', import.meta.url).pathname;
@@ -37,17 +38,31 @@ it('the bundle needs nothing outside itself', () => {
   expect(bundle).not.toMatch(/\/home\/|-----BEGIN [A-Z ]*PRIVATE KEY-----/);
 });
 
-it('runs from the package alone, and prints no experimental warning', () => {
+it('runs from the package alone', () => {
   const r = run('seller', '--help');
   expect(r.status).toBe(0);
   expect(r.stdout).toContain('Sell an API');
-  expect(r.stderr).not.toMatch(/Warning/);
 });
 
-it('a real warning from elsewhere still prints', () => {
-  const entry = readFileSync(join(here, 'npm', 'attessa.mjs'), 'utf8');
-  expect(entry).toContain("startsWith('SQLite is an experimental feature')");
-  expect(entry).toContain('emit.call(process, warning, ...rest)');
+it('a command that opens the ledger prints no SQLite warning, and only because of the filter', () => {
+  const key = generatePrivateKey(); // made here for this run; holds nothing
+  const args = [join(installed, 'dist', 'attessa.mjs'), 'status', '--rpc', 'http://127.0.0.1:1'];
+  const { ATTESSA_PRIVATE_KEY: _k, ...env } = process.env;
+  const opts = { encoding: 'utf8' as const, cwd, env: { ...env, HOME: cwd, ATTESSA_PRIVATE_KEY: key }, timeout: 30_000 };
+  expect(spawnSync('node', args, opts).stderr).not.toMatch(/ExperimentalWarning/);
+  // The same bundle without the entry point's filter does warn, so the line above can fail.
+  args[0] = join(installed, 'dist', 'bin.mjs');
+  expect(spawnSync('node', args, opts).stderr).toMatch(/ExperimentalWarning: SQLite/);
+});
+
+it('the filter drops only that one warning', () => {
+  const dir = join(cwd, 'filter');
+  mkdirSync(dir);
+  cpSync(join(here, 'npm', 'attessa.mjs'), join(dir, 'attessa.mjs'));
+  writeFileSync(join(dir, 'bin.mjs'), "process.emitWarning('SQLite is an experimental feature and might change at any time', 'ExperimentalWarning');\nprocess.emitWarning('something else went wrong');\n");
+  const r = spawnSync('node', [join(dir, 'attessa.mjs')], { encoding: 'utf8' });
+  expect(r.stderr).toContain('something else went wrong');
+  expect(r.stderr).not.toContain('SQLite');
 });
 
 it('mainnet says there is no registry yet, rather than pretending', () => {

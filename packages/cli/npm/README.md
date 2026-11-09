@@ -15,7 +15,7 @@ npm install -g attessa
 attessa init
 ```
 
-`attessa init` looks for your wallet: an OS keychain, `ATTESSA_PRIVATE_KEY`, or `--keystore <file>` with its password in `ATTESSA_KEYSTORE_PASSWORD`. Never share a private key or a seed phrase, including with anyone offering help with this tool.
+`attessa init` needs a wallet of yours. This package has no OS keychain support, so it stops and says so until you set `ATTESSA_PRIVATE_KEY`, or pass `--keystore <file>` with the password in `ATTESSA_KEYSTORE_PASSWORD`. Never share a private key or a seed phrase, including with anyone offering help with this tool.
 
 ## Commands
 
