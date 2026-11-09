@@ -251,21 +251,50 @@ describe('buy inputs (T28) round 1 behaviours, on the library route', () => {
     }
   });
 
-  it('cross-check: an honest paid block is checked against Forno at the same number, and Forno failing then does not fail the read', async () => {
+  it('cross-check: an honest paid block is checked against Forno at the same number, and Forno failing then fails closed (no paid answer is accepted unverified)', async () => {
     const { f, guard } = fetcher('ok');
     const i = await f.fetch(PAY_TO, NOW);
     expect(i.source).toBe('buy:test-capability');
     expect(forno.requests).toHaveLength(2);
     expect((forno.requests[1] as Array<{ method: string; params: string[] }>)[0]).toMatchObject({ method: 'eth_getBlockByNumber', params: ['0x3e7', false] });
     expect(guard.state(NOW).spentAtomic).toBe('10000');
-    // Forno answers the head, then dies for the cross-check: the paid read stands.
+    // Forno answers the head, then dies for the cross-check and the fallback: nothing is accepted, nothing reaches the enclave.
     const logs: string[] = [];
     let n = 0;
     const flaky = new HttpRpcSource('forno', forno.url, (async (u: string, o: RequestInit) => (n++ === 0 ? fetch(u, o) : Promise.reject(new Error('down')))) as typeof fetch);
     const g2 = new BuySpendGuard(join(mkdtempSync(join(tmpdir(), 'attessa-buy-')), 'g.json'), { settledSince: () => 0n });
     const f2 = new InputFetcher({ forno: flaky, buy: new BuyPaidSource(CFG, ACCOUNT, x.fetchImpl), guard: g2, timeoutMs: 1000, log: (e) => logs.push(e) });
-    expect((await f2.fetch(PAY_TO, NOW)).source).toBe('buy:test-capability');
+    await expect(f2.fetch(PAY_TO, NOW)).rejects.toThrow(/inputs_unavailable/);
     expect(logs).toContain('inputs_crosscheck_unavailable');
+  });
+
+  it('cross-check outage plus a forged paid payload: the forged inputs are never returned (so never evaluated), and a working Forno fallback serves them instead', async () => {
+    x.paidMode = 'ok';
+    // The paid service answers a valid-shaped batch with a fabricated block.
+    const forging: typeof fetch = async (input, init) => {
+      const res = await x.fetchImpl(input, init);
+      if (!init?.headers || !new Headers(init.headers).has('payment-signature')) return res;
+      const arr = JSON.parse(await res.text()) as Array<{ id: number; result: Record<string, string> }>;
+      const blk = arr.find((r) => r.id === 1)!.result;
+      blk.hash = '0x' + 'cd'.repeat(32);
+      blk.timestamp = '0x5';
+      return new Response(JSON.stringify(arr), { status: 200 });
+    };
+    // (a) Forno dies after the head: no cross-check, no fallback, no inputs.
+    let n = 0;
+    const logs: string[] = [];
+    const flaky = new HttpRpcSource('forno', forno.url, (async (u: string, o: RequestInit) => (n++ === 0 ? fetch(u, o) : Promise.reject(new Error('down')))) as typeof fetch);
+    const guard = new BuySpendGuard(join(mkdtempSync(join(tmpdir(), 'attessa-buy-')), 'g.json'), { settledSince: () => 0n });
+    const f = new InputFetcher({ forno: flaky, buy: new BuyPaidSource(CFG, ACCOUNT, forging), guard, timeoutMs: 1000, log: (e) => logs.push(e) });
+    let inputs: unknown = null;
+    await f.fetch(PAY_TO, NOW).then((i) => (inputs = i), () => {});
+    expect(inputs, 'no inputs may exist for the enclave to evaluate').toBeNull();
+    expect(logs).toContain('inputs_unavailable');
+    // (b) Forno is back for the fallback: the answer is Forno's, never the forged one.
+    const { f: f3 } = fetcher('ok', 0n, CFG, forging);
+    const i3 = await f3.fetch(PAY_TO, NOW);
+    expect(i3.source).toBe('forno');
+    expect(i3.block.hash).toBe(forno.blockHash(BigInt(i3.block.number)));
   });
 
   it('head: Forno down and buy up, nothing is paid: one evaluate never pays for a head, and there is no block to read at', async () => {

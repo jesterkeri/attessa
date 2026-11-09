@@ -4801,3 +4801,15 @@ reviewed: reviews/ci-budget-review-r2.md | verdict: SHIP, Codex r2 at 1c76f6d (r
 
 Codex round 4 reviewed 0c6dc15 in a frozen worktree (delta 1567e61..0c6dc15): both round-3 majors are closed (cancel --dry-run follows the verified chain; a gas-cap refusal stays `gas_over_cap` and states whether a permission was signed) and no new defect was found. Joshua ran it and passed on the verdict. Codex's sandbox could not finish the full verification chain within its 30-second process limit, and the report records that.
 reviewed: reviews/mainnet-entry-review-r4.md | verdict: SHIP (rounds r1 to r3 ended REVISE; archived outside the repo)
+
+## T28 Codex r1 fixes (M1-M3)
+- M1: an unavailable Forno cross-check now fails the paid read closed; the Forno fallback runs, and if it cannot answer the result is `inputs_unavailable` with no inputs for the enclave. Old fail-open test replaced; forged-payload-plus-outage test added.
+- M2: `buy-intents.jsonl` (new `src/ledger.ts`) is append-only, fsynced per line: `intent` (id, capability, payer, cap, timestamp) written in `onBeforePayment`, `nonce` line before the paid request is sent, then `outcome` `responded` or `uncertain`. A paid fetch that throws after the send ends as `payment_uncertain`. No durable intent, no send.
+- M3: an existing but unreadable/corrupt `buy-guard.json` throws (guard fault, buy off, Forno serves). Today's spend = max(state, ledger intents for the UTC day, uncertain ones included). State is written with fsync.
+- Verify: `pnpm --filter @attessa/seller-host lint && ... typecheck && ... test`
+```
+ Test Files  13 passed (13)
+      Tests  137 passed (137)
+exit 0
+```
+reviewed: pending Codex r2

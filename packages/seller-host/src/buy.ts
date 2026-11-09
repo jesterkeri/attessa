@@ -1,6 +1,8 @@
 import { isAddress, type LocalAccount } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { x402 } from '@celo/buy-core';
+import { randomUUID } from 'node:crypto';
+import { BuyIntentLedger } from './ledger.ts';
 import { parseBatchReply, type BuySource, type RpcCall } from './inputs.ts';
 
 /**
@@ -136,8 +138,10 @@ export class BuyPaidSource implements BuySource {
   private readonly account: LocalAccount;
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly onReceipt: ((r: BuyReceipt) => void | Promise<void>) | undefined;
-  constructor(c: BuyConfig, account: LocalAccount, fetchImpl?: typeof fetch, onReceipt?: (r: BuyReceipt) => void | Promise<void>) {
+  private readonly ledger: BuyIntentLedger | undefined;
+  constructor(c: BuyConfig, account: LocalAccount, fetchImpl?: typeof fetch, onReceipt?: (r: BuyReceipt) => void | Promise<void>, ledger?: BuyIntentLedger) {
     this.onReceipt = onReceipt;
+    this.ledger = ledger;
     validateBuyConfig(c);
     this.c = c;
     this.id = `buy:${c.capabilityId}`;
@@ -163,9 +167,32 @@ export class BuyPaidSource implements BuySource {
     if (signal.aborted) throw new Error(`${this.id}: paid read failed (aborted)`);
     const max = this.c.maxAmountAtomic;
     let text: string;
+    // The durable intent of this call: written (fsynced) before the paid request is sent, closed by a response or marked uncertain.
+    const ledger = this.ledger;
+    let intentId: string | null = null;
+    let closed = false;
+    const base = this.fetchImpl ?? fetch;
+    const stamp = (): string => new Date().toISOString();
+    // The signed nonce is only visible on the wire request: record it, fsynced, before that request is sent.
+    const sendingFetch = (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      if (ledger && intentId !== null) {
+        const hdr = (() => { const h = new Headers(init?.headers); return h.get('payment-signature') ?? h.get('x-payment'); })();
+        if (hdr) {
+          let nonce: string | null = null;
+          try {
+            const n = (JSON.parse(Buffer.from(hdr, 'base64').toString('utf8')) as { payload?: { authorization?: { nonce?: unknown } } }).payload?.authorization?.nonce;
+            if (typeof n === 'string' && /^0x[0-9a-fA-F]{64}$/.test(n)) nonce = n;
+          } catch {
+            // the header is the library's own; an unreadable one just leaves the nonce to the receipt
+          }
+          if (nonce) ledger.append({ v: 1, kind: 'nonce', id: intentId, nonce, timestamp: stamp() });
+        }
+      }
+      return base(input, init);
+    }) as typeof fetch;
     try {
       const res = await x402.payingFetch(
-        { account: this.account, network: PAY_NETWORK, preferredToken: 'USDC', ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}) },
+        { account: this.account, network: PAY_NETWORK, preferredToken: 'USDC', fetchImpl: sendingFetch },
         this.c.url,
         {
           method: 'POST',
@@ -189,10 +216,25 @@ export class BuyPaidSource implements BuySource {
           },
           onBeforePayment: () => {
             if (signal.aborted) throw Object.assign(new Error('aborted'), { code: 'aborted' });
+            // No durable intent, no send: a failed write here throws before anything leaves.
+            if (ledger) {
+              const id = randomUUID();
+              ledger.append({ v: 1, kind: 'intent', id, capability: this.c.capabilityId, payer: this.account.address, cap: max.toString(), nonce: null, timestamp: stamp() });
+              intentId = id;
+            }
           },
           // Proof of payment: the library calls this after the paid request, whatever its outcome. A failed write can't
           // undo a payment and must not read as a failed call, so errors stop here (the library also guards this).
           onPayment: async (info) => {
+            // A response came back, whatever its status: the intent is no longer uncertain. Closing is best effort (the intent already counts).
+            if (ledger && intentId !== null && !closed) {
+              closed = true;
+              try {
+                ledger.append({ v: 1, kind: 'outcome', id: intentId, status: 'responded', timestamp: stamp() });
+              } catch {
+                // the intent line already holds the spend
+              }
+            }
             await this.onReceipt?.({ capabilityId: this.c.capabilityId, url: info.url, network: info.network, asset: info.asset, amount: info.amount, status: info.status, outcome: info.outcome, txHash: typeof info.txHash === 'string' && /^0x[0-9a-fA-F]{64}$/.test(info.txHash) ? info.txHash : null, from: info.authorization.from, nonce: info.authorization.nonce, timestamp: info.timestamp });
           },
           onAccountingError: () => {},
@@ -204,6 +246,16 @@ export class BuyPaidSource implements BuySource {
       }
       text = await readCapped(res);
     } catch (e) {
+      // An intent that was sent and got no response may have settled: it is never reported as an unpaid failed read.
+      if (ledger && intentId !== null && !closed) {
+        closed = true;
+        try {
+          ledger.append({ v: 1, kind: 'outcome', id: intentId, status: 'uncertain', timestamp: stamp() });
+        } catch {
+          // the intent line already holds the spend
+        }
+        throw new Error(`${this.id}: paid read failed (payment_uncertain)`);
+      }
       throw new Error(`${this.id}: paid read failed (${failureCode(e)})`);
     }
     let json: unknown;

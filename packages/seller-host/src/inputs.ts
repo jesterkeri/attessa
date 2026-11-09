@@ -195,15 +195,16 @@ export class InputFetcher {
             }
           },
         };
-        // A paid answer is checked against free Forno at the same number. If Forno cannot answer, the paid
-        // read stands (it is not Forno's evaluate to fail); a differing hash or timestamp is a failed buy read.
+        // A paid answer is checked against free Forno at the same number. The paid provider is untrusted: if Forno cannot
+        // answer, the paid read is rejected (fail closed) and the Forno fallback below runs; a differing hash or timestamp
+        // is a failed buy read as well.
         verify = async (blk) => {
           let ref: unknown;
           try {
             [ref] = await forno.batch([{ method: 'eth_getBlockByNumber', params: [`0x${BigInt(blk.number).toString(16)}`, false] }], AbortSignal.timeout(this.timeoutMs));
           } catch (e) {
             log?.('inputs_crosscheck_unavailable', { reason: (e as Error).message });
-            return;
+            throw new Error('cross-check against Forno unavailable');
           }
           const r = (typeof ref === 'object' && ref !== null ? ref : {}) as Record<string, unknown>;
           const sameHash = typeof r.hash === 'string' && r.hash.toLowerCase() === blk.hash;

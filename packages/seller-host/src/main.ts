@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { loadConfig } from './config.ts';
 import { EnclaveClient, TcpEnclaveTransport } from './enclave.ts';
 import { BuyPaidSource, loadAgentAccount } from './buy.ts';
+import { BuyIntentLedger } from './ledger.ts';
 import { BuySpendGuard, GatewayDbRevenue } from './guard.ts';
 import { HttpRpcSource, InputFetcher } from './inputs.ts';
 import { SellerHost } from './server.ts';
@@ -21,6 +22,7 @@ export async function main(path: string): Promise<void> {
   const cfg = loadConfig(path);
   // The agent wallet key comes from env only and stays in memory. Without a usable key paid reads are off and every read goes to Forno.
   let buy: BuyPaidSource | null = null;
+  const ledger = new BuyIntentLedger(join(cfg.stateDir, 'buy-intents.jsonl'));
   if (cfg.buy) {
     const key = loadAgentAccount();
     if (key.ok) {
@@ -28,7 +30,7 @@ export async function main(path: string): Promise<void> {
       buy = new BuyPaidSource(cfg.buy, key.account, undefined, (r) => {
         log('buy_paid', { capabilityId: r.capabilityId, amount: r.amount, outcome: r.outcome, txHash: r.txHash, from: r.from, nonce: r.nonce }); // first: survives a failed write
         appendFileSync(receipts, `${JSON.stringify(r)}\n`, { mode: 0o600 });
-      });
+      }, ledger);
     }
     else log('buy_disabled', { reason: key.reason, fallback: 'forno' });
   }
@@ -38,7 +40,7 @@ export async function main(path: string): Promise<void> {
     inputs: new InputFetcher({
       forno: new HttpRpcSource('forno', cfg.fornoUrl),
       ...(buy
-        ? { buy, guard: new BuySpendGuard(join(cfg.stateDir, 'buy-guard.json'), new GatewayDbRevenue(cfg.gatewayDbPath!, log), log) }
+        ? { buy, guard: new BuySpendGuard(join(cfg.stateDir, 'buy-guard.json'), new GatewayDbRevenue(cfg.gatewayDbPath!, log), log, ledger) }
         : {}),
       log,
     }),
