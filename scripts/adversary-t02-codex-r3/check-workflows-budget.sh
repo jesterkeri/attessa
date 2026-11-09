@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # T02 Codex r3 m1: check-workflows.sh accepted any timeout-minutes from 1 to 30, so jobs above their
-# PIPELINE.md budget (ts 4, contracts 4, slither 3, enclave 5, harness jobs 1) passed. Each named job
+# PIPELINE.md budget (ts 6, contracts 4, slither 3, enclave 5, harness jobs 1) passed. Each named job
 # at its budget must be clean; one minute over must be refused; a job id PIPELINE does not name may
 # take at most 1 (the strictest budget; T02 adversary r16).
 set -u
@@ -32,7 +32,7 @@ Y
     echo "$out"; echo "FAIL $1=$2: check-workflows.sh did not refuse a timeout over the PIPELINE budget"; rc=1
   else echo "ok   $1=$2: $(grep -m1 '^FAIL ' <<<"$out")"; fi
 }
-check ts 4 clean;         check ts 5 refused
+check ts 6 clean;         check ts 7 refused
 check contracts 4 clean;  check contracts 5 refused
 check slither 3 clean;    check slither 4 refused
 check enclave 5 clean;    check enclave 6 refused
