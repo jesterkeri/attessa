@@ -31,10 +31,13 @@ ATT_CID=()     # every CID this run asked run-enclave to start, recorded before 
 ATT_PRE=()     # for each attempt: the enclave ids that existed in the snapshot taken just before that run-enclave
 KNOWN=" "      # CIDs whose id is already in STARTED
 REFUSED=0      # a launch was refused (CID held, or the host could not be listed)
+# An id this script can hand to terminate-enclave exactly as the host gave it. A NUL can't survive a shell variable (bash
+# drops it, which makes a different id), newlines and tabs break the line reads below, and a leading dash reads as a flag.
+ID_OK='def idok: type == "string" and length > 0 and (explode | all(. >= 32 and . != 127)) and (startswith("-") | not); '
 # The id run-enclave printed, only if its output is exactly one object bound to this launch: our CID (numeric) and our
 # name. The launch and cleanup both ask this, so there is one rule for trusting that output.
 printed_id() {
-  jq -sr --argjson c "$1" --arg n "$NAME-$1" 'if length == 1 and (.[0] | type == "object" and (.EnclaveID | type == "string" and length > 0) and (.EnclaveCID | type == "number") and .EnclaveCID == $c and .EnclaveName == $n) then .[0].EnclaveID else empty end' "$OUTD/$1.out" 2>/dev/null
+  jq -sr --argjson c "$1" --arg n "$NAME-$1" "$ID_OK"'if length == 1 and (.[0] | type == "object" and (.EnclaveID | idok) and (.EnclaveCID | type == "number") and .EnclaveCID == $c and .EnclaveName == $n) then .[0].EnclaveID else empty end' "$OUTD/$1.out" 2>/dev/null
 }
 # Ownership is never inferred from a CID alone. An enclave found on an attempted CID is ours only if (a) run-enclave
 # itself printed its id for that CID, or (b) it is absent from the pre-launch snapshot AND carries that launch's EnclaveName.
@@ -44,7 +47,7 @@ cleanup() {
   trap '' INT TERM   # a second INT/TERM must not cut cleanup short
   trap - EXIT
   set +e
-  local rc=0 i cid id found pre name
+  local rc=0 i cid id found pre kind
   [ "$REFUSED" = 0 ] || rc=1
   for i in "${!ATT_CID[@]}"; do
     cid=${ATT_CID[$i]}
@@ -52,13 +55,12 @@ cleanup() {
     id=$(printed_id "$cid")
     if [ -n "$id" ]; then STARTED+=("$id"); continue; fi
     if found=$(enclaves); then
-      pre=${ATT_PRE[$i]:-}   # a signal can land between recording the CID and its snapshot; the name check still applies
-      while IFS=$'\t' read -r id name; do
-        [ -n "$id" ] || continue
-        case " $pre " in *" $id "*) continue ;; esac
-        if [ "$name" = "$NAME-$cid" ]; then STARTED+=("$id")
+      pre=${ATT_PRE[$i]:-[]}   # a signal can land between recording the CID and its snapshot; the name check still applies
+      # jq does the matching, on exact strings: the id reaches STARTED as the host wrote it, and anything else is only named.
+      while IFS=$'\t' read -r kind id; do
+        if [ "$kind" = ours ]; then STARTED+=("$id")
         else echo "enclave $id holds CID $cid but this run cannot prove it started it; NOT terminating it. Check it and stop it by hand if it is yours." >&2; rc=1; fi
-      done < <(jq -r --argjson c "$cid" '.[] | select(.EnclaveCID == $c) | [.EnclaveID, (.EnclaveName // "")] | @tsv' <<<"$found")
+      done < <(jq -r --argjson c "$cid" --argjson pre "$pre" --arg n "$NAME-$cid" "$ID_OK"'.[] | select(.EnclaveCID == $c) | .EnclaveID as $i | select(any($pre[]; . == $i) | not) | if ($i | idok) and .EnclaveName == $n then "ours\t\($i)" else "other\t\(if ($i | idok) then $i else ($i | tojson) end)" end' <<<"$found")
     else
       echo "cannot list enclaves to look for CID $cid; check it and stop it by hand" >&2; rc=1
     fi
@@ -93,7 +95,7 @@ run() {
   if jq -e --argjson c "$cid" 'any(.[]; .EnclaveCID == $c)' <<<"$snap" >/dev/null; then
     echo "refusing to start CID $cid: an enclave already holds it (not ours; left alone)"; REFUSED=1; return 1
   fi
-  ATT_CID+=("$cid"); ATT_PRE+=("$(jq -r '.[].EnclaveID' <<<"$snap" | tr '\n' ' ')")   # before the call
+  ATT_CID+=("$cid"); ATT_PRE+=("$(jq -c '[.[].EnclaveID]' <<<"$snap")")   # before the call
   nitro-cli run-enclave --eif-path build/enclave-spike.eif --cpu-count 1 --memory 1024 --enclave-cid "$cid" --enclave-name "$NAME-$cid" >"$OUTD/$cid.out" || return 1
   out=$(<"$OUTD/$cid.out")
   id=$(printed_id "$cid") && [ -n "$id" ] || { echo "cannot confirm the run-enclave response for CID $cid; cleanup will look it up"; return 1; }
