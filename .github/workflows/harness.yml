@@ -62,7 +62,7 @@ jobs:
           echo "pack integrity ok"
 
   secrets:
-    name: no secrets in client output
+    name: credential scanner self-test
     runs-on: ubuntu-latest
     timeout-minutes: 1   # PIPELINE.md budget (jobs take 3-7 s)
     steps:
