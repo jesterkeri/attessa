@@ -18,16 +18,19 @@ export function readLive(config, { mainnet = false } = {}) {
     if (typeof v !== 'boolean') throw new Error(`site.config.json: live.${k} must be true or false`);
   }
   const flags = Object.fromEntries(FEATURES.map(k => [k, live[k] === true]));
-  return { ...flags, all: FEATURES.every(k => flags[k]), mainnet: mainnet === true };
+  // The seller's wording says real money moves on Celo mainnet, so it can't be switched on without a deployment there.
+  if (flags.seller && mainnet !== true) throw new Error('site.config.json: live.seller needs a Celo mainnet registry in the deploy record');
+  // contractsOnly: deployed on mainnet with no public seller there yet, the one state where both halves must be said.
+  return { ...flags, all: FEATURES.every(k => flags[k]), mainnet: mainnet === true, contractsOnly: mainnet === true && !flags.seller };
 }
 
 const BLOCK = /<!--(live|notlive):(\w+)-->([\s\S]*?)<!--\/\1-->|\{\{#(live|notlive) (\w+)\}\}([\s\S]*?)\{\{\/\4\}\}/g;
-const TOKEN = /<!--\/?(live|notlive)\b[^>]*-->|\{\{[#/](live|notlive)[^}]*\}\}/;
+const TOKEN = /<!--\s*\/?\s*(live|notlive)\s*(:[^>]*)?-->|\{\{\s*[#/]\s*(live|notlive)[^}]*\}\}/;
 
 export function applyStatus(html, live) {
   const out = html.replace(BLOCK, (_, k1, key1, body1, k2, key2, body2) => {
     const kind = k1 ?? k2, key = key1 ?? key2, body = body1 ?? body2;
-    if (!(key in live)) throw new Error(`unknown live feature in a page: ${key}`);
+    if (!Object.hasOwn(live, key)) throw new Error(`unknown live feature in a page: ${key}`);
     if (TOKEN.test(body)) throw new Error(`nested live block for ${key}`);
     return (kind === 'live') === live[key] ? body : '';
   });

@@ -27,6 +27,7 @@ const layout = readFileSync(join(src, 'layout.html'), 'utf8');
 const siteConfig = JSON.parse(readFileSync(process.env.SITE_CONFIG ?? join(here, 'site.config.json'), 'utf8'));
 if (!/^https:\/\/[a-z0-9.-]+$/.test(siteConfig.siteOrigin)) throw new Error('site.config.json: siteOrigin must be https://<host> with no path');
 const SITE_ORIGIN_HOST = new URL(siteConfig.siteOrigin).host;
+if (process.env.SITE_TEST_DEPLOYMENTS && !process.env.SITE_OUT) throw new Error('SITE_TEST_DEPLOYMENTS is for test builds, which set SITE_OUT: it must never reach dist');
 const live = readLive(siteConfig, { mainnet: config.networks.mainnet.enabled });
 const contactSet = siteConfig.securityContact != null && siteConfig.securityTxtExpires != null;
 if (contactSet) {
@@ -176,11 +177,6 @@ function expand(html, depth = 0) {
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
 cpSync(join(src, 'static'), out, { recursive: true });
-// The scripts a visitor runs say the same as the pages: the same status blocks, resolved once, before anything reads them.
-for (const name of readdirSync(join(out, 'assets')).filter(n => n.endsWith('.js'))) {
-  const script = join(out, 'assets', name);
-  writeFileSync(script, applyStatus(readFileSync(script, 'utf8'), live));
-}
 
 // Third-party code is bundled, never loaded from a CDN. motion.js gets gsap and ScrollTrigger (as the globals it
 // already reads); scene.js gets three. Output replaces the copied source files.
@@ -191,6 +187,10 @@ bundle(join(src, 'entry', 'motion.entry.js'), join(out, 'assets', 'motion.js'), 
   format: 'iife', define: { __PH_ICONS__: JSON.stringify(SCRIPT_ICONS) }, nodePaths: [join(here, 'node_modules')],
 });
 bundle(join(src, 'static', 'assets', 'scene.js'), join(out, 'assets', 'scene.js'), { format: 'esm', nodePaths: [join(here, 'node_modules')] });
+
+// Everything copied or bundled says the same as the pages: the same status blocks, resolved once, wherever the file sits.
+const copied = dir => readdirSync(dir, { withFileTypes: true }).flatMap(e => (e.isDirectory() ? copied(join(dir, e.name)) : [join(dir, e.name)]));
+for (const file of copied(out).filter(p => /\.(js|mjs|cjs|html|css|txt|json|svg)$/.test(p))) writeFileSync(file, applyStatus(readFileSync(file, 'utf8'), live));
 
 // security.txt: filled from site.config.json. With no contact yet it says so, in comments only (RFC 9116 needs a Contact
 // and an Expires line, so it is not valid until they are set), and never carries a placeholder.

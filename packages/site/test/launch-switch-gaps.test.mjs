@@ -1,0 +1,79 @@
+// Adversary probes of the launch switch (commit 8f6b915). Spec: packages/site/site.config.json `live` flags are
+// feature flags only; anything about Celo mainnet being deployed follows the deploy record (packages/core/src/deployments.ts
+// `celo.enclaveRegistry`), never a flag; every script a visitor runs says the same as the pages; an unknown status
+// block stops the build.
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, cpSync, mkdirSync, appendFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const site = join(dirname(fileURLToPath(import.meta.url)), '..');
+const { applyStatus, readLive, FEATURES } = await import(join(site, 'status.mjs'));
+const config = JSON.parse(readFileSync(join(site, 'site.config.json'), 'utf8'));
+const A = n => `0x${String(n).repeat(40)}`;
+const MAINNET_RECORD = { celo: { enclaveRegistry: A(1), validatorStack: { p384Verifier: A(2), certManager: A(3), nitroValidator: A(4) } } };
+
+function build({ on, record, src, except = [] }) {
+  const dir = mkdtempSync(join(tmpdir(), 'site-gap-'));
+  const cfg = join(dir, 'config.json');
+  writeFileSync(cfg, JSON.stringify({ ...config, live: Object.fromEntries(FEATURES.map(k => [k, on && !except.includes(k)])) }));
+  const out = join(dir, 'out');
+  execFileSync('node', ['build.mjs'], {
+    cwd: site, stdio: 'pipe',
+    env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(src ? { SITE_SRC: src } : {}), ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) },
+  });
+  const files = d => readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? files(join(d, e.name)) : [join(d, e.name)]);
+  return Object.fromEntries(files(out).map(f => [f.slice(out.length + 1), readFileSync(f, 'utf8')]));
+}
+
+test('no mainnet deploy record: every flag but seller claims no mainnet, and seller stops the build', () => {
+  const p = build({ on: true, except: ['seller'] });
+  assert.doesNotMatch(p['terms.html'], /Attessa runs on Celo mainnet/, 'terms.html claims mainnet from a flag');
+  assert.doesNotMatch(p['index.html'], /USA&#x20AE; on Celo mainnet\./, 'index.html claims mainnet settlement from a flag');
+  assert.throws(() => build({ on: true }), /needs a Celo mainnet registry/);
+});
+
+test('a mainnet deploy record with every feature flag off: no page says mainnet is not live or that Sepolia is the only network', () => {
+  const p = build({ on: false, record: MAINNET_RECORD });
+  assert.doesNotMatch(p['terms.html'], /not live on Celo mainnet/, 'terms.html says mainnet is not live although the record has a registry');
+  assert.doesNotMatch(p['index.html'], /on mainnet after launch/, 'index.html says mainnet comes after launch although the record has a registry');
+  assert.doesNotMatch(p['privacy.html'], /Celo Sepolia is the only network you can pick/, 'privacy.html says Sepolia is the only network while the footer offers mainnet');
+  // Contracts on mainnet are not a live seller: the pages keep saying so.
+  assert.match(p['terms.html'], /no public seller is live there, and nothing on this site moves real money/);
+  assert.match(p['index.html'], /No public seller is live yet/);
+});
+
+test('privacy.html still says Sepolia is the only network while no registry is deployed', () => {
+  assert.match(build({ on: true, except: ['seller'] })['privacy.html'], /Celo Sepolia is the only network you can pick/);
+});
+
+test('a status block in a script outside the top level of assets, or in a bundled script, is resolved', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'site-gap-src-'));
+  const src = join(dir, 'src');
+  cpSync(join(site, 'src'), src, { recursive: true });
+  const line = "var gap = '{{#notlive seller}}GAP-NOT-LIVE{{/notlive}}';\n";
+  mkdirSync(join(src, 'static', 'assets', 'vendor'), { recursive: true });
+  writeFileSync(join(src, 'static', 'assets', 'vendor', 'x.js'), line);
+  writeFileSync(join(src, 'static', 'assets', 'y.mjs'), line);
+  writeFileSync(join(src, 'static', 'z.js'), line);
+  appendFileSync(join(src, 'static', 'assets', 'motion.js'), `\nwindow.__gap = '{{#notlive seller}}GAP-NOT-LIVE{{/notlive}}';\n`);
+  const p = build({ on: true, record: MAINNET_RECORD, src });
+  const leaked = Object.entries(p).filter(([, t]) => /GAP-NOT-LIVE|\{\{[#/](?:not)?live/.test(t)).map(([f]) => f);
+  assert.deepEqual(leaked, []);
+});
+
+test('a block named for an inherited object property is an unknown feature, not a silent drop', () => {
+  const off = readLive({});
+  for (const k of ['constructor', 'toString', 'hasOwnProperty']) {
+    assert.throws(() => applyStatus(`<!--live:${k}-->x<!--/live-->`, off), /unknown live feature/, k);
+  }
+});
+
+test('the test deploy record can never reach dist, and a spaced status comment stops the build', () => {
+  const { SITE_OUT: _unset, ...env } = process.env;
+  assert.throws(() => execFileSync('node', ['build.mjs'], { cwd: site, stdio: 'pipe', env: { ...env, SITE_TEST_DEPLOYMENTS: JSON.stringify(MAINNET_RECORD) } }), /must never reach dist/);
+  assert.throws(() => applyStatus('<!--  live:seller-->x<!--/live-->', readLive({})), /unbalanced/);
+});

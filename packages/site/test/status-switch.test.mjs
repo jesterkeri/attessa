@@ -14,7 +14,9 @@ const site = join(dirname(fileURLToPath(import.meta.url)), '..');
 const repo = join(site, '..', '..');
 const config = JSON.parse(readFileSync(join(site, 'site.config.json'), 'utf8'));
 const allOff = readLive({});
-const allOn = readLive({ live: Object.fromEntries(FEATURES.map(k => [k, true])) });
+const everyFlag = Object.fromEntries(FEATURES.map(k => [k, true]));
+const allOn = readLive({ live: everyFlag }, { mainnet: true });
+const allButSeller = readLive({ live: { ...everyFlag, seller: false } });
 
 // A stand-in deploy record for Celo mainnet, to build the state after Gate 5. Sepolia's real stack is a different record.
 const A = n => `0x${String(n).repeat(40)}`;
@@ -24,7 +26,7 @@ const MAINNET_RECORD = { celo: { enclaveRegistry: A(1), validatorStack: { p384Ve
 function build(live, record) {
   const dir = mkdtempSync(join(tmpdir(), 'site-switch-'));
   const cfg = join(dir, 'config.json');
-  const { all: _all, mainnet: _mainnet, ...flags } = live;
+  const { all: _all, mainnet: _mainnet, contractsOnly: _contractsOnly, ...flags } = live;
   writeFileSync(cfg, JSON.stringify({ ...config, live: flags }));
   const out = join(dir, 'out');
   execFileSync('node', ['build.mjs'], { cwd: site, env: { ...process.env, SITE_CONFIG: cfg, SITE_OUT: out, ...(record ? { SITE_TEST_DEPLOYMENTS: JSON.stringify(record) } : {}) }, stdio: 'pipe' });
@@ -55,7 +57,7 @@ test('a feature missing from the list counts as not live, and `all` needs every 
   assert.deepEqual(readLive({}), allOff);
   assert.equal(allOff.all, false);
   assert.equal(allOn.all, true);
-  assert.equal(readLive({ live: { seller: true } }).all, false);
+  assert.equal(readLive({ live: { seller: true } }, { mainnet: true }).all, false);
 });
 
 test('with everything off, every label a visitor relies on is on the page', () => {
@@ -86,8 +88,13 @@ test('a mainnet deployment shows the addresses and opens the switch', () => {
   assert.match(files.find(p => p.f === 'index.html').html, /No public seller is live yet/);
 });
 
-test('no feature flag stands in for a mainnet deployment: every flag on and no registry keeps the mainnet labels', () => {
-  const files = build(allOn);
+test('the seller flag is refused without a mainnet registry, so a flag alone can never claim mainnet', () => {
+  assert.throws(() => readLive({ live: { seller: true } }), /needs a Celo mainnet registry/);
+  assert.throws(() => build({ seller: true }), /needs a Celo mainnet registry/);
+});
+
+test('no other flag stands in for a mainnet deployment: every one on and no registry keeps the mainnet labels', () => {
+  const files = build(allButSeller);
   const of = name => files.find(p => p.f === name).html;
   assert.match(of('security.html'), /<td class="muted">After launch<\/td>/);
   assert.match(of('security.html'), /fill in once deployed/);
@@ -100,12 +107,12 @@ test('the deploy record, not the list, decides mainnet', () => {
   assert.throws(() => readLive({ live: { mainnet: true } }), /not a known feature/);
   assert.equal(readLive({}).mainnet, false);
   assert.equal(readLive({}, { mainnet: true }).mainnet, true);
-  assert.equal(readLive({ live: Object.fromEntries(FEATURES.map(k => [k, true])) }).mainnet, false);
+  assert.equal(allButSeller.mainnet, false);
   assert.equal(allOn.all, true, '`all` is the features only');
 });
 
 test('the explorer scripts follow viaBuy, and nothing else moves them', () => {
-  const site = flags => build(readLive({ live: flags })).find(p => p.f === 'assets/site.js').html;
+  const site = flags => build(readLive({ live: flags }, { mainnet: true }), MAINNET_RECORD).find(p => p.f === 'assets/site.js').html;
   const off = site({});
   assert.match(off, /Once buying through buy is built/);
   assert.match(off, /Optional, not built yet:/);
@@ -126,12 +133,11 @@ const blocksIn = d => readdirSync(d, { withFileTypes: true }).flatMap(e => {
 });
 
 test('each feature flag alone changes exactly its own blocks, in pages and scripts', () => {
-  const blocks = blocksIn(join(site, 'src')).filter(b => !/\{\{|\[\[/.test(b.body) && b.key !== 'all');
+  const blocks = blocksIn(join(site, 'src')).filter(b => !/\{\{|\[\[/.test(b.body) && !['all', 'mainnet', 'contractsOnly'].includes(b.key));
   for (const key of [...FEATURES]) {
-    const text = build(readLive({ live: { [key]: true } })).map(p => p.html).join('\n');
+    const text = build(readLive({ live: { [key]: true } }, { mainnet: key === 'seller' }), key === 'seller' ? MAINNET_RECORD : undefined).map(p => p.html).join('\n');
     for (const b of blocks) {
       const on = b.key === key;
-      if (b.key === 'mainnet') continue; // the deploy record's own tests are above
       const expected = (b.kind === 'live') === on;
       if (expected) assert.ok(text.includes(b.body), `${key} on: ${b.file} ${b.kind}:${b.key} should be shown: ${b.body.slice(0, 70)}`);
       // Absence is asserted only for a wording long enough to be its own (" preview" occurs in ordinary copy) that no
@@ -163,7 +169,7 @@ test('no flag is on while its work is unfinished', () => {
   const cliDir = join(repo, 'packages', 'cli', 'src');
   const walk = d => readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
   const cli = walk(cliDir).map(f => readFileSync(f, 'utf8')).join('\n');
-  const live = readLive(config);
+  const live = readLive(config, { mainnet: siteNetworks.networks.mainnet.enabled });
   const bad = [];
   for (const [k, need] of Object.entries(NEEDS)) {
     if (!live[k]) continue;
@@ -172,13 +178,12 @@ test('no flag is on while its work is unfinished', () => {
     }
     if (need.cli && !need.cli.test(cli)) bad.push(`${k} is live but the CLI has no such command`);
   }
-  if (live.seller && !siteNetworks.networks.mainnet.enabled) bad.push('seller is live but the deploy record has no mainnet registry');
   assert.deepEqual(bad, []);
 });
 
 test('in every state the tutorial says the working payment check works', () => {
-  for (const flags of [allOff, allOn]) {
-    const page = build(flags).find(p => p.f.endsWith('tutorial.html')).html;
+  for (const [flags, record] of [[allOff], [allOn, MAINNET_RECORD]]) {
+    const page = build(flags, record).find(p => p.f.endsWith('tutorial.html')).html;
     assert.doesNotMatch(page, /explorer<\/a> is live/);
     assert.match(page, /into the <a href="\.\.\/explorer\.html">proof explorer<\/a> to check its payment/);
   }
