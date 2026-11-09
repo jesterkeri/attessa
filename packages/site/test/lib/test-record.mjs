@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 // and TMPDIR can't make a folder in the repo count. What this builds must not be something to deploy.
 if (!process.execArgv.some((a) => a.endsWith('test-record.mjs'))) throw new Error('test-record.mjs must be named on the node command line, not through NODE_OPTIONS');
 /** The real path of a folder that may not exist yet: its nearest existing parent resolved, then the rest. */
-function real(path) {
+function realPath(path) {
   const rest = [];
   let at = resolve(path);
   while (!existsSync(at)) {
@@ -22,9 +22,9 @@ function real(path) {
   return join(realpathSync(at), ...rest);
 }
 const inside = (path, folder) => path.startsWith(folder + sep);
-const repo = real(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..'));
-const output = process.env.SITE_OUT ? real(process.env.SITE_OUT) : null;
-if (!output || !inside(output, real(tmpdir())) || inside(output, repo)) throw new Error('test-record.mjs builds only into the temp directory: SITE_OUT must be under it, and outside this repo');
+const repo = realPath(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..'));
+const output = process.env.SITE_OUT ? realPath(process.env.SITE_OUT) : null;
+if (!output || !inside(output, realPath(tmpdir())) || inside(output, repo)) throw new Error('test-record.mjs builds only into the temp directory: SITE_OUT must be under it, and outside this repo');
 
 const WRAPPED = 'attessa-test:core';
 const record = process.env.SITE_TEST_DEPLOYMENTS ?? '{}';
